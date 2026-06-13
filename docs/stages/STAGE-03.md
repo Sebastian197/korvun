@@ -1,8 +1,8 @@
 # Stage 03 — Router / gateway core
 
-> **Status:** open (Phase 3.1 done, Phase 3.2 pending)
+> **Status:** closed
 > **Started:** 2026-06-13
-> **Closed:** —
+> **Closed:** 2026-06-13
 
 ## Objective
 
@@ -16,7 +16,7 @@ slow brain or a slow channel — all with stdlib-only concurrency
 | Phase | Description                              | Status |
 |-------|------------------------------------------|--------|
 | 3.1   | Routing core                             | done   |
-| 3.2   | Concurrency and resilience               | pending |
+| 3.2   | Concurrency and resilience               | done   |
 
 ## Phase 3.1 — Routing core
 
@@ -103,12 +103,103 @@ slow brain or a slow channel — all with stdlib-only concurrency
   `envelope` existed and surfaced as soon as a second package
   (`router`) joined.
 
+## Phase 3.2 — Concurrency and resilience
+
+### Deliverables
+
+- `internal/router/options.go` — `Option` type plus the new knobs:
+  - `WithBrainWorkers(n int)` — concurrent workers per brain
+    (default 1; matches Phase 3.1).
+  - `WithBrainHandlerTimeout(d time.Duration)` — per-call ctx
+    deadline on `Brain.Handle` (default 5 s; 0 disables).
+  - `WithOutboundQueueCapacity(n int)` — bounded queue per channel
+    (default 64).
+  - `WithOutboundEnqueueTimeout(d time.Duration)` — symmetric to the
+    inbound enqueue timeout (default 250 ms; 0 disables).
+  - `WithErrorHandler(h func(RouterError))` — asynchronous error
+    hook; without one, errors are silently dropped (Phase 3.1
+    behaviour).
+- `internal/router/errors.go` extended with `ErrChannelSaturated`,
+  `ErrorKind` (`ErrKindHandle`, `ErrKindSend`,
+  `ErrKindOutboundSaturated`), and the `RouterError` struct
+  (`Kind`, `Brain`, `Channel`, `Envelope`, `Err`) implementing
+  `error` and `Unwrap` for `errors.Is` matching.
+- `internal/router/router.go` — Router now owns a per-channel
+  outbound worker (drains a bounded buffered queue → `Channel.Send`
+  under `sendTimeout`); brain workers spawn `WithBrainWorkers` × N
+  goroutines per brain, all draining the same per-brain inbound
+  queue; `handleAndReply` wraps `Brain.Handle` in a context bounded
+  by `brainHandlerTimeout`; `sendReply` enqueues into the channel's
+  outbound queue with `outboundEnqueueTimeout`; `notifyError` skips
+  events caused by the router's own shutdown-time context
+  cancellation.
+- `internal/router/router_phase32_test.go` — black-box tests for
+  every Phase 3.2 surface, including the **explicit isolation
+  tests** for both brains and channel outbound queues.
+
+### Workflow compliance
+
+| Step                         | Result                                          |
+|------------------------------|-------------------------------------------------|
+| External docs verified first | n/a (stdlib only)                               |
+| ADR written before code      | ADR-0003 (Phase 3.1)                            |
+| TDD red before green         | Red commit precedes green for Phase 3.2 too     |
+| `make quality` green         | yes, with `-race`                               |
+| Stage doc updated            | this document                                   |
+
+### Behaviour fixed in Phase 3.2
+
+- **Configurable brain workers.** Each brain runs `n` worker
+  goroutines (`WithBrainWorkers(n)`), all draining its single bounded
+  inbound queue. Default 1 (Phase 3.1 serialisation).
+- **Brain handler timeout.** Each `Brain.Handle` call runs under a
+  context derived from the router's own with a deadline of
+  `brainHandlerTimeout` (default 5 s, configurable, 0 disables).
+- **Per-channel outbound queue.** `Channel.Send` is no longer called
+  inline from the brain worker; instead the reply is pushed onto a
+  bounded queue (capacity `outboundQueueCapacity`, default 64) and a
+  dedicated outbound goroutine drains it. The brain worker therefore
+  never blocks on `Send`, and a slow channel never affects either the
+  brain queues or sibling channels' outbound queues.
+- **Error hook.** A `func(RouterError)` registered via
+  `WithErrorHandler` receives every asynchronous failure: brain
+  handler errors (including deadline-exceeded), channel send errors,
+  outbound enqueue saturation. Without a hook, errors are dropped
+  silently — Phase 3.1 behaviour is preserved.
+- **Isolation guarantees, demonstrated, not assumed.**
+  - `TestBrainIsolation_SlowBrainDoesNotBlockFastBrain` — a brain
+    stuck in `Handle` does not stop another brain from draining its
+    own queue.
+  - `TestChannelOutboundIsolation_SlowChannelDoesNotBlockFastChannel`
+    — a slow `Channel.Send` on one channel does not stop another
+    channel from delivering replies.
+- **Concurrent dispatch under `-race`.** 20 goroutines × 10
+  envelopes = 200 envelopes against 4 brain workers, all processed,
+  race detector clean.
+- **Shutdown bounded by caller ctx.** In-flight handlers respect the
+  cancelled router context and return promptly; errors caused by
+  this in-flight cancellation are suppressed from the hook.
+
 ## Key Decisions
 
 - ADR-0003 — Router design (conversation correlation +
-  backpressure).
+  backpressure), pinned for both phases.
 - `brain` stays out of the critical coverage list until it has
-  executable code (Stage 7).
+  executable code (Stage 7); it remains an interface-only forward
+  slice in this stage.
+
+## Quality Gate (stage-wide, on master)
+
+| Package                          | Coverage |
+|----------------------------------|----------|
+| `internal/channel`               | 100.0%   |
+| `internal/channel/webhook`       | 91.4%    |
+| `internal/channels/telegram`     | 100.0%   |
+| `internal/envelope`              | 97.8%    |
+| `internal/router`                | **96.3%** (≥ 90% critical target) |
+| **total**                        | **96.1%** |
+
+`make quality` green with `-race`.
 
 ## Notes
 
@@ -116,8 +207,6 @@ slow brain or a slow channel — all with stdlib-only concurrency
   `internal/envelope`, and Go stdlib. It does **not** import any
   concrete adapter; the test suite uses in-test fakes that satisfy
   `channel.Channel` and `brain.Brain`.
-- Phase 3.2 will introduce: configurable worker pools per brain, the
-  per-call brain-handler timeout (default 5 s), the per-channel
-  outbound queue, an error-reporting hook, and the high-contention
-  concurrency suite (race-heavy load tests, deadlock guards, fairness
-  smoke tests).
+- The Telegram `channel.Channel` wrapper continues to be tracked as
+  Phase 2E.8 of the Telegram-completion plan (see STAGE-02.md);
+  Stage 3 does not depend on it.
