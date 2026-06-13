@@ -1,0 +1,40 @@
+{
+  "update_id": 100000010,
+  "message": {
+    "message_id": 200,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000100,
+    "photo": [
+      {
+        "file_id": "PhotoSmall_FID",
+        "file_unique_id": "small_u",
+        "width": 90,
+        "height": 90,
+        "file_size": 1500
+      },
+      {
+        "file_id": "PhotoMedium_FID",
+        "file_unique_id": "medium_u",
+        "width": 320,
+        "height": 320,
+        "file_size": 18000
+      },
+      {
+        "file_id": "PhotoLarge_FID",
+        "file_unique_id": "large_u",
+        "width": 800,
+        "height": 800,
+        "file_size": 95000
+      }
+    ]
+  }
+}

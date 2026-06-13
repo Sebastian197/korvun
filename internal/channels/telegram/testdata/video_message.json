@@ -1,0 +1,27 @@
+{
+  "update_id": 100000013,
+  "message": {
+    "message_id": 203,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000400,
+    "video": {
+      "file_id": "Video_FID",
+      "file_unique_id": "video_u",
+      "width": 1280,
+      "height": 720,
+      "duration": 30,
+      "file_name": "clip.mp4",
+      "mime_type": "video/mp4",
+      "file_size": 4500000
+    }
+  }
+}

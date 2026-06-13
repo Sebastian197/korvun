@@ -1,0 +1,24 @@
+{
+  "update_id": 100000011,
+  "message": {
+    "message_id": 201,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000200,
+    "voice": {
+      "file_id": "VoiceNote_FID",
+      "file_unique_id": "voice_u",
+      "duration": 7,
+      "mime_type": "audio/ogg",
+      "file_size": 24800
+    }
+  }
+}

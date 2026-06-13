@@ -1,0 +1,27 @@
+{
+  "update_id": 100000012,
+  "message": {
+    "message_id": 202,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000300,
+    "audio": {
+      "file_id": "AudioTrack_FID",
+      "file_unique_id": "audio_u",
+      "duration": 180,
+      "performer": "Test Artist",
+      "title": "Test Track",
+      "file_name": "track.mp3",
+      "mime_type": "audio/mpeg",
+      "file_size": 1820000
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "update_id": 100000016,
+  "message": {
+    "message_id": 206,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000700,
+    "document": {
+      "file_id": "CaptionedDoc_FID",
+      "file_unique_id": "cd_u",
+      "file_name": "informe.docx",
+      "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "file_size": 12000
+    },
+    "caption": "informe del Q3"
+  }
+}

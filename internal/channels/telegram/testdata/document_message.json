@@ -1,0 +1,24 @@
+{
+  "update_id": 100000014,
+  "message": {
+    "message_id": 204,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000500,
+    "document": {
+      "file_id": "Document_FID",
+      "file_unique_id": "doc_u",
+      "file_name": "report.pdf",
+      "mime_type": "application/pdf",
+      "file_size": 256000
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "update_id": 100000015,
+  "message": {
+    "message_id": 205,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000600,
+    "photo": [
+      {
+        "file_id": "CaptionedPhoto_FID",
+        "file_unique_id": "cp_u",
+        "width": 800,
+        "height": 600,
+        "file_size": 100000
+      }
+    ],
+    "caption": "una foto con descripción"
+  }
+}
