@@ -74,6 +74,10 @@ type fakeBrain struct {
 	// releaseCh, if non-nil, blocks each Handle call until either the
 	// channel is closed/receives or ctx is cancelled.
 	releaseCh chan struct{}
+
+	// onHandle, if non-nil, runs at the very start of every Handle
+	// call, before any blocking. Used to observe concurrency.
+	onHandle func(ctx context.Context, env *envelope.Envelope)
 }
 
 func newFakeBrain(replies ...*envelope.Envelope) *fakeBrain {
@@ -81,6 +85,9 @@ func newFakeBrain(replies ...*envelope.Envelope) *fakeBrain {
 }
 
 func (f *fakeBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*envelope.Envelope, error) {
+	if f.onHandle != nil {
+		f.onHandle(ctx, env)
+	}
 	if f.releaseCh != nil {
 		select {
 		case <-f.releaseCh:
