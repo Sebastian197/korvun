@@ -20,6 +20,7 @@ import (
 // can exercise the adapter exactly as it would from a real webhook handler.
 func loadUpdateFixture(t *testing.T, name string) *models.Update {
 	t.Helper()
+	// #nosec G304 -- fixture name is supplied by the test itself, not user input.
 	data, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
 		t.Fatalf("read fixture %q: %v", name, err)
