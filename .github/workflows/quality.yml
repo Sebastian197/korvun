@@ -52,14 +52,24 @@ jobs:
           set -euo pipefail
           CORE_MIN=85
           CRITICAL_MIN=90
-          CRITICAL_PKGS="envelope policy router brain"
+          # Critical packages: each must be >= CRITICAL_MIN once it has
+          # executable code. The `brain` package is intentionally NOT in
+          # this list yet — Phase 3.1 ships it as an interface-only
+          # forward slice of Stage 7 with no executable statements; it
+          # will be re-added when Stage 7 implements a concrete brain.
+          CRITICAL_PKGS="envelope policy router"
 
           if [ ! -d internal ] || [ -z "$(find internal -name '*.go' -print -quit 2>/dev/null)" ]; then
             echo "No internal/ packages yet — coverage gate vacuously satisfied"
             exit 0
           fi
 
-          go test -race -coverprofile=coverage.out -coverpkg=./internal/... ./internal/... \
+          # No -coverpkg: every package measures its own statements, so
+          # the per-package number in the log is the package's own
+          # coverage. Adding -coverpkg=./internal/... dilutes each
+          # package against the whole tree and breaks the per-package
+          # gate.
+          go test -race -coverprofile=coverage.out ./internal/... \
             | tee coverage-test.log
 
           if ! grep -q '^mode:' coverage.out 2>/dev/null \

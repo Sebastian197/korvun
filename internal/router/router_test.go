@@ -38,8 +38,8 @@ func newFakeChannel(name string) *fakeChannel {
 	}
 }
 
-func (f *fakeChannel) Name() string                { return f.name }
-func (f *fakeChannel) Manifest() channel.Manifest  { return channel.Manifest{Text: true} }
+func (f *fakeChannel) Name() string               { return f.name }
+func (f *fakeChannel) Manifest() channel.Manifest { return channel.Manifest{Text: true} }
 func (f *fakeChannel) Receive(_ context.Context) (<-chan *envelope.Envelope, error) {
 	return f.inbound, nil
 }
