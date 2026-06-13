@@ -46,16 +46,57 @@ jobs:
       - name: Test
         run: go test -race ./...
 
-      - name: Coverage
+      - name: Coverage gate
         shell: bash
         run: |
-          go test -race -coverprofile=coverage.out ./... 2>&1 || true
-          if grep -q '^mode:' coverage.out 2>/dev/null && grep -v '^mode:' coverage.out | grep -q '.' 2>/dev/null; then
-            total=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
-            echo "Coverage: ${total}%"
-          else
-            echo "No testable packages yet — skipping coverage threshold"
+          set -euo pipefail
+          CORE_MIN=85
+          CRITICAL_MIN=90
+          CRITICAL_PKGS="envelope policy router brain"
+
+          if [ ! -d internal ] || [ -z "$(find internal -name '*.go' -print -quit 2>/dev/null)" ]; then
+            echo "No internal/ packages yet — coverage gate vacuously satisfied"
+            exit 0
           fi
+
+          go test -race -coverprofile=coverage.out -coverpkg=./internal/... ./internal/... \
+            | tee coverage-test.log
+
+          if ! grep -q '^mode:' coverage.out 2>/dev/null \
+             || ! grep -v '^mode:' coverage.out | grep -q '.' 2>/dev/null; then
+            echo "FAIL: no coverage data produced for internal/ packages"
+            exit 1
+          fi
+
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$3); print $3}')
+          echo "internal/ total coverage: ${total}%"
+          if awk -v t="$total" -v m="$CORE_MIN" 'BEGIN { exit !(t+0 < m+0) }'; then
+            echo "FAIL: internal/ total coverage ${total}% < ${CORE_MIN}%"
+            exit 1
+          fi
+
+          fail=0
+          for pkg in $CRITICAL_PKGS; do
+            if [ ! -d "internal/$pkg" ]; then
+              echo "skip: internal/$pkg (not present yet)"
+              continue
+            fi
+            cov=$(awk -v p="internal/$pkg[[:space:]]" '
+              $0 ~ p && /coverage:/ {
+                for (i=1; i<=NF; i++) if ($i == "coverage:") { print $(i+1); exit }
+              }' coverage-test.log | tr -d '%')
+            if [ -z "${cov:-}" ]; then
+              echo "FAIL: could not parse coverage for internal/$pkg"
+              fail=1
+              continue
+            fi
+            echo "internal/$pkg coverage: ${cov}%"
+            if awk -v t="$cov" -v m="$CRITICAL_MIN" 'BEGIN { exit !(t+0 < m+0) }'; then
+              echo "FAIL: internal/$pkg ${cov}% < ${CRITICAL_MIN}%"
+              fail=1
+            fi
+          done
+          exit $fail
 
       - name: SAST (gosec)
         shell: bash
