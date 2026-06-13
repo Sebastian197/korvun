@@ -1,0 +1,67 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install tools
+        shell: bash
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+          go install golang.org/x/tools/cmd/goimports@latest
+
+      - name: Build
+        run: go build ./...
+
+      - name: Lint (fmt + vet + golangci-lint)
+        shell: bash
+        run: |
+          echo "Checking gofmt..."
+          test -z "$(gofmt -l .)" || { echo "Files need gofmt:"; gofmt -l .; exit 1; }
+          echo "Checking goimports..."
+          test -z "$($(go env GOPATH)/bin/goimports -l .)" || { echo "Files need goimports:"; $(go env GOPATH)/bin/goimports -l .; exit 1; }
+          go vet ./...
+          $(go env GOPATH)/bin/golangci-lint run ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Coverage
+        shell: bash
+        run: |
+          go test -race -coverprofile=coverage.out ./... 2>&1 || true
+          if grep -q '^mode:' coverage.out 2>/dev/null && grep -v '^mode:' coverage.out | grep -q '.' 2>/dev/null; then
+            total=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+            echo "Coverage: ${total}%"
+          else
+            echo "No testable packages yet — skipping coverage threshold"
+          fi
+
+      - name: SAST (gosec)
+        shell: bash
+        run: $(go env GOPATH)/bin/golangci-lint run --enable gosec ./...
+
+      - name: Govulncheck
+        shell: bash
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          $(go env GOPATH)/bin/govulncheck ./...
