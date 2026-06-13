@@ -38,10 +38,11 @@ go, split it.
 
 For every phase:
 
-1. **Context7 first.** Before writing ANY code that uses a library, framework,
-   SDK or external API, consult its version-specific documentation via Context7.
-   Never program against an external API from memory. If the verified docs are
-   not available, say so instead of inventing signatures.
+1. **Verify external docs first.** Before writing ANY code that uses a library,
+   framework, SDK, external API, or CI tooling, verify it first — never from
+   memory. See "External documentation verification" below for which tool to use
+   in each case. If verification isn't possible, stop and say so instead of
+   inventing signatures or versions.
 2. **Tests first (TDD).** Write the test suite that defines the contract BEFORE
    the implementation, and confirm it fails (red). Only then write the minimum
    code to make it pass (green).
@@ -49,6 +50,44 @@ For every phase:
 4. **Quality gate.** `make quality` must be green (lint + vet + tests +
    coverage) over the WHOLE suite, not just the new code, before closing.
 5. **Documentation.** Update stage docs, ADRs, and the master document.
+
+## External documentation verification — which tool for what
+
+Never program against an external API, library, or tooling version from memory.
+Verify first. The correct verification tool depends on what is being used:
+
+### Code libraries and frameworks → Context7 (mandatory)
+
+For any Go package, npm package, SDK, or framework used in production code
+(HTTP routers, Telegram client, SQLite/Postgres drivers, model provider SDKs,
+NATS/Redis clients, config libraries, etc.):
+
+- Consult version-specific documentation via Context7 BEFORE writing code
+  against it.
+- If Context7 is not connected or the docs cannot be verified, STOP and say so.
+  Do NOT proceed from memory. This is non-negotiable — wrong function signatures
+  recalled from memory cause subtle, hard-to-find bugs.
+
+### GitHub Actions and CI tooling → verify the current tag at source
+
+For GitHub Actions (`actions/checkout`, `actions/setup-go`,
+`github/codeql-action`, `anchore/sbom-action`, etc.) and other CI tooling,
+Context7 is NOT the right tool (it covers code libraries, not Action tags).
+Instead:
+
+- Verify the current stable tag at the Action's own GitHub repository
+  (its `/releases` page) or the GitHub Marketplace, using WebSearch/WebFetch.
+- Do NOT guess tags from memory. If web access is unavailable, say so and pin
+  to a known major tag with a `# TODO: verify action version` comment, rather
+  than silently assuming.
+- Prefer pinning Actions to a full commit SHA (most secure) or at least a
+  fixed major tag (e.g. `@v4`), never a floating ref.
+
+### General principle
+
+The rule is always the same — never invent versions or signatures. Only the
+*tool* changes: Context7 for code libraries, the source repo/marketplace for
+Action tags.
 
 ## Go standards
 
@@ -97,4 +136,5 @@ For every phase:
 
 - Move one task at a time. Pause for confirmation before advancing phases.
 - Do not skip the red-test step "to save time".
-- If asked to use a library and Context7 docs are not verified, stop and say so.
+- If a code library is needed and Context7 docs are not verified, stop and say
+  so. If an Action/CI version cannot be verified at source, stop and say so.
