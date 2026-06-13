@@ -39,6 +39,25 @@ var (
 	ErrInvalidChatID = errors.New("telegram: telegram.chat_id is not a valid int64")
 
 	// ErrNoTextPart is returned when an outbound Envelope does not contain
-	// any non-empty text part. Phase 2.3 only sends text messages.
+	// any non-empty text part. Phase 2.3 only sends text messages;
+	// OutboundParams (Phase 2E.2) prefers ErrNoPartsToSend for the
+	// multi-modal path.
 	ErrNoTextPart = errors.New("telegram: envelope has no text part")
+
+	// ErrNoPartsToSend is returned by OutboundParams when an outbound
+	// Envelope has neither a non-empty text part nor a media part.
+	// (Phase 2E.2.)
+	ErrNoPartsToSend = errors.New("telegram: envelope has no parts to send")
+
+	// ErrTooManyMediaParts is returned by OutboundParams when an
+	// outbound Envelope carries more than one media part. Telegram's
+	// per-message send methods address one media item at a time;
+	// media groups require a different Send method and are out of
+	// scope for Phase 2E.2.
+	ErrTooManyMediaParts = errors.New("telegram: envelope has more than one media part")
+
+	// ErrMissingMediaSource is returned by OutboundParams when a
+	// media part has an empty Source (no Telegram file_id or URL to
+	// reference).
+	ErrMissingMediaSource = errors.New("telegram: media part has empty source")
 )

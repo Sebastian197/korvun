@@ -28,4 +28,23 @@ const (
 	MetaChatType = "telegram.chat_type"
 	// MetaMessageID is the Telegram message ID, stringified.
 	MetaMessageID = "telegram.message_id"
+	// MetaAudioKind disambiguates Telegram's two audio sub-types when an
+	// outbound Envelope carries an envelope.Audio Part. Inbound voice
+	// notes and audio files both collapse to envelope.Audio (no native
+	// distinction in the canonical domain); on outbound the caller can
+	// set this Meta key to AudioKindVoice to send the file as a voice
+	// note (SendVoice) instead of the default music/audio file
+	// (SendAudio).
+	MetaAudioKind = "telegram.audio_kind"
+)
+
+// Values accepted by MetaAudioKind. Any other value (including an
+// absent key) falls back to AudioKindAudio semantics.
+const (
+	// AudioKindVoice routes envelope.Audio outbound through
+	// bot.SendVoice / SendVoiceParams.
+	AudioKindVoice = "voice"
+	// AudioKindAudio routes envelope.Audio outbound through
+	// bot.SendAudio / SendAudioParams. This is the default.
+	AudioKindAudio = "audio"
 )
