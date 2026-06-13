@@ -31,21 +31,44 @@ import "time"
 const MetaConversationID = "conversation.id"
 
 // Tuning defaults pinned in ADR-0003. They are deliberately
-// conservative; Phase 3.1's job is to make the wiring correct and the
-// contract explicit, not to tune for any particular workload.
+// conservative; Phase 3.1's job was to make the wiring correct and
+// the contract explicit; Phase 3.2 makes the rest configurable and
+// adds the error hook + per-channel outbound queue.
 const (
 	// DefaultQueueCapacity is the buffered size of each per-brain
-	// inbound queue.
+	// inbound queue. (Phase 3.1.)
 	DefaultQueueCapacity = 64
 
 	// DefaultEnqueueTimeout caps how long DispatchInbound waits to
 	// push an envelope into a saturated brain queue before returning
-	// ErrBrainSaturated.
+	// ErrBrainSaturated. (Phase 3.1.)
 	DefaultEnqueueTimeout = 250 * time.Millisecond
 
 	// DefaultSendTimeout caps how long a single Channel.Send call may
-	// take. It is applied to every reply dispatch, regardless of the
-	// channel implementation, so a slow transport cannot indefinitely
-	// occupy a brain worker.
+	// take. (Phase 3.1.)
 	DefaultSendTimeout = 5 * time.Second
+
+	// DefaultBrainWorkers is the number of concurrent goroutines
+	// draining the per-brain inbound queue. Default 1 preserves the
+	// serial-per-brain semantics from Phase 3.1. (Configurable in
+	// Phase 3.2 via WithBrainWorkers.)
+	DefaultBrainWorkers = 1
+
+	// DefaultBrainHandlerTimeout caps how long a single Brain.Handle
+	// invocation may take. Past this point the handler's context is
+	// cancelled and an ErrKindHandle event reaches the error hook.
+	// (Phase 3.2; WithBrainHandlerTimeout overrides.)
+	DefaultBrainHandlerTimeout = 5 * time.Second
+
+	// DefaultOutboundQueueCapacity is the buffered size of each
+	// per-channel outbound queue holding replies waiting for
+	// Channel.Send. (Phase 3.2; WithOutboundQueueCapacity overrides.)
+	DefaultOutboundQueueCapacity = 64
+
+	// DefaultOutboundEnqueueTimeout caps how long a brain worker waits
+	// to push a reply onto a saturated channel outbound queue before
+	// surfacing ErrKindOutboundSaturated to the error hook (and
+	// dropping that reply). Symmetric to DefaultEnqueueTimeout for
+	// inbound. (Phase 3.2; WithOutboundEnqueueTimeout overrides.)
+	DefaultOutboundEnqueueTimeout = 250 * time.Millisecond
 )

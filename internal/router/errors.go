@@ -3,7 +3,12 @@
 
 package router
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/Sebastian197/korvun/internal/envelope"
+)
 
 // Sentinel errors returned by the router. Callers should match these
 // with errors.Is rather than string comparison.
@@ -60,4 +65,87 @@ var (
 	// ErrShutdown is returned by every public operation invoked after
 	// Shutdown.
 	ErrShutdown = errors.New("router: shut down")
+
+	// ErrChannelSaturated is the underlying error wrapped inside a
+	// RouterError of kind ErrKindOutboundSaturated. Per ADR-0003,
+	// outbound saturation surfaces as an explicit event to the error
+	// hook rather than as silent message loss.
+	ErrChannelSaturated = errors.New("router: channel outbound queue saturated")
 )
+
+// ErrorKind classifies the failure mode an asynchronous router event
+// represents. Returned to the error hook configured by
+// WithErrorHandler.
+type ErrorKind int
+
+// Error kinds delivered to the WithErrorHandler hook.
+const (
+	// ErrKindHandle indicates a Brain.Handle invocation returned an
+	// error (including context deadline exceeded if the per-call
+	// brain handler timeout fired).
+	ErrKindHandle ErrorKind = iota + 1
+
+	// ErrKindSend indicates a Channel.Send invocation returned an
+	// error (including context deadline exceeded if the send timeout
+	// fired).
+	ErrKindSend
+
+	// ErrKindOutboundSaturated indicates a reply could not be enqueued
+	// on a channel's outbound queue within the outbound enqueue
+	// timeout; the reply was dropped. The wrapped error is
+	// ErrChannelSaturated.
+	ErrKindOutboundSaturated
+)
+
+// String returns the short human-readable name of the error kind.
+func (k ErrorKind) String() string {
+	switch k {
+	case ErrKindHandle:
+		return "handle"
+	case ErrKindSend:
+		return "send"
+	case ErrKindOutboundSaturated:
+		return "outbound_saturated"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(k))
+	}
+}
+
+// RouterError is the structured event passed to the error hook
+// configured via WithErrorHandler. The router never returns these to
+// the caller of DispatchInbound — they are asynchronous failures
+// surfaced from a brain worker or a channel worker.
+//
+// Brain is populated when Kind is ErrKindHandle; Channel is populated
+// when Kind is ErrKindSend or ErrKindOutboundSaturated. Envelope is
+// the envelope being processed when the failure occurred. Err is the
+// underlying cause.
+type RouterError struct {
+	Kind     ErrorKind
+	Brain    string
+	Channel  string
+	Envelope *envelope.Envelope
+	Err      error
+}
+
+// Error implements the error interface. The format is "router/<kind>:
+// <err>" with optional " (brain=… channel=…)" suffix.
+func (e RouterError) Error() string {
+	subject := ""
+	switch {
+	case e.Brain != "" && e.Channel != "":
+		subject = fmt.Sprintf(" (brain=%s channel=%s)", e.Brain, e.Channel)
+	case e.Brain != "":
+		subject = fmt.Sprintf(" (brain=%s)", e.Brain)
+	case e.Channel != "":
+		subject = fmt.Sprintf(" (channel=%s)", e.Channel)
+	}
+	if e.Err != nil {
+		return fmt.Sprintf("router/%s: %s%s", e.Kind, e.Err.Error(), subject)
+	}
+	return fmt.Sprintf("router/%s%s", e.Kind, subject)
+}
+
+// Unwrap returns the underlying error so errors.Is / errors.As can
+// match against ErrChannelSaturated and friends.
+func (e RouterError) Unwrap() error { return e.Err }

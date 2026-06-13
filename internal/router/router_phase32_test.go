@@ -215,6 +215,21 @@ func TestErrorHook_SendError(t *testing.T) {
 	}
 }
 
+// failOnceBrain returns an error on the first Handle call and the
+// configured replies on every subsequent one. Race-safe across
+// goroutines via atomic counter — used by TestErrorHook_NotSet_*.
+type failOnceBrain struct {
+	calls   atomic.Int64
+	replies []*envelope.Envelope
+}
+
+func (b *failOnceBrain) Handle(_ context.Context, _ *envelope.Envelope) ([]*envelope.Envelope, error) {
+	if b.calls.Add(1) == 1 {
+		return nil, errors.New("boom")
+	}
+	return b.replies, nil
+}
+
 func TestErrorHook_NotSet_ErrorsSwallowedSafely(t *testing.T) {
 	// Without a hook, errors must be swallowed silently and the worker
 	// must remain available for the next envelope.
@@ -224,31 +239,13 @@ func TestErrorHook_NotSet_ErrorsSwallowedSafely(t *testing.T) {
 	ch := newFakeChannel("ch")
 	_ = r.RegisterChannel(ch)
 
-	first := true
-	b := &fakeBrain{
-		replies: []*envelope.Envelope{mkOutbound("ch", "c", "ok")},
-		onHandle: func(_ context.Context, _ *envelope.Envelope) {
-			// Fail the first time, then succeed.
-			if first {
-				first = false
-			}
-		},
-	}
-	// First call: simulate failure via handleErr swap mid-run.
-	b.handleErr = errors.New("boom")
+	b := &failOnceBrain{replies: []*envelope.Envelope{mkOutbound("ch", "c", "ok")}}
 	_ = r.RegisterBrain("brain", b)
 	_ = r.Route("ch", "brain")
 
 	if err := r.DispatchInbound(context.Background(), mkInbound("ch", "c", "first")); err != nil {
 		t.Fatal(err)
 	}
-	// Give the worker a moment to consume the first envelope.
-	time.Sleep(20 * time.Millisecond)
-	// Reset the failure for the next call.
-	b.mu.Lock()
-	b.handleErr = nil
-	b.mu.Unlock()
-
 	if err := r.DispatchInbound(context.Background(), mkInbound("ch", "c", "second")); err != nil {
 		t.Fatal(err)
 	}
@@ -478,6 +475,198 @@ func TestShutdown_WhileInFlight_CtxBounded(t *testing.T) {
 	if err := r.Shutdown(ctx); err != nil {
 		t.Errorf("Shutdown returned err = %v, want nil (handler should release on ctx cancel)", err)
 	}
+}
+
+// ---------- Branch coverage ------------------------------------------------
+// Short tests covering the "disabled" branch of each timeout knob, the
+// option clamps, and the RouterError formatting helpers.
+
+func TestOptions_ClampNonPositiveValuesToOne(t *testing.T) {
+	// Each clamping option must accept 0 or negative and behave as if 1
+	// were passed. The only observable effect is that a brain with the
+	// clamped value still works: e.g. WithBrainWorkers(0) starts at
+	// least one worker, so dispatch eventually reaches the brain.
+	r := router.New(
+		router.WithQueueCapacity(0),
+		router.WithBrainWorkers(0),
+		router.WithOutboundQueueCapacity(0),
+	)
+	t.Cleanup(func() { shutdown(t, r) })
+
+	ch := newFakeChannel("ch")
+	_ = r.RegisterChannel(ch)
+	b := newFakeBrain(mkOutbound("ch", "c", "x"))
+	_ = r.RegisterBrain("brain", b)
+	_ = r.Route("ch", "brain")
+
+	if err := r.DispatchInbound(context.Background(), mkInbound("ch", "c", "x")); err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	eventually(t, 500*time.Millisecond, func() bool { return len(ch.Sent()) == 1 }, "reply should land even with clamped knobs")
+}
+
+func TestDispatchInbound_ZeroEnqueueTimeout_BlocksUntilCtx(t *testing.T) {
+	// WithEnqueueTimeout(0) disables the enqueue timeout: the call
+	// blocks until either the envelope is enqueued or ctx is cancelled.
+	r := router.New(
+		router.WithQueueCapacity(1),
+		router.WithEnqueueTimeout(0),
+	)
+
+	_ = r.RegisterChannel(newFakeChannel("ch"))
+	block := make(chan struct{})
+	b := &fakeBrain{releaseCh: block}
+	_ = r.RegisterBrain("brain", b)
+	_ = r.Route("ch", "brain")
+
+	// Fill worker + queue (1 in worker, 1 in queue) so the next push
+	// blocks indefinitely.
+	if err := r.DispatchInbound(context.Background(), mkInbound("ch", "c", "x")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.DispatchInbound(context.Background(), mkInbound("ch", "c", "x")); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- r.DispatchInbound(ctx, mkInbound("ch", "c", "x"))
+	}()
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("dispatch did not return after ctx cancel")
+	}
+
+	close(block)
+	shutdown(t, r)
+}
+
+func TestBrainHandlerTimeout_DisabledWhenZero(t *testing.T) {
+	// WithBrainHandlerTimeout(0) disables the per-call timeout: the
+	// handler is called with the router context directly.
+	r := router.New(router.WithBrainHandlerTimeout(0))
+	t.Cleanup(func() { shutdown(t, r) })
+
+	_ = r.RegisterChannel(newFakeChannel("ch"))
+	b := newFakeBrain()
+	_ = r.RegisterBrain("brain", b)
+	_ = r.Route("ch", "brain")
+
+	if err := r.DispatchInbound(context.Background(), mkInbound("ch", "c", "x")); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 200*time.Millisecond, func() bool { return len(b.Handled()) == 1 }, "handler should run with disabled timeout")
+}
+
+func TestSendTimeout_DisabledWhenZero(t *testing.T) {
+	// WithSendTimeout(0) disables the send deadline: Channel.Send is
+	// invoked with the router context directly.
+	r := router.New(router.WithSendTimeout(0))
+	t.Cleanup(func() { shutdown(t, r) })
+
+	ch := newFakeChannel("ch")
+	_ = r.RegisterChannel(ch)
+	b := newFakeBrain(mkOutbound("ch", "c", "x"))
+	_ = r.RegisterBrain("brain", b)
+	_ = r.Route("ch", "brain")
+
+	if err := r.DispatchInbound(context.Background(), mkInbound("ch", "c", "x")); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 200*time.Millisecond, func() bool { return len(ch.Sent()) == 1 }, "reply should land with disabled send timeout")
+}
+
+func TestOutboundEnqueueTimeout_DisabledWhenZero(t *testing.T) {
+	// WithOutboundEnqueueTimeout(0) disables the timeout: a saturated
+	// outbound queue makes the brain worker wait until either a slot
+	// frees up or the router context is cancelled. Test the happy path
+	// (a slot eventually frees).
+	r := router.New(
+		router.WithOutboundQueueCapacity(1),
+		router.WithOutboundEnqueueTimeout(0),
+	)
+	t.Cleanup(func() { shutdown(t, r) })
+
+	ch := newFakeChannel("ch")
+	_ = r.RegisterChannel(ch)
+
+	// One reply: fits comfortably in cap=1.
+	b := newFakeBrain(mkOutbound("ch", "c", "x"))
+	_ = r.RegisterBrain("brain", b)
+	_ = r.Route("ch", "brain")
+
+	_ = r.DispatchInbound(context.Background(), mkInbound("ch", "c", "x"))
+	eventually(t, 200*time.Millisecond, func() bool { return len(ch.Sent()) == 1 }, "reply should land with disabled outbound enqueue timeout")
+}
+
+func TestRouterError_FormattingAndUnwrap(t *testing.T) {
+	tests := []struct {
+		name string
+		re   router.RouterError
+		want string
+	}{
+		{
+			"handle with brain",
+			router.RouterError{Kind: router.ErrKindHandle, Brain: "b1", Err: errors.New("boom")},
+			"router/handle: boom (brain=b1)",
+		},
+		{
+			"send with channel",
+			router.RouterError{Kind: router.ErrKindSend, Channel: "c1", Err: errors.New("nope")},
+			"router/send: nope (channel=c1)",
+		},
+		{
+			"outbound saturated wraps sentinel",
+			router.RouterError{Kind: router.ErrKindOutboundSaturated, Channel: "c1", Err: router.ErrChannelSaturated},
+			"router/outbound_saturated: " + router.ErrChannelSaturated.Error() + " (channel=c1)",
+		},
+		{
+			"both subjects",
+			router.RouterError{Kind: router.ErrKindHandle, Brain: "b", Channel: "c", Err: errors.New("e")},
+			"router/handle: e (brain=b channel=c)",
+		},
+		{
+			"no underlying err",
+			router.RouterError{Kind: router.ErrKindHandle, Brain: "b"},
+			"router/handle (brain=b)",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.re.Error(); got != tt.want {
+				t.Errorf("Error() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("unwrap returns inner", func(t *testing.T) {
+		re := router.RouterError{Err: router.ErrChannelSaturated}
+		if !errors.Is(re, router.ErrChannelSaturated) {
+			t.Error("errors.Is(re, ErrChannelSaturated) = false, want true (via Unwrap)")
+		}
+	})
+
+	t.Run("kind string", func(t *testing.T) {
+		cases := map[router.ErrorKind]string{
+			router.ErrKindHandle:            "handle",
+			router.ErrKindSend:              "send",
+			router.ErrKindOutboundSaturated: "outbound_saturated",
+			router.ErrorKind(99):            "unknown(99)",
+		}
+		for k, want := range cases {
+			if got := k.String(); got != want {
+				t.Errorf("ErrorKind(%d).String() = %q, want %q", int(k), got, want)
+			}
+		}
+	})
 }
 
 func TestShutdown_SuppressesShutdownTimeErrors(t *testing.T) {

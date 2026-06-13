@@ -14,74 +14,77 @@ import (
 	"github.com/Sebastian197/korvun/internal/envelope"
 )
 
-// Option configures a Router at construction time.
-type Option func(*Router)
-
-// WithQueueCapacity overrides the per-brain queue capacity. Values
-// less than 1 are clamped to 1.
-func WithQueueCapacity(n int) Option {
-	return func(r *Router) {
-		if n < 1 {
-			n = 1
-		}
-		r.queueCapacity = n
-	}
-}
-
-// WithEnqueueTimeout overrides the DispatchInbound enqueue timeout.
-// Values less than or equal to zero disable the timeout (the call
-// only returns on enqueue or ctx cancellation).
-func WithEnqueueTimeout(d time.Duration) Option {
-	return func(r *Router) { r.enqueueTimeout = d }
-}
-
-// WithSendTimeout overrides the per-call timeout applied to every
-// Channel.Send invocation for outbound replies.
-func WithSendTimeout(d time.Duration) Option {
-	return func(r *Router) { r.sendTimeout = d }
-}
-
-// Router is Korvun's in-process message router.
+// Router wires inbound Envelopes from channels to brains and outbound
+// replies back to channels. Phase 3.2 adds configurable worker pools,
+// per-call brain handler timeouts, a per-channel outbound queue, and
+// an asynchronous error hook (RouterError).
 type Router struct {
 	mu sync.RWMutex
 
-	channels map[string]channel.Channel
+	channels map[string]*channelWorker
 	brains   map[string]*brainWorker
 	routes   map[string]string // channel name -> brain name
 
+	// Phase 3.1 knobs.
 	queueCapacity  int
 	enqueueTimeout time.Duration
 	sendTimeout    time.Duration
 
+	// Phase 3.2 knobs.
+	brainWorkers           int
+	brainHandlerTimeout    time.Duration
+	outboundQueueCapacity  int
+	outboundEnqueueTimeout time.Duration
+	errorHandler           func(RouterError)
+
 	ctx    context.Context
 	cancel context.CancelFunc
-	wg     sync.WaitGroup
+
+	brainWg   sync.WaitGroup
+	channelWg sync.WaitGroup
 
 	shutdownOnce sync.Once
 	shutdown     bool
 }
 
-// brainWorker pairs a registered brain with its inbound queue.
+// brainWorker pairs a registered brain with its bounded inbound queue.
 type brainWorker struct {
 	name  string
 	brain brain.Brain
 	queue chan *envelope.Envelope
 }
 
-// New constructs a Router with the given options. Defaults are pinned
-// by ADR-0003: queue capacity 64, enqueue timeout 250 ms, send
-// timeout 5 s.
+// channelWorker pairs a registered channel with its bounded outbound
+// queue. Replies the brain produces enter this queue; a dedicated
+// goroutine drains it and invokes Channel.Send.
+type channelWorker struct {
+	name    string
+	channel channel.Channel
+	queue   chan *envelope.Envelope
+}
+
+// New constructs a Router with the given options. All knobs default
+// to the values pinned by ADR-0003 (DefaultQueueCapacity,
+// DefaultEnqueueTimeout, DefaultSendTimeout, DefaultBrainWorkers,
+// DefaultBrainHandlerTimeout, DefaultOutboundQueueCapacity,
+// DefaultOutboundEnqueueTimeout). No error hook is set by default;
+// without one, asynchronous errors are silently dropped (compatible
+// with Phase 3.1 behaviour).
 func New(opts ...Option) *Router {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Router{
-		channels:       make(map[string]channel.Channel),
-		brains:         make(map[string]*brainWorker),
-		routes:         make(map[string]string),
-		queueCapacity:  DefaultQueueCapacity,
-		enqueueTimeout: DefaultEnqueueTimeout,
-		sendTimeout:    DefaultSendTimeout,
-		ctx:            ctx,
-		cancel:         cancel,
+		channels:               make(map[string]*channelWorker),
+		brains:                 make(map[string]*brainWorker),
+		routes:                 make(map[string]string),
+		queueCapacity:          DefaultQueueCapacity,
+		enqueueTimeout:         DefaultEnqueueTimeout,
+		sendTimeout:            DefaultSendTimeout,
+		brainWorkers:           DefaultBrainWorkers,
+		brainHandlerTimeout:    DefaultBrainHandlerTimeout,
+		outboundQueueCapacity:  DefaultOutboundQueueCapacity,
+		outboundEnqueueTimeout: DefaultOutboundEnqueueTimeout,
+		ctx:                    ctx,
+		cancel:                 cancel,
 	}
 	for _, o := range opts {
 		o(r)
@@ -89,8 +92,9 @@ func New(opts ...Option) *Router {
 	return r
 }
 
-// RegisterChannel makes a channel available to the router. The
-// channel's Name() is used as its registry key and must be non-empty.
+// RegisterChannel makes a channel available to the router and starts
+// its outbound worker. The channel's Name() is used as its registry
+// key and must be non-empty.
 func (r *Router) RegisterChannel(ch channel.Channel) error {
 	if ch == nil {
 		return ErrNilChannel
@@ -100,17 +104,28 @@ func (r *Router) RegisterChannel(ch channel.Channel) error {
 		return ErrEmptyChannelName
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.shutdown {
+		r.mu.Unlock()
 		return ErrShutdown
 	}
-	r.channels[name] = ch
+	cw := &channelWorker{
+		name:    name,
+		channel: ch,
+		queue:   make(chan *envelope.Envelope, r.outboundQueueCapacity),
+	}
+	r.channels[name] = cw
+	r.channelWg.Add(1)
+	r.mu.Unlock()
+
+	go r.runChannelWorker(cw)
 	return nil
 }
 
 // RegisterBrain attaches a brain to the router under the given name
-// and starts its single background worker. The worker stops cleanly
-// during Shutdown.
+// and starts its configured number of worker goroutines (see
+// WithBrainWorkers; default 1). All workers consume the same bounded
+// inbound queue; concurrency between them is the router's only
+// concurrency-control knob for a brain.
 func (r *Router) RegisterBrain(name string, b brain.Brain) error {
 	if b == nil {
 		return ErrNilBrain
@@ -129,10 +144,13 @@ func (r *Router) RegisterBrain(name string, b brain.Brain) error {
 		queue: make(chan *envelope.Envelope, r.queueCapacity),
 	}
 	r.brains[name] = bw
-	r.wg.Add(1)
+	workers := r.brainWorkers
+	r.brainWg.Add(workers)
 	r.mu.Unlock()
 
-	go r.runBrainWorker(bw)
+	for i := 0; i < workers; i++ {
+		go r.runBrainWorker(bw)
+	}
 	return nil
 }
 
@@ -157,12 +175,8 @@ func (r *Router) Route(channelName, brainName string) error {
 
 // DispatchInbound enqueues an inbound Envelope for the brain routed
 // from its channel. It enforces conversation correlation, routing
-// table integrity, and bounded-queue backpressure per ADR-0003.
-//
-// Concretely, DispatchInbound either pushes the envelope onto the
-// target brain's queue, returns ctx.Err() if the caller cancels, or
-// returns ErrBrainSaturated if the queue stays full for the configured
-// enqueue timeout. The call never blocks beyond that deadline.
+// table integrity, and bounded-queue backpressure per ADR-0003. The
+// call never blocks beyond the configured enqueue timeout.
 func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) error {
 	if env == nil {
 		return ErrNilEnvelope
@@ -215,27 +229,22 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 	}
 }
 
-// Shutdown stops every brain worker and waits for in-flight handlers
-// to return. It is safe to call concurrently and multiple times: only
-// the first invocation does any work; subsequent ones simply wait for
-// the in-progress shutdown to finish.
-//
-// The provided ctx bounds how long Shutdown blocks waiting for
-// workers; if ctx is cancelled first, Shutdown returns ctx.Err() while
-// the workers still drain in the background.
+// Shutdown stops every brain worker and channel worker and waits for
+// them to return. It is idempotent and safe for concurrent use. The
+// supplied ctx bounds how long Shutdown blocks: if ctx is cancelled
+// first, Shutdown returns ctx.Err() while workers continue draining
+// in the background.
 func (r *Router) Shutdown(ctx context.Context) error {
 	r.shutdownOnce.Do(func() {
 		r.mu.Lock()
 		r.shutdown = true
-		r.cancel()
-		for _, bw := range r.brains {
-			close(bw.queue)
-		}
 		r.mu.Unlock()
+		r.cancel()
 	})
 	done := make(chan struct{})
 	go func() {
-		r.wg.Wait()
+		r.brainWg.Wait()
+		r.channelWg.Wait()
 		close(done)
 	}()
 	select {
@@ -246,10 +255,9 @@ func (r *Router) Shutdown(ctx context.Context) error {
 	}
 }
 
-// ConversationKey returns the routing key for an envelope, joining the
-// channel name and the conversation id with "::". It is the canonical
-// way to address a conversation in the router. Returns "" if the
-// envelope is nil or the conversation id is absent or empty.
+// ConversationKey returns the routing key for an envelope, joining
+// the channel name and the conversation id with "::". Returns "" if
+// the envelope is nil or its conversation id is absent or empty.
 func ConversationKey(env *envelope.Envelope) string {
 	if env == nil {
 		return ""
@@ -261,35 +269,149 @@ func ConversationKey(env *envelope.Envelope) string {
 	return env.Channel + "::" + v
 }
 
-// runBrainWorker is the single goroutine attached to each registered
-// brain (Phase 3.1: one worker per brain). It drains the brain's queue,
-// calls Handle, and dispatches every reply through the originating
-// channel under the configured send timeout.
+// ---------- internal workers ----------------------------------------------
+
+// runBrainWorker drains its brain's inbound queue, invoking
+// handleAndReply for each envelope. The worker exits on either queue
+// close (Shutdown closed it) or router context cancellation.
 func (r *Router) runBrainWorker(bw *brainWorker) {
-	defer r.wg.Done()
-	for env := range bw.queue {
-		r.handleAndReply(bw.brain, env)
+	defer r.brainWg.Done()
+	for {
+		select {
+		case env, ok := <-bw.queue:
+			if !ok {
+				return
+			}
+			r.handleAndReply(bw.name, bw.brain, env)
+		case <-r.ctx.Done():
+			return
+		}
 	}
 }
 
-// handleAndReply runs Brain.Handle on env and forwards each returned
-// envelope to env.Channel via Channel.Send under a context bound by
-// sendTimeout. Errors are intentionally swallowed in Phase 3.1; an
-// error-reporting hook arrives in Phase 3.2.
-func (r *Router) handleAndReply(b brain.Brain, env *envelope.Envelope) {
-	out, err := b.Handle(r.ctx, env)
-	if err != nil || len(out) == 0 {
+// runChannelWorker drains its channel's outbound queue, invoking
+// deliver for each reply.
+func (r *Router) runChannelWorker(cw *channelWorker) {
+	defer r.channelWg.Done()
+	for {
+		select {
+		case env, ok := <-cw.queue:
+			if !ok {
+				return
+			}
+			r.deliver(cw, env)
+		case <-r.ctx.Done():
+			return
+		}
+	}
+}
+
+// handleAndReply runs Brain.Handle under a bounded context (per
+// WithBrainHandlerTimeout) and, on success, enqueues every reply on
+// its target channel's outbound queue. Errors from Handle are routed
+// to the error hook.
+func (r *Router) handleAndReply(brainName string, b brain.Brain, env *envelope.Envelope) {
+	var (
+		out []*envelope.Envelope
+		err error
+	)
+	if r.brainHandlerTimeout > 0 {
+		ctx, cancel := context.WithTimeout(r.ctx, r.brainHandlerTimeout)
+		out, err = b.Handle(ctx, env)
+		cancel()
+	} else {
+		out, err = b.Handle(r.ctx, env)
+	}
+	if err != nil {
+		r.notifyError(RouterError{
+			Kind:     ErrKindHandle,
+			Brain:    brainName,
+			Envelope: env,
+			Err:      err,
+		})
 		return
 	}
+	for _, reply := range out {
+		r.sendReply(reply)
+	}
+}
+
+// sendReply enqueues a single reply onto the originating channel's
+// outbound queue. If the queue is saturated within
+// outboundEnqueueTimeout, the reply is dropped and the error hook
+// receives ErrKindOutboundSaturated wrapping ErrChannelSaturated.
+func (r *Router) sendReply(env *envelope.Envelope) {
 	r.mu.RLock()
-	ch, ok := r.channels[env.Channel]
+	if r.shutdown {
+		r.mu.RUnlock()
+		return
+	}
+	cw, ok := r.channels[env.Channel]
 	r.mu.RUnlock()
 	if !ok {
 		return
 	}
-	for _, reply := range out {
-		sendCtx, cancel := context.WithTimeout(r.ctx, r.sendTimeout)
-		_ = ch.Send(sendCtx, reply)
-		cancel()
+
+	if r.outboundEnqueueTimeout <= 0 {
+		select {
+		case cw.queue <- env:
+			return
+		case <-r.ctx.Done():
+			return
+		}
+	}
+	timer := time.NewTimer(r.outboundEnqueueTimeout)
+	defer timer.Stop()
+	select {
+	case cw.queue <- env:
+		return
+	case <-timer.C:
+		r.notifyError(RouterError{
+			Kind:     ErrKindOutboundSaturated,
+			Channel:  cw.name,
+			Envelope: env,
+			Err:      ErrChannelSaturated,
+		})
+	case <-r.ctx.Done():
+		return
+	}
+}
+
+// deliver invokes Channel.Send under a context bounded by sendTimeout.
+// Errors from Send are routed to the error hook.
+func (r *Router) deliver(cw *channelWorker, env *envelope.Envelope) {
+	var (
+		sendCtx context.Context
+		cancel  context.CancelFunc
+	)
+	if r.sendTimeout > 0 {
+		sendCtx, cancel = context.WithTimeout(r.ctx, r.sendTimeout)
+	} else {
+		sendCtx, cancel = context.WithCancel(r.ctx)
+	}
+	err := cw.channel.Send(sendCtx, env)
+	cancel()
+	if err != nil {
+		r.notifyError(RouterError{
+			Kind:     ErrKindSend,
+			Channel:  cw.name,
+			Envelope: env,
+			Err:      err,
+		})
+	}
+}
+
+// notifyError invokes the configured error hook, if any. Errors
+// produced by the router's own internal context cancellation (i.e.
+// during Shutdown) are suppressed: they are an artefact of shutting
+// down, not a real failure to surface to the operator.
+func (r *Router) notifyError(re RouterError) {
+	select {
+	case <-r.ctx.Done():
+		return
+	default:
+	}
+	if r.errorHandler != nil {
+		r.errorHandler(re)
 	}
 }
