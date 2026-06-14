@@ -1,0 +1,21 @@
+{
+  "update_id": 100000061,
+  "message_reaction": {
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "message_id": 802,
+    "user": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "date": 1786000910,
+    "old_reaction": [
+      {"type": "emoji", "emoji": "👍"}
+    ],
+    "new_reaction": []
+  }
+}

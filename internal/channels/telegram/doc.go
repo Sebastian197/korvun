@@ -58,6 +58,18 @@ const (
 	// can correlate it with the original send by Meta[MetaMessageID]
 	// (which Telegram preserves across edits). (Phase 2E.6.)
 	MetaEditedAt = "telegram.edited_at"
+	// MetaReactionAction labels the kind of inbound reaction event,
+	// one of "added", "removed", "changed". Derived from the
+	// MessageReactionUpdated.OldReaction / NewReaction diff after the
+	// emoji-only filter is applied. (Phase 2E.7.)
+	MetaReactionAction = "telegram.reaction_action"
+	// MetaReactionPrevious is the comma-separated emoji list that the
+	// user held BEFORE a "changed" reaction event. Set only when
+	// MetaReactionAction == "changed"; absent otherwise. The CSV form
+	// assumes individual emoji strings contain no comma — true for
+	// every standard emoji codepoint and accepted as scope under
+	// ADR-0007. (Phase 2E.7.)
+	MetaReactionPrevious = "telegram.reaction_previous"
 )
 
 // Values accepted by MetaAudioKind. Any other value (including an

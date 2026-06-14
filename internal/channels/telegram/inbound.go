@@ -4,6 +4,7 @@
 package telegram
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,18 +30,28 @@ import (
 //     Content is the callback Data string, and Meta carries the
 //     callback ID so a later outbound OpCallbackAck Envelope can
 //     address it (ADR-0006).
+//   - MessageReaction (Phase 2E.7): a user-initiated reaction change.
+//     The resulting Envelope carries one or more Reaction Parts
+//     (emoji per Part), and Meta carries the action label
+//     (added/removed/changed) plus the previous emoji set for the
+//     'changed' case (ADR-0007). Non-emoji ReactionType variants
+//     (custom_emoji, paid) are filtered out before the diff is
+//     computed and are invisible to the dominio in this phase.
 //
-// Returns ErrNoMessage when the update carries neither a Message, a
-// CallbackQuery, nor an EditedMessage (or when the CallbackQuery
-// lacks the ID needed to ack it), and ErrUnsupportedContent when the
-// carried kind has no content the adapter can translate (no sender,
-// no text/media, no callback data).
+// Returns ErrNoMessage when the update carries no recognised inbound
+// kind (or when a CallbackQuery lacks the ID needed to ack it), and
+// ErrUnsupportedContent when the carried kind has no content the
+// adapter can translate (no sender, no text/media, no callback data,
+// reaction event with no net change after filtering).
 func InboundFromUpdate(u *models.Update) (*envelope.Envelope, error) {
 	if u == nil {
 		return nil, ErrNoMessage
 	}
 	if u.CallbackQuery != nil {
 		return inboundFromCallbackQuery(u.CallbackQuery)
+	}
+	if u.MessageReaction != nil {
+		return inboundFromMessageReaction(u.MessageReaction)
 	}
 	if u.EditedMessage != nil {
 		return inboundFromMessage(u.EditedMessage)
@@ -174,6 +185,108 @@ func inboundFromCallbackQuery(cq *models.CallbackQuery) (*envelope.Envelope, err
 	}
 	env.AddCallback(cq.Data)
 	return env, nil
+}
+
+// inboundFromMessageReaction handles the MessageReaction update kind:
+// a specific user changed their reactions on a previously sent
+// message. ADR-0007 fixes the contract: filter the discriminated
+// ReactionType union to emoji-only on both sides, compute the diff,
+// and produce one Envelope per real user-visible change (the no-op
+// case is dropped at this seam, never delivered upward).
+func inboundFromMessageReaction(mr *models.MessageReactionUpdated) (*envelope.Envelope, error) {
+	// Anonymous-admin reactions (User == nil, ActorChat != nil) are out
+	// of scope for ADR-0007; refuse the update rather than surface an
+	// envelope without a sender.
+	if mr.User == nil {
+		return nil, ErrUnsupportedContent
+	}
+	oldEmojis := filterEmojiReactions(mr.OldReaction)
+	newEmojis := filterEmojiReactions(mr.NewReaction)
+	action, partEmojis, prevCSV, ok := computeReactionDiff(oldEmojis, newEmojis)
+	if !ok {
+		return nil, ErrUnsupportedContent
+	}
+	sender := envelope.Participant{
+		ID:   strconv.FormatInt(mr.User.ID, 10),
+		Name: senderName(mr.User),
+	}
+	env := envelope.New(ChannelName, envelope.Inbound, sender)
+	env.Timestamp = time.Unix(int64(mr.Date), 0).UTC()
+	env.Meta[MetaChatID] = strconv.FormatInt(mr.Chat.ID, 10)
+	env.Meta[MetaMessageID] = strconv.Itoa(mr.MessageID)
+	if t := string(mr.Chat.Type); t != "" {
+		env.Meta[MetaChatType] = t
+	}
+	env.Meta[MetaReactionAction] = action
+	if prevCSV != "" {
+		env.Meta[MetaReactionPrevious] = prevCSV
+	}
+	for _, em := range partEmojis {
+		env.AddReaction(em)
+	}
+	return env, nil
+}
+
+// filterEmojiReactions returns the emoji strings from the standard
+// ReactionTypeEmoji variants in rs, dropping the custom_emoji and
+// paid variants per ADR-0007 §5. The slice preserves Telegram's
+// delivery order so downstream sees the same sequence the user
+// performed.
+func filterEmojiReactions(rs []models.ReactionType) []string {
+	out := make([]string, 0, len(rs))
+	for _, r := range rs {
+		if r.Type == models.ReactionTypeTypeEmoji && r.ReactionTypeEmoji != nil {
+			out = append(out, r.ReactionTypeEmoji.Emoji)
+		}
+	}
+	return out
+}
+
+// computeReactionDiff classifies the change between two emoji-filtered
+// reaction slices into one of three actions plus the Parts contents,
+// per ADR-0007 §4. Returns ok=false when the two slices represent the
+// same set (the no-op case, including both-empty after filtering) so
+// the caller can refuse the event before constructing an envelope.
+//
+// The set comparison uses sorted copies, so a user who simply
+// reordered the same emojis (which Telegram does not actually
+// generate, but defensively) is recognised as a no-op rather than
+// surfaced as a spurious 'changed'.
+//
+// The 'changed' case returns the CSV of the OLD emoji set in
+// Telegram's delivery order; the CSV form assumes individual emoji
+// strings contain no comma (true for every standard emoji codepoint).
+func computeReactionDiff(oldEmojis, newEmojis []string) (action string, parts []string, prev string, ok bool) {
+	if sameEmojiSet(oldEmojis, newEmojis) {
+		return "", nil, "", false
+	}
+	switch {
+	case len(oldEmojis) == 0:
+		return "added", newEmojis, "", true
+	case len(newEmojis) == 0:
+		return "removed", oldEmojis, "", true
+	default:
+		return "changed", newEmojis, strings.Join(oldEmojis, ","), true
+	}
+}
+
+// sameEmojiSet reports whether a and b contain the same emojis,
+// regardless of order. Both slices are assumed small (a user holds at
+// most a handful of reactions at a time).
+func sameEmojiSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	as := append([]string(nil), a...)
+	bs := append([]string(nil), b...)
+	sort.Strings(as)
+	sort.Strings(bs)
+	for i := range as {
+		if as[i] != bs[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // senderName picks a display name for a Telegram user, preferring the
