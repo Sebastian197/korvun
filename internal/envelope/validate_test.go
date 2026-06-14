@@ -96,6 +96,56 @@ func TestValidate_valid_operation_envelopes(t *testing.T) {
 				return e.SetDelete()
 			}(),
 		},
+		{
+			name: "OpSetReaction with one emoji",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetReactions("👍")
+			}(),
+		},
+		{
+			name: "OpSetReaction with multiple emoji",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetReactions("👍", "🎉", "❤️")
+			}(),
+		},
+		{
+			name: "OpSetReaction empty Parts (clear all)",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetReactions()
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.env.Validate(); err != nil {
+				t.Errorf("Validate() returned error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidate_valid_reaction_inbound(t *testing.T) {
+	tests := []struct {
+		name string
+		env  *Envelope
+	}{
+		{
+			name: "single reaction",
+			env: func() *Envelope {
+				e := New("telegram", Inbound, Participant{ID: "user-1"})
+				return e.AddReaction("👍")
+			}(),
+		},
+		{
+			name: "multiple reactions (Premium account)",
+			env: func() *Envelope {
+				e := New("telegram", Inbound, Participant{ID: "user-1"})
+				return e.AddReaction("👍").AddReaction("🎉").AddReaction("❤️")
+			}(),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -221,6 +271,45 @@ func TestValidate_operation_errors(t *testing.T) {
 				return e
 			},
 			wantErr: "unknown OperationKind",
+		},
+		{
+			name: "OpSetReaction with non-Text Part",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpSetReaction}
+				e.Parts = []Part{{Type: Image, Source: "x"}}
+				return e
+			},
+			wantErr: "must be Text",
+		},
+		{
+			name: "OpSetReaction with empty-Content Text Part",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpSetReaction}
+				e.Parts = []Part{{Type: Text, Content: ""}}
+				return e
+			},
+			wantErr: "must have non-empty Content",
+		},
+		{
+			name: "OpSetReaction with non-empty Source",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpSetReaction}
+				e.Parts = []Part{{Type: Text, Content: "👍", Source: "x"}}
+				return e
+			},
+			wantErr: "must not set Source/MIMEType",
+		},
+		{
+			name: "OpSetReaction with Keyboard",
+			build: func() *Envelope {
+				e := base().SetReactions("👍")
+				e.Keyboard = &Keyboard{Rows: [][]Button{{CallbackButton("x", "x")}}}
+				return e
+			},
+			wantErr: "OpSetReaction must not carry a Keyboard",
 		},
 	}
 	for _, tt := range tests {
@@ -468,6 +557,49 @@ func TestValidate_errors(t *testing.T) {
 					{Type: Callback, Content: "no"},
 				}
 			},
+			wantErr: "must be the only part",
+		},
+		{
+			name: "reaction part with empty content",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Reaction, Content: ""}}
+			},
+			wantErr: "empty content",
+		},
+		{
+			name: "reaction part with non-empty source",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Reaction, Content: "👍", Source: "x"}}
+			},
+			wantErr: "reaction must not set source",
+		},
+		{
+			name: "reaction part with non-empty mime type",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Reaction, Content: "👍", MIMEType: "text/plain"}}
+			},
+			wantErr: "reaction must not set mime",
+		},
+		{
+			name: "reaction mixed with text part",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{
+					{Type: Reaction, Content: "👍"},
+					{Type: Text, Content: "hello"},
+				}
+			},
+			wantErr: "reaction",
+		},
+		{
+			name: "reaction mixed with callback part",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{
+					{Type: Reaction, Content: "👍"},
+					{Type: Callback, Content: "yes"},
+				}
+			},
+			// Callback exclusivity strikes first (must be the only Part)
+			// — either rule rejecting is correct; we just need refusal.
 			wantErr: "must be the only part",
 		},
 		{
@@ -732,6 +864,22 @@ func TestJSON_roundtrip_operation_field(t *testing.T) {
 			}(),
 			kind: OpCallbackAck,
 		},
+		{
+			name: "OpSetReaction with multiple emoji",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetReactions("👍", "🎉")
+			}(),
+			kind: OpSetReaction,
+		},
+		{
+			name: "OpSetReaction clear-all",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetReactions()
+			}(),
+			kind: OpSetReaction,
+		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -750,6 +898,31 @@ func TestJSON_roundtrip_operation_field(t *testing.T) {
 				t.Errorf("decoded.Operation.Kind = %v, want %v", decoded.Operation.Kind, tt.kind)
 			}
 		})
+	}
+}
+
+func TestJSON_roundtrip_reaction_inbound(t *testing.T) {
+	original := New("telegram", Inbound, Participant{ID: "user-1"})
+	original.AddReaction("👍").AddReaction("🎉")
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	var decoded Envelope
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	if len(decoded.Parts) != 2 {
+		t.Fatalf("Parts len = %d, want 2", len(decoded.Parts))
+	}
+	for i, want := range []string{"👍", "🎉"} {
+		if decoded.Parts[i].Type != Reaction {
+			t.Errorf("Parts[%d].Type = %v, want Reaction", i, decoded.Parts[i].Type)
+		}
+		if decoded.Parts[i].Content != want {
+			t.Errorf("Parts[%d].Content = %q, want %q", i, decoded.Parts[i].Content, want)
+		}
 	}
 }
 

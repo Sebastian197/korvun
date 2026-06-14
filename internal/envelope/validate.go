@@ -51,12 +51,21 @@ func (e *Envelope) Validate() error {
 	return nil
 }
 
-// validateExclusivePartTypes enforces that a Callback part must be the
-// only Part in the envelope when it appears. A tap event has no media
-// or text body beyond its data string, so it refuses to share the
-// Parts slice with anything else. The rule list intentionally stays
-// short — ADR-0006 moved CallbackAck out of Parts entirely so its
-// exclusivity is now enforced at the Operation level instead.
+// validateExclusivePartTypes enforces two distinct exclusivity rules:
+//
+//   - Callback parts are *singletons*: when a Callback Part appears, it
+//     must be the only Part in the envelope. A tap event has no media
+//     or text body beyond its data string.
+//   - Reaction parts are *uniform-typed*: when a Reaction Part appears,
+//     every other Part must also be a Reaction Part. A reaction event
+//     may carry multiple emojis (Premium accounts), so the rule is "all
+//     same kind" rather than "exactly one".
+//
+// The Callback check runs first so a Reaction + Callback mix is
+// rejected for the same Callback-singleton reason it would be rejected
+// without a Reaction present. CallbackAck used to be in this list but
+// ADR-0006 moved it out of Parts entirely (its exclusivity is enforced
+// at the Operation level now).
 func validateExclusivePartTypes(parts []Part) error {
 	if len(parts) <= 1 {
 		return nil
@@ -65,6 +74,20 @@ func validateExclusivePartTypes(parts []Part) error {
 		if p.Type == Callback {
 			return fmt.Errorf("%s part must be the only part in the envelope", p.Type)
 		}
+	}
+	// Reaction-uniformity rule. Walk once: any non-Reaction Part
+	// alongside a Reaction Part is a coexistence violation.
+	hasReaction := false
+	hasNonReaction := false
+	for _, p := range parts {
+		if p.Type == Reaction {
+			hasReaction = true
+		} else {
+			hasNonReaction = true
+		}
+	}
+	if hasReaction && hasNonReaction {
+		return errors.New("reaction parts must not coexist with other part types")
 	}
 	return nil
 }
@@ -126,6 +149,23 @@ func validateOperation(e *Envelope) error {
 		if e.Keyboard != nil {
 			return errors.New("OpCallbackAck must not carry a Keyboard")
 		}
+	case OpSetReaction:
+		// Parts may be empty (clear all the bot's reactions on the
+		// target) or 1+ Text Parts (each Content is one emoji).
+		for i, p := range e.Parts {
+			if p.Type != Text {
+				return fmt.Errorf("OpSetReaction part %d must be Text, got %s", i, p.Type)
+			}
+			if p.Content == "" {
+				return fmt.Errorf("OpSetReaction part %d must have non-empty Content", i)
+			}
+			if p.Source != "" || p.MIMEType != "" {
+				return fmt.Errorf("OpSetReaction part %d must not set Source/MIMEType", i)
+			}
+		}
+		if e.Keyboard != nil {
+			return errors.New("OpSetReaction must not carry a Keyboard")
+		}
 	default:
 		return fmt.Errorf("unknown OperationKind: %d", op.Kind)
 	}
@@ -164,6 +204,16 @@ func validatePart(idx int, p Part) error {
 		}
 		if p.MIMEType != "" {
 			return fmt.Errorf("part %d: callback must not set mime type", idx)
+		}
+	case Reaction:
+		if p.Content == "" {
+			return fmt.Errorf("part %d: empty content for reaction part", idx)
+		}
+		if p.Source != "" {
+			return fmt.Errorf("part %d: reaction must not set source", idx)
+		}
+		if p.MIMEType != "" {
+			return fmt.Errorf("part %d: reaction must not set mime type", idx)
 		}
 	default:
 		return fmt.Errorf("part %d: unknown part type %d", idx, p.Type)

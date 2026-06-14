@@ -26,6 +26,13 @@ const (
 	// non-empty Content (the toast text). Keyboard: forbidden. Target
 	// via channel-specific Meta entry (e.g. telegram.callback_query_id).
 	OpCallbackAck
+	// OpSetReaction sets (or clears) the bot's emoji reactions on a
+	// previously sent message. Parts: 0+ Text Parts, each Content one
+	// emoji; empty Parts means "clear all the bot's reactions on the
+	// target". Keyboard: forbidden. Target via channel-specific Meta
+	// entries (e.g. telegram.chat_id + telegram.message_id).
+	// See ADR-0007.
+	OpSetReaction
 )
 
 // String returns the human-readable name of the operation kind.
@@ -39,6 +46,8 @@ func (k OperationKind) String() string {
 		return "delete"
 	case OpCallbackAck:
 		return "callback_ack"
+	case OpSetReaction:
+		return "set_reaction"
 	default:
 		return "unknown"
 	}

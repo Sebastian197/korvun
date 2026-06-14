@@ -119,3 +119,37 @@ func (e *Envelope) SetCallbackAck(toast string) *Envelope {
 	}
 	return e
 }
+
+// SetReactions marks the envelope as an OpSetReaction operation that
+// sets the bot's reactions on the target message to the given emojis,
+// one per variadic argument. Passing no arguments clears all of the
+// bot's existing reactions on the target. Replaces any pre-existing
+// Parts and Operation. See ADR-0007.
+//
+// Each emoji is stored as its own Text Part (so multi-emoji reactions
+// round-trip cleanly through the canonical envelope shape). The
+// channel-specific target identifier (e.g. telegram.chat_id +
+// telegram.message_id) must already be present in Meta when
+// OutboundParams is called.
+func (e *Envelope) SetReactions(emojis ...string) *Envelope {
+	e.Operation = &Operation{Kind: OpSetReaction}
+	parts := make([]Part, len(emojis))
+	for i, em := range emojis {
+		parts[i] = Part{Type: Text, Content: em}
+	}
+	e.Parts = parts
+	return e
+}
+
+// AddReaction appends a single Reaction part to the envelope. Unlike
+// the other Part builders, AddReaction is intended for inbound use:
+// when an adapter materialises a user-initiated reaction event, it
+// calls AddReaction once per emoji the user holds on the target
+// message. See ADR-0007.
+func (e *Envelope) AddReaction(emoji string) *Envelope {
+	e.Parts = append(e.Parts, Part{
+		Type:    Reaction,
+		Content: emoji,
+	})
+	return e
+}

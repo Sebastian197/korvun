@@ -323,6 +323,88 @@ func TestBuilder_SetReplacesPriorOperationAndParts(t *testing.T) {
 	}
 }
 
+func TestBuilder_SetReactions_Single(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	result := env.SetReactions("👍")
+	if result != env {
+		t.Error("SetReactions should return the same *Envelope for chaining")
+	}
+	if env.Operation == nil || env.Operation.Kind != OpSetReaction {
+		t.Fatalf("Operation = %+v, want OpSetReaction", env.Operation)
+	}
+	if len(env.Parts) != 1 {
+		t.Fatalf("Parts len = %d, want 1", len(env.Parts))
+	}
+	p := env.Parts[0]
+	if p.Type != Text {
+		t.Errorf("Part Type = %v, want Text (each emoji is a Text Part)", p.Type)
+	}
+	if p.Content != "👍" {
+		t.Errorf("Part Content = %q, want %q", p.Content, "👍")
+	}
+}
+
+func TestBuilder_SetReactions_Multiple(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	env.SetReactions("👍", "🎉", "❤️")
+	if env.Operation.Kind != OpSetReaction {
+		t.Fatalf("Operation.Kind = %v, want OpSetReaction", env.Operation.Kind)
+	}
+	if len(env.Parts) != 3 {
+		t.Fatalf("Parts len = %d, want 3", len(env.Parts))
+	}
+	for i, want := range []string{"👍", "🎉", "❤️"} {
+		if env.Parts[i].Content != want {
+			t.Errorf("Parts[%d].Content = %q, want %q", i, env.Parts[i].Content, want)
+		}
+	}
+}
+
+func TestBuilder_SetReactions_EmptyClearsAll(t *testing.T) {
+	// Variadic with zero arguments = clear all the bot's reactions on
+	// the target message (an Envelope with OpSetReaction and empty Parts).
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	env.SetReactions()
+	if env.Operation == nil || env.Operation.Kind != OpSetReaction {
+		t.Fatalf("Operation = %+v, want OpSetReaction", env.Operation)
+	}
+	if len(env.Parts) != 0 {
+		t.Errorf("Parts len = %d, want 0 (clear-all intent)", len(env.Parts))
+	}
+}
+
+func TestBuilder_SetReactions_ReplacesPriorState(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	env.AddText("ignored")
+	env.SetReactions("👍")
+	if len(env.Parts) != 1 || env.Parts[0].Content != "👍" {
+		t.Errorf("Parts = %+v, want single emoji '👍'", env.Parts)
+	}
+}
+
+func TestBuilder_AddReaction(t *testing.T) {
+	env := New("telegram", Inbound, Participant{ID: "user-1"})
+	result := env.AddReaction("👍").AddReaction("🎉")
+	if result != env {
+		t.Error("AddReaction should return the same *Envelope for chaining")
+	}
+	if len(env.Parts) != 2 {
+		t.Fatalf("Parts len = %d, want 2", len(env.Parts))
+	}
+	for i, want := range []string{"👍", "🎉"} {
+		p := env.Parts[i]
+		if p.Type != Reaction {
+			t.Errorf("Parts[%d].Type = %v, want Reaction", i, p.Type)
+		}
+		if p.Content != want {
+			t.Errorf("Parts[%d].Content = %q, want %q", i, p.Content, want)
+		}
+		if p.Source != "" || p.MIMEType != "" {
+			t.Errorf("Parts[%d] Source/MIMEType must be empty", i)
+		}
+	}
+}
+
 func TestBuilder_WithKeyboard_SingleRow(t *testing.T) {
 	env := New("telegram", Outbound, Participant{ID: "bot"})
 	result := env.AddText("Choose:").WithKeyboard(

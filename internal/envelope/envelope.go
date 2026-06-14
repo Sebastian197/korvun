@@ -55,6 +55,17 @@ const (
 	// instead of typing a message. Content carries the action payload
 	// (the channel's callback data string). See ADR-0005.
 	Callback
+	// Slot 7 is intentionally retired: it was PartType.CallbackAck in 2E.4
+	// before ADR-0006 migrated outbound ack to OperationKind.OpCallbackAck.
+	// The slot is left unused so an old marshalled envelope carrying
+	// type=7 never silently deserialises into a new content kind.
+
+	// Reaction represents one emoji reaction on an inbound event:
+	// the user added, removed or changed their reactions on a previously
+	// sent message. Multiple Reaction Parts may coexist in the same
+	// Envelope (a Premium user can hold several reactions at once). The
+	// emoji string lives in Content. See ADR-0007.
+	Reaction PartType = 8
 )
 
 // String returns the human-readable name of the part type.
@@ -74,6 +85,8 @@ func (pt PartType) String() string {
 		return "location"
 	case Callback:
 		return "callback"
+	case Reaction:
+		return "reaction"
 	default:
 		return "unknown"
 	}
