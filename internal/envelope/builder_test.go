@@ -104,3 +104,97 @@ func TestBuilder_chaining(t *testing.T) {
 		t.Fatalf("Parts len = %d, want 3", len(env.Parts))
 	}
 }
+
+func TestBuilder_AddLocation(t *testing.T) {
+	tests := []struct {
+		name     string
+		lat, lon float64
+	}{
+		{"barcelona", 41.40338, 2.17403},
+		{"sydney negative lon", -33.8688, 151.2093},
+		{"null island origin", 0, 0},
+		{"antipode all negative", -41.40338, -2.17403},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := New("telegram", Inbound, Participant{ID: "user-1"})
+			result := env.AddLocation(tt.lat, tt.lon)
+			if result != env {
+				t.Error("AddLocation should return the same *Envelope for chaining")
+			}
+			if len(env.Parts) != 1 {
+				t.Fatalf("Parts len = %d, want 1", len(env.Parts))
+			}
+			p := env.Parts[0]
+			if p.Type != Location {
+				t.Errorf("Parts[0].Type = %v, want Location", p.Type)
+			}
+			if p.Source != "" {
+				t.Errorf("Parts[0].Source = %q, want empty for Location", p.Source)
+			}
+			if p.MIMEType != "" {
+				t.Errorf("Parts[0].MIMEType = %q, want empty for Location", p.MIMEType)
+			}
+			lat, lon, ok := p.Location()
+			if !ok {
+				t.Fatalf("Part.Location() ok = false, want true; content=%q", p.Content)
+			}
+			if lat != tt.lat || lon != tt.lon {
+				t.Errorf("Part.Location() = (%v, %v), want (%v, %v)", lat, lon, tt.lat, tt.lon)
+			}
+		})
+	}
+}
+
+func TestPart_Location_accessor_negative(t *testing.T) {
+	tests := []struct {
+		name string
+		part Part
+	}{
+		{
+			name: "non-location type returns ok=false",
+			part: Part{Type: Text, Content: `{"lat":1,"lon":2}`},
+		},
+		{
+			name: "location with empty content",
+			part: Part{Type: Location, Content: ""},
+		},
+		{
+			name: "location with non-JSON content",
+			part: Part{Type: Location, Content: "41.40338,2.17403"},
+		},
+		{
+			name: "location with JSON missing lat",
+			part: Part{Type: Location, Content: `{"lon":2.17403}`},
+		},
+		{
+			name: "location with JSON missing lon",
+			part: Part{Type: Location, Content: `{"lat":41.40338}`},
+		},
+		{
+			name: "location with JSON wrong type for lat",
+			part: Part{Type: Location, Content: `{"lat":"x","lon":2}`},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, _, ok := tt.part.Location(); ok {
+				t.Errorf("Part.Location() ok = true, want false")
+			}
+		})
+	}
+}
+
+func TestPart_Location_tolerates_unknown_keys(t *testing.T) {
+	p := Part{
+		Type:    Location,
+		Content: `{"lat":41.40338,"lon":2.17403,"accuracy":12.5,"live_period":600}`,
+	}
+	lat, lon, ok := p.Location()
+	if !ok {
+		t.Fatalf("Part.Location() with unknown extra keys ok = false, want true")
+	}
+	if lat != 41.40338 || lon != 2.17403 {
+		t.Errorf("Part.Location() = (%v, %v), want (41.40338, 2.17403)", lat, lon)
+	}
+}

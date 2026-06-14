@@ -47,6 +47,19 @@ func validatePart(idx int, p Part) error {
 		if p.Source == "" {
 			return fmt.Errorf("part %d: empty source for %s part", idx, p.Type)
 		}
+	case Location:
+		if p.Content == "" {
+			return fmt.Errorf("part %d: empty content for location part", idx)
+		}
+		if p.Source != "" {
+			return fmt.Errorf("part %d: location must not set source", idx)
+		}
+		if p.MIMEType != "" {
+			return fmt.Errorf("part %d: location must not set mime type", idx)
+		}
+		if _, _, ok := p.Location(); !ok {
+			return fmt.Errorf("part %d: invalid location content: %q", idx, p.Content)
+		}
 	default:
 		return fmt.Errorf("part %d: unknown part type %d", idx, p.Type)
 	}

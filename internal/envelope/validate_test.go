@@ -18,6 +18,46 @@ func TestValidate_valid_envelope(t *testing.T) {
 	}
 }
 
+func TestValidate_valid_location_envelopes(t *testing.T) {
+	tests := []struct {
+		name string
+		env  *Envelope
+	}{
+		{
+			name: "AddLocation builder",
+			env: func() *Envelope {
+				e := New("telegram", Inbound, Participant{ID: "user-1"})
+				return e.AddLocation(41.40338, 2.17403)
+			}(),
+		},
+		{
+			name: "Null Island (0,0) is valid",
+			env: func() *Envelope {
+				e := New("telegram", Inbound, Participant{ID: "user-1"})
+				return e.AddLocation(0, 0)
+			}(),
+		},
+		{
+			name: "unknown extra keys are tolerated (forward compat)",
+			env: func() *Envelope {
+				e := New("telegram", Inbound, Participant{ID: "user-1"})
+				e.Parts = append(e.Parts, Part{
+					Type:    Location,
+					Content: `{"lat":41.40338,"lon":2.17403,"accuracy":12.5,"live_period":600}`,
+				})
+				return e
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.env.Validate(); err != nil {
+				t.Errorf("Validate() returned error for valid location envelope: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidate_errors(t *testing.T) {
 	base := func() *Envelope {
 		env := New("telegram", Inbound, Participant{ID: "user-1"})
@@ -78,6 +118,63 @@ func TestValidate_errors(t *testing.T) {
 			name:    "zero timestamp",
 			modify:  func(e *Envelope) { e.Timestamp = time.Time{} },
 			wantErr: "zero timestamp",
+		},
+		{
+			name: "location part with empty content",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Location, Content: ""}}
+			},
+			wantErr: "empty content",
+		},
+		{
+			name: "location part with non-JSON content",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Location, Content: "41.40338,2.17403"}}
+			},
+			wantErr: "invalid location",
+		},
+		{
+			name: "location part missing lat",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Location, Content: `{"lon":2.17403}`}}
+			},
+			wantErr: "invalid location",
+		},
+		{
+			name: "location part missing lon",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Location, Content: `{"lat":41.40338}`}}
+			},
+			wantErr: "invalid location",
+		},
+		{
+			name: "location part with wrong lat type",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Location, Content: `{"lat":"x","lon":2}`}}
+			},
+			wantErr: "invalid location",
+		},
+		{
+			name: "location part with non-empty source",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{
+					Type:    Location,
+					Content: `{"lat":0,"lon":0}`,
+					Source:  "https://example.com/map",
+				}}
+			},
+			wantErr: "location must not set source",
+		},
+		{
+			name: "location part with non-empty mime type",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{
+					Type:     Location,
+					Content:  `{"lat":0,"lon":0}`,
+					MIMEType: "application/geo+json",
+				}}
+			},
+			wantErr: "location must not set mime",
 		},
 	}
 
@@ -160,6 +257,7 @@ func TestJSON_roundtrip_preserves_all_part_types(t *testing.T) {
 	original.AddMedia(Audio, "clip.mp3", "audio/mpeg")
 	original.AddMedia(Video, "vid.mp4", "video/mp4")
 	original.AddMedia(File, "doc.pdf", "application/pdf")
+	original.AddLocation(41.40338, 2.17403)
 
 	data, err := json.Marshal(original)
 	if err != nil {
@@ -171,7 +269,7 @@ func TestJSON_roundtrip_preserves_all_part_types(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error: %v", err)
 	}
 
-	wantTypes := []PartType{Text, Image, Audio, Video, File}
+	wantTypes := []PartType{Text, Image, Audio, Video, File, Location}
 	if len(decoded.Parts) != len(wantTypes) {
 		t.Fatalf("Parts len = %d, want %d", len(decoded.Parts), len(wantTypes))
 	}
@@ -179,6 +277,13 @@ func TestJSON_roundtrip_preserves_all_part_types(t *testing.T) {
 		if decoded.Parts[i].Type != wt {
 			t.Errorf("Parts[%d].Type = %v, want %v", i, decoded.Parts[i].Type, wt)
 		}
+	}
+	lat, lon, ok := decoded.Parts[5].Location()
+	if !ok {
+		t.Fatalf("decoded location part not parseable: %q", decoded.Parts[5].Content)
+	}
+	if lat != 41.40338 || lon != 2.17403 {
+		t.Errorf("decoded location = (%v, %v), want (41.40338, 2.17403)", lat, lon)
 	}
 }
 

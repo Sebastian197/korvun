@@ -45,6 +45,11 @@ const (
 	Video
 	// File represents a generic file attachment.
 	File
+	// Location represents a geographic coordinate pair. The latitude and
+	// longitude ride inside Content as a JSON object {"lat":..,"lon":..};
+	// see ADR-0004. Callers should use Envelope.AddLocation to build a
+	// Location part and Part.Location to read the coordinates back.
+	Location
 )
 
 // String returns the human-readable name of the part type.
@@ -60,6 +65,8 @@ func (pt PartType) String() string {
 		return "video"
 	case File:
 		return "file"
+	case Location:
+		return "location"
 	default:
 		return "unknown"
 	}

@@ -39,3 +39,14 @@ func (e *Envelope) AddMedia(pt PartType, source, mimeType string) *Envelope {
 	})
 	return e
 }
+
+// AddLocation appends a Location part to the envelope, encoding the
+// coordinate pair in the canonical wire form fixed by ADR-0004. Returns
+// the envelope for method chaining.
+func (e *Envelope) AddLocation(lat, lon float64) *Envelope {
+	e.Parts = append(e.Parts, Part{
+		Type:    Location,
+		Content: marshalLocation(lat, lon),
+	})
+	return e
+}
