@@ -51,11 +51,19 @@ this ADR was written. Relevant API facts confirmed at that version:
   context.Context)` blocks until ctx is cancelled. Updates flow through
   `WithDefaultHandler` callbacks the library invokes from its internal
   worker pool.
-- **Polling primitive (caller-driven).** `func (b *Bot) GetUpdates(ctx,
-  *bot.GetUpdatesParams) ([]*models.Update, error)` exposes the same
-  `getUpdates` API method as a one-shot call, callable without going
-  through `b.Start`. Params include `Offset`, `Timeout`,
-  `AllowedUpdates`.
+- **Polling primitive — there is no public caller-driven seam.**
+  Re-verified by reading the library source at v1.21.0: `getUpdates`
+  is an **unexported** method (`func (b *Bot) getUpdates(ctx
+  context.Context, wg *sync.WaitGroup)` in `get_updates.go`), driven
+  only by `b.Start`. There is no public `GetUpdates(ctx, params)`
+  one-shot. Configuration of the polling loop happens via Options at
+  construction: `WithAllowedUpdates`, `WithInitialOffset`,
+  `WithUpdatesChannelCap`, `WithHTTPClient(pollTimeout, client)`.
+  Updates leave the library through a configured handler
+  (`WithDefaultHandler` is the universal sink). This is the surface
+  Phase 2E.8 must build on for polling mode — there is no
+  workable alternative short of re-implementing the Bot API client,
+  which contradicts ADR-0001.
 - **Webhook mode (library-driven).** `func (b *Bot) WebhookHandler()
   http.HandlerFunc` returns an HTTP handler that validates the
   `X-Telegram-Bot-Api-Secret-Token` header against the secret given
@@ -127,12 +135,17 @@ two writers feeds it, depending on the configured mode:
   }
   ```
 
-- **Polling mode**: a long-running goroutine loops on `bot.Bot.GetUpdates(ctx,
-  &bot.GetUpdatesParams{Offset: a.nextOffset, Timeout: a.pollTimeoutSeconds,
-  AllowedUpdates: a.allowedUpdates})`, dispatches each
-  `*models.Update` to `InboundFromUpdate`, and writes to the channel
-  with the same `select` shape. The polling goroutine carries its own
-  offset bookkeeping in memory.
+- **Polling mode**: at `New` time the adapter constructs the
+  underlying `*bot.Bot` with `bot.WithDefaultHandler(a.dispatchUpdate)`
+  (plus `WithAllowedUpdates`, `WithUpdatesChannelCap`,
+  `WithInitialOffset` as configured). On `Start`, a single goroutine
+  runs `b.Start(ctx)`; the library's internal `getUpdates` loop fires
+  `dispatchUpdate(ctx, b, *models.Update)` for every received update,
+  and `dispatchUpdate` runs `InboundFromUpdate` and writes the
+  resulting Envelope to the channel with the same `select` shape as
+  the webhook path. Offset bookkeeping is owned by the library; the
+  adapter does not implement its own polling loop because the v1.21.0
+  surface does not expose the seam to do so safely.
 
 `Receive(ctx context.Context) (<-chan *envelope.Envelope, error)` is a
 thin accessor: it returns the same buffered channel on every call, and
@@ -210,18 +223,22 @@ The default is `ModePolling`. Three concrete reasons drove this:
   it works behind any NAT, on any port, with only outbound HTTPS to
   `api.telegram.org`.
 - **The cost of shipping polling on top of webhook is small.** Both
-  modes share Send, both share `InboundFromUpdate`, both share the
-  buffered inbound channel and its backpressure rules. Only the input
-  side of the adapter differs (an HTTP listener vs. a `GetUpdates`
-  loop). Concretely: ~150 LOC of polling, vs. ~250 LOC of webhook +
-  HTTP lifecycle. The duplicated cost is negligible relative to the
-  flexibility gained.
-- **Polling is the easier mode to TDD.** The polling loop can be
-  tested with an in-test `bot.Bot` mock that returns a pre-canned
-  slice of `*models.Update`. No `httptest.Server`, no certificate
-  ceremony, no port-bind. The webhook tests reuse `httptest.Server`
-  on top of the same adapter code path. So shipping both also keeps
-  the test surface manageable.
+  modes share `Send`, both share `InboundFromUpdate`, both share the
+  buffered inbound channel and its backpressure rule. The polling
+  side is even thinner than originally sketched: the library owns the
+  loop, so the adapter's polling code is just the `dispatchUpdate`
+  callback (a function the webhook path will reuse) plus the start /
+  join plumbing for `b.Start`. The webhook side is the bigger build
+  (hand-rolled HTTP handler + `*http.Server` lifecycle).
+- **Polling is the easier mode to TDD.** `dispatchUpdate` is a
+  function on the adapter that takes a `*models.Update` and feeds the
+  buffered channel; tests call it directly with fixture updates
+  (loaded via the same testdata facilities Phase 2E.1–2E.7 already
+  use), no `*bot.Bot` instantiation needed. The webhook tests use
+  `httptest.Server` against the hand-rolled handler. The end-to-end
+  "real bot polling against a Telegram mock server" test is left as a
+  smoke check; the unit coverage lives in `dispatchUpdate` and the
+  webhook handler.
 
 Operationally, the recommendation is **webhook for production
 (cloud), polling for development and self-hosted edge devices**. Both
@@ -340,20 +357,23 @@ and bounded by the caller's `ctx`. Per mode:
      all-or-nothing semantic.
 
 - **`ModePolling`**:
-  1. Construct `a.bot` (already done in `New` actually).
-  2. Spawn the polling goroutine. The goroutine carries its own ctx
-     derived from a new background context that the adapter cancels in
-     `Stop`. The ctx passed to `Start` is used only for the initial
-     `SetWebhook(nil)` / `DeleteWebhook(...)` call (see below), not
-     for the steady-state loop — the steady-state loop must outlive
-     the `Start` ctx by definition.
-  3. As a safety net, call `b.DeleteWebhook(ctx,
+  1. `a.bot` was constructed in `New` with `WithDefaultHandler(a.dispatchUpdate)`
+     and the other polling-relevant Options (`WithAllowedUpdates`,
+     `WithUpdatesChannelCap`, optional `WithInitialOffset`).
+  2. As a safety net, call `b.DeleteWebhook(ctx,
      &bot.DeleteWebhookParams{DropPendingUpdates: false})` once
      before the loop starts. This ensures polling never silently
      fights an old webhook registration left over from a previous
-     deployment (Telegram returns 409 to `getUpdates` if a webhook is
-     still active). On error, the call is logged and the loop starts
-     anyway — `getUpdates` will surface the conflict explicitly.
+     deployment (the library's polling loop will surface the
+     conflict explicitly otherwise). On error, the call is logged
+     and the loop starts anyway.
+  3. Spawn a goroutine that runs `b.Start(a.loopCtx)`. `a.loopCtx`
+     is derived from a fresh background context that the adapter
+     cancels in `Stop`; the ctx passed to `Start` is used only for
+     the synchronous `DeleteWebhook` call above (so a slow
+     bootstrap respects the caller's bound), not for the steady-
+     state loop, which must outlive the `Start` ctx by definition.
+     The goroutine is tracked by `a.workers`.
 
 In both modes, `Start` returns once the transport is established and
 the inbound producer is running. It does **not** block on traffic.
@@ -376,8 +396,9 @@ bounded by `ctx`:
   4. `close(a.inbound)` — signal "no more updates" to the router.
 
 - **`ModePolling`**:
-  1. Cancel the polling goroutine's ctx.
-  2. Wait on `a.workers.Wait()`.
+  1. Cancel `a.loopCtx`; `b.Start` returns shortly after.
+  2. Wait on `a.workers.Wait()` so `b.Start` and any in-flight
+     `dispatchUpdate` finish before the channel is closed.
   3. `close(a.inbound)`.
 
 The router's `Phase 3.2 Shutdown` already handles a closed channel on
@@ -416,14 +437,49 @@ elapses, the rule is **acknowledge and warn**, not block or 5xx. Why:
   response is to surface it for monitoring, not to break the contract
   with Telegram.
 
-Polling mode applies the same rule by symmetry: the polling loop
-*drops* the converted Envelope after `enqueueTimeout`, increments
-the same counter, logs, and moves on to the next update. The next
-`GetUpdates` call uses the advanced `Offset`, so the dropped update
-is **not** re-fetched. This is consistent: the adapter's contract is
-"best-effort delivery from Telegram to the Envelope channel under
-the configured buffer", and saturation is a misconfiguration, not a
-data-loss bug.
+Polling mode has the same single-seam saturation story, even though
+the input path has two buffers in series. The polling pipeline looks
+like:
+
+```text
+Telegram getUpdates ─► library internal updates chan ─► library worker pool
+                       (cap = WithUpdatesChannelCap)     (size = WithWorkers, default 1)
+                                                                  │
+                                                                  ▼
+                                              a.dispatchUpdate(ctx, b, *Update)
+                                                                  │
+                                                                  ▼  bounded select, 250 ms
+                                                              a.inbound
+                                                              (cap = 64)
+```
+
+The adapter sets `WithUpdatesChannelCap(a.inboundCapacity)` so the
+two buffers are dimensioned coherently (both 64 by default), and
+`WithWorkers(1)` by default to keep update ordering predictable.
+Saturation is handled at **one** point only — the
+`dispatchUpdate → a.inbound` boundary, identical in shape to the
+webhook handler's enqueue. When the 250 ms enqueue timeout elapses:
+
+- `dispatchUpdate` returns immediately, freeing the library worker
+  to take the next update from the library's internal channel.
+- The same `telegram_adapter_inbound_dropped_total` counter is
+  incremented; the same structured log line is emitted.
+- The library considers the update acknowledged because it had
+  already advanced its offset when it read the update off the
+  HTTPS response; Telegram will **not** redeliver this update.
+  Saturation drop is permanent loss in polling mode just as it is
+  in webhook mode (Telegram saw a 200 in webhook, an offset bump
+  in polling — both are ack from its perspective).
+
+There is therefore one saturation seam and one metric across both
+modes, not two competing stories. The library's internal channel
+serves as a smoothing buffer ahead of the adapter's hard boundary;
+it is not an independent drop point. If the library's internal
+channel ever did fill (which would require `dispatchUpdate` to
+block longer than 250 ms across a burst, contradicting the
+adapter's own `select`), the library's `getUpdates` loop pauses
+its next poll — back-pressuring Telegram, not us. That's the
+correct failure mode.
 
 The "drop and warn" rule is only operationally safe if the warn side
 is actually observed. The counter
@@ -438,27 +494,30 @@ running with silent data loss masquerading as silent success.
 
 #### 4d. Polling-mode restart behavior — at-least-once bounded by Telegram's 24 h server-side buffer
 
-`ModePolling` keeps `nextOffset` in memory only. On a Korvun restart
-`nextOffset` is reset to 0 and the first `GetUpdates` call asks
-Telegram for the oldest unacknowledged update. Per the Telegram Bot
-API, updates are retained server-side for **up to 24 hours** until
-acknowledged — calling `GetUpdates` with `Offset = N` acts as the
-acknowledgement of every update with `update_id < N`. The four
-restart cases therefore are:
+`ModePolling` delegates the offset to the library's internal
+`getUpdates` loop. The library keeps the offset in memory for the
+lifetime of the `*bot.Bot` instance only. On a Korvun restart the
+new `*bot.Bot` starts from offset 0 (or `bot.WithInitialOffset(n)`
+if explicitly configured at construction), and the first
+`getUpdates` call asks Telegram for the oldest unacknowledged update.
+Per the Telegram Bot API, updates are retained server-side for **up
+to 24 hours** until acknowledged — a `getUpdates` call with
+`Offset = N` acts as the acknowledgement of every update with
+`update_id < N`. The four restart cases therefore are:
 
 - **Clean restart with no unprocessed updates pending.** No
   re-delivery; the first post-restart `GetUpdates` returns nothing
   until a new user action.
 - **Restart with updates Telegram had already delivered but for
-  which `nextOffset` had not yet advanced past them on a subsequent
-  poll.** Telegram redelivers them. Because `InboundFromUpdate` is
-  pure, the resulting Envelope is byte-identical to the one the
-  previous process produced — downstream side-effect handlers MUST
-  be idempotent or guarded by the conversation/state layer
-  (Stage 7+) to avoid double-execution.
+  which the library had not yet advanced its offset past them on a
+  subsequent poll.** Telegram redelivers them. Because
+  `InboundFromUpdate` is pure, the resulting Envelope is
+  byte-identical to the one the previous process produced —
+  downstream side-effect handlers MUST be idempotent or guarded by
+  the conversation/state layer (Stage 7+) to avoid double-execution.
 - **Restart with updates in flight at the time of SIGTERM.** Same
   as above: Telegram redelivers anything not yet acknowledged via
-  the next `Offset` bump.
+  the next `getUpdates` call.
 - **Long outage (process down for more than 24 h).** Telegram drops
   updates older than the retention window. The Bot API does not
   surface this as an error; the long outage simply manifests as "no
@@ -485,9 +544,10 @@ sustained overload can lose individual updates in either mode. The
 two behaviors are independent: restart-replay is bounded by
 Telegram's 24 h server-side buffer (polling) or the webhook retry
 budget (webhook); saturation drops are unbounded but emit a counter.
-A persistent `nextOffset` store would tighten the polling-mode bound
-toward exactly-once at the cost of one I/O per poll-batch; see
-§Open follow-ups.
+A persistent offset store (driving `bot.WithInitialOffset(n)` at
+restart from the last successfully dispatched update_id) would
+tighten the polling-mode bound toward exactly-once at the cost of
+one I/O per poll-batch; see §Open follow-ups.
 
 ### 5. Package rename — separate refactor commit, performed first in Phase 2E.8
 
@@ -684,33 +744,65 @@ sibling, not a replacement) is the lowest-friction time.
 
 ### Transport — A3: library owns inbound (`b.Start` / `b.StartWebhook` + `WithDefaultHandler`)
 
-Construct `bot.Bot` with `WithDefaultHandler(func(ctx, b, u) { /* push envelope to chan */ })`,
-call `b.Start(ctx)` (polling) or `b.StartWebhook(ctx) + http.HandleFunc(path, b.WebhookHandler())`
-(webhook).
+This needs to be split into polling and webhook subcases because
+the v1.21.0 library surface forces different answers per mode.
 
-**Rejected** for the chosen-design fit reasons enumerated in ADR-0001
-and reinforced in §3 here:
+**Polling subcase — library-driven, ADOPTED.** Verification of the
+v1.21.0 source showed that `getUpdates` is unexported and accessible
+only through `b.Start(ctx) + WithDefaultHandler`. There is no
+caller-driven seam to hand-roll a `GetUpdates` loop against without
+re-implementing the HTTP+JSON Bot API client — which would defeat
+ADR-0001's whole point. The polling design therefore delegates to
+the library: `bot.New(..., WithDefaultHandler(a.dispatchUpdate))`
+at construction, `go b.Start(ctx)` at `Start`, cancel-and-join at
+`Stop`. Loss of "we own the lifecycle" is mitigated by:
 
-- The library handler validates the secret with `==` and responds
-  silently on rejection. Both are operational regressions vs. the
-  hand-rolled handler.
+- `b.Start` returns promptly when its ctx is cancelled (verified by
+  source reading: the polling loop selects on ctx.Done at every
+  iteration).
+- The library's internal updates channel is a buffer between the
+  HTTP-level `getUpdates` reply and our `dispatchUpdate` callback.
+  Its capacity is exposed via `WithUpdatesChannelCap`, so the two
+  buffers can be sized coherently (we set both to the same
+  `inboundCapacity` default of 64). See §4c for the single-seam
+  saturation diagram and metric.
+- Backpressure still works at one seam only: `dispatchUpdate` runs
+  the same bounded-`select` enqueue as the webhook path. If our
+  buffer is full and the timeout elapses, we drop and increment the
+  counter, and the library's call to `dispatchUpdate` returns.
+  Library workers stay unblocked; the library's internal channel
+  serves as a smoothing buffer, not an independent drop point.
+
+**Webhook subcase — hand-rolled, REJECTED for library-driven.**
+For webhook the rejection arguments from the original draft still
+apply, and Phase 2E.8 keeps the hand-rolled handler:
+
+- The library's `WebhookHandler` compares the secret with `==`
+  (timing-attack territory) and silently swallows rejections (no
+  401). Both are operational regressions versus the
+  `crypto/subtle.ConstantTimeCompare`-based hand-rolled handler in
+  §3.
 - The library's `StartWebhook` adds a second buffer (its internal
-  updates channel) between the HTTP handler and our `InboundFromUpdate`.
-  We'd then have to drain that channel via `WithDefaultHandler` into
-  *our* channel — two buffers, one converter, no clarity gain.
-- Library-owned lifecycle means `Stop` becomes "cancel ctx, hope it
-  returns soon". The adapter-owned design lets us serialise "stop HTTP
-  server → DeleteWebhook → close channel" with explicit ordering and
-  predictable error handling.
-- `bot.ProcessUpdate` (the seam ADR-0001 picked the library for) is
-  still available if we ever need it. The chosen design uses
-  `InboundFromUpdate` directly, which is even thinner.
+  updates channel) between the HTTP handler and our
+  `dispatchUpdate`. With the hand-rolled handler the inbound write
+  is one buffer, period.
+- The lifecycle ownership argument still holds for webhook: we want
+  "stop HTTP server → DeleteWebhook → close channel" with explicit
+  ordering.
 
-The chosen design uses `bot.Bot` only as: (a) an outbound HTTP client
-for the `Send*` calls, and (b) a thin caller of `SetWebhook` /
-`DeleteWebhook` / `GetUpdates`. This is exactly the boundary the
-library README advertises as supported, and matches ADR-0001's
-"transport-agnostic adapter" principle.
+The chosen design therefore uses `bot.Bot` as: (a) an outbound HTTP
+client for the `Send*` calls (both modes), (b) a caller of
+`SetWebhook` / `DeleteWebhook` (webhook mode and polling-mode
+safety-net), and (c) the polling loop driver via `b.Start` plus
+`WithDefaultHandler` (polling mode only). Webhook updates do not
+flow through the library; polling updates do, by necessity.
+
+**Trade-off accepted.** The asymmetry "polling delegates to the
+library, webhook does not" is a v1.21.0 fact of life. Future
+library versions may expose a public `GetUpdates` seam (the
+library's roadmap is open), at which point a follow-up ADR could
+unify the two paths. Until then, the split is the right call for
+each side's specific constraints.
 
 ### Lifecycle — B1: Start/Stop on the `channel.Channel` interface itself
 
