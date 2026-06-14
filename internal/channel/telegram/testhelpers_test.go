@@ -12,8 +12,99 @@ import (
 
 // stubBotClient is a do-nothing botClient implementation used by
 // tests that need an Adapter wired up but don't exercise the Send
-// path. Send-style tests construct richer fakes (see send_test.go).
+// path. Send-style tests use capturingBotClient instead.
 type stubBotClient struct{}
+
+// capturingBotClient records the params it last received per method
+// and returns either a non-nil result or, if errOn matches the kind,
+// the configured forced error. Used by Send tests to assert dispatch
+// + error propagation without an HTTPS call to Telegram.
+type capturingBotClient struct {
+	lastMessage        *bot.SendMessageParams
+	lastPhoto          *bot.SendPhotoParams
+	lastDocument       *bot.SendDocumentParams
+	lastVoice          *bot.SendVoiceParams
+	lastAudio          *bot.SendAudioParams
+	lastVideo          *bot.SendVideoParams
+	lastLocation       *bot.SendLocationParams
+	lastAnswerCallback *bot.AnswerCallbackQueryParams
+	lastEditText       *bot.EditMessageTextParams
+	lastEditCaption    *bot.EditMessageCaptionParams
+	lastDelete         *bot.DeleteMessageParams
+	lastSetReaction    *bot.SetMessageReactionParams
+	lastSetWebhook     *bot.SetWebhookParams
+	lastDeleteWebhook  *bot.DeleteWebhookParams
+
+	// errOn, when non-zero, causes the matching method to return
+	// forcedErr instead of a happy-path response. Lets tests check
+	// the error-wrap path on Send without staging twelve fakes.
+	errOn     OutboundKind
+	forcedErr error
+}
+
+func (c *capturingBotClient) maybeErr(k OutboundKind) error {
+	if c.errOn == k {
+		return c.forcedErr
+	}
+	return nil
+}
+
+func (c *capturingBotClient) SendMessage(_ context.Context, p *bot.SendMessageParams) (*models.Message, error) {
+	c.lastMessage = p
+	return &models.Message{}, c.maybeErr(OutboundKindMessage)
+}
+func (c *capturingBotClient) SendPhoto(_ context.Context, p *bot.SendPhotoParams) (*models.Message, error) {
+	c.lastPhoto = p
+	return &models.Message{}, c.maybeErr(OutboundKindPhoto)
+}
+func (c *capturingBotClient) SendDocument(_ context.Context, p *bot.SendDocumentParams) (*models.Message, error) {
+	c.lastDocument = p
+	return &models.Message{}, c.maybeErr(OutboundKindDocument)
+}
+func (c *capturingBotClient) SendVoice(_ context.Context, p *bot.SendVoiceParams) (*models.Message, error) {
+	c.lastVoice = p
+	return &models.Message{}, c.maybeErr(OutboundKindVoice)
+}
+func (c *capturingBotClient) SendAudio(_ context.Context, p *bot.SendAudioParams) (*models.Message, error) {
+	c.lastAudio = p
+	return &models.Message{}, c.maybeErr(OutboundKindAudio)
+}
+func (c *capturingBotClient) SendVideo(_ context.Context, p *bot.SendVideoParams) (*models.Message, error) {
+	c.lastVideo = p
+	return &models.Message{}, c.maybeErr(OutboundKindVideo)
+}
+func (c *capturingBotClient) SendLocation(_ context.Context, p *bot.SendLocationParams) (*models.Message, error) {
+	c.lastLocation = p
+	return &models.Message{}, c.maybeErr(OutboundKindLocation)
+}
+func (c *capturingBotClient) AnswerCallbackQuery(_ context.Context, p *bot.AnswerCallbackQueryParams) (bool, error) {
+	c.lastAnswerCallback = p
+	return true, c.maybeErr(OutboundKindAnswerCallback)
+}
+func (c *capturingBotClient) EditMessageText(_ context.Context, p *bot.EditMessageTextParams) (*models.Message, error) {
+	c.lastEditText = p
+	return &models.Message{}, c.maybeErr(OutboundKindEditText)
+}
+func (c *capturingBotClient) EditMessageCaption(_ context.Context, p *bot.EditMessageCaptionParams) (*models.Message, error) {
+	c.lastEditCaption = p
+	return &models.Message{}, c.maybeErr(OutboundKindEditCaption)
+}
+func (c *capturingBotClient) DeleteMessage(_ context.Context, p *bot.DeleteMessageParams) (bool, error) {
+	c.lastDelete = p
+	return true, c.maybeErr(OutboundKindDelete)
+}
+func (c *capturingBotClient) SetMessageReaction(_ context.Context, p *bot.SetMessageReactionParams) (bool, error) {
+	c.lastSetReaction = p
+	return true, c.maybeErr(OutboundKindSetReaction)
+}
+func (c *capturingBotClient) SetWebhook(_ context.Context, p *bot.SetWebhookParams) (bool, error) {
+	c.lastSetWebhook = p
+	return true, nil
+}
+func (c *capturingBotClient) DeleteWebhook(_ context.Context, p *bot.DeleteWebhookParams) (bool, error) {
+	c.lastDeleteWebhook = p
+	return true, nil
+}
 
 func (stubBotClient) SendMessage(context.Context, *bot.SendMessageParams) (*models.Message, error) {
 	return &models.Message{}, nil
