@@ -1,0 +1,26 @@
+{
+  "update_id": 100000042,
+  "message": {
+    "message_id": 503,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 2000,
+      "type": "supergroup",
+      "title": "Test Group"
+    },
+    "date": 1786000520,
+    "text": "/cmd@korvun_bot args here",
+    "entities": [
+      {
+        "type": "bot_command",
+        "offset": 0,
+        "length": 15
+      }
+    ]
+  }
+}

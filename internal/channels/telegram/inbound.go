@@ -60,11 +60,55 @@ func inboundFromMessage(m *models.Message) (*envelope.Envelope, error) {
 
 	appendMediaPart(env, m)
 	appendTextPart(env, m)
+	parseBotCommand(env, m)
 
 	if len(env.Parts) == 0 {
 		return nil, ErrUnsupportedContent
 	}
 	return env, nil
+}
+
+// parseBotCommand inspects the message for a bot_command MessageEntity
+// at offset 0 and, when present, exposes the command name and arguments
+// in Meta (MetaCommand, MetaCommandArgs). The Text Part itself is left
+// intact, so existing text consumers continue to see the original /cmd
+// payload verbatim. Phase 2E.5 — see the stage notes for why this
+// mapping stays in Meta with the telegram. prefix instead of being
+// promoted to a canonical envelope concept.
+func parseBotCommand(env *envelope.Envelope, m *models.Message) {
+	if m.Text == "" {
+		return
+	}
+	cmdLength := 0
+	for _, e := range m.Entities {
+		if e.Type == models.MessageEntityTypeBotCommand && e.Offset == 0 {
+			cmdLength = e.Length
+			break
+		}
+	}
+	// cmdLength must cover at least "/X" (a leading slash plus one
+	// character) and stay within Text bounds. Anything else is treated
+	// as a missing or malformed command entity and skipped silently.
+	if cmdLength <= 1 || cmdLength > len(m.Text) {
+		return
+	}
+	// Bot command names are restricted to ASCII letters, digits and
+	// underscore by Telegram, so byte slicing of the command portion
+	// is safe; the args portion is taken whole, preserving any unicode
+	// the caller placed after the entity boundary.
+	nameWithBotname := m.Text[1:cmdLength]
+	name := nameWithBotname
+	if at := strings.IndexByte(name, '@'); at >= 0 {
+		name = name[:at]
+	}
+	if name == "" {
+		return
+	}
+	env.Meta[MetaCommand] = name
+	args := strings.TrimLeft(m.Text[cmdLength:], " \t\n")
+	if args != "" {
+		env.Meta[MetaCommandArgs] = args
+	}
 }
 
 // inboundFromCallbackQuery handles the CallbackQuery update kind.

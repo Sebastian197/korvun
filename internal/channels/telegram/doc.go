@@ -41,6 +41,15 @@ const (
 	// on an outbound CallbackAck envelope identifies which callback
 	// the ack addresses. (Phase 2E.4.)
 	MetaCallbackQueryID = "telegram.callback_query_id"
+	// MetaCommand is the name of the bot command parsed from a Text
+	// Message with a bot_command MessageEntity at offset 0. The leading
+	// "/" and any "@botname" suffix are stripped. Absent if the
+	// message is not a command. (Phase 2E.5.)
+	MetaCommand = "telegram.command"
+	// MetaCommandArgs is the trimmed argument string that follows the
+	// command name in the Text. Absent when the command carries no
+	// arguments. (Phase 2E.5.)
+	MetaCommandArgs = "telegram.command_args"
 )
 
 // Values accepted by MetaAudioKind. Any other value (including an
