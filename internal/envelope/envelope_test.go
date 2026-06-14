@@ -39,6 +39,8 @@ func TestPartType_String(t *testing.T) {
 		{"video", Video, "video"},
 		{"file", File, "file"},
 		{"location", Location, "location"},
+		{"callback", Callback, "callback"},
+		{"callback_ack", CallbackAck, "callback_ack"},
 		{"unknown", PartType(99), "unknown"},
 	}
 	for _, tt := range tests {

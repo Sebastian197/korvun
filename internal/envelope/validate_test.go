@@ -18,6 +18,76 @@ func TestValidate_valid_envelope(t *testing.T) {
 	}
 }
 
+func TestValidate_valid_callback_envelopes(t *testing.T) {
+	tests := []struct {
+		name string
+		env  *Envelope
+	}{
+		{
+			name: "inbound callback with data",
+			env: func() *Envelope {
+				e := New("telegram", Inbound, Participant{ID: "user-1"})
+				return e.AddCallback("button_yes")
+			}(),
+		},
+		{
+			name: "outbound silent ack (empty Content)",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.AddCallbackAck("")
+			}(),
+		},
+		{
+			name: "outbound ack with toast",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.AddCallbackAck("Saved!")
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.env.Validate(); err != nil {
+				t.Errorf("Validate() returned error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidate_valid_keyboard_envelopes(t *testing.T) {
+	tests := []struct {
+		name string
+		env  *Envelope
+	}{
+		{
+			name: "text + single-row keyboard with callback buttons",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.AddText("Choose:").WithKeyboard(
+					[]Button{CallbackButton("Yes", "yes"), CallbackButton("No", "no")},
+				)
+			}(),
+		},
+		{
+			name: "text + multi-row keyboard with mixed kinds",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.AddText("Pick:").WithKeyboard(
+					[]Button{CallbackButton("Buy", "buy")},
+					[]Button{URLButton("Docs", "https://example.com")},
+				)
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.env.Validate(); err != nil {
+				t.Errorf("Validate() returned error: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidate_valid_location_envelopes(t *testing.T) {
 	tests := []struct {
 		name string
@@ -176,6 +246,122 @@ func TestValidate_errors(t *testing.T) {
 			},
 			wantErr: "location must not set mime",
 		},
+		{
+			name: "callback part with empty content",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Callback, Content: ""}}
+			},
+			wantErr: "empty content",
+		},
+		{
+			name: "callback part with non-empty source",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Callback, Content: "data", Source: "x"}}
+			},
+			wantErr: "callback must not set source",
+		},
+		{
+			name: "callback part with non-empty mime type",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: Callback, Content: "data", MIMEType: "text/plain"}}
+			},
+			wantErr: "callback must not set mime",
+		},
+		{
+			name: "callback part mixed with text part",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{
+					{Type: Callback, Content: "yes"},
+					{Type: Text, Content: "hola"},
+				}
+			},
+			wantErr: "must be the only part",
+		},
+		{
+			name: "two callback parts in the same envelope",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{
+					{Type: Callback, Content: "yes"},
+					{Type: Callback, Content: "no"},
+				}
+			},
+			wantErr: "must be the only part",
+		},
+		{
+			name: "callback_ack part with non-empty source",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: CallbackAck, Source: "x"}}
+			},
+			wantErr: "callback_ack must not set source",
+		},
+		{
+			name: "callback_ack part with non-empty mime type",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{{Type: CallbackAck, MIMEType: "text/plain"}}
+			},
+			wantErr: "callback_ack must not set mime",
+		},
+		{
+			name: "callback_ack part mixed with text part",
+			modify: func(e *Envelope) {
+				e.Parts = []Part{
+					{Type: CallbackAck, Content: "Saved!"},
+					{Type: Text, Content: "extra"},
+				}
+			},
+			wantErr: "must be the only part",
+		},
+		{
+			name: "keyboard with no rows",
+			modify: func(e *Envelope) {
+				e.Keyboard = &Keyboard{Rows: nil}
+			},
+			wantErr: "keyboard has no rows",
+		},
+		{
+			name: "keyboard with empty Rows slice",
+			modify: func(e *Envelope) {
+				e.Keyboard = &Keyboard{Rows: [][]Button{}}
+			},
+			wantErr: "keyboard has no rows",
+		},
+		{
+			name: "keyboard row with no buttons",
+			modify: func(e *Envelope) {
+				e.Keyboard = &Keyboard{Rows: [][]Button{
+					{CallbackButton("a", "a")},
+					{},
+				}}
+			},
+			wantErr: "row 1 has no buttons",
+		},
+		{
+			name: "keyboard button with empty text",
+			modify: func(e *Envelope) {
+				e.Keyboard = &Keyboard{Rows: [][]Button{
+					{Button{Text: "", CallbackData: "x"}},
+				}}
+			},
+			wantErr: "button text is empty",
+		},
+		{
+			name: "keyboard button with both CallbackData and URL",
+			modify: func(e *Envelope) {
+				e.Keyboard = &Keyboard{Rows: [][]Button{
+					{Button{Text: "ambiguous", CallbackData: "x", URL: "https://example.com"}},
+				}}
+			},
+			wantErr: "button must set exactly one of callback_data or url",
+		},
+		{
+			name: "keyboard button with neither action",
+			modify: func(e *Envelope) {
+				e.Keyboard = &Keyboard{Rows: [][]Button{
+					{Button{Text: "no-action"}},
+				}}
+			},
+			wantErr: "button must set exactly one of callback_data or url",
+		},
 	}
 
 	for _, tt := range tests {
@@ -284,6 +470,58 @@ func TestJSON_roundtrip_preserves_all_part_types(t *testing.T) {
 	}
 	if lat != 41.40338 || lon != 2.17403 {
 		t.Errorf("decoded location = (%v, %v), want (41.40338, 2.17403)", lat, lon)
+	}
+}
+
+func TestJSON_roundtrip_keyboard_field(t *testing.T) {
+	original := New("telegram", Outbound, Participant{ID: "bot"})
+	original.AddText("Choose:").WithKeyboard(
+		[]Button{CallbackButton("Yes", "yes"), URLButton("Help", "https://example.com")},
+		[]Button{CallbackButton("Cancel", "cancel")},
+	)
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+
+	var decoded Envelope
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+
+	if decoded.Keyboard == nil {
+		t.Fatal("decoded.Keyboard is nil")
+	}
+	if len(decoded.Keyboard.Rows) != 2 {
+		t.Fatalf("Rows len = %d, want 2", len(decoded.Keyboard.Rows))
+	}
+	if decoded.Keyboard.Rows[0][0].CallbackData != "yes" {
+		t.Errorf("Rows[0][0].CallbackData = %q, want %q",
+			decoded.Keyboard.Rows[0][0].CallbackData, "yes")
+	}
+	if decoded.Keyboard.Rows[0][1].URL != "https://example.com" {
+		t.Errorf("Rows[0][1].URL = %q", decoded.Keyboard.Rows[0][1].URL)
+	}
+	if decoded.Keyboard.Rows[1][0].CallbackData != "cancel" {
+		t.Errorf("Rows[1][0].CallbackData = %q, want %q",
+			decoded.Keyboard.Rows[1][0].CallbackData, "cancel")
+	}
+}
+
+func TestJSON_roundtrip_keyboard_absent_when_nil(t *testing.T) {
+	// Envelopes without a keyboard must marshal to JSON that contains
+	// no "keyboard" key, so the wire format of every 2.1-2E.3 envelope
+	// stays byte-stable.
+	original := New("telegram", Outbound, Participant{ID: "bot"})
+	original.AddText("plain")
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if containsSubstring(string(data), `"keyboard"`) {
+		t.Errorf("marshalled JSON contains keyboard key when Keyboard is nil: %s", data)
 	}
 }
 

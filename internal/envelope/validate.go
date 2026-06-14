@@ -29,9 +29,34 @@ func (e *Envelope) Validate() error {
 	if e.Timestamp.IsZero() {
 		return errors.New("zero timestamp")
 	}
+	if err := validateExclusivePartTypes(e.Parts); err != nil {
+		return err
+	}
 	for i, p := range e.Parts {
 		if err := validatePart(i, p); err != nil {
 			return err
+		}
+	}
+	if e.Keyboard != nil {
+		if err := validateKeyboard(e.Keyboard); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateExclusivePartTypes enforces that Callback and CallbackAck
+// parts must be the only Part in the envelope when they appear. A tap
+// event has no media or text body beyond its data string, and an ack
+// is a single instruction to the channel — both refuse to share the
+// Parts slice with anything else.
+func validateExclusivePartTypes(parts []Part) error {
+	if len(parts) <= 1 {
+		return nil
+	}
+	for _, p := range parts {
+		if p.Type == Callback || p.Type == CallbackAck {
+			return fmt.Errorf("%s part must be the only part in the envelope", p.Type)
 		}
 	}
 	return nil
@@ -60,8 +85,51 @@ func validatePart(idx int, p Part) error {
 		if _, _, ok := p.Location(); !ok {
 			return fmt.Errorf("part %d: invalid location content: %q", idx, p.Content)
 		}
+	case Callback:
+		if p.Content == "" {
+			return fmt.Errorf("part %d: empty content for callback part", idx)
+		}
+		if p.Source != "" {
+			return fmt.Errorf("part %d: callback must not set source", idx)
+		}
+		if p.MIMEType != "" {
+			return fmt.Errorf("part %d: callback must not set mime type", idx)
+		}
+	case CallbackAck:
+		// Content is optional: empty Content means a silent ack.
+		if p.Source != "" {
+			return fmt.Errorf("part %d: callback_ack must not set source", idx)
+		}
+		if p.MIMEType != "" {
+			return fmt.Errorf("part %d: callback_ack must not set mime type", idx)
+		}
 	default:
 		return fmt.Errorf("part %d: unknown part type %d", idx, p.Type)
+	}
+	return nil
+}
+
+// validateKeyboard checks structural invariants of an attached
+// Keyboard: at least one row, every row non-empty, every button with
+// non-empty Text and exactly one of CallbackData / URL set.
+func validateKeyboard(k *Keyboard) error {
+	if len(k.Rows) == 0 {
+		return errors.New("keyboard has no rows")
+	}
+	for ri, row := range k.Rows {
+		if len(row) == 0 {
+			return fmt.Errorf("keyboard row %d has no buttons", ri)
+		}
+		for bi, b := range row {
+			if b.Text == "" {
+				return fmt.Errorf("keyboard row %d button %d: button text is empty", ri, bi)
+			}
+			hasCallback := b.CallbackData != ""
+			hasURL := b.URL != ""
+			if hasCallback == hasURL {
+				return fmt.Errorf("keyboard row %d button %d: button must set exactly one of callback_data or url", ri, bi)
+			}
+		}
 	}
 	return nil
 }

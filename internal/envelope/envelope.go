@@ -50,6 +50,17 @@ const (
 	// see ADR-0004. Callers should use Envelope.AddLocation to build a
 	// Location part and Part.Location to read the coordinates back.
 	Location
+	// Callback represents an inbound interaction event: the user invoked
+	// a previously-defined action (e.g. tapped an inline-keyboard button)
+	// instead of typing a message. Content carries the action payload
+	// (the channel's callback data string). See ADR-0005.
+	Callback
+	// CallbackAck represents an outbound acknowledgement of a Callback
+	// event. Content carries an optional toast text shown to the user;
+	// empty Content means a silent ack. The channel-specific identifier
+	// of the callback being acknowledged lives in Meta, validated by
+	// the adapter (e.g. "telegram.callback_query_id"). See ADR-0005.
+	CallbackAck
 )
 
 // String returns the human-readable name of the part type.
@@ -67,6 +78,10 @@ func (pt PartType) String() string {
 		return "file"
 	case Location:
 		return "location"
+	case Callback:
+		return "callback"
+	case CallbackAck:
+		return "callback_ack"
 	default:
 		return "unknown"
 	}
@@ -97,4 +112,9 @@ type Envelope struct {
 	Parts     []Part            `json:"parts"`
 	Timestamp time.Time         `json:"timestamp"`
 	Meta      map[string]string `json:"meta,omitempty"`
+	// Keyboard is an optional interactive overlay attached to the
+	// message (e.g. inline buttons). Keyboards are decoration, not
+	// content, so they live alongside Parts rather than inside it; see
+	// ADR-0005. nil means no keyboard.
+	Keyboard *Keyboard `json:"keyboard,omitempty"`
 }

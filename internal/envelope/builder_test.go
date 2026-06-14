@@ -198,3 +198,115 @@ func TestPart_Location_tolerates_unknown_keys(t *testing.T) {
 		t.Errorf("Part.Location() = (%v, %v), want (41.40338, 2.17403)", lat, lon)
 	}
 }
+
+func TestBuilder_AddCallback(t *testing.T) {
+	env := New("telegram", Inbound, Participant{ID: "user-1"})
+	result := env.AddCallback("button_yes")
+	if result != env {
+		t.Error("AddCallback should return the same *Envelope for chaining")
+	}
+	if len(env.Parts) != 1 {
+		t.Fatalf("Parts len = %d, want 1", len(env.Parts))
+	}
+	p := env.Parts[0]
+	if p.Type != Callback {
+		t.Errorf("Type = %v, want Callback", p.Type)
+	}
+	if p.Content != "button_yes" {
+		t.Errorf("Content = %q, want %q", p.Content, "button_yes")
+	}
+	if p.Source != "" || p.MIMEType != "" {
+		t.Errorf("Source/MIMEType must be empty on Callback (got %q / %q)", p.Source, p.MIMEType)
+	}
+}
+
+func TestBuilder_AddCallbackAck(t *testing.T) {
+	tests := []struct {
+		name  string
+		toast string
+	}{
+		{"silent ack (empty toast)", ""},
+		{"ack with toast", "Saved!"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := New("telegram", Outbound, Participant{ID: "bot"})
+			result := env.AddCallbackAck(tt.toast)
+			if result != env {
+				t.Error("AddCallbackAck should return the same *Envelope for chaining")
+			}
+			if len(env.Parts) != 1 {
+				t.Fatalf("Parts len = %d, want 1", len(env.Parts))
+			}
+			p := env.Parts[0]
+			if p.Type != CallbackAck {
+				t.Errorf("Type = %v, want CallbackAck", p.Type)
+			}
+			if p.Content != tt.toast {
+				t.Errorf("Content = %q, want %q", p.Content, tt.toast)
+			}
+			if p.Source != "" || p.MIMEType != "" {
+				t.Errorf("Source/MIMEType must be empty on CallbackAck")
+			}
+		})
+	}
+}
+
+func TestBuilder_WithKeyboard_SingleRow(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	result := env.AddText("Choose:").WithKeyboard(
+		[]Button{CallbackButton("Yes", "yes"), CallbackButton("No", "no")},
+	)
+	if result != env {
+		t.Error("WithKeyboard should return the same *Envelope for chaining")
+	}
+	if env.Keyboard == nil {
+		t.Fatal("Keyboard is nil after WithKeyboard")
+	}
+	if len(env.Keyboard.Rows) != 1 {
+		t.Fatalf("Rows len = %d, want 1", len(env.Keyboard.Rows))
+	}
+	if len(env.Keyboard.Rows[0]) != 2 {
+		t.Fatalf("Rows[0] len = %d, want 2", len(env.Keyboard.Rows[0]))
+	}
+	if env.Keyboard.Rows[0][0].Text != "Yes" || env.Keyboard.Rows[0][0].CallbackData != "yes" {
+		t.Errorf("Rows[0][0] = %+v, want Yes/yes", env.Keyboard.Rows[0][0])
+	}
+	if env.Keyboard.Rows[0][1].Text != "No" || env.Keyboard.Rows[0][1].CallbackData != "no" {
+		t.Errorf("Rows[0][1] = %+v, want No/no", env.Keyboard.Rows[0][1])
+	}
+}
+
+func TestBuilder_WithKeyboard_MultipleRows_MixedKinds(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	env.AddText("Pick:").WithKeyboard(
+		[]Button{CallbackButton("Buy", "buy")},
+		[]Button{URLButton("Docs", "https://example.com/docs")},
+	)
+	if len(env.Keyboard.Rows) != 2 {
+		t.Fatalf("Rows len = %d, want 2", len(env.Keyboard.Rows))
+	}
+	if env.Keyboard.Rows[0][0].CallbackData != "buy" {
+		t.Errorf("Rows[0][0].CallbackData = %q, want %q", env.Keyboard.Rows[0][0].CallbackData, "buy")
+	}
+	if env.Keyboard.Rows[0][0].URL != "" {
+		t.Errorf("callback button should not set URL, got %q", env.Keyboard.Rows[0][0].URL)
+	}
+	if env.Keyboard.Rows[1][0].URL != "https://example.com/docs" {
+		t.Errorf("Rows[1][0].URL = %q", env.Keyboard.Rows[1][0].URL)
+	}
+	if env.Keyboard.Rows[1][0].CallbackData != "" {
+		t.Errorf("URL button should not set CallbackData, got %q", env.Keyboard.Rows[1][0].CallbackData)
+	}
+}
+
+func TestButton_Constructors(t *testing.T) {
+	cb := CallbackButton("Yes", "yes")
+	if cb.Text != "Yes" || cb.CallbackData != "yes" || cb.URL != "" {
+		t.Errorf("CallbackButton = %+v, want Text=Yes CallbackData=yes URL=empty", cb)
+	}
+	url := URLButton("Open", "https://example.com")
+	if url.Text != "Open" || url.URL != "https://example.com" || url.CallbackData != "" {
+		t.Errorf("URLButton = %+v, want Text=Open URL=https://example.com CallbackData=empty", url)
+	}
+}
