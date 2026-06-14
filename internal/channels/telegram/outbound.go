@@ -31,6 +31,7 @@ const (
 	OutboundKindEditText
 	OutboundKindEditCaption
 	OutboundKindDelete
+	OutboundKindSetReaction
 )
 
 // String returns a short lowercase name for the kind, suitable for
@@ -59,6 +60,8 @@ func (k OutboundKind) String() string {
 		return "edit_caption"
 	case OutboundKindDelete:
 		return "delete"
+	case OutboundKindSetReaction:
+		return "set_reaction"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(k))
 	}
@@ -80,6 +83,7 @@ type Outbound struct {
 	EditText       *bot.EditMessageTextParams
 	EditCaption    *bot.EditMessageCaptionParams
 	Delete         *bot.DeleteMessageParams
+	SetReaction    *bot.SetMessageReactionParams
 }
 
 // OutboundParams converts an outbound Envelope into the appropriate
@@ -264,6 +268,8 @@ func outboundOperation(e *envelope.Envelope) (*Outbound, error) {
 		return outboundEditCaption(e)
 	case envelope.OpDelete:
 		return outboundDelete(e)
+	case envelope.OpSetReaction:
+		return outboundSetReaction(e)
 	default:
 		return nil, ErrUnsupportedContent
 	}
@@ -338,6 +344,42 @@ func outboundEditCaption(e *envelope.Envelope) (*Outbound, error) {
 			MessageID:   messageID,
 			Caption:     e.Parts[0].Content,
 			ReplyMarkup: buildReplyMarkup(e.Keyboard),
+		},
+	}, nil
+}
+
+// outboundSetReaction translates an OpSetReaction Envelope into a
+// *bot.SetMessageReactionParams. Each Text Part's Content becomes a
+// models.ReactionType of the emoji variant; empty Parts maps to an
+// empty []ReactionType, which Telegram's setMessageReaction
+// endpoint interprets as "clear all the bot's reactions on the
+// target". Validate has already guaranteed that every Part is Text
+// with non-empty Content.
+func outboundSetReaction(e *envelope.Envelope) (*Outbound, error) {
+	chatID, err := parseChatID(e)
+	if err != nil {
+		return nil, err
+	}
+	messageID, err := parseTargetMessageID(e)
+	if err != nil {
+		return nil, err
+	}
+	reactions := make([]models.ReactionType, len(e.Parts))
+	for i, p := range e.Parts {
+		reactions[i] = models.ReactionType{
+			Type: models.ReactionTypeTypeEmoji,
+			ReactionTypeEmoji: &models.ReactionTypeEmoji{
+				Type:  models.ReactionTypeTypeEmoji,
+				Emoji: p.Content,
+			},
+		}
+	}
+	return &Outbound{
+		Kind: OutboundKindSetReaction,
+		SetReaction: &bot.SetMessageReactionParams{
+			ChatID:    chatID,
+			MessageID: messageID,
+			Reaction:  reactions,
 		},
 	}, nil
 }
