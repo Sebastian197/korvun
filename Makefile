@@ -24,7 +24,7 @@ lint: fmt vet
 	$(GOLANGCI_LINT) run ./...
 
 cover:
-	@go test -race -coverprofile=coverage.out ./... 2>&1 | tee /dev/stderr | grep -q 'ok' && \
+	@go test -race -coverprofile=coverage.out ./internal/... 2>&1 | tee /dev/stderr | grep -q 'ok' && \
 	grep -q '^mode:' coverage.out 2>/dev/null && \
 	grep -v '^mode:' coverage.out | grep -q '.' 2>/dev/null && \
 	{ \
@@ -35,6 +35,11 @@ cover:
 			exit 1; \
 		fi; \
 	} || echo "No testable packages yet — skipping coverage threshold"
+# Note: coverage scope is intentionally internal/... only — the cmd/
+# packages today are temporary live-skeleton CLIs (cmd/demo-model,
+# cmd/demo-groq) that are exercised manually against real backends,
+# not via go test. Lint, vet and test still cover ./... above; only
+# the coverage threshold excludes cmd/.
 
 quality: lint test cover
 	@echo "Quality gate passed."
