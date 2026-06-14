@@ -28,5 +28,10 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
+.idea/
 # .vscode/
+
+# Project artefacts kept out of the repo
+KORVUN-Documento-Maestro.pdf
+# Compiled CLI binary produced by `go build` at the module root.
+/korvun
