@@ -5,11 +5,14 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/router"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 )
@@ -178,10 +181,58 @@ func (a *Adapter) handleLibraryUpdate(ctx context.Context, _ *bot.Bot, u *models
 // resulting Envelope onto the buffered inbound channel with the
 // bounded backpressure rule fixed by ADR-0008 §1 / §4c. Defined as
 // a method (not a closure) so tests can call it directly with
-// fixture updates, no *bot.Bot needed. The actual conversion +
-// backpressure body lands in the dispatch sub-phase; this stub is
-// the minimum needed for handleLibraryUpdate to type-check and for
-// bot.WithDefaultHandler to bind to a real method at New time.
-func (a *Adapter) dispatchUpdate(_ context.Context, _ *models.Update) {
-	_ = a.inbound
+// fixture updates, no *bot.Bot needed.
+//
+// Three outcomes are possible:
+//
+//   - The update converts to an Envelope and enqueues within
+//     enqueueTimeout: success, no log.
+//   - The update has no Korvun-visible content (ErrNoMessage or
+//     ErrUnsupportedContent from InboundFromUpdate): silently skip.
+//     These are normal events (a service-message update, an
+//     anonymous-admin reaction, etc.); logging every one would drown
+//     real signal.
+//   - Conversion succeeded but the inbound buffer is saturated past
+//     enqueueTimeout: drop the Envelope, log a structured warning,
+//     and increment dropped. The library worker that delivered this
+//     update is released by the same return; see ADR-0008 §4c for
+//     why this is the right operational shape rather than blocking
+//     or pushing back to Telegram.
+//
+// ctx cancellation short-circuits both the convert and the enqueue
+// without counting as a saturation drop — a cancelled ctx means the
+// process is shutting down, which is not the same condition the
+// observability layer wants to alert on.
+func (a *Adapter) dispatchUpdate(ctx context.Context, u *models.Update) {
+	if ctx.Err() != nil {
+		return
+	}
+	env, err := InboundFromUpdate(u)
+	if err != nil {
+		if errors.Is(err, ErrNoMessage) || errors.Is(err, ErrUnsupportedContent) {
+			return
+		}
+		a.cfg.logger.WarnContext(ctx,
+			"telegram: failed to convert update",
+			"error", err.Error())
+		return
+	}
+	convID := env.Meta[MetaChatID]
+	if convID != "" {
+		env.Meta[router.MetaConversationID] = convID
+	}
+	timer := time.NewTimer(a.cfg.enqueueTimeout)
+	defer timer.Stop()
+	select {
+	case a.inbound <- env:
+	case <-ctx.Done():
+	case <-timer.C:
+		a.dropped.Add(1)
+		a.cfg.logger.WarnContext(ctx,
+			"telegram: dropped inbound envelope after enqueue timeout",
+			"conversation_id", convID,
+			"chat_id", env.Meta[MetaChatID],
+			"timeout", a.cfg.enqueueTimeout.String(),
+			"reason", "inbound_buffer_saturated")
+	}
 }
