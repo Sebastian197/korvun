@@ -27,6 +27,7 @@ const (
 	OutboundKindAudio
 	OutboundKindVideo
 	OutboundKindLocation
+	OutboundKindAnswerCallback
 )
 
 // String returns a short lowercase name for the kind, suitable for
@@ -47,6 +48,8 @@ func (k OutboundKind) String() string {
 		return "video"
 	case OutboundKindLocation:
 		return "location"
+	case OutboundKindAnswerCallback:
+		return "answer_callback"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(k))
 	}
@@ -56,14 +59,15 @@ func (k OutboundKind) String() string {
 // of the typed fields is non-nil, matching Kind. The caller dispatches
 // the appropriate bot.SendXxx method against the populated field.
 type Outbound struct {
-	Kind     OutboundKind
-	Message  *bot.SendMessageParams
-	Photo    *bot.SendPhotoParams
-	Document *bot.SendDocumentParams
-	Voice    *bot.SendVoiceParams
-	Audio    *bot.SendAudioParams
-	Video    *bot.SendVideoParams
-	Location *bot.SendLocationParams
+	Kind           OutboundKind
+	Message        *bot.SendMessageParams
+	Photo          *bot.SendPhotoParams
+	Document       *bot.SendDocumentParams
+	Voice          *bot.SendVoiceParams
+	Audio          *bot.SendAudioParams
+	Video          *bot.SendVideoParams
+	Location       *bot.SendLocationParams
+	AnswerCallback *bot.AnswerCallbackQueryParams
 }
 
 // OutboundParams converts an outbound Envelope into the appropriate
@@ -96,6 +100,15 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 	if e.Channel != ChannelName {
 		return nil, fmt.Errorf("%w: got %q", ErrWrongChannel, e.Channel)
 	}
+
+	// CallbackAck is an outbound primitive with no ChatID and no
+	// message body; it is addressed by the callback query ID alone.
+	// Route it before parseChatID / classifyParts so those
+	// message-shaped preconditions don't trip on it.
+	if ack := findCallbackAckPart(e.Parts); ack != nil {
+		return outboundAnswerCallback(e, ack)
+	}
+
 	chatID, err := parseChatID(e)
 	if err != nil {
 		return nil, err
@@ -106,6 +119,8 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 		return nil, err
 	}
 
+	replyMarkup := buildReplyMarkup(e.Keyboard)
+
 	if media == nil {
 		if text == "" {
 			return nil, ErrNoPartsToSend
@@ -113,8 +128,9 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 		return &Outbound{
 			Kind: OutboundKindMessage,
 			Message: &bot.SendMessageParams{
-				ChatID: chatID,
-				Text:   text,
+				ChatID:      chatID,
+				Text:        text,
+				ReplyMarkup: replyMarkup,
 			},
 		}, nil
 	}
@@ -133,9 +149,10 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 		return &Outbound{
 			Kind: OutboundKindLocation,
 			Location: &bot.SendLocationParams{
-				ChatID:    chatID,
-				Latitude:  lat,
-				Longitude: lon,
+				ChatID:      chatID,
+				Latitude:    lat,
+				Longitude:   lon,
+				ReplyMarkup: replyMarkup,
 			},
 		}, nil
 	}
@@ -150,9 +167,10 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 		return &Outbound{
 			Kind: OutboundKindPhoto,
 			Photo: &bot.SendPhotoParams{
-				ChatID:  chatID,
-				Photo:   input,
-				Caption: text,
+				ChatID:      chatID,
+				Photo:       input,
+				Caption:     text,
+				ReplyMarkup: replyMarkup,
 			},
 		}, nil
 	case envelope.Audio:
@@ -160,36 +178,40 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 			return &Outbound{
 				Kind: OutboundKindVoice,
 				Voice: &bot.SendVoiceParams{
-					ChatID:  chatID,
-					Voice:   input,
-					Caption: text,
+					ChatID:      chatID,
+					Voice:       input,
+					Caption:     text,
+					ReplyMarkup: replyMarkup,
 				},
 			}, nil
 		}
 		return &Outbound{
 			Kind: OutboundKindAudio,
 			Audio: &bot.SendAudioParams{
-				ChatID:  chatID,
-				Audio:   input,
-				Caption: text,
+				ChatID:      chatID,
+				Audio:       input,
+				Caption:     text,
+				ReplyMarkup: replyMarkup,
 			},
 		}, nil
 	case envelope.Video:
 		return &Outbound{
 			Kind: OutboundKindVideo,
 			Video: &bot.SendVideoParams{
-				ChatID:  chatID,
-				Video:   input,
-				Caption: text,
+				ChatID:      chatID,
+				Video:       input,
+				Caption:     text,
+				ReplyMarkup: replyMarkup,
 			},
 		}, nil
 	case envelope.File:
 		return &Outbound{
 			Kind: OutboundKindDocument,
 			Document: &bot.SendDocumentParams{
-				ChatID:   chatID,
-				Document: input,
-				Caption:  text,
+				ChatID:      chatID,
+				Document:    input,
+				Caption:     text,
+				ReplyMarkup: replyMarkup,
 			},
 		}, nil
 	default:
@@ -197,6 +219,60 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 		// not covered yet.
 		return nil, ErrUnsupportedContent
 	}
+}
+
+// findCallbackAckPart returns the first CallbackAck part in parts, or
+// nil if none is present. Validate's exclusivity rule guarantees that
+// a CallbackAck part, when present, is the only part — so the search
+// terminates on the first match without scanning further.
+func findCallbackAckPart(parts []envelope.Part) *envelope.Part {
+	for i := range parts {
+		if parts[i].Type == envelope.CallbackAck {
+			return &parts[i]
+		}
+	}
+	return nil
+}
+
+// outboundAnswerCallback translates a CallbackAck envelope into a
+// *bot.AnswerCallbackQueryParams. The callback_query_id Meta key is
+// required; its absence is the only failure mode here (the Part shape
+// has already been guarded by Validate at the call seam).
+func outboundAnswerCallback(e *envelope.Envelope, ack *envelope.Part) (*Outbound, error) {
+	id := e.Meta[MetaCallbackQueryID]
+	if id == "" {
+		return nil, ErrMissingCallbackQueryID
+	}
+	return &Outbound{
+		Kind: OutboundKindAnswerCallback,
+		AnswerCallback: &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: id,
+			Text:            ack.Content,
+		},
+	}, nil
+}
+
+// buildReplyMarkup translates a canonical envelope.Keyboard into a
+// Telegram InlineKeyboardMarkup value. Returns nil when k is nil, so
+// the caller can assign the result unconditionally to ReplyMarkup
+// without a guarded branch per Send*Params.
+func buildReplyMarkup(k *envelope.Keyboard) models.ReplyMarkup {
+	if k == nil {
+		return nil
+	}
+	rows := make([][]models.InlineKeyboardButton, len(k.Rows))
+	for i, row := range k.Rows {
+		buttons := make([]models.InlineKeyboardButton, len(row))
+		for j, b := range row {
+			buttons[j] = models.InlineKeyboardButton{
+				Text:         b.Text,
+				CallbackData: b.CallbackData,
+				URL:          b.URL,
+			}
+		}
+		rows[i] = buttons
+	}
+	return models.InlineKeyboardMarkup{InlineKeyboard: rows}
 }
 
 // OutboundToSendMessage converts an outbound Envelope into a
