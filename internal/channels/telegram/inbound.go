@@ -13,23 +13,36 @@ import (
 )
 
 // InboundFromUpdate converts a Telegram Update into a canonical
-// Envelope. Supported content (Phase 2E.1):
+// Envelope. Supported update kinds:
 //
-//   - Text messages (Phase 2.3).
-//   - Photo, voice, audio, video, document — each mapped to an
-//     Envelope Part with file_id as Source and mime_type (when
-//     present) as MIMEType.
-//   - Caption (the text Telegram attaches to a media message) is
-//     appended as a separate text Part after the media Part.
+//   - Message (Phase 2.3 / 2E.1 / 2E.3): text, photo, voice, audio,
+//     video, document, location, plus optional caption.
+//   - CallbackQuery (Phase 2E.4): a tap on an inline-keyboard button.
+//     The resulting Envelope carries a single Callback Part whose
+//     Content is the callback Data string, and Meta carries the
+//     callback ID so a later outbound CallbackAck can address it.
 //
-// The Update must carry a non-nil Message with a non-nil From; if
-// the resulting Envelope would carry no Parts (no text, no caption,
-// no supported media) the call returns ErrUnsupportedContent.
+// Returns ErrNoMessage when the update carries neither a Message nor a
+// CallbackQuery (or when the CallbackQuery lacks the ID needed to ack
+// it), and ErrUnsupportedContent when the carried kind has no content
+// the adapter can translate (no sender, no text/media, no callback
+// data).
 func InboundFromUpdate(u *models.Update) (*envelope.Envelope, error) {
-	if u == nil || u.Message == nil {
+	if u == nil {
 		return nil, ErrNoMessage
 	}
-	m := u.Message
+	if u.CallbackQuery != nil {
+		return inboundFromCallbackQuery(u.CallbackQuery)
+	}
+	if u.Message == nil {
+		return nil, ErrNoMessage
+	}
+	return inboundFromMessage(u.Message)
+}
+
+// inboundFromMessage handles the Message update kind. Kept as a
+// separate function so InboundFromUpdate stays a thin dispatcher.
+func inboundFromMessage(m *models.Message) (*envelope.Envelope, error) {
 	if m.From == nil {
 		return nil, ErrUnsupportedContent
 	}
@@ -51,6 +64,52 @@ func InboundFromUpdate(u *models.Update) (*envelope.Envelope, error) {
 	if len(env.Parts) == 0 {
 		return nil, ErrUnsupportedContent
 	}
+	return env, nil
+}
+
+// inboundFromCallbackQuery handles the CallbackQuery update kind.
+// A callback without an ID cannot be acknowledged, so the adapter
+// refuses it rather than letting the orchestrator hold an envelope
+// it cannot translate to a SendAnswerCallbackQuery later. An empty
+// Data string is treated the same way an empty Message is in
+// inboundFromMessage: ErrUnsupportedContent.
+func inboundFromCallbackQuery(cq *models.CallbackQuery) (*envelope.Envelope, error) {
+	if cq.From.ID == 0 {
+		return nil, ErrUnsupportedContent
+	}
+	if cq.ID == "" {
+		return nil, ErrNoMessage
+	}
+	if cq.Data == "" {
+		return nil, ErrUnsupportedContent
+	}
+	sender := envelope.Participant{
+		ID:   strconv.FormatInt(cq.From.ID, 10),
+		Name: senderName(&cq.From),
+	}
+	env := envelope.New(ChannelName, envelope.Inbound, sender)
+	env.Meta[MetaCallbackQueryID] = cq.ID
+	// The original message that carried the keyboard may be either
+	// accessible (full Message) or inaccessible (only chat + id + date
+	// retained by Telegram). Preserve chat/message identifiers when
+	// available so a downstream consumer can address the original
+	// message (e.g. edit it once the side-effect ADR lands).
+	if cq.Message.Message != nil {
+		om := cq.Message.Message
+		env.Meta[MetaChatID] = strconv.FormatInt(om.Chat.ID, 10)
+		env.Meta[MetaMessageID] = strconv.Itoa(om.ID)
+		if t := string(om.Chat.Type); t != "" {
+			env.Meta[MetaChatType] = t
+		}
+	} else if cq.Message.InaccessibleMessage != nil {
+		im := cq.Message.InaccessibleMessage
+		env.Meta[MetaChatID] = strconv.FormatInt(im.Chat.ID, 10)
+		env.Meta[MetaMessageID] = strconv.Itoa(im.MessageID)
+		if t := string(im.Chat.Type); t != "" {
+			env.Meta[MetaChatType] = t
+		}
+	}
+	env.AddCallback(cq.Data)
 	return env, nil
 }
 

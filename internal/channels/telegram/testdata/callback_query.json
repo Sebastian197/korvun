@@ -1,0 +1,29 @@
+{
+  "update_id": 100000030,
+  "callback_query": {
+    "id": "CQ_unique_id_42",
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "message": {
+      "message_id": 401,
+      "from": {
+        "id": 9999,
+        "is_bot": true,
+        "first_name": "KorvunBot",
+        "username": "korvun_bot"
+      },
+      "chat": {
+        "id": 1000,
+        "type": "private"
+      },
+      "date": 1786000400,
+      "text": "Choose an option:"
+    },
+    "chat_instance": "chat_instance_abc",
+    "data": "button_yes"
+  }
+}

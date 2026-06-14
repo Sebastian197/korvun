@@ -36,6 +36,11 @@ const (
 	// note (SendVoice) instead of the default music/audio file
 	// (SendAudio).
 	MetaAudioKind = "telegram.audio_kind"
+	// MetaCallbackQueryID is the Telegram CallbackQuery.ID of an
+	// inbound callback_query update, preserved verbatim. The same key
+	// on an outbound CallbackAck envelope identifies which callback
+	// the ack addresses. (Phase 2E.4.)
+	MetaCallbackQueryID = "telegram.callback_query_id"
 )
 
 // Values accepted by MetaAudioKind. Any other value (including an
