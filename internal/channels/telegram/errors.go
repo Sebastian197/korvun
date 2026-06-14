@@ -72,4 +72,11 @@ var (
 	// so its absence makes the envelope unsendable. (Phase 2E.4,
 	// migrated to Operation routing in Phase 2E.6.)
 	ErrMissingCallbackQueryID = errors.New("telegram: envelope is missing telegram.callback_query_id meta")
+
+	// ErrMissingTargetMessageID is returned by OutboundParams when an
+	// edit/delete Operation Envelope does not carry
+	// telegram.message_id in Meta (absent, empty, or not parseable as
+	// int). The target message of an edit/delete is addressed by that
+	// ID, so its absence makes the envelope unsendable. (Phase 2E.6.)
+	ErrMissingTargetMessageID = errors.New("telegram: envelope is missing or has invalid telegram.message_id meta")
 )

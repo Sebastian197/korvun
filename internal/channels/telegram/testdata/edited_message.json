@@ -1,0 +1,19 @@
+{
+  "update_id": 100000050,
+  "edited_message": {
+    "message_id": 701,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000700,
+    "edit_date": 1786000800,
+    "text": "edited text"
+  }
+}

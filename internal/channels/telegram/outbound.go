@@ -28,6 +28,9 @@ const (
 	OutboundKindVideo
 	OutboundKindLocation
 	OutboundKindAnswerCallback
+	OutboundKindEditText
+	OutboundKindEditCaption
+	OutboundKindDelete
 )
 
 // String returns a short lowercase name for the kind, suitable for
@@ -50,6 +53,12 @@ func (k OutboundKind) String() string {
 		return "location"
 	case OutboundKindAnswerCallback:
 		return "answer_callback"
+	case OutboundKindEditText:
+		return "edit_text"
+	case OutboundKindEditCaption:
+		return "edit_caption"
+	case OutboundKindDelete:
+		return "delete"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(k))
 	}
@@ -68,12 +77,27 @@ type Outbound struct {
 	Video          *bot.SendVideoParams
 	Location       *bot.SendLocationParams
 	AnswerCallback *bot.AnswerCallbackQueryParams
+	EditText       *bot.EditMessageTextParams
+	EditCaption    *bot.EditMessageCaptionParams
+	Delete         *bot.DeleteMessageParams
 }
 
 // OutboundParams converts an outbound Envelope into the appropriate
-// Telegram Send*Params, packaged in an Outbound tagged union.
+// Telegram Send*/Edit*/Delete*/AnswerCallbackQuery Params, packaged in
+// an Outbound tagged union.
 //
-// Dispatch rules (Phase 2E.2):
+// Dispatch order:
+//
+//   - If Envelope.Operation != nil, route to outboundOperation. This
+//     covers OpCallbackAck (notification side-effect) and the three
+//     mutations OpEditText / OpEditCaption / OpDelete (ADR-0006).
+//     Operations bypass the chat-ID / classify-parts pipeline because
+//     OpCallbackAck is addressed by callback_query_id alone, and the
+//     edit/delete kinds read their own preconditions inside
+//     outboundOperation.
+//   - Otherwise, fall through the message-shaped dispatch:
+//
+// Message-shaped dispatch rules (Phase 2.3 + 2E.2 + 2E.3 + 2E.4):
 //
 //   - An Envelope carrying only text part(s) returns OutboundKindMessage
 //     with Message populated; the first non-empty text part becomes
@@ -83,9 +107,14 @@ type Outbound struct {
 //     Audio -> Audio by default, Audio with Meta[MetaAudioKind] ==
 //     AudioKindVoice -> Voice. The first non-empty text part becomes
 //     that Send*Params.Caption.
+//   - A Location part returns OutboundKindLocation populating
+//     SendLocationParams with the canonical lat/lon (ADR-0004).
 //   - An Envelope carrying more than one media part returns
 //     ErrTooManyMediaParts; per-message Send* methods address one
 //     media item at a time and media-group support is out of scope.
+//   - When Envelope.Keyboard is non-nil it is translated to an
+//     InlineKeyboardMarkup and attached as ReplyMarkup on every
+//     Send*Params produced.
 //
 // The media part's Source must be a Telegram file_id or URL — this
 // phase only supports referenced files via models.InputFileString;
@@ -222,14 +251,19 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 }
 
 // outboundOperation routes a side-effect Envelope to its native
-// Telegram primitive based on Operation.Kind. Phase 2E.6 implements
-// OpCallbackAck here as a migration from the 2E.4 PartType.CallbackAck
-// path; the three mutation kinds (OpEditText, OpEditCaption, OpDelete)
-// arrive in a follow-up commit.
+// Telegram primitive based on Operation.Kind. Notifications
+// (OpCallbackAck) and mutations (OpEditText, OpEditCaption, OpDelete)
+// all flow through here per the side-effect taxonomy in ADR-0006.
 func outboundOperation(e *envelope.Envelope) (*Outbound, error) {
 	switch e.Operation.Kind {
 	case envelope.OpCallbackAck:
 		return outboundAnswerCallback(e)
+	case envelope.OpEditText:
+		return outboundEditText(e)
+	case envelope.OpEditCaption:
+		return outboundEditCaption(e)
+	case envelope.OpDelete:
+		return outboundDelete(e)
 	default:
 		return nil, ErrUnsupportedContent
 	}
@@ -257,6 +291,92 @@ func outboundAnswerCallback(e *envelope.Envelope) (*Outbound, error) {
 			Text:            text,
 		},
 	}, nil
+}
+
+// outboundEditText translates an OpEditText Envelope into a
+// *bot.EditMessageTextParams. Target chat and message IDs come from
+// Meta; the new body is the first Text Part's Content (Validate
+// guaranteed exactly one Text Part with non-empty Content);
+// Envelope.Keyboard, if any, becomes the new ReplyMarkup.
+func outboundEditText(e *envelope.Envelope) (*Outbound, error) {
+	chatID, err := parseChatID(e)
+	if err != nil {
+		return nil, err
+	}
+	messageID, err := parseTargetMessageID(e)
+	if err != nil {
+		return nil, err
+	}
+	return &Outbound{
+		Kind: OutboundKindEditText,
+		EditText: &bot.EditMessageTextParams{
+			ChatID:      chatID,
+			MessageID:   messageID,
+			Text:        e.Parts[0].Content,
+			ReplyMarkup: buildReplyMarkup(e.Keyboard),
+		},
+	}, nil
+}
+
+// outboundEditCaption translates an OpEditCaption Envelope into a
+// *bot.EditMessageCaptionParams. The Text Part's Content becomes
+// Caption (an empty Content is a legitimate intent to clear the
+// caption); Envelope.Keyboard, if any, becomes the new ReplyMarkup.
+func outboundEditCaption(e *envelope.Envelope) (*Outbound, error) {
+	chatID, err := parseChatID(e)
+	if err != nil {
+		return nil, err
+	}
+	messageID, err := parseTargetMessageID(e)
+	if err != nil {
+		return nil, err
+	}
+	return &Outbound{
+		Kind: OutboundKindEditCaption,
+		EditCaption: &bot.EditMessageCaptionParams{
+			ChatID:      chatID,
+			MessageID:   messageID,
+			Caption:     e.Parts[0].Content,
+			ReplyMarkup: buildReplyMarkup(e.Keyboard),
+		},
+	}, nil
+}
+
+// outboundDelete translates an OpDelete Envelope into a
+// *bot.DeleteMessageParams. No Parts, no Keyboard (Validate
+// guaranteed both); only chat and message IDs are consulted.
+func outboundDelete(e *envelope.Envelope) (*Outbound, error) {
+	chatID, err := parseChatID(e)
+	if err != nil {
+		return nil, err
+	}
+	messageID, err := parseTargetMessageID(e)
+	if err != nil {
+		return nil, err
+	}
+	return &Outbound{
+		Kind: OutboundKindDelete,
+		Delete: &bot.DeleteMessageParams{
+			ChatID:    chatID,
+			MessageID: messageID,
+		},
+	}, nil
+}
+
+// parseTargetMessageID extracts the int message ID from
+// env.Meta[MetaMessageID] for edit/delete operations. Returns
+// ErrMissingTargetMessageID when the entry is absent, empty, or not
+// parseable as an int.
+func parseTargetMessageID(e *envelope.Envelope) (int, error) {
+	s, ok := e.Meta[MetaMessageID]
+	if !ok || s == "" {
+		return 0, ErrMissingTargetMessageID
+	}
+	id, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("%w: %q: %v", ErrMissingTargetMessageID, s, err)
+	}
+	return id, nil
 }
 
 // buildReplyMarkup translates a canonical envelope.Keyboard into a

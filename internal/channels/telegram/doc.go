@@ -51,6 +51,13 @@ const (
 	// command name in the Text. Absent when the command carries no
 	// arguments. (Phase 2E.5.)
 	MetaCommandArgs = "telegram.command_args"
+	// MetaEditedAt is the stringified Unix timestamp of the moment a
+	// Message was last edited. Set on the inbound Envelope iff the
+	// source Message.EditDate is non-zero. Its presence is the
+	// canonical signal that this Envelope arrived as an edit; consumers
+	// can correlate it with the original send by Meta[MetaMessageID]
+	// (which Telegram preserves across edits). (Phase 2E.6.)
+	MetaEditedAt = "telegram.edited_at"
 )
 
 // Values accepted by MetaAudioKind. Any other value (including an

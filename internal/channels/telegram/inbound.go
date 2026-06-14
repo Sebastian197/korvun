@@ -17,23 +17,33 @@ import (
 //
 //   - Message (Phase 2.3 / 2E.1 / 2E.3): text, photo, voice, audio,
 //     video, document, location, plus optional caption.
+//   - EditedMessage (Phase 2E.6): a user edit of one of their own
+//     previous messages. Same *Message shape as a fresh Message; the
+//     discriminator is EditDate (Unix timestamp, non-zero iff edited).
+//     The resulting Envelope's Timestamp is EditDate (the moment of
+//     the event), Meta[telegram.edited_at] carries the same value,
+//     and Meta[telegram.message_id] is identical to the original
+//     send so the orchestrator can correlate by ID.
 //   - CallbackQuery (Phase 2E.4): a tap on an inline-keyboard button.
 //     The resulting Envelope carries a single Callback Part whose
 //     Content is the callback Data string, and Meta carries the
 //     callback ID so a later outbound OpCallbackAck Envelope can
 //     address it (ADR-0006).
 //
-// Returns ErrNoMessage when the update carries neither a Message nor a
-// CallbackQuery (or when the CallbackQuery lacks the ID needed to ack
-// it), and ErrUnsupportedContent when the carried kind has no content
-// the adapter can translate (no sender, no text/media, no callback
-// data).
+// Returns ErrNoMessage when the update carries neither a Message, a
+// CallbackQuery, nor an EditedMessage (or when the CallbackQuery
+// lacks the ID needed to ack it), and ErrUnsupportedContent when the
+// carried kind has no content the adapter can translate (no sender,
+// no text/media, no callback data).
 func InboundFromUpdate(u *models.Update) (*envelope.Envelope, error) {
 	if u == nil {
 		return nil, ErrNoMessage
 	}
 	if u.CallbackQuery != nil {
 		return inboundFromCallbackQuery(u.CallbackQuery)
+	}
+	if u.EditedMessage != nil {
+		return inboundFromMessage(u.EditedMessage)
 	}
 	if u.Message == nil {
 		return nil, ErrNoMessage
@@ -43,6 +53,9 @@ func InboundFromUpdate(u *models.Update) (*envelope.Envelope, error) {
 
 // inboundFromMessage handles the Message update kind. Kept as a
 // separate function so InboundFromUpdate stays a thin dispatcher.
+// The same function handles both fresh Messages and EditedMessages;
+// EditDate > 0 is the discriminator that shifts Timestamp and
+// stamps Meta[MetaEditedAt].
 func inboundFromMessage(m *models.Message) (*envelope.Envelope, error) {
 	if m.From == nil {
 		return nil, ErrUnsupportedContent
@@ -52,7 +65,12 @@ func inboundFromMessage(m *models.Message) (*envelope.Envelope, error) {
 		Name: senderName(m.From),
 	}
 	env := envelope.New(ChannelName, envelope.Inbound, sender)
-	env.Timestamp = time.Unix(int64(m.Date), 0).UTC()
+	if m.EditDate > 0 {
+		env.Timestamp = time.Unix(int64(m.EditDate), 0).UTC()
+		env.Meta[MetaEditedAt] = strconv.Itoa(m.EditDate)
+	} else {
+		env.Timestamp = time.Unix(int64(m.Date), 0).UTC()
+	}
 	env.Meta[MetaChatID] = strconv.FormatInt(m.Chat.ID, 10)
 	env.Meta[MetaMessageID] = strconv.Itoa(m.ID)
 	if t := string(m.Chat.Type); t != "" {
