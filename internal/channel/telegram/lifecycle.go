@@ -78,26 +78,52 @@ func (a *Adapter) Start(ctx context.Context) error {
 // the router sees a clean "no more updates" signal it can use to
 // drain.
 //
+// Shutdown ordering:
+//
+//  1. Flip state to stateStopped under mu. Every subsequent
+//     dispatchUpdate that races the unlock sees state==stopped and
+//     returns without Add'ing to dispatchWG.
+//  2. close(a.done). Every dispatchUpdate already past the state
+//     check has Add'd; their in-flight select sees <-a.done and
+//     returns without touching a.inbound.
+//  3. Per-mode transport shutdown (stopWebhook / stopPolling). For
+//     webhook this is DeleteWebhook + httpServer.Shutdown; for
+//     polling it is loopCancel. Both bounded by ctx.
+//  4. workers.Wait — joins ListenAndServe and runner.Start.
+//  5. dispatchWG.Wait — joins every dispatchUpdate that was past
+//     the state check. After steps 1/2 no new Add is possible and
+//     every in-flight dispatch is either returning via <-a.done
+//     or has already returned via the other select cases.
+//  6. close(a.inbound). Guaranteed safe: by step 5 no goroutine
+//     can be in mid-send on a.inbound.
+//
 // Stop is what main.go calls BEFORE router.Shutdown — see ADR-0008
 // §4b for the ordering rule.
 func (a *Adapter) Stop(ctx context.Context) error {
 	var err error
 	a.stopOnce.Do(func() {
 		a.mu.Lock()
-		switch a.state {
-		case stateRunning:
-			// fallthrough into the per-mode shutdown below.
-		case stateNew:
-			a.state = stateStopped
-			close(a.inbound)
-			a.mu.Unlock()
-			return
-		case stateStopped:
-			a.mu.Unlock()
-			return
-		}
+		prev := a.state
 		a.state = stateStopped
 		a.mu.Unlock()
+
+		// Broadcast to dispatchUpdate goroutines AFTER state has
+		// flipped, so the two seams (state under mu, done channel)
+		// agree about "no more enqueues" by the time any
+		// dispatchUpdate looks at either.
+		close(a.done)
+
+		switch prev {
+		case stateNew:
+			// Never started, nothing to tear down. dispatchWG is
+			// trivially zero (no Start means no dispatchUpdate ran).
+			close(a.inbound)
+			return
+		case stateStopped:
+			// Unreachable through stopOnce.Do, but defensive: do
+			// not close inbound twice.
+			return
+		}
 
 		switch a.cfg.mode {
 		case ModeWebhook:
@@ -106,6 +132,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 			err = a.stopPolling(ctx)
 		}
 		a.workers.Wait()
+		a.dispatchWG.Wait()
 		close(a.inbound)
 	})
 	return err

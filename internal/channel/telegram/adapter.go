@@ -64,6 +64,15 @@ type Adapter struct {
 	client  botClient
 	runner  botRunner
 	inbound chan *envelope.Envelope
+	// done is closed by Stop to broadcast "the adapter is shutting
+	// down" to every dispatchUpdate goroutine. A reader of done
+	// inside the dispatchUpdate select means "refuse to enqueue,
+	// release any library worker that called us, and return"; a
+	// reader outside the select (during the state check) means
+	// "do not even Add to dispatchWG". Together with the
+	// state/mu/dispatchWG triple this is what closes the race
+	// between in-flight dispatchUpdate and close(a.inbound) at Stop.
+	done    chan struct{}
 	dropped atomic.Uint64
 
 	mu         sync.Mutex
@@ -72,6 +81,13 @@ type Adapter struct {
 	loopCancel context.CancelFunc
 	httpServer *http.Server
 	workers    sync.WaitGroup
+	// dispatchWG tracks in-flight dispatchUpdate calls (the ones
+	// that passed the state check under mu and got Add'd). Stop
+	// waits on it AFTER closing done and AFTER workers.Wait so by
+	// the time close(a.inbound) executes there is no goroutine
+	// still able to send on it. New Adds after state==stopped are
+	// refused under the mu seam — see dispatchUpdate.
+	dispatchWG sync.WaitGroup
 	stopOnce   sync.Once
 }
 
@@ -104,6 +120,7 @@ func New(opts ...Option) (*Adapter, error) {
 	a := &Adapter{
 		cfg:     cfg,
 		inbound: make(chan *envelope.Envelope, cfg.inboundCapacity),
+		done:    make(chan struct{}),
 		state:   stateNew,
 	}
 
@@ -218,7 +235,7 @@ func (a *Adapter) handleLibraryUpdate(ctx context.Context, _ *bot.Bot, u *models
 // a method (not a closure) so tests can call it directly with
 // fixture updates, no *bot.Bot needed.
 //
-// Three outcomes are possible:
+// Four outcomes are possible:
 //
 //   - The update converts to an Envelope and enqueues within
 //     enqueueTimeout: success, no log.
@@ -233,12 +250,31 @@ func (a *Adapter) handleLibraryUpdate(ctx context.Context, _ *bot.Bot, u *models
 //     update is released by the same return; see ADR-0008 §4c for
 //     why this is the right operational shape rather than blocking
 //     or pushing back to Telegram.
+//   - The adapter is shutting down (Stop has closed a.done): refuse
+//     to enqueue. Either we never Add'd to dispatchWG because
+//     state==stopped, or the in-flight select fires on <-a.done.
+//     Either way no send happens on a.inbound after Stop has
+//     committed to close(a.inbound).
 //
 // ctx cancellation short-circuits both the convert and the enqueue
 // without counting as a saturation drop — a cancelled ctx means the
 // process is shutting down, which is not the same condition the
 // observability layer wants to alert on.
 func (a *Adapter) dispatchUpdate(ctx context.Context, u *models.Update) {
+	// The state check and the dispatchWG.Add(1) sit under a.mu
+	// together so Stop's transition to stateStopped strictly
+	// happens-before any future Add. Once Stop has flipped state,
+	// every subsequent dispatchUpdate returns here without
+	// touching dispatchWG or a.inbound.
+	a.mu.Lock()
+	if a.state == stateStopped {
+		a.mu.Unlock()
+		return
+	}
+	a.dispatchWG.Add(1)
+	a.mu.Unlock()
+	defer a.dispatchWG.Done()
+
 	if ctx.Err() != nil {
 		return
 	}
@@ -261,6 +297,10 @@ func (a *Adapter) dispatchUpdate(ctx context.Context, u *models.Update) {
 	select {
 	case a.inbound <- env:
 	case <-ctx.Done():
+	case <-a.done:
+		// Adapter is shutting down — refuse to enqueue. No counter
+		// increment: shutdown is not the saturation condition the
+		// observability layer should alert on.
 	case <-timer.C:
 		a.dropped.Add(1)
 		a.cfg.logger.WarnContext(ctx,

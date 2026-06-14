@@ -6,6 +6,7 @@ package telegram
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -95,6 +96,99 @@ func TestStop_beforeStartIsNoOp(t *testing.T) {
 	}
 	if _, ok := <-a.inbound; ok {
 		t.Error("inbound should be closed after Stop on a never-started adapter")
+	}
+}
+
+// TestStop_doesNotPanicWithInFlightDispatch reproduces the race
+// the original Phase 2E.8 sub-E commit had: dispatchUpdate goroutines
+// blocked in the saturated-buffer select while Stop closed
+// a.inbound. Before the fix this test panics under -race with
+// "send on closed channel"; after the fix every in-flight
+// dispatchUpdate observes <-a.done and returns cleanly, Stop joins
+// dispatchWG before closing, and no send hits a closed channel.
+//
+// The test runs under -race because the race detector is what
+// makes the bug consistently visible — wall-clock alone would
+// catch it only sometimes.
+func TestStop_doesNotPanicWithInFlightDispatch(t *testing.T) {
+	runner := newRunnableBotClient()
+	a, err := New(
+		WithToken("test-token"),
+		WithMode(ModePolling),
+		WithInboundCapacity(1),
+		// Long enough that without the <-a.done case the dispatch
+		// goroutines would still be parked in the select when Stop
+		// reaches close(a.inbound).
+		WithEnqueueTimeout(5*time.Second),
+		withInjectedBotForTests(runner),
+	)
+	if err != nil {
+		t.Fatalf("New() err = %v", err)
+	}
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("Start() err = %v", err)
+	}
+
+	// Saturate the buffer (no reader is attached).
+	a.dispatchUpdate(context.Background(), newTextUpdate(1, 1, "first"))
+	if got := len(a.inbound); got != 1 {
+		t.Fatalf("inbound not saturated: len = %d, want 1", got)
+	}
+
+	// Launch N dispatchers that will block on the saturated send.
+	const N = 8
+	var ready sync.WaitGroup
+	var done sync.WaitGroup
+	for i := 0; i < N; i++ {
+		ready.Add(1)
+		done.Add(1)
+		go func(i int) {
+			defer done.Done()
+			ready.Done()
+			a.dispatchUpdate(context.Background(),
+				newTextUpdate(1, 100+i, "blocked"))
+		}(i)
+	}
+	ready.Wait()
+	// Let the goroutines enter the select. 50ms is generous but
+	// keeps the test fast under -race overhead.
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop with a short ctx — this is the original failure mode:
+	// httpServer.Shutdown / loopCancel returns quickly, workers.Wait
+	// returns quickly, and close(a.inbound) used to race the
+	// in-flight sends.
+	stopCtx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if err := a.Stop(stopCtx); err != nil {
+		t.Fatalf("Stop() err = %v", err)
+	}
+
+	// Every blocked dispatchUpdate must have returned cleanly via
+	// the <-a.done case (no send, no counter increment).
+	waitDone := make(chan struct{})
+	go func() {
+		done.Wait()
+		close(waitDone)
+	}()
+	select {
+	case <-waitDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("dispatch goroutines did not return within 2s of Stop()")
+	}
+
+	// Drop counter must not have been incremented by the shutdown
+	// path — drops are saturation events, not shutdown events.
+	if got := a.DroppedCount(); got != 0 {
+		t.Errorf("DroppedCount = %d after shutdown, want 0", got)
+	}
+
+	// Verify a.inbound is closed (drains the one seeded envelope
+	// first, then returns the closed-channel ok=false).
+	for range a.inbound {
+	}
+	if _, ok := <-a.inbound; ok {
+		t.Error("inbound channel was not closed after Stop()")
 	}
 }
 
