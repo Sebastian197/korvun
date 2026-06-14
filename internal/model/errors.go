@@ -3,7 +3,11 @@
 
 package model
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"time"
+)
 
 // Sentinel errors every Model adapter returns at the upstream
 // validation seam. Callers match with errors.Is rather than
@@ -41,7 +45,53 @@ var (
 	// not be parsed or the status code was non-2xx. Wraps the
 	// underlying cause.
 	ErrProviderResponse = errors.New("model: provider returned a bad response")
+
+	// ErrAuthInvalid is returned by adapter implementations when the
+	// underlying provider rejected the call for missing or invalid
+	// credentials (typically HTTP 401 or 403 on cloud APIs). Distinct
+	// from ErrProviderUnavailable because a retry will not help — the
+	// operator must fix the credentials before the call can succeed.
+	// (ADR-0010 §1 / §4.)
+	ErrAuthInvalid = errors.New("model: provider authentication failed")
+
+	// ErrRateLimited is returned by adapter implementations when the
+	// underlying provider rejected the call for exceeding a quota
+	// (typically HTTP 429 on cloud APIs). Recoverable by waiting; a
+	// fan-out / retry policy upstream of the adapter (Phase 4.3) can
+	// inspect *RateLimitError via errors.As to recover the optional
+	// RetryAfter hint. (ADR-0010 §1 / §4.)
+	ErrRateLimited = errors.New("model: provider rate-limited the caller")
 )
+
+// RateLimitError is the concrete error type returned when a provider
+// signals a rate-limit hit. Provider identifies the source (handy
+// when a fan-out sees several errors from different providers);
+// RetryAfter is the suggested wait, zero when the provider did not
+// advise one (e.g. HTTP 429 without a retry-after header).
+//
+// Wraps ErrRateLimited so errors.Is(err, ErrRateLimited) keeps
+// working without callers having to know the concrete type;
+// errors.As(err, &rle) recovers the metadata. Same pattern as
+// net.OpError, os.PathError, etc.
+type RateLimitError struct {
+	Provider   string
+	RetryAfter time.Duration
+}
+
+// Error implements the error interface. Includes the provider and,
+// when present, the retry-after hint, so a log line is self-
+// describing without forcing the caller to type-assert.
+func (e *RateLimitError) Error() string {
+	if e.RetryAfter > 0 {
+		return fmt.Sprintf("%s: %s rate-limited, retry after %s",
+			ErrRateLimited.Error(), e.Provider, e.RetryAfter)
+	}
+	return fmt.Sprintf("%s: %s rate-limited", ErrRateLimited.Error(), e.Provider)
+}
+
+// Unwrap returns the wrapped ErrRateLimited sentinel so
+// errors.Is(err, ErrRateLimited) succeeds on a *RateLimitError.
+func (e *RateLimitError) Unwrap() error { return ErrRateLimited }
 
 // ValidateRequest checks the universal upstream invariants every
 // adapter expects: non-nil request, non-empty Model, at least one
