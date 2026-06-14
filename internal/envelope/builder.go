@@ -62,20 +62,6 @@ func (e *Envelope) AddCallback(data string) *Envelope {
 	return e
 }
 
-// AddCallbackAck appends a CallbackAck part to the envelope. The toast
-// string is shown to the user as a small notification; empty toast
-// produces a silent ack that only clears the channel's retry. The
-// channel-specific identifier of the callback being acknowledged must
-// already be present in Meta (e.g. "telegram.callback_query_id"). See
-// ADR-0005.
-func (e *Envelope) AddCallbackAck(toast string) *Envelope {
-	e.Parts = append(e.Parts, Part{
-		Type:    CallbackAck,
-		Content: toast,
-	})
-	return e
-}
-
 // WithKeyboard attaches an interactive overlay to the envelope. Each
 // variadic argument is one row of buttons; the rows are stacked
 // top-to-bottom in the resulting UI. Validate enforces structural
@@ -83,5 +69,53 @@ func (e *Envelope) AddCallbackAck(toast string) *Envelope {
 // chaining.
 func (e *Envelope) WithKeyboard(rows ...[]Button) *Envelope {
 	e.Keyboard = &Keyboard{Rows: rows}
+	return e
+}
+
+// SetEditText marks the envelope as an OpEditText operation and stores
+// the new body text as a single Text Part. The channel-specific target
+// identifier (e.g. telegram.chat_id + telegram.message_id) must
+// already be present in Meta when OutboundParams is called. Replaces
+// any pre-existing Parts and Operation. See ADR-0006.
+func (e *Envelope) SetEditText(text string) *Envelope {
+	e.Operation = &Operation{Kind: OpEditText}
+	e.Parts = []Part{{Type: Text, Content: text}}
+	return e
+}
+
+// SetEditCaption marks the envelope as an OpEditCaption operation and
+// stores the new caption as a single Text Part. Empty caption clears
+// the existing caption on the target message. Replaces any
+// pre-existing Parts and Operation. See ADR-0006.
+func (e *Envelope) SetEditCaption(caption string) *Envelope {
+	e.Operation = &Operation{Kind: OpEditCaption}
+	e.Parts = []Part{{Type: Text, Content: caption}}
+	return e
+}
+
+// SetDelete marks the envelope as an OpDelete operation. Parts is set
+// to empty (delete has no body); any pre-existing Parts and Operation
+// are replaced. The Keyboard, if any, must be cleared by the caller —
+// Validate rejects an OpDelete envelope that carries a Keyboard. See
+// ADR-0006.
+func (e *Envelope) SetDelete() *Envelope {
+	e.Operation = &Operation{Kind: OpDelete}
+	e.Parts = []Part{}
+	return e
+}
+
+// SetCallbackAck marks the envelope as an OpCallbackAck operation.
+// Empty toast produces a silent ack (empty Parts); a non-empty toast
+// is stored as a single Text Part. The channel-specific callback
+// identifier must already be present in Meta (e.g.
+// telegram.callback_query_id). Replaces any pre-existing Parts and
+// Operation. See ADR-0006.
+func (e *Envelope) SetCallbackAck(toast string) *Envelope {
+	e.Operation = &Operation{Kind: OpCallbackAck}
+	if toast == "" {
+		e.Parts = []Part{}
+	} else {
+		e.Parts = []Part{{Type: Text, Content: toast}}
+	}
 	return e
 }

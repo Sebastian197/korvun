@@ -13,23 +13,27 @@ import (
 
 // ----------------------------------------------------------------------------
 // Phase 2E.4 — outbound CallbackAck.
+// (Migrated to Envelope.Operation in Phase 2E.6; the behavioural contract
+// is preserved verbatim — only the construction API changes.)
 //
-// A CallbackAck Envelope translates to *bot.AnswerCallbackQueryParams via a
-// new OutboundKindAnswerCallback. The minimal contract (ADR-0005) is:
+// An OpCallbackAck Envelope translates to *bot.AnswerCallbackQueryParams via
+// OutboundKindAnswerCallback. The minimal contract (ADR-0005, refined by
+// ADR-0006) is:
 //   - CallbackQueryID is read from Meta[MetaCallbackQueryID]; absence
 //     yields ErrMissingCallbackQueryID.
-//   - Text is the CallbackAck Part's Content; empty Content = silent ack.
+//   - Text is the first Text Part's Content; empty Parts = silent ack
+//     (translates to empty Text on AnswerCallbackQueryParams).
 //   - No ChatID is needed (the ack is addressed by the callback ID, not by
 //     chat), so the standard MetaChatID precondition does NOT apply to acks.
 // ----------------------------------------------------------------------------
 
-// ackEnv builds an outbound CallbackAck envelope with the given toast and
+// ackEnv builds an outbound OpCallbackAck envelope with the given toast and
 // the callback_query_id Meta entry set. Tests that want to remove either
 // piece tweak the result.
 func ackEnv(toast string) *envelope.Envelope {
 	e := envelope.New(ChannelName, envelope.Outbound, envelope.Participant{ID: "bot"})
 	e.Meta[MetaCallbackQueryID] = "CQ_xyz_42"
-	e.AddCallbackAck(toast)
+	e.SetCallbackAck(toast)
 	return e
 }
 
@@ -94,7 +98,7 @@ func TestOutboundParams_CallbackAck_NoChatIDRequired(t *testing.T) {
 	// chat-ID precondition must not fire here.
 	e := envelope.New(ChannelName, envelope.Outbound, envelope.Participant{ID: "bot"})
 	e.Meta[MetaCallbackQueryID] = "CQ_no_chat"
-	e.AddCallbackAck("")
+	e.SetCallbackAck("")
 	out, err := OutboundParams(e)
 	if err != nil {
 		t.Fatalf("OutboundParams: %v", err)

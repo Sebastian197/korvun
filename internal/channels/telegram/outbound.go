@@ -101,12 +101,12 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 		return nil, fmt.Errorf("%w: got %q", ErrWrongChannel, e.Channel)
 	}
 
-	// CallbackAck is an outbound primitive with no ChatID and no
-	// message body; it is addressed by the callback query ID alone.
-	// Route it before parseChatID / classifyParts so those
-	// message-shaped preconditions don't trip on it.
-	if ack := findCallbackAckPart(e.Parts); ack != nil {
-		return outboundAnswerCallback(e, ack)
+	// Side-effect operations (ADR-0006) are routed before the
+	// chat-ID / classify-parts pipeline so that operations addressed by
+	// a non-chat target (currently only OpCallbackAck) don't trip on
+	// the standard message-shaped preconditions.
+	if e.Operation != nil {
+		return outboundOperation(e)
 	}
 
 	chatID, err := parseChatID(e)
@@ -221,33 +221,40 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 	}
 }
 
-// findCallbackAckPart returns the first CallbackAck part in parts, or
-// nil if none is present. Validate's exclusivity rule guarantees that
-// a CallbackAck part, when present, is the only part — so the search
-// terminates on the first match without scanning further.
-func findCallbackAckPart(parts []envelope.Part) *envelope.Part {
-	for i := range parts {
-		if parts[i].Type == envelope.CallbackAck {
-			return &parts[i]
-		}
+// outboundOperation routes a side-effect Envelope to its native
+// Telegram primitive based on Operation.Kind. Phase 2E.6 implements
+// OpCallbackAck here as a migration from the 2E.4 PartType.CallbackAck
+// path; the three mutation kinds (OpEditText, OpEditCaption, OpDelete)
+// arrive in a follow-up commit.
+func outboundOperation(e *envelope.Envelope) (*Outbound, error) {
+	switch e.Operation.Kind {
+	case envelope.OpCallbackAck:
+		return outboundAnswerCallback(e)
+	default:
+		return nil, ErrUnsupportedContent
 	}
-	return nil
 }
 
-// outboundAnswerCallback translates a CallbackAck envelope into a
+// outboundAnswerCallback translates an OpCallbackAck Envelope into a
 // *bot.AnswerCallbackQueryParams. The callback_query_id Meta key is
-// required; its absence is the only failure mode here (the Part shape
-// has already been guarded by Validate at the call seam).
-func outboundAnswerCallback(e *envelope.Envelope, ack *envelope.Part) (*Outbound, error) {
+// required; its absence is the only failure mode here (Operation
+// shape has already been guarded by Validate at the call seam). The
+// toast text rides as the first Text Part's Content; a silent ack
+// (empty Parts) yields an empty Text on the params.
+func outboundAnswerCallback(e *envelope.Envelope) (*Outbound, error) {
 	id := e.Meta[MetaCallbackQueryID]
 	if id == "" {
 		return nil, ErrMissingCallbackQueryID
+	}
+	text := ""
+	if len(e.Parts) == 1 {
+		text = e.Parts[0].Content
 	}
 	return &Outbound{
 		Kind: OutboundKindAnswerCallback,
 		AnswerCallback: &bot.AnswerCallbackQueryParams{
 			CallbackQueryID: id,
-			Text:            ack.Content,
+			Text:            text,
 		},
 	}, nil
 }

@@ -66,9 +66,10 @@ var (
 	// shape fixed by ADR-0004. (Phase 2E.3.)
 	ErrInvalidLocation = errors.New("telegram: location part has invalid content")
 
-	// ErrMissingCallbackQueryID is returned by OutboundParams when a
-	// CallbackAck Envelope does not carry telegram.callback_query_id in
-	// Meta (or carries it empty). The ack is addressed by that ID, so
-	// its absence makes the envelope unsendable. (Phase 2E.4.)
+	// ErrMissingCallbackQueryID is returned by OutboundParams when an
+	// OpCallbackAck Envelope does not carry telegram.callback_query_id
+	// in Meta (or carries it empty). The ack is addressed by that ID,
+	// so its absence makes the envelope unsendable. (Phase 2E.4,
+	// migrated to Operation routing in Phase 2E.6.)
 	ErrMissingCallbackQueryID = errors.New("telegram: envelope is missing telegram.callback_query_id meta")
 )

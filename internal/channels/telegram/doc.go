@@ -38,8 +38,9 @@ const (
 	MetaAudioKind = "telegram.audio_kind"
 	// MetaCallbackQueryID is the Telegram CallbackQuery.ID of an
 	// inbound callback_query update, preserved verbatim. The same key
-	// on an outbound CallbackAck envelope identifies which callback
-	// the ack addresses. (Phase 2E.4.)
+	// on an outbound OpCallbackAck Envelope identifies which callback
+	// the ack addresses. (Phase 2E.4, routed via Operation in Phase
+	// 2E.6.)
 	MetaCallbackQueryID = "telegram.callback_query_id"
 	// MetaCommand is the name of the bot command parsed from a Text
 	// Message with a bot_command MessageEntity at offset 0. The leading

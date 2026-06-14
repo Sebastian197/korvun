@@ -31,17 +31,17 @@ func TestValidate_valid_callback_envelopes(t *testing.T) {
 			}(),
 		},
 		{
-			name: "outbound silent ack (empty Content)",
+			name: "outbound silent ack (empty Parts)",
 			env: func() *Envelope {
 				e := New("telegram", Outbound, Participant{ID: "bot"})
-				return e.AddCallbackAck("")
+				return e.SetCallbackAck("")
 			}(),
 		},
 		{
 			name: "outbound ack with toast",
 			env: func() *Envelope {
 				e := New("telegram", Outbound, Participant{ID: "bot"})
-				return e.AddCallbackAck("Saved!")
+				return e.SetCallbackAck("Saved!")
 			}(),
 		},
 	}
@@ -49,6 +49,189 @@ func TestValidate_valid_callback_envelopes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.env.Validate(); err != nil {
 				t.Errorf("Validate() returned error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidate_valid_operation_envelopes(t *testing.T) {
+	tests := []struct {
+		name string
+		env  *Envelope
+	}{
+		{
+			name: "OpEditText with new body",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetEditText("updated body")
+			}(),
+		},
+		{
+			name: "OpEditText with attached keyboard",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetEditText("updated body").WithKeyboard(
+					[]Button{CallbackButton("Yes", "yes")},
+				)
+			}(),
+		},
+		{
+			name: "OpEditCaption with new caption",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetEditCaption("new caption")
+			}(),
+		},
+		{
+			name: "OpEditCaption with empty Content (clear caption)",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetEditCaption("")
+			}(),
+		},
+		{
+			name: "OpDelete",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetDelete()
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.env.Validate(); err != nil {
+				t.Errorf("Validate() returned error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidate_operation_errors(t *testing.T) {
+	base := func() *Envelope {
+		return New("telegram", Outbound, Participant{ID: "bot"})
+	}
+	tests := []struct {
+		name    string
+		build   func() *Envelope
+		wantErr string
+	}{
+		{
+			name: "OpEditText with empty Parts",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpEditText}
+				e.Parts = []Part{}
+				return e
+			},
+			wantErr: "OpEditText requires exactly 1 part",
+		},
+		{
+			name: "OpEditText with empty Content",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpEditText}
+				e.Parts = []Part{{Type: Text, Content: ""}}
+				return e
+			},
+			wantErr: "non-empty Content",
+		},
+		{
+			name: "OpEditText with non-Text Part",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpEditText}
+				e.Parts = []Part{{Type: Image, Source: "x"}}
+				return e
+			},
+			wantErr: "part must be Text",
+		},
+		{
+			name: "OpEditCaption with two Parts",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpEditCaption}
+				e.Parts = []Part{{Type: Text, Content: "a"}, {Type: Text, Content: "b"}}
+				return e
+			},
+			wantErr: "OpEditCaption requires exactly 1 part",
+		},
+		{
+			name: "OpDelete with non-empty Parts",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpDelete}
+				e.Parts = []Part{{Type: Text, Content: "extra"}}
+				return e
+			},
+			wantErr: "OpDelete requires empty parts",
+		},
+		{
+			name: "OpDelete with Keyboard",
+			build: func() *Envelope {
+				e := base().SetDelete()
+				e.Keyboard = &Keyboard{Rows: [][]Button{{CallbackButton("x", "x")}}}
+				return e
+			},
+			wantErr: "OpDelete must not carry a Keyboard",
+		},
+		{
+			name: "OpCallbackAck with two Parts",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpCallbackAck}
+				e.Parts = []Part{{Type: Text, Content: "a"}, {Type: Text, Content: "b"}}
+				return e
+			},
+			wantErr: "OpCallbackAck requires 0 or 1 parts",
+		},
+		{
+			name: "OpCallbackAck with empty-Content Text Part",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpCallbackAck}
+				e.Parts = []Part{{Type: Text, Content: ""}}
+				return e
+			},
+			wantErr: "non-empty Content (use empty Parts for silent ack)",
+		},
+		{
+			name: "OpCallbackAck with non-Text Part",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OpCallbackAck}
+				e.Parts = []Part{{Type: Image, Source: "x"}}
+				return e
+			},
+			wantErr: "part must be Text",
+		},
+		{
+			name: "OpCallbackAck with Keyboard",
+			build: func() *Envelope {
+				e := base().SetCallbackAck("toast")
+				e.Keyboard = &Keyboard{Rows: [][]Button{{CallbackButton("x", "x")}}}
+				return e
+			},
+			wantErr: "OpCallbackAck must not carry a Keyboard",
+		},
+		{
+			name: "unknown OperationKind",
+			build: func() *Envelope {
+				e := base()
+				e.Operation = &Operation{Kind: OperationKind(99)}
+				return e
+			},
+			wantErr: "unknown OperationKind",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := tt.build()
+			err := env.Validate()
+			if err == nil {
+				t.Fatal("Validate() should return error")
+			}
+			if !containsSubstring(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want substring %q", err.Error(), tt.wantErr)
 			}
 		})
 	}
@@ -288,30 +471,6 @@ func TestValidate_errors(t *testing.T) {
 			wantErr: "must be the only part",
 		},
 		{
-			name: "callback_ack part with non-empty source",
-			modify: func(e *Envelope) {
-				e.Parts = []Part{{Type: CallbackAck, Source: "x"}}
-			},
-			wantErr: "callback_ack must not set source",
-		},
-		{
-			name: "callback_ack part with non-empty mime type",
-			modify: func(e *Envelope) {
-				e.Parts = []Part{{Type: CallbackAck, MIMEType: "text/plain"}}
-			},
-			wantErr: "callback_ack must not set mime",
-		},
-		{
-			name: "callback_ack part mixed with text part",
-			modify: func(e *Envelope) {
-				e.Parts = []Part{
-					{Type: CallbackAck, Content: "Saved!"},
-					{Type: Text, Content: "extra"},
-				}
-			},
-			wantErr: "must be the only part",
-		},
-		{
 			name: "keyboard with no rows",
 			modify: func(e *Envelope) {
 				e.Keyboard = &Keyboard{Rows: nil}
@@ -522,6 +681,90 @@ func TestJSON_roundtrip_keyboard_absent_when_nil(t *testing.T) {
 	}
 	if containsSubstring(string(data), `"keyboard"`) {
 		t.Errorf("marshalled JSON contains keyboard key when Keyboard is nil: %s", data)
+	}
+}
+
+func TestJSON_roundtrip_operation_field(t *testing.T) {
+	// Round-trip every OperationKind to confirm the new top-level
+	// "operation" key marshals and unmarshals correctly.
+	cases := []struct {
+		name string
+		env  *Envelope
+		kind OperationKind
+	}{
+		{
+			name: "OpEditText",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetEditText("new body")
+			}(),
+			kind: OpEditText,
+		},
+		{
+			name: "OpEditCaption",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetEditCaption("new caption")
+			}(),
+			kind: OpEditCaption,
+		},
+		{
+			name: "OpDelete",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetDelete()
+			}(),
+			kind: OpDelete,
+		},
+		{
+			name: "OpCallbackAck silent",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetCallbackAck("")
+			}(),
+			kind: OpCallbackAck,
+		},
+		{
+			name: "OpCallbackAck with toast",
+			env: func() *Envelope {
+				e := New("telegram", Outbound, Participant{ID: "bot"})
+				return e.SetCallbackAck("Saved!")
+			}(),
+			kind: OpCallbackAck,
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.env)
+			if err != nil {
+				t.Fatalf("json.Marshal: %v", err)
+			}
+			var decoded Envelope
+			if err := json.Unmarshal(data, &decoded); err != nil {
+				t.Fatalf("json.Unmarshal: %v", err)
+			}
+			if decoded.Operation == nil {
+				t.Fatalf("decoded.Operation is nil; raw = %s", data)
+			}
+			if decoded.Operation.Kind != tt.kind {
+				t.Errorf("decoded.Operation.Kind = %v, want %v", decoded.Operation.Kind, tt.kind)
+			}
+		})
+	}
+}
+
+func TestJSON_roundtrip_operation_absent_when_nil(t *testing.T) {
+	// Envelopes without an operation must marshal to JSON without an
+	// "operation" key, so 2.1-2E.5 envelopes round-trip byte-stable.
+	original := New("telegram", Outbound, Participant{ID: "bot"})
+	original.AddText("plain")
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if containsSubstring(string(data), `"operation"`) {
+		t.Errorf("marshalled JSON contains operation key when Operation is nil: %s", data)
 	}
 }
 

@@ -23,18 +23,24 @@ func (e *Envelope) Validate() error {
 	if e.Sender.ID == "" {
 		return errors.New("empty sender ID")
 	}
-	if len(e.Parts) == 0 {
-		return errors.New("no parts")
-	}
 	if e.Timestamp.IsZero() {
 		return errors.New("zero timestamp")
 	}
-	if err := validateExclusivePartTypes(e.Parts); err != nil {
-		return err
-	}
-	for i, p := range e.Parts {
-		if err := validatePart(i, p); err != nil {
+	if e.Operation != nil {
+		if err := validateOperation(e); err != nil {
 			return err
+		}
+	} else {
+		if len(e.Parts) == 0 {
+			return errors.New("no parts")
+		}
+		if err := validateExclusivePartTypes(e.Parts); err != nil {
+			return err
+		}
+		for i, p := range e.Parts {
+			if err := validatePart(i, p); err != nil {
+				return err
+			}
 		}
 	}
 	if e.Keyboard != nil {
@@ -45,19 +51,83 @@ func (e *Envelope) Validate() error {
 	return nil
 }
 
-// validateExclusivePartTypes enforces that Callback and CallbackAck
-// parts must be the only Part in the envelope when they appear. A tap
-// event has no media or text body beyond its data string, and an ack
-// is a single instruction to the channel — both refuse to share the
-// Parts slice with anything else.
+// validateExclusivePartTypes enforces that a Callback part must be the
+// only Part in the envelope when it appears. A tap event has no media
+// or text body beyond its data string, so it refuses to share the
+// Parts slice with anything else. The rule list intentionally stays
+// short — ADR-0006 moved CallbackAck out of Parts entirely so its
+// exclusivity is now enforced at the Operation level instead.
 func validateExclusivePartTypes(parts []Part) error {
 	if len(parts) <= 1 {
 		return nil
 	}
 	for _, p := range parts {
-		if p.Type == Callback || p.Type == CallbackAck {
+		if p.Type == Callback {
 			return fmt.Errorf("%s part must be the only part in the envelope", p.Type)
 		}
+	}
+	return nil
+}
+
+// validateOperation enforces the per-OperationKind contract documented
+// in ADR-0006 §1. Each kind specifies a strict Parts shape and a
+// Keyboard policy; this function rejects any envelope that deviates.
+func validateOperation(e *Envelope) error {
+	op := e.Operation
+	switch op.Kind {
+	case OpEditText:
+		if len(e.Parts) != 1 {
+			return fmt.Errorf("OpEditText requires exactly 1 part, got %d", len(e.Parts))
+		}
+		p := e.Parts[0]
+		if p.Type != Text {
+			return fmt.Errorf("OpEditText part must be Text, got %s", p.Type)
+		}
+		if p.Content == "" {
+			return errors.New("OpEditText part must have non-empty Content")
+		}
+		if p.Source != "" || p.MIMEType != "" {
+			return errors.New("OpEditText part must not set Source/MIMEType")
+		}
+	case OpEditCaption:
+		if len(e.Parts) != 1 {
+			return fmt.Errorf("OpEditCaption requires exactly 1 part, got %d", len(e.Parts))
+		}
+		p := e.Parts[0]
+		if p.Type != Text {
+			return fmt.Errorf("OpEditCaption part must be Text, got %s", p.Type)
+		}
+		if p.Source != "" || p.MIMEType != "" {
+			return errors.New("OpEditCaption part must not set Source/MIMEType")
+		}
+	case OpDelete:
+		if len(e.Parts) != 0 {
+			return fmt.Errorf("OpDelete requires empty parts, got %d", len(e.Parts))
+		}
+		if e.Keyboard != nil {
+			return errors.New("OpDelete must not carry a Keyboard")
+		}
+	case OpCallbackAck:
+		if len(e.Parts) > 1 {
+			return fmt.Errorf("OpCallbackAck requires 0 or 1 parts, got %d", len(e.Parts))
+		}
+		if len(e.Parts) == 1 {
+			p := e.Parts[0]
+			if p.Type != Text {
+				return fmt.Errorf("OpCallbackAck part must be Text, got %s", p.Type)
+			}
+			if p.Content == "" {
+				return errors.New("OpCallbackAck part must have non-empty Content (use empty Parts for silent ack)")
+			}
+			if p.Source != "" || p.MIMEType != "" {
+				return errors.New("OpCallbackAck part must not set Source/MIMEType")
+			}
+		}
+		if e.Keyboard != nil {
+			return errors.New("OpCallbackAck must not carry a Keyboard")
+		}
+	default:
+		return fmt.Errorf("unknown OperationKind: %d", op.Kind)
 	}
 	return nil
 }
@@ -94,14 +164,6 @@ func validatePart(idx int, p Part) error {
 		}
 		if p.MIMEType != "" {
 			return fmt.Errorf("part %d: callback must not set mime type", idx)
-		}
-	case CallbackAck:
-		// Content is optional: empty Content means a silent ack.
-		if p.Source != "" {
-			return fmt.Errorf("part %d: callback_ack must not set source", idx)
-		}
-		if p.MIMEType != "" {
-			return fmt.Errorf("part %d: callback_ack must not set mime type", idx)
 		}
 	default:
 		return fmt.Errorf("part %d: unknown part type %d", idx, p.Type)

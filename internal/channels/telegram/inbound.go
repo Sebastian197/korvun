@@ -20,7 +20,8 @@ import (
 //   - CallbackQuery (Phase 2E.4): a tap on an inline-keyboard button.
 //     The resulting Envelope carries a single Callback Part whose
 //     Content is the callback Data string, and Meta carries the
-//     callback ID so a later outbound CallbackAck can address it.
+//     callback ID so a later outbound OpCallbackAck Envelope can
+//     address it (ADR-0006).
 //
 // Returns ErrNoMessage when the update carries neither a Message nor a
 // CallbackQuery (or when the CallbackQuery lacks the ID needed to ack

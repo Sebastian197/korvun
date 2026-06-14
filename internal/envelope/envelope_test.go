@@ -40,13 +40,33 @@ func TestPartType_String(t *testing.T) {
 		{"file", File, "file"},
 		{"location", Location, "location"},
 		{"callback", Callback, "callback"},
-		{"callback_ack", CallbackAck, "callback_ack"},
 		{"unknown", PartType(99), "unknown"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.pt.String(); got != tt.want {
 				t.Errorf("PartType.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOperationKind_String(t *testing.T) {
+	tests := []struct {
+		name string
+		k    OperationKind
+		want string
+	}{
+		{"edit_text", OpEditText, "edit_text"},
+		{"edit_caption", OpEditCaption, "edit_caption"},
+		{"delete", OpDelete, "delete"},
+		{"callback_ack", OpCallbackAck, "callback_ack"},
+		{"unknown", OperationKind(99), "unknown"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.k.String(); got != tt.want {
+				t.Errorf("OperationKind.String() = %q, want %q", got, tt.want)
 			}
 		})
 	}

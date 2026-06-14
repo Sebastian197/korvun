@@ -220,35 +220,106 @@ func TestBuilder_AddCallback(t *testing.T) {
 	}
 }
 
-func TestBuilder_AddCallbackAck(t *testing.T) {
-	tests := []struct {
-		name  string
-		toast string
-	}{
-		{"silent ack (empty toast)", ""},
-		{"ack with toast", "Saved!"},
+func TestBuilder_SetCallbackAck_Silent(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	result := env.SetCallbackAck("")
+	if result != env {
+		t.Error("SetCallbackAck should return the same *Envelope for chaining")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			env := New("telegram", Outbound, Participant{ID: "bot"})
-			result := env.AddCallbackAck(tt.toast)
-			if result != env {
-				t.Error("AddCallbackAck should return the same *Envelope for chaining")
-			}
-			if len(env.Parts) != 1 {
-				t.Fatalf("Parts len = %d, want 1", len(env.Parts))
-			}
-			p := env.Parts[0]
-			if p.Type != CallbackAck {
-				t.Errorf("Type = %v, want CallbackAck", p.Type)
-			}
-			if p.Content != tt.toast {
-				t.Errorf("Content = %q, want %q", p.Content, tt.toast)
-			}
-			if p.Source != "" || p.MIMEType != "" {
-				t.Errorf("Source/MIMEType must be empty on CallbackAck")
-			}
-		})
+	if env.Operation == nil || env.Operation.Kind != OpCallbackAck {
+		t.Fatalf("Operation = %+v, want OpCallbackAck", env.Operation)
+	}
+	if len(env.Parts) != 0 {
+		t.Errorf("silent ack must have empty Parts, got %d", len(env.Parts))
+	}
+}
+
+func TestBuilder_SetCallbackAck_WithToast(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	env.SetCallbackAck("Saved!")
+	if env.Operation == nil || env.Operation.Kind != OpCallbackAck {
+		t.Fatalf("Operation = %+v, want OpCallbackAck", env.Operation)
+	}
+	if len(env.Parts) != 1 {
+		t.Fatalf("toast ack Parts len = %d, want 1", len(env.Parts))
+	}
+	p := env.Parts[0]
+	if p.Type != Text {
+		t.Errorf("toast Part Type = %v, want Text", p.Type)
+	}
+	if p.Content != "Saved!" {
+		t.Errorf("toast Part Content = %q, want %q", p.Content, "Saved!")
+	}
+}
+
+func TestBuilder_SetEditText(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	result := env.SetEditText("new body")
+	if result != env {
+		t.Error("SetEditText should return the same *Envelope for chaining")
+	}
+	if env.Operation == nil || env.Operation.Kind != OpEditText {
+		t.Fatalf("Operation = %+v, want OpEditText", env.Operation)
+	}
+	if len(env.Parts) != 1 || env.Parts[0].Type != Text || env.Parts[0].Content != "new body" {
+		t.Errorf("Parts = %+v, want single Text with 'new body'", env.Parts)
+	}
+}
+
+func TestBuilder_SetEditCaption_NonEmpty(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	env.SetEditCaption("new caption")
+	if env.Operation == nil || env.Operation.Kind != OpEditCaption {
+		t.Fatalf("Operation = %+v, want OpEditCaption", env.Operation)
+	}
+	if len(env.Parts) != 1 || env.Parts[0].Content != "new caption" {
+		t.Errorf("Parts = %+v, want single Text with 'new caption'", env.Parts)
+	}
+}
+
+func TestBuilder_SetEditCaption_EmptyClears(t *testing.T) {
+	// An empty caption is a valid intent: clear the caption on the
+	// target message. The Part is still set (empty Content), so
+	// OutboundParams can find it.
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	env.SetEditCaption("")
+	if env.Operation == nil || env.Operation.Kind != OpEditCaption {
+		t.Fatalf("Operation = %+v, want OpEditCaption", env.Operation)
+	}
+	if len(env.Parts) != 1 || env.Parts[0].Type != Text || env.Parts[0].Content != "" {
+		t.Errorf("Parts = %+v, want single empty Text", env.Parts)
+	}
+}
+
+func TestBuilder_SetDelete(t *testing.T) {
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	result := env.SetDelete()
+	if result != env {
+		t.Error("SetDelete should return the same *Envelope for chaining")
+	}
+	if env.Operation == nil || env.Operation.Kind != OpDelete {
+		t.Fatalf("Operation = %+v, want OpDelete", env.Operation)
+	}
+	if len(env.Parts) != 0 {
+		t.Errorf("OpDelete must have empty Parts, got %d", len(env.Parts))
+	}
+}
+
+func TestBuilder_SetReplacesPriorOperationAndParts(t *testing.T) {
+	// Set* builders replace any pre-existing Parts and Operation so the
+	// envelope is in a known state regardless of construction order.
+	env := New("telegram", Outbound, Participant{ID: "bot"})
+	env.AddText("ignored")
+	env.SetEditText("kept")
+	if len(env.Parts) != 1 || env.Parts[0].Content != "kept" {
+		t.Errorf("Parts = %+v, want single Text 'kept'", env.Parts)
+	}
+	env.SetDelete()
+	if env.Operation.Kind != OpDelete {
+		t.Errorf("Operation.Kind = %v, want OpDelete", env.Operation.Kind)
+	}
+	if len(env.Parts) != 0 {
+		t.Errorf("Parts after SetDelete len = %d, want 0", len(env.Parts))
 	}
 }
 

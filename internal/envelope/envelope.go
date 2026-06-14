@@ -55,12 +55,6 @@ const (
 	// instead of typing a message. Content carries the action payload
 	// (the channel's callback data string). See ADR-0005.
 	Callback
-	// CallbackAck represents an outbound acknowledgement of a Callback
-	// event. Content carries an optional toast text shown to the user;
-	// empty Content means a silent ack. The channel-specific identifier
-	// of the callback being acknowledged lives in Meta, validated by
-	// the adapter (e.g. "telegram.callback_query_id"). See ADR-0005.
-	CallbackAck
 )
 
 // String returns the human-readable name of the part type.
@@ -80,8 +74,6 @@ func (pt PartType) String() string {
 		return "location"
 	case Callback:
 		return "callback"
-	case CallbackAck:
-		return "callback_ack"
 	default:
 		return "unknown"
 	}
@@ -117,4 +109,10 @@ type Envelope struct {
 	// content, so they live alongside Parts rather than inside it; see
 	// ADR-0005. nil means no keyboard.
 	Keyboard *Keyboard `json:"keyboard,omitempty"`
+	// Operation is an optional outbound side-effect intent attached to
+	// the envelope (edit, delete, callback ack). Operations are verbs,
+	// not content; they get their own top-level slot rather than
+	// living inside Parts. See ADR-0006. nil means a normal envelope
+	// (no operation).
+	Operation *Operation `json:"operation,omitempty"`
 }
