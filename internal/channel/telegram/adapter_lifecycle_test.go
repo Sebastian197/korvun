@@ -6,6 +6,7 @@ package telegram
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -177,6 +178,47 @@ func TestAdapter_Mode_reflectsConfig(t *testing.T) {
 	a := newTestAdapter(t)
 	if a.Mode() != ModePolling {
 		t.Errorf("Mode() = %v, want %v", a.Mode(), ModePolling)
+	}
+}
+
+// --- handleLibraryUpdate / Options coverage ---
+
+func TestAdapter_handleLibraryUpdate_routesToDispatch(t *testing.T) {
+	a := newTestAdapter(t)
+	u := newTextUpdate(7, 3, "lib-handled")
+	a.handleLibraryUpdate(context.Background(), nil, u)
+	select {
+	case env := <-a.inbound:
+		if env.Parts[0].Content != "lib-handled" {
+			t.Errorf("Content = %q", env.Parts[0].Content)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("handleLibraryUpdate did not produce an Envelope")
+	}
+}
+
+func TestOptions_overrideDefaults(t *testing.T) {
+	logger := slog.Default()
+	a, err := New(
+		WithToken("test-token"),
+		WithMode(ModePolling),
+		WithWebhookPath("/custom/wh"),
+		WithReadHeaderTimeout(15*time.Second),
+		WithLogger(logger),
+		WithLibraryOptions(),
+		withInjectedBotForTests(stubBotClient{}),
+	)
+	if err != nil {
+		t.Fatalf("New() err = %v", err)
+	}
+	if a.cfg.webhookPath != "/custom/wh" {
+		t.Errorf("webhookPath = %q", a.cfg.webhookPath)
+	}
+	if a.cfg.readHeaderTimeout != 15*time.Second {
+		t.Errorf("readHeaderTimeout = %v", a.cfg.readHeaderTimeout)
+	}
+	if a.cfg.logger != logger {
+		t.Errorf("logger override did not stick")
 	}
 }
 

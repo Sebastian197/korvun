@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -38,6 +40,14 @@ type botClient interface {
 	DeleteWebhook(ctx context.Context, params *bot.DeleteWebhookParams) (bool, error)
 }
 
+// botRunner is the polling-loop seam: *bot.Bot exposes Start(ctx)
+// as the only public way to run the getUpdates loop in v1.21.0.
+// Lifted behind an interface so tests can inject a controllable
+// stand-in without instantiating a real *bot.Bot.
+type botRunner interface {
+	Start(ctx context.Context)
+}
+
 // Adapter is the Korvun channel adapter for Telegram. It satisfies
 // the channel.Channel contract from internal/channel by exposing
 // Name, Manifest, Send, and Receive. Lifecycle (Start, Stop) is
@@ -52,9 +62,29 @@ type Adapter struct {
 	cfg *config
 
 	client  botClient
+	runner  botRunner
 	inbound chan *envelope.Envelope
 	dropped atomic.Uint64
+
+	mu         sync.Mutex
+	state      adapterState
+	loopCtx    context.Context
+	loopCancel context.CancelFunc
+	httpServer *http.Server
+	workers    sync.WaitGroup
+	stopOnce   sync.Once
 }
+
+// adapterState tracks the lifecycle for ErrAlreadyStarted /
+// ErrNotStarted enforcement. Transitions are strictly linear:
+// stateNew -> stateRunning -> stateStopped.
+type adapterState int
+
+const (
+	stateNew adapterState = iota
+	stateRunning
+	stateStopped
+)
 
 // New builds an Adapter from the supplied Options. It validates the
 // resolved config before constructing the underlying *bot.Bot, so a
@@ -74,10 +104,14 @@ func New(opts ...Option) (*Adapter, error) {
 	a := &Adapter{
 		cfg:     cfg,
 		inbound: make(chan *envelope.Envelope, cfg.inboundCapacity),
+		state:   stateNew,
 	}
 
 	if cfg.injectedBotForTests != nil {
 		a.client = cfg.injectedBotForTests
+		if r, ok := cfg.injectedBotForTests.(botRunner); ok {
+			a.runner = r
+		}
 		return a, nil
 	}
 
@@ -100,6 +134,7 @@ func New(opts ...Option) (*Adapter, error) {
 		return nil, fmt.Errorf("telegram: bot.New: %w", err)
 	}
 	a.client = b
+	a.runner = b
 	return a, nil
 }
 

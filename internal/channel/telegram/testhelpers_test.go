@@ -106,6 +106,27 @@ func (c *capturingBotClient) DeleteWebhook(_ context.Context, p *bot.DeleteWebho
 	return true, nil
 }
 
+// runnableBotClient embeds capturingBotClient and adds a blocking
+// Start so the adapter's polling lifecycle (Phase 2E.8 sub-E) can
+// be exercised end to end. Start blocks until ctx is cancelled,
+// which is the same shape *bot.Bot.Start has.
+type runnableBotClient struct {
+	capturingBotClient
+	started chan struct{}
+}
+
+func newRunnableBotClient() *runnableBotClient {
+	return &runnableBotClient{started: make(chan struct{}, 1)}
+}
+
+func (r *runnableBotClient) Start(ctx context.Context) {
+	select {
+	case r.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+}
+
 func (stubBotClient) SendMessage(context.Context, *bot.SendMessageParams) (*models.Message, error) {
 	return &models.Message{}, nil
 }
