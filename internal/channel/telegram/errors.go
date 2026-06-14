@@ -79,4 +79,56 @@ var (
 	// int). The target message of an edit/delete is addressed by that
 	// ID, so its absence makes the envelope unsendable. (Phase 2E.6.)
 	ErrMissingTargetMessageID = errors.New("telegram: envelope is missing or has invalid telegram.message_id meta")
+
+	// ErrMissingToken is returned by New when no Bot API token was
+	// supplied via WithToken. (Phase 2E.8.)
+	ErrMissingToken = errors.New("telegram: missing bot token")
+
+	// ErrInvalidMode is returned by New when WithMode was not used
+	// (zero Mode) or when the value is not a recognised Mode. (Phase 2E.8.)
+	ErrInvalidMode = errors.New("telegram: invalid or missing transport mode")
+
+	// ErrMissingWebhookURL is returned by New when Mode is
+	// ModeWebhook and no public URL was supplied via WithWebhookURL.
+	// (Phase 2E.8.)
+	ErrMissingWebhookURL = errors.New("telegram: webhook mode requires a public URL")
+
+	// ErrMissingListenAddr is returned by New when Mode is
+	// ModeWebhook and no listen address was supplied via
+	// WithListenAddr. (Phase 2E.8.)
+	ErrMissingListenAddr = errors.New("telegram: webhook mode requires a listen address")
+
+	// ErrMissingSecretToken is returned by New when Mode is
+	// ModeWebhook and no secret token was supplied via
+	// WithSecretToken. The secret token is the only authentication
+	// between Telegram and Korvun; running webhook mode without it
+	// is not a supported deployment. (Phase 2E.8.)
+	ErrMissingSecretToken = errors.New("telegram: webhook mode requires a secret token")
+
+	// ErrMissingTLSConfig is returned by New when Mode is
+	// ModeWebhook and neither WithTLS nor WithReverseProxyTermination
+	// was supplied. (Phase 2E.8.)
+	ErrMissingTLSConfig = errors.New("telegram: webhook mode requires WithTLS or WithReverseProxyTermination")
+
+	// ErrInvalidInboundCapacity is returned by New when
+	// WithInboundCapacity was set to a non-positive value. (Phase 2E.8.)
+	ErrInvalidInboundCapacity = errors.New("telegram: inbound capacity must be positive")
+
+	// ErrInvalidEnqueueTimeout is returned by New when
+	// WithEnqueueTimeout was set to a non-positive value. (Phase 2E.8.)
+	ErrInvalidEnqueueTimeout = errors.New("telegram: enqueue timeout must be positive")
+
+	// ErrAlreadyStarted is returned by Adapter.Start when the
+	// adapter has already been started. (Phase 2E.8.)
+	ErrAlreadyStarted = errors.New("telegram: adapter already started")
+
+	// ErrNotStarted is returned by Adapter.Send when the adapter
+	// has not been started yet, or has been stopped. (Phase 2E.8.)
+	ErrNotStarted = errors.New("telegram: adapter not started")
+
+	// ErrUnknownOutboundKind is returned by Send when the Outbound
+	// classification returns an OutboundKind value the dispatcher
+	// does not recognise. Defensive — every existing kind has a
+	// case. (Phase 2E.8.)
+	ErrUnknownOutboundKind = errors.New("telegram: unknown outbound kind")
 )
