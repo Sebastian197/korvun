@@ -1,0 +1,25 @@
+{
+  "update_id": 100000020,
+  "message": {
+    "message_id": 301,
+    "from": {
+      "id": 555,
+      "is_bot": false,
+      "first_name": "Alice",
+      "username": "alice"
+    },
+    "chat": {
+      "id": 1000,
+      "type": "private"
+    },
+    "date": 1786000300,
+    "location": {
+      "latitude": 41.40338,
+      "longitude": 2.17403,
+      "horizontal_accuracy": 12.5,
+      "live_period": 600,
+      "heading": 90,
+      "proximity_alert_radius": 100
+    }
+  }
+}

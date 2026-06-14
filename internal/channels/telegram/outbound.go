@@ -26,6 +26,7 @@ const (
 	OutboundKindVoice
 	OutboundKindAudio
 	OutboundKindVideo
+	OutboundKindLocation
 )
 
 // String returns a short lowercase name for the kind, suitable for
@@ -44,6 +45,8 @@ func (k OutboundKind) String() string {
 		return "audio"
 	case OutboundKindVideo:
 		return "video"
+	case OutboundKindLocation:
+		return "location"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(k))
 	}
@@ -60,6 +63,7 @@ type Outbound struct {
 	Voice    *bot.SendVoiceParams
 	Audio    *bot.SendAudioParams
 	Video    *bot.SendVideoParams
+	Location *bot.SendLocationParams
 }
 
 // OutboundParams converts an outbound Envelope into the appropriate
@@ -111,6 +115,27 @@ func OutboundParams(e *envelope.Envelope) (*Outbound, error) {
 			Message: &bot.SendMessageParams{
 				ChatID: chatID,
 				Text:   text,
+			},
+		}, nil
+	}
+
+	// Location is the only non-text part that does not carry a Source
+	// (its coordinates live in Content per ADR-0004), so it is routed
+	// before the InputFileString construction below. Telegram's
+	// SendLocationParams has no Caption field; any accompanying text
+	// part is intentionally dropped — locked in by a test in
+	// location_outbound_test.go.
+	if media.Type == envelope.Location {
+		lat, lon, ok := media.Location()
+		if !ok {
+			return nil, fmt.Errorf("%w: %q", ErrInvalidLocation, media.Content)
+		}
+		return &Outbound{
+			Kind: OutboundKindLocation,
+			Location: &bot.SendLocationParams{
+				ChatID:    chatID,
+				Latitude:  lat,
+				Longitude: lon,
 			},
 		}, nil
 	}

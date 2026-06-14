@@ -60,4 +60,9 @@ var (
 	// media part has an empty Source (no Telegram file_id or URL to
 	// reference).
 	ErrMissingMediaSource = errors.New("telegram: media part has empty source")
+
+	// ErrInvalidLocation is returned by OutboundParams when a Location
+	// part's Content cannot be decoded as the canonical {lat, lon} JSON
+	// shape fixed by ADR-0004. (Phase 2E.3.)
+	ErrInvalidLocation = errors.New("telegram: location part has invalid content")
 )

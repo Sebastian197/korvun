@@ -65,10 +65,14 @@ func senderName(u *models.User) string {
 }
 
 // appendMediaPart inspects the message and appends at most one media
-// Part to env. Telegram messages carry at most one of photo / voice /
-// audio / video / document in practice; the iteration order is
-// deterministic but defensive — if a message ever happens to carry
-// more than one, the first match wins.
+// or location Part to env. Telegram messages carry at most one of
+// photo / voice / audio / video / document / location in practice; the
+// iteration order is deterministic but defensive — if a message ever
+// happens to carry more than one, the first match wins.
+//
+// Location parts are not media in the file-attachment sense but share
+// the same exclusivity rule and live alongside media in the switch so
+// the "one non-text part per message" invariant stays in one place.
 func appendMediaPart(env *envelope.Envelope, m *models.Message) {
 	switch {
 	case len(m.Photo) > 0:
@@ -83,6 +87,13 @@ func appendMediaPart(env *envelope.Envelope, m *models.Message) {
 		env.AddMedia(envelope.Video, m.Video.FileID, m.Video.MimeType)
 	case m.Document != nil:
 		env.AddMedia(envelope.File, m.Document.FileID, m.Document.MimeType)
+	case m.Location != nil:
+		// Telegram delivers latitude/longitude as float64. Companion
+		// fields (horizontal_accuracy, live_period, heading,
+		// proximity_alert_radius) are intentionally NOT mapped: ADR-0004
+		// fixes the canonical envelope payload to {lat, lon} until a
+		// future amending ADR widens the schema.
+		env.AddLocation(m.Location.Latitude, m.Location.Longitude)
 	}
 }
 
