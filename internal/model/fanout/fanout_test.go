@@ -431,6 +431,29 @@ func TestRun_panicInGenerateBecomesOutcome(t *testing.T) {
 	}
 }
 
+func TestRun_panicWithSentinelPreservesGrammar(t *testing.T) {
+	// ADR-0011 §3 promises the upstream sentinel grammar is preserved
+	// untouched through Outcome.Err. A panic whose value is itself an
+	// error (e.g. an adapter that misuses a sentinel as a panic value)
+	// MUST round-trip through errors.Is for the original sentinel, not
+	// just stringify into the panic-prefixed message.
+	c := New()
+	boom := &fakeModel{name: "boom", panicOnGen: model.ErrAuthInvalid}
+	res, err := c.Run(context.Background(), validRequest(), []model.Model{boom})
+	if err != nil {
+		t.Fatalf("Run err = %v", err)
+	}
+	if res.Outcomes[0].Err == nil {
+		t.Fatal("Outcomes[0].Err = nil after sentinel panic, want non-nil")
+	}
+	if !errors.Is(res.Outcomes[0].Err, model.ErrAuthInvalid) {
+		t.Errorf("errors.Is(Outcomes[0].Err, ErrAuthInvalid) = false; want true. Got %v", res.Outcomes[0].Err)
+	}
+	if !strings.Contains(res.Outcomes[0].Err.Error(), "fanout: provider panicked") {
+		t.Errorf("Outcomes[0].Err = %q, want 'fanout: provider panicked' prefix", res.Outcomes[0].Err.Error())
+	}
+}
+
 func TestRun_panicInNameBecomesOutcome(t *testing.T) {
 	c := New()
 	boom := &fakeModel{name: "boom", panicOnName: errors.New("name panic")}

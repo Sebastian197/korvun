@@ -168,7 +168,17 @@ func (c *Coordinator) callOne(
 	defer wg.Done()
 	defer func() {
 		if r := recover(); r != nil {
-			out.Err = fmt.Errorf("fanout: provider panicked: %v", r)
+			// If the panic value is itself an error, wrap it with %w so
+			// errors.Is / errors.As against the original sentinel (e.g.
+			// model.ErrAuthInvalid panicked by a buggy adapter) keep
+			// working through the fan-out boundary. ADR-0011 §3 promises
+			// the upstream sentinel grammar is preserved untouched; %v
+			// would stringify it and lose the chain.
+			if e, ok := r.(error); ok {
+				out.Err = fmt.Errorf("fanout: provider panicked: %w", e)
+			} else {
+				out.Err = fmt.Errorf("fanout: provider panicked: %v", r)
+			}
 		}
 	}()
 
