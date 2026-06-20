@@ -1,0 +1,13 @@
+# Normalize line endings to LF on every platform so the Windows CI runner
+# checks out the same bytes as Linux/macOS. Without this, autocrlf converts
+# files to CRLF on Windows checkout and `gofmt -l` flags every .go file as
+# needing formatting — a false positive that fails the Quality Gate.
+* text=auto eol=lf
+
+# Go toolchain output is always LF; be explicit for the files we lint.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+
+# Shell scripts must stay LF or they break when executed.
+*.sh text eol=lf
