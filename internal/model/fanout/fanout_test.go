@@ -461,8 +461,8 @@ func TestRun_panicInGenerateBecomesOutcome(t *testing.T) {
 	if res.Outcomes[0].Err == nil {
 		t.Fatal("Outcomes[0].Err = nil after panic, want non-nil")
 	}
-	if !strings.Contains(res.Outcomes[0].Err.Error(), "fanout: provider panicked") {
-		t.Errorf("Outcomes[0].Err = %q, want 'fanout: provider panicked' prefix", res.Outcomes[0].Err.Error())
+	if !strings.Contains(res.Outcomes[0].Err.Error(), "model dispatch: provider panicked") {
+		t.Errorf("Outcomes[0].Err = %q, want 'model dispatch: provider panicked' prefix", res.Outcomes[0].Err.Error())
 	}
 	if !strings.Contains(res.Outcomes[0].Err.Error(), "kaboom") {
 		t.Errorf("Outcomes[0].Err = %q, want panic value 'kaboom'", res.Outcomes[0].Err.Error())
@@ -496,8 +496,8 @@ func TestRun_panicWithSentinelPreservesGrammar(t *testing.T) {
 	if !errors.Is(res.Outcomes[0].Err, model.ErrAuthInvalid) {
 		t.Errorf("errors.Is(Outcomes[0].Err, ErrAuthInvalid) = false; want true. Got %v", res.Outcomes[0].Err)
 	}
-	if !strings.Contains(res.Outcomes[0].Err.Error(), "fanout: provider panicked") {
-		t.Errorf("Outcomes[0].Err = %q, want 'fanout: provider panicked' prefix", res.Outcomes[0].Err.Error())
+	if !strings.Contains(res.Outcomes[0].Err.Error(), "model dispatch: provider panicked") {
+		t.Errorf("Outcomes[0].Err = %q, want 'model dispatch: provider panicked' prefix", res.Outcomes[0].Err.Error())
 	}
 }
 
@@ -540,8 +540,8 @@ func TestRun_panicInNameBecomesOutcome(t *testing.T) {
 	if res.Outcomes[0].Err == nil {
 		t.Fatal("Outcomes[0].Err = nil after Name() panic, want non-nil")
 	}
-	if !strings.Contains(res.Outcomes[0].Err.Error(), "fanout: provider panicked") {
-		t.Errorf("Outcomes[0].Err = %q, want 'fanout: provider panicked' prefix", res.Outcomes[0].Err.Error())
+	if !strings.Contains(res.Outcomes[0].Err.Error(), "model dispatch: provider panicked") {
+		t.Errorf("Outcomes[0].Err = %q, want 'model dispatch: provider panicked' prefix", res.Outcomes[0].Err.Error())
 	}
 	// Provider may legitimately be "" — Name() never returned.
 	if res.Outcomes[1].Err != nil {

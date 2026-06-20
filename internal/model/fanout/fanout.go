@@ -175,57 +175,77 @@ func (c *Coordinator) Run(
 	return &Result{Outcomes: outcomes}, nil
 }
 
-// callOne runs Model.Generate for a single model and writes the
-// outcome into the pre-allocated slot. The combination of
-// defer wg.Done (runs last) and defer recover (runs first) ensures
-// that any user-mode panic in Generate or Name surfaces as a failed
-// Outcome with the "fanout: provider panicked:" prefix, and wg.Wait
-// always returns. Per-slot isolation means each goroutine writes
-// only to outcomes[i] for a unique i; no two goroutines touch the
-// same memory location. WaitGroup.Done → Wait is the synchronisation
-// fence the post-Wait read of outcomes relies on.
+// callOne is the fan-out's goroutine body: it runs the shared CallOne
+// primitive for a single model and writes the result into the
+// pre-allocated slot. The combination of defer wg.Done and CallOne's own
+// internal recover ensures any user-mode panic in Generate or Name
+// surfaces as a failed Outcome (never escaping the goroutine) and wg.Wait
+// always returns. Per-slot isolation means each goroutine writes only to
+// outcomes[i] for a unique i; no two goroutines touch the same memory
+// location. WaitGroup.Done → Wait is the synchronisation fence the
+// post-Wait read of outcomes relies on.
 func (c *Coordinator) callOne(
 	runCtx context.Context, req *model.Request, m model.Model,
 	out *Outcome, wg *sync.WaitGroup,
 ) {
 	defer wg.Done()
+	*out = CallOne(runCtx, req, m, c.perModelTimeout, c.now)
+}
+
+// CallOne runs Model.Generate for a single model and returns its Outcome.
+// It is the shared per-call primitive of the model-dispatch mechanism: the
+// parallel Coordinator wraps it in a goroutine + WaitGroup, and the
+// sequential coordinator (ADR-0016) calls it in a serial loop. Having ONE
+// implementation keeps the upstream sentinel grammar preserved in exactly
+// one place — re-deriving it per dispatch shape is how the P1 %w bug crept
+// in (the e633874 fix; ADR-0011 §3). CallOne holds no state and spawns no
+// goroutine.
+//
+// It applies, in order:
+//   - a recover that turns any user-mode panic in Name or Generate into a
+//     failed Outcome. An error panic value is wrapped with %w so
+//     errors.Is / errors.As against the original sentinel (e.g.
+//     model.ErrAuthInvalid panicked by a buggy adapter) keep working
+//     through the boundary; a non-error value is rendered with %v. The
+//     prefix is dispatch-shape-neutral ("model dispatch: provider
+//     panicked:") so a sequential outcome never falsely reads "fanout".
+//   - the optional per-model timeout (skipped when perModelTimeout <= 0):
+//     the call derives its own ctx via context.WithTimeout.
+//   - latency capture via the now clock. start is read AFTER the potential
+//     m.Name() panic, and the Latency defer is registered AFTER start, so
+//     an unset start can never produce a bogus epoch-relative Latency; when
+//     m.Name() panics first, neither is reached and Latency reads 0, which
+//     matches "wall-clock time spent inside Model.Generate" (Generate was
+//     never entered).
+//
+// now MUST be non-nil; both Coordinators guarantee it (New sets time.Now;
+// Run defends a zero-value Coordinator before calling).
+func CallOne(
+	ctx context.Context, req *model.Request, m model.Model,
+	perModelTimeout time.Duration, now func() time.Time,
+) (out Outcome) {
 	defer func() {
 		if r := recover(); r != nil {
-			// If the panic value is itself an error, wrap it with %w so
-			// errors.Is / errors.As against the original sentinel (e.g.
-			// model.ErrAuthInvalid panicked by a buggy adapter) keep
-			// working through the fan-out boundary. ADR-0011 §3 promises
-			// the upstream sentinel grammar is preserved untouched; %v
-			// would stringify it and lose the chain.
 			if e, ok := r.(error); ok {
-				out.Err = fmt.Errorf("fanout: provider panicked: %w", e)
+				out.Err = fmt.Errorf("model dispatch: provider panicked: %w", e)
 			} else {
-				out.Err = fmt.Errorf("fanout: provider panicked: %v", r)
+				out.Err = fmt.Errorf("model dispatch: provider panicked: %v", r)
 			}
 		}
 	}()
 
 	out.Provider = m.Name()
 
-	callCtx := runCtx
-	if c.perModelTimeout > 0 {
+	callCtx := ctx
+	if perModelTimeout > 0 {
 		var cancel context.CancelFunc
-		callCtx, cancel = context.WithTimeout(runCtx, c.perModelTimeout)
+		callCtx, cancel = context.WithTimeout(ctx, perModelTimeout)
 		defer cancel()
 	}
 
-	// Capture start AFTER any potential m.Name() panic so an unset start
-	// can never produce a bogus epoch-relative Latency. Register the
-	// Latency defer AFTER assigning start so the closure captures a
-	// valid value. The defer runs on all exit paths (normal return,
-	// error return, AND panic) — see ADR-0011 §"Panic isolation". When
-	// m.Name() panics before this point, neither start nor the defer
-	// are reached; Latency reads 0, which matches the doc invariant
-	// "wall-clock time spent inside Model.Generate" (we never entered
-	// Generate).
-	start := c.now()
+	start := now()
 	defer func() {
-		out.Latency = c.now().Sub(start)
+		out.Latency = now().Sub(start)
 	}()
 
 	resp, err := m.Generate(callCtx, req)
@@ -234,4 +254,5 @@ func (c *Coordinator) callOne(
 		return
 	}
 	out.Response = resp
+	return
 }
