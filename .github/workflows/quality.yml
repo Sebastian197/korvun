@@ -73,22 +73,16 @@ jobs:
           go test -race -coverprofile=coverage.out ./internal/... \
             | tee coverage-test.log
 
-          # --- TEMP DIAGNOSTICS (ci/diagnose-coverage-macos) ---
-          echo "=== DIAG env ==="
-          go version
-          echo "GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) CGO_ENABLED=$(go env CGO_ENABLED)"
-          echo "=== DIAG coverage.out after '-race' run ==="
-          ls -la coverage.out 2>&1 || echo "coverage.out MISSING"
-          echo "lines: $(wc -l < coverage.out 2>/dev/null || echo NA)"
-          echo "head:"; head -3 coverage.out 2>/dev/null || true
-          echo "=== DIAG retry WITHOUT -race ==="
-          go test -coverprofile=coverage-norace.out ./internal/... >/dev/null 2>&1 || true
-          ls -la coverage-norace.out 2>&1 || echo "coverage-norace.out MISSING"
-          echo "norace lines: $(wc -l < coverage-norace.out 2>/dev/null || echo NA)"
-          # --- END TEMP DIAGNOSTICS ---
-
+          # Guard: coverage.out must have the mode header AND >=1 data line.
+          # Use `grep -vc` (a self-contained count) rather than a
+          # `grep -v ... | grep -q .` pipeline: under `set -o pipefail` the
+          # downstream `grep -q` closes the pipe on its first match, the
+          # upstream `grep -v` then dies with SIGPIPE (141), and pipefail
+          # propagates that non-zero — a false "no data" failure that only
+          # surfaced on the BSD-grep macOS runner. `grep -vc` has no pipe,
+          # so no SIGPIPE, and behaves identically across OSes.
           if ! grep -q '^mode:' coverage.out 2>/dev/null \
-             || ! grep -v '^mode:' coverage.out | grep -q '.' 2>/dev/null; then
+             || [ "$(grep -vc '^mode:' coverage.out 2>/dev/null)" -eq 0 ]; then
             echo "FAIL: no coverage data produced for internal/ packages"
             exit 1
           fi
