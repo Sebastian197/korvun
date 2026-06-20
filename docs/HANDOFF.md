@@ -49,7 +49,9 @@ NOT started.** It is new design work — a privacy/cost-aware `Selector`
 that runs *before* fan-out, plus a cost-saving sequential coordinator
 (a sibling of fan-out) — each needing its own framing and ADR before any
 code. No code until the Stage 6 ADR(s) are accepted. There are **zero
-half-open stages**: 0–5 and 7 are closed; 6 is the deliberate next step.
+half-open stages**: 0–5 and 7 are closed, each with its own stage doc
+(`STAGE-05.md` and `STAGE-07.md` now exist — Stage 7 is formally closed,
+not just in prose); 6 is the deliberate next step.
 
 **Stage 5 (policy engine — post-dispatch phase) is CLOSED**
 (`docs/stages/STAGE-05.md`). TWO post-dispatch reducers on master:
@@ -59,11 +61,13 @@ Brain. The stage closed the POST-DISPATCH phase only — the pre-dispatch
 `Selector` and the cost-saving sequential coordinator are **Stage 6**,
 not started. See "Stage 5 — policy reducers".
 
-**Stage 7 (Brain orchestrator) is CLOSED** (ADR-0014). The `Orchestrator`
-in `internal/brain` is the first live end-to-end path — Envelope in →
-translate → fan-out → policy → translate → Envelope out — implementing the
-`brain.Brain` seam the router already consumes. `cmd/demo-brain` runs it
-against real Ollama + Groq. See "Stage 7 — Brain orchestrator" below.
+**Stage 7 (Brain orchestrator) is CLOSED** (ADR-0014 +
+`docs/stages/STAGE-07.md` — now formally closed with its own stage doc,
+not only in prose). The `Orchestrator` in `internal/brain` is the first
+live end-to-end path — Envelope in → translate → fan-out → policy →
+translate → Envelope out — implementing the `brain.Brain` seam the router
+already consumes. `cmd/demo-brain` runs it against real Ollama + Groq.
+See "Stage 7 — Brain orchestrator" below.
 
 ### What landed on master in Stage 4
 
