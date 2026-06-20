@@ -214,9 +214,21 @@ func (c *Coordinator) callOne(
 		defer cancel()
 	}
 
+	// Capture start AFTER any potential m.Name() panic so an unset start
+	// can never produce a bogus epoch-relative Latency. Register the
+	// Latency defer AFTER assigning start so the closure captures a
+	// valid value. The defer runs on all exit paths (normal return,
+	// error return, AND panic) — see ADR-0011 §"Panic isolation". When
+	// m.Name() panics before this point, neither start nor the defer
+	// are reached; Latency reads 0, which matches the doc invariant
+	// "wall-clock time spent inside Model.Generate" (we never entered
+	// Generate).
 	start := c.now()
+	defer func() {
+		out.Latency = c.now().Sub(start)
+	}()
+
 	resp, err := m.Generate(callCtx, req)
-	out.Latency = c.now().Sub(start)
 	if err != nil {
 		out.Err = err
 		return

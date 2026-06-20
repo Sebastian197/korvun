@@ -53,15 +53,17 @@ func (f *fakeModel) Generate(ctx context.Context, req *model.Request) (*model.Re
 	f.mu.Lock()
 	f.lastCtx = ctx
 	f.mu.Unlock()
-	if f.panicOnGen != nil {
-		panic(f.panicOnGen)
-	}
+	// Delay first so a panicking fake can simulate "panic after doing
+	// real work" — necessary for the I1 Latency-on-panic test.
 	if f.delay > 0 {
 		select {
 		case <-time.After(f.delay):
 		case <-ctx.Done():
 			return nil, fmt.Errorf("fake: %w (ctx cancel)", model.ErrProviderUnavailable)
 		}
+	}
+	if f.panicOnGen != nil {
+		panic(f.panicOnGen)
 	}
 	if f.err != nil {
 		return nil, f.err
@@ -451,6 +453,30 @@ func TestRun_panicWithSentinelPreservesGrammar(t *testing.T) {
 	}
 	if !strings.Contains(res.Outcomes[0].Err.Error(), "fanout: provider panicked") {
 		t.Errorf("Outcomes[0].Err = %q, want 'fanout: provider panicked' prefix", res.Outcomes[0].Err.Error())
+	}
+}
+
+func TestRun_latencyCapturedOnPanicDuringGenerate(t *testing.T) {
+	// I1: the Outcome doc promises Latency is the wall-clock time the
+	// goroutine spent inside Model.Generate. A panic mid-Generate must
+	// NOT zero the measurement (an unmeasured Latency is
+	// indistinguishable from "returned instantly" in observability).
+	c := New()
+	boom := &fakeModel{
+		name:       "slow-boom",
+		delay:      20 * time.Millisecond,
+		panicOnGen: errors.New("boom after work"),
+	}
+	res, err := c.Run(context.Background(), validRequest(), []model.Model{boom})
+	if err != nil {
+		t.Fatalf("Run err = %v", err)
+	}
+	if res.Outcomes[0].Err == nil {
+		t.Fatal("Outcomes[0].Err = nil after panic, want non-nil")
+	}
+	if res.Outcomes[0].Latency < 20*time.Millisecond {
+		t.Errorf("Latency = %v after %v delay, want >= 20ms (panic must not zero the measurement)",
+			res.Outcomes[0].Latency, 20*time.Millisecond)
 	}
 }
 
