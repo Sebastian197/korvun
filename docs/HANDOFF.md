@@ -40,9 +40,13 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | 2       | Channel abstraction + Telegram inbound    | closed |
 | 2-EXT   | Telegram channel lifecycle (webhook + polling) | closed |
 | 3       | Router / gateway core                     | closed |
-| **4**   | **Models (interface + Ollama + Groq + fan-out)** | **closed (this integration)** |
+| **4**   | **Models (interface + Ollama + Groq + fan-out)** | **closed** |
 
-Stages 5+ have not started.
+Stage 5 (policy engine) has STARTED. ADR-0012 is accepted and on master
+(commit `c4e519b`). The first cut (`internal/policy` — `Policy`,
+`Decision`, `PriorityReducer`) is **closed on master**: `/office-hours`-framed,
+`/plan-eng-review`-stressed, `/review`-checked, `make quality` green.
+See "Stage 5 — first cut" below.
 
 ### What landed on master in Stage 4
 
@@ -86,6 +90,7 @@ internal/
     ollama/           Ollama adapter (Stage 4.1)
     groq/             Groq adapter (Stage 4.2)
     fanout/           parallel dispatch coordinator (Stage 4.3)
+  policy/             policy engine: Policy + Decision + PriorityReducer (Stage 5, ADR-0012)
 cmd/
   korvun/             placeholder for the real bootstrap (Stage 5+)
   demo-model/         Ollama live skeleton (delete in Stage 5+)
@@ -109,6 +114,7 @@ docs/
 | `internal/model/ollama`          | 96.0%    |
 | `internal/model/groq`            | 94.7%    |
 | `internal/model/fanout`          | 100.0%   |
+| `internal/policy`                | 100.0%   |
 | `internal/router`                | 96.3%    |
 | **total**                        | **90.9%** |
 
@@ -189,12 +195,74 @@ future cloud adapter.
 
 ---
 
-## Next: Stages 5–6 — the policy engine
+## Stage 5 — first cut (policy engine reducer)
+
+ADR-0012 (`docs/adr/0012-policy-engine.md`, **accepted**) pins the
+policy-engine protocol. It was framed by `/office-hours` and
+stress-tested by `/plan-eng-review` before any code; the eng-review
+pushback is absorbed in the ADR (not parked as open questions).
+
+Key decisions locked by ADR-0012:
+
+- **The central type is a `Policy` interface returning a rich
+  `Decision`, NOT a `model.Model` decorator.** This is a conscious
+  correction of ADR-0011 §"Open follow-ups", which had hypothesised
+  policy-layer wrappers implementing `model.Model` over the fan-out.
+  `model.Response` is lossy for provenance and consensus dissent; the
+  `model.Model` shape survives only as the opt-in lossy `AsModel`
+  adapter (the SECONDARY path, never the default).
+- **`Decision{Response, Provenance, Accounting}` is defined rich on day
+  one**, but the first reducer fills only the selection subset. No
+  invented fields (no consensus score / confidence until a consensus
+  reducer needs them). The first cut is a strict subset of the final
+  engine, not a throwaway prototype.
+- **Two-phase model is the frame; only the post-dispatch reducer ships.**
+  Pre-dispatch `Selector` (privacy + cost routing) is deferred — it needs
+  Envelope sensitivity modelling that does not exist (only
+  `Meta map[string]string` today).
+
+What landed (closed on master):
+
+- **`internal/policy`** — `Policy` interface; `Decision` / `Provenance`
+  / `Contribution` / `ProviderCost`; sentinels `ErrNilResult` and
+  `ErrNoUsableOutcome`; `PriorityReducer` (selects the highest-priority
+  successful Outcome by operator-declared provider order). Pure function
+  over `*fanout.Result`. 100% coverage, `make quality` green under
+  `-race`.
+- The wedge is a **SELECTION** demo, not cost-saving: wait-all fan-out
+  has already called and paid every provider before the reducer runs.
+  Cost-saving fail-over needs a sequential coordinator (sibling of
+  fan-out) — its own future ADR. Stateful budgets need a persistence ADR
+  first. Both explicitly out of Stage 5 scope (ADR-0012 §4–§5).
+
+`/review` ran on the code (two independent reviewers: adversarial
+edge-case + test-coverage). **Zero correctness bugs** — the design held
+under all eight edge-case vectors (empty/duplicate `Order`, both-non-nil
+and both-nil invariant violations, all-failed `errors.Join`, mid-slice
+winner). The inverse of the 4.3 signal: on pure/simple code `/review`
+did not invent logic bugs. It surfaced real test-quality findings, all
+applied: removed a no-op `errUnwrap` helper (tautological assertion) for
+a positive `errors.Is` check; added table rows for the both-non-nil
+poison-skip, the mid-slice winner, and duplicate `Order`; added a
+both-nil all-failed test; strengthened the all-failed accounting
+assertions (provider + latency, not just length). Plus one robustness
+touch-up in `priority.go`: `bestRank` now starts at `math.MaxInt` so the
+rank comparison can never collide with a genuine rank 0.
+
+**Known follow-up (ADR consistency, not a code bug):** ADR-0012 §6
+package layout lists `model.go` (`AsModel`) and §1 features it, but the
+adapter was deliberately NOT in this cut (the operator scoped the cut to
+`Policy` + `Decision` + `PriorityReducer`). The ADR does not yet mark
+`AsModel` as deferred. Decide next turn: annotate the ADR §6 /
+out-of-scope to mark `AsModel` deferred, or ship it as a small follow-up.
+
+### Still ahead in Stages 5–6 (deferred by ADR-0012, with constraints)
 
 This is the project's differentiator. The mechanism layer (Stage 4)
 returns every Outcome; Stages 5–6 turn those Outcomes into the
 behaviour the operator configures via the no-code visual builder.
-Policy questions to answer:
+Remaining policy work (each constrained by ADR-0012 so the future cut
+does not over-promise):
 
 - **Consensus / majority.** Two providers gave different answers —
   pick by vote? By a semantic-equivalence check? By a quorum?
@@ -210,22 +278,24 @@ Policy questions to answer:
   (consensus); others want the first OK and cancel the rest. Both
   compose over `fanout.Run` plus a wrapper.
 
-### Recommended workflow for Stage 5
+### Recommended workflow for Stage 5 (status)
 
-This is high-stakes design work. Follow the project's heavyweight
+This is high-stakes design work. Followed the project's heavyweight
 phase shape:
 
-1. **`/office-hours` first.** The policy engine is a product
-   question (what does the no-code builder need to express?) as
-   much as an engineering question. Office-hours pulls that out.
-2. **`/plan-eng-review` on the resulting plan.** Independent
-   engineering critique before the ADR.
-3. **ADR-0012.** Pin the policy-engine protocol BEFORE any code.
-   At a minimum: how a policy is described, how it consumes a
-   `*fanout.Result`, what the return shape to the Brain is.
-4. **TDD per phase, `-race` mandatory.** Same shape as 4.3.
+1. **`/office-hours`** — DONE. Framed the design space; honest verdict
+   logged: marginal-to-moderate value (startup-market lens is a poor fit
+   for an internal architecture call; its forced-alternatives + premise
+   challenge were the useful part).
+2. **`/plan-eng-review`** — DONE. This is where the value was: the
+   eng-manager lenses produced the four findings that changed the ADR
+   (the `model.Model` lossiness, the Decision-is-the-throwaway-risk, the
+   selection-vs-cost-saving distinction, the stateful-budget deferral).
+3. **ADR-0012** — DONE (accepted, `c4e519b`).
+4. **TDD per phase, `-race` mandatory.** First reducer done this way
+   (red on a stub, then green); subsequent reducers follow the same shape.
 5. **`/review` ONLY on the code**, not on ADR-0012 — the lesson from
-   4.3.
+   4.3. The first cut is awaiting that code review now.
 
 ### Hard constraints carried forward
 
@@ -268,6 +338,16 @@ Key entries currently:
   separately from this integration on the user's call — it is
   neither committed nor discussed in this handoff. Confirm with the
   user before any work that would touch it.
-- The first action of Stage 5 should be `/office-hours`, not code.
+- Stage 5 first cut is CLOSED on master: ADR-0012 accepted; the
+  `internal/policy` `PriorityReducer` reducer reviewed (`/review`) and
+  landed, `make quality` green. The two-phase engine is the frame;
+  only the post-dispatch reducer is implemented so far.
+- **Next step is undecided — to be chosen by the operator + copilot next
+  turn.** Candidates: (a) a second reducer (consensus/majority over
+  structured output, or quality-pick); (b) the pre-dispatch `Selector`
+  (privacy + cost routing — needs an Envelope sensitivity model first);
+  (c) the sequential coordinator (sibling of fan-out) that unlocks
+  cost-saving fail-over; (d) reconcile the `AsModel` ADR-consistency
+  follow-up. No code on any of these until the direction is chosen.
 - `make quality` green with `-race` is the bar — do not advance a
   phase until the whole tree (not just the new code) is green.
