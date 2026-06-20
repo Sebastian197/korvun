@@ -29,7 +29,7 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of Stage 4 close, 2026-06-20)
+## Current state (as of Stage 5 close, 2026-06-20)
 
 ### Stages closed on master
 
@@ -40,11 +40,24 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | 2       | Channel abstraction + Telegram inbound    | closed |
 | 2-EXT   | Telegram channel lifecycle (webhook + polling) | closed |
 | 3       | Router / gateway core                     | closed |
-| **4**   | **Models (interface + Ollama + Groq + fan-out)** | **closed** |
+| 4       | Models (interface + Ollama + Groq + fan-out) | closed |
+| **5**   | **Policy engine — post-dispatch phase (2 reducers)** | **closed** |
+| **7**   | **Brain orchestrator (first live end-to-end path)** | **closed** |
 
-Stage 5 (policy engine) has TWO post-dispatch reducers on master:
+**Stage 6 (policy engine — pre-dispatch phase) is the next stage and is
+NOT started.** It is new design work — a privacy/cost-aware `Selector`
+that runs *before* fan-out, plus a cost-saving sequential coordinator
+(a sibling of fan-out) — each needing its own framing and ADR before any
+code. No code until the Stage 6 ADR(s) are accepted. There are **zero
+half-open stages**: 0–5 and 7 are closed; 6 is the deliberate next step.
+
+**Stage 5 (policy engine — post-dispatch phase) is CLOSED**
+(`docs/stages/STAGE-05.md`). TWO post-dispatch reducers on master:
 `PriorityReducer` (ADR-0012) and `ConsensusReducer` (ADR-0013), on the
-unchanged `Policy` / `Decision` contract. See "Stage 5 — policy reducers".
+unchanged `Policy` / `Decision` contract, validated live through the
+Brain. The stage closed the POST-DISPATCH phase only — the pre-dispatch
+`Selector` and the cost-saving sequential coordinator are **Stage 6**,
+not started. See "Stage 5 — policy reducers".
 
 **Stage 7 (Brain orchestrator) is CLOSED** (ADR-0014). The `Orchestrator`
 in `internal/brain` is the first live end-to-end path — Envelope in →
@@ -463,14 +476,18 @@ Key entries currently:
   end-to-end path (Envelope → fan-out → policy → Envelope), stateless glue
   on master, `cmd/demo-brain` running it against real Ollama + Groq. The
   five pieces are now one system through `Handle`. See "Stage 7" above.
-- **Next step is undecided — to be chosen by the operator + copilot next
-  turn.** Candidates: (a) **Stage 11 single-binary wiring** (`cmd/korvun`
-  `main.go`: channel → router → brain → channel) — closes V1 checklist
-  criterion 1, turns the demo into a real binary; (b) the pre-dispatch
-  `Selector` (privacy + cost routing — needs an Envelope sensitivity model
-  first); (c) the sequential coordinator (sibling of fan-out) for
-  cost-saving fail-over (its own ADR); (d) conversation memory (Stage 9 —
-  needs a persistence ADR + an injected conversation-keyed store, per
-  ADR-0014 §4). No code until the direction is chosen.
+- **Next step is Stage 6 (policy engine — pre-dispatch phase), and it is
+  NOT started.** Per the operator's directive, Stages 5, 6 and 7 are
+  closed *in order* before anything else (no Stage 11, no Stage 8, no
+  loose pieces). Stages 5 and 7 are now closed; **Stage 6 is the
+  remaining one and is the only sanctioned next direction.** It is new
+  DESIGN work — a privacy/cost-aware pre-dispatch `Selector` (needs an
+  Envelope sensitivity model first) plus a cost-saving sequential
+  coordinator (a sibling of fan-out, its own ADR). It needs its own
+  framing (`/office-hours` + `/plan-eng-review`) and ADR(s) before any
+  code, and must be started deliberately by operator + copilot — not
+  chained automatically onto the Stage 5 close. Stage 11 single-binary
+  wiring and Stage 9 conversation memory remain explicitly downstream of
+  Stage 6, not candidates for this next turn.
 - `make quality` green with `-race` is the bar — do not advance a
   phase until the whole tree (not just the new code) is green.
