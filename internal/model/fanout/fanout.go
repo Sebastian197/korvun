@@ -42,14 +42,19 @@ type Result struct {
 }
 
 // Coordinator dispatches a single model.Request to N model.Model
-// implementations in parallel and collects every outcome. Construct
-// with New; the zero value is defended against (Run lazily defaults
-// the clock) but explicit construction is preferred.
+// implementations in parallel and collects every outcome.
 //
-// A Coordinator instance is safe for concurrent reuse: multiple Run
-// invocations on the same Coordinator do not interfere because all
-// per-call state (outcomes slice, derived ctx, WaitGroup) is created
-// inside Run.
+// Construct with New. The zero value works for ONE-SHOT use (Run
+// lazily defaults the clock on first call), but reuse — and
+// especially CONCURRENT reuse — requires construction via New.
+// Reason: the zero-value defense at the top of Run writes c.now
+// without synchronization, which races against the c.now() reads
+// inside still-running child goroutines of a concurrent Run. New
+// initializes c.now eagerly so subsequent Run calls only read the
+// field, making the post-New Coordinator safe for concurrent reuse:
+// all per-call state (outcomes slice, derived ctx, WaitGroup) is
+// created inside Run, and the configuration fields (perModelTimeout,
+// now) are read-only after construction.
 type Coordinator struct {
 	perModelTimeout time.Duration
 	// now is the package-private clock seam. New sets it to time.Now;
@@ -108,6 +113,16 @@ func New(opts ...Option) *Coordinator {
 // Run blocks until every spawned goroutine returns. An adapter that
 // ignores ctx will block Run; this is the cooperative-cancellation
 // invariant documented in ADR-0011 §2.
+//
+// Callers MUST supply distinct model.Model instances. The model.Model
+// contract does NOT promise Generate is concurrency-safe on a single
+// instance; passing the same adapter twice in models would invoke
+// Generate from two goroutines on one instance and risk data races
+// in any adapter that holds per-call mutable state. The two
+// production adapters (internal/model/ollama and internal/model/groq)
+// happen to be safe because they only read fields after construction,
+// but future adapters are not required to be. Run does not detect
+// duplicates.
 func (c *Coordinator) Run(
 	ctx context.Context,
 	req *model.Request,
@@ -133,6 +148,14 @@ func (c *Coordinator) Run(
 
 	// Zero-value defense: a Coordinator constructed by `var c Coordinator`
 	// (skipping New) has c.now == nil; default lazily rather than panic.
+	// SAFETY: this write is one-shot-only — callers that reuse a
+	// Coordinator concurrently MUST go through New (see the type doc).
+	// The single-Run path is race-free because the c.now() reads inside
+	// the child goroutines are synchronized by the WaitGroup against
+	// THIS write (Wait happens-after Done; Done happens-after every
+	// callOne read). Concurrent Run calls on a zero-value Coordinator
+	// would NOT have that fence and would race; New initializes c.now
+	// eagerly to remove the question.
 	if c.now == nil {
 		c.now = time.Now
 	}
