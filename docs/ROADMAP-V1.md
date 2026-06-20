@@ -18,17 +18,23 @@ más las piezas de robustez que un producto de verdad necesita.
 > Cada entrada se marca con: **qué falta**, **qué ADR/etapa la cubre**, y
 > **por qué se difirió**.
 
-- **Selector pre-dispatch (privacidad/coste).** Decide qué modelos entran al
-  fan-out ANTES de llamarlos.
-  - *Qué falta:* modelar la sensibilidad en el `Envelope` (hoy solo `Meta` map).
-  - *Cobertura:* ADR-0012 / ADR-0013.
-  - *Por qué se difirió:* requiere extender el `Envelope` antes de poder filtrar.
+- **✓ HECHO — Selector pre-dispatch (privacidad).** Decide qué modelos entran al
+  fan-out ANTES de llamarlos. **Cerrado en Stage 6** (ADR-0015): `policy.SelectModels`
+  filtra el `[]model.Model` por una `Sensitivity` declarada **por-Brain** + un
+  catálogo de atributos en el wiring. El reframe clave: **no se tocó el `Envelope`**
+  — un campo de sensibilidad por-mensaje no tiene escritor correcto hoy e inferirlo
+  está prohibido (ADR-0012 §5e), así que se difiere (aditivo) al builder no-code.
+  Demostrado por `cmd/demo-selector`.
+  - *Pendiente futuro (aditivo):* el campo tipado `Envelope.Sensitivity` + la
+    interfaz `Selector` por-mensaje, cuando exista un escritor; el **filtro de
+    coste** (`CostTier` en el catálogo), misma maquinaria.
 
-- **Coordinator secuencial (fail-over que SÍ ahorra coste).** Hermano del
-  fan-out: no llama a Groq si Ollama ya acertó.
-  - *Qué falta:* su propio ADR; lógica secuencial con corte temprano.
-  - *Por qué se difirió:* el fan-out `wait-all` no ahorra dinero; esto sí, pero
-    es un mecanismo distinto que necesita diseño propio.
+- **✓ HECHO — Coordinator secuencial (fail-over que SÍ ahorra coste).** Hermano del
+  fan-out: no llama a Groq si Ollama ya acertó. **Cerrado en Stage 6** (ADR-0016):
+  `sequential.Coordinator` hace dispatch serial parando en el primer éxito, reusando
+  el primitivo compartido `fanout.CallOne` (no duplica la disciplina de
+  panic+latencia+`%w`) y devolviendo el mismo `*fanout.Result`. Demostrado por
+  `cmd/demo-sequential`.
 
 - **Coste con estado (budget diario por Brain).**
   - *Qué falta:* una capa de persistencia que el proyecto aún no tiene.
@@ -128,11 +134,13 @@ más las piezas de robustez que un producto de verdad necesita.
 - [ ] Un mensaje real entra por un canal, se enruta, varios modelos responden,
       una política decide, y la respuesta vuelve — todo en un binario real
       (`main.go`), no en demos.
-      - *Estado:* el **pipeline del Brain está hecho** (Envelope → fan-out →
-        política → Envelope; ADR-0014, demostrado por `cmd/demo-brain`). Falta
-        el **ensamblaje en un binario real** (`cmd/korvun`, Stage 11): hoy el
-        demo llama `Handle` directo, sin canal + router vivos cableados. Ese
-        cableado es lo único que separa este criterio de estar marcado.
+      - *Estado:* **el motor de políticas completo está hecho** — post-dispatch
+        (reducers, Stage 5), pre-dispatch (selector de privacidad, Stage 6.1) y
+        el fail-over secuencial que ahorra coste (Stage 6.2), todo orquestado por
+        el Brain (Stage 7, `cmd/demo-brain`). Lo **único** que falta para marcar
+        este criterio es el **ensamblaje en un binario real** (`cmd/korvun`,
+        Stage 11): hoy los demos llaman a las piezas directamente, sin canal +
+        router vivos cableados en un `main.go`. Ese cableado es el último paso.
 - [ ] Persiste estado entre reinicios.
 - [ ] Es observable (sé qué está pasando dentro sin leer el código).
 - [ ] Lo configura alguien por fichero, sin recompilar.
