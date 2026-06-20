@@ -29,7 +29,7 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of Stage 6 close, 2026-06-20)
+## Current state (as of session close, 2026-06-20)
 
 ### Stages closed on master
 
@@ -49,12 +49,30 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 stages.** With Stage 6 closed, **the entire policy-engine block (Stages 5+6)
 plus its orchestration (Stage 7) is complete**: post-dispatch reducers +
 pre-dispatch privacy selector + cost-saving sequential fail-over, all wired
-through the Brain. Korvun's differentiator now exists end-to-end in code.
+through the Brain. The full differentiator is built and demonstrable with four
+demos. **CI is green.**
 
-**The next big step is UNDECIDED** and chosen by operator + copilot — likely
-Stage 11 (the real `cmd/korvun` assembly, V1 checklist criterion 1), Stage 8
-(agents), or Stage 9 (persistence). It must be started deliberately, not
-chained automatically. See "Notes for the next session".
+**The next big step is DECIDED: Stage 11** — the real `cmd/korvun` assembly
+(channel → router → brain → channel; the binary that boots and lets Telegram
+talk to real models). It closes V1 checklist criterion 1. Stage 11 is taken
+**ahead of Stages 8/9/10 on purpose** — assembling first yields a product that
+boots. See "Notes for the next session" for the framing and the recommended
+order afterwards.
+
+### CI status (session 2026-06-20)
+
+PR #1 (the CI fixes) was squash-merged to master; branch
+`ci/diagnose-coverage-macos` deleted; **master at `548909d`, CI green** — 10
+jobs: `quality` ×3 OSes, `sbom`, `cross-compile` ×6. Fix notes:
+
+- **`.gitattributes` forces LF** so `gofmt` is clean on the Windows checkout
+  (CRLF was failing lint).
+- **Coverage guard rewritten without a pipe** — `pipefail` + SIGPIPE was
+  failing the gate on macOS though the coverage file was fine.
+- **CodeQL job removed** — GitHub code scanning needs Advanced Security on a
+  private repo (not available here); SAST stays covered by the `gosec` step
+  (`golangci-lint --enable gosec`) + `govulncheck` in the `quality` job.
+  Re-add CodeQL if the repo goes public or GHAS is enabled.
 
 **Stage 6 (policy engine — pre-dispatch phase) is CLOSED**
 (`docs/stages/STAGE-06.md`). TWO pieces on opposite sides of the
@@ -513,18 +531,23 @@ Key entries currently:
   — exists end-to-end in code and is shown by four disposable demos
   (`demo-policy`, `demo-brain`, `demo-selector`, `demo-sequential`). What
   remains is operability, not more engine.
-- **The next big step is UNDECIDED — choose deliberately (operator +
-  copilot), do not chain automatically.** Strong candidates:
-  - **Stage 11** — the real `cmd/korvun` `main.go` wiring channel → router →
-    brain → channel. This is V1 checklist criterion 1 (a real message in/out
-    through a real binary, not a demo) and deletes the four demos. The closest
-    single step to a usable product.
-  - **Stage 8** — agents (brains calling external tools). Heavy concurrency →
-    `/review` zone.
-  - **Stage 9** — persistence (the prerequisite for budgets, history, brain
-    state; needs a persistence ADR first).
+- **The next big step is DECIDED: Stage 11** — the real `cmd/korvun` `main.go`
+  wiring channel → router → brain → channel; the binary that boots and lets
+  Telegram talk to real models. It closes V1 checklist criterion 1 (a real
+  message in/out through a real binary, not a demo) and deletes the four demos.
+  The closest single step to a usable product.
+  - **Open it with `/office-hours` + `/plan-eng-review` before the ADR.** This
+    is a structural integration point: config decisions, secrets via env,
+    boot/stop lifecycle, catalog wiring. It earns the heavyweight phase shape.
+  - **Stage 11 is taken ahead of 8/9/10 deliberately** — assembling first gives
+    a product that boots. Recommended order afterwards: **9 (persistence) → 12
+    (observability) → 8 (agents) → 10 (bus) → 13 (control API) → 14 (builder) →
+    15 (packaging) → 16 (hardening + release)**.
 - **`cmd/demo-selector` and `cmd/demo-sequential` are temporary**, deleted in
   Stage 11 with `demo-policy`/`demo-brain` when the engine runs through the
   real binary.
+- **Minor pending (operator's call, web setting):** protect the `master` branch
+  (Settings → Branches → ruleset: block force-push/deletion, require status
+  checks). Does not block anything.
 - `make quality` green with `-race` is the bar — do not advance a
   phase until the whole tree (not just the new code) is green.

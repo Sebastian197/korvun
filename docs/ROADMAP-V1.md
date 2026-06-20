@@ -69,6 +69,16 @@ más las piezas de robustez que un producto de verdad necesita.
 
 ## 2. Robustez y operabilidad (lo que hace un producto, no un prototipo)
 
+- **✓ HECHO — CI/CD multiplataforma en verde.** El pipeline (`quality.yml`)
+  corre en los 3 SO (`quality` ×3), genera SBOM y cross-compila las 6
+  combinaciones (linux/windows/darwin × amd64/arm64) — 10 jobs, todos verdes en
+  master (`548909d`, sesión 2026-06-20). Fixes: `.gitattributes` fuerza LF
+  (lint limpio en Windows), guard de cobertura sin `pipefail`/SIGPIPE (macOS),
+  job CodeQL retirado (code scanning requiere GHAS en repo privado; SAST sigue
+  cubierto por `gosec` + `govulncheck`).
+  - *Pendiente futuro:* reañadir CodeQL si el repo pasa a público o se habilita
+    GHAS; proteger la rama `master` (ruleset web).
+
 - **Persistencia.** Ninguna etapa hecha tiene capa de storage. La V1 necesita
   decidir SQLite/Postgres/NATS (ya en el stack previsto) y un ADR de
   persistencia — es prerequisito de budget, historial y estado de los brains.
