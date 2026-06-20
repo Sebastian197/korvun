@@ -128,6 +128,11 @@ más las piezas de robustez que un producto de verdad necesita.
 - [ ] Un mensaje real entra por un canal, se enruta, varios modelos responden,
       una política decide, y la respuesta vuelve — todo en un binario real
       (`main.go`), no en demos.
+      - *Estado:* el **pipeline del Brain está hecho** (Envelope → fan-out →
+        política → Envelope; ADR-0014, demostrado por `cmd/demo-brain`). Falta
+        el **ensamblaje en un binario real** (`cmd/korvun`, Stage 11): hoy el
+        demo llama `Handle` directo, sin canal + router vivos cableados. Ese
+        cableado es lo único que separa este criterio de estar marcado.
 - [ ] Persiste estado entre reinicios.
 - [ ] Es observable (sé qué está pasando dentro sin leer el código).
 - [ ] Lo configura alguien por fichero, sin recompilar.

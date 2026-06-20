@@ -146,6 +146,46 @@ func eventually(t *testing.T, timeout time.Duration, cond func() bool, msg strin
 	t.Fatalf("eventually timed out after %v: %s", timeout, msg)
 }
 
+// consistently asserts cond holds for the whole duration (the negative of
+// eventually): used to verify that nothing happens (e.g. no reply is sent).
+func consistently(t *testing.T, dur time.Duration, cond func() bool, msg string) {
+	t.Helper()
+	deadline := time.Now().Add(dur)
+	for time.Now().Before(deadline) {
+		if !cond() {
+			t.Fatalf("consistently failed: %s", msg)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+// A Brain that returns an empty/nil reply slice — the Orchestrator's no-text
+// short-circuit (ADR-0014 §5) — must not make the router send anything or
+// panic. Anchors the router-side contract the Brain relies on.
+func TestHandle_EmptyReplies_NothingSent(t *testing.T) {
+	r := router.New()
+	ch := newFakeChannel("telegram")
+	b := newFakeBrain() // no replies → Handle returns (nil, nil)
+	if err := r.RegisterChannel(ch); err != nil {
+		t.Fatalf("RegisterChannel: %v", err)
+	}
+	if err := r.RegisterBrain("b1", b); err != nil {
+		t.Fatalf("RegisterBrain: %v", err)
+	}
+	if err := r.Route("telegram", "b1"); err != nil {
+		t.Fatalf("Route: %v", err)
+	}
+	defer shutdown(t, r)
+
+	if err := r.DispatchInbound(context.Background(), mkInbound("telegram", "1000", "hi")); err != nil {
+		t.Fatalf("DispatchInbound: %v", err)
+	}
+	eventually(t, time.Second, func() bool { return len(b.Handled()) == 1 },
+		"brain did not handle the inbound")
+	consistently(t, 100*time.Millisecond, func() bool { return len(ch.Sent()) == 0 },
+		"router sent something for an empty reply slice")
+}
+
 // ---------- DispatchInbound validation -------------------------------------
 
 func TestDispatchInbound_validation(t *testing.T) {

@@ -42,11 +42,15 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | 3       | Router / gateway core                     | closed |
 | **4**   | **Models (interface + Ollama + Groq + fan-out)** | **closed** |
 
-Stage 5 (policy engine) has STARTED. **Two post-dispatch reducers are on
-master**: `PriorityReducer` (ADR-0012) and `ConsensusReducer` (ADR-0013),
-both on the unchanged `Policy` / `Decision` contract, both `/review`-checked,
-`make quality` green. `cmd/demo-policy` shows them deciding over a hand-built
-Result. See "Stage 5 — policy reducers" below.
+Stage 5 (policy engine) has TWO post-dispatch reducers on master:
+`PriorityReducer` (ADR-0012) and `ConsensusReducer` (ADR-0013), on the
+unchanged `Policy` / `Decision` contract. See "Stage 5 — policy reducers".
+
+**Stage 7 (Brain orchestrator) is CLOSED** (ADR-0014). The `Orchestrator`
+in `internal/brain` is the first live end-to-end path — Envelope in →
+translate → fan-out → policy → translate → Envelope out — implementing the
+`brain.Brain` seam the router already consumes. `cmd/demo-brain` runs it
+against real Ollama + Groq. See "Stage 7 — Brain orchestrator" below.
 
 ### What landed on master in Stage 4
 
@@ -85,7 +89,8 @@ internal/
     telegram/         Telegram adapter (Stage 2 + 2-EXT)
     webhook/          generic webhook channel (Stage 2)
   router/             gateway core (Stage 3)
-  brain/              forward-slice interface (Stage 3, real impl in Stage 7)
+  brain/              Brain interface (Stage 3) + Orchestrator + pure translators
+                      + WithModelID decorator (Stage 7, ADR-0014)
   model/              Model interface + sentinels (Stage 4)
     ollama/           Ollama adapter (Stage 4.1)
     groq/             Groq adapter (Stage 4.2)
@@ -97,10 +102,11 @@ cmd/
   demo-model/         Ollama live skeleton (delete in Stage 5+)
   demo-groq/          Groq live skeleton (delete in Stage 5+)
   demo-fanout/        Ollama + Groq fan-out live skeleton (delete in Stage 5+)
-  demo-policy/        both reducers over a hand-built Result (delete in Stage 7)
+  demo-policy/        both reducers over a hand-built Result (delete in Stage 11)
+  demo-brain/         Envelope → Brain → fan-out → policy → Envelope (delete in Stage 11)
 docs/
   HANDOFF.md          this file
-  adr/                ADRs 0001 through 0011
+  adr/                ADRs 0001 through 0014
   stages/             STAGE-00.md through STAGE-04.md
 ```
 
@@ -117,8 +123,9 @@ docs/
 | `internal/model/groq`            | 94.7%    |
 | `internal/model/fanout`          | 100.0%   |
 | `internal/policy`                | 100.0%   |
+| `internal/brain`                 | 100.0%   |
 | `internal/router`                | 96.3%    |
-| **total**                        | **90.9%** |
+| **total**                        | **94.3%** |
 
 `make quality` green with `-race`. `go.mod` still has a single
 direct dependency (`github.com/go-telegram/bot v1.21.0`); four
@@ -364,6 +371,63 @@ phase shape:
 
 ---
 
+## Stage 7 — Brain orchestrator (live skeleton)
+
+ADR-0014 (`docs/adr/0014-brain-orchestrator.md`, **accepted**) pins the
+Brain. Framed by `/office-hours`, stressed by `/plan-eng-review`, the code
+`/review`-checked. **This is the project's first live end-to-end path** —
+the five pieces become one system.
+
+The key framing that de-risked it: **the Brain is NOT structural
+concurrency.** The router owns concurrency (workers, queues, `Handle`
+timeout, error hook), the fan-out owns parallelism. So the `Orchestrator`
+is stateless sequential glue, and it shipped **directly to master, no
+feature branch** (ADR-0014 §6) — TDD on master like the reducers.
+
+What landed (`internal/brain`):
+
+- **`Orchestrator`** (implements `brain.Brain`): `Handle` = translate →
+  `coord.Run` → `policy.Apply` → translate. Stateless, safe to share across
+  the router's N workers. `coord`/`models`/`policy`/`fallback`/`systemPrompt`
+  injected; `models` + `policy` are interfaces so a future `SelectingBrain`
+  wraps it.
+- **`WithModelID`** — the Brain-local decorator that gives each provider its
+  own model id by COPYING the request (`cp := *req; cp.Model = id`), never
+  mutating the shared `*req` the fan-out hands every goroutine. The
+  copy-don't-mutate rule (ADR-0014 §2) is the load-bearing correctness
+  constraint; a heterogeneous fan-out test under `-race` enforces it.
+- **Pure translators** — `envelopeToRequest` (latest non-whitespace text →
+  a user Message; no text → no reply) and `decisionToEnvelopes` (echoes the
+  inbound addressing Meta so the reply is deliverable without the Brain
+  knowing channel-specific keys).
+- **No-answer contract** (ADR-0014 §3): `ErrNoUsableOutcome` /
+  `ErrNoConsensus` → a fallback reply Envelope + `slog` the provenance, NO
+  error. A `coord.Run` error or any other policy error → propagated to the
+  router error hook. The user never sees silence on the common error path.
+
+`/review` found **zero correctness bugs** (the decorator-over-shared-`*req`
+race is genuinely closed); its test-quality findings were applied — most
+valuably a real `PriorityReducer`-over-real-fan-out integration test (the
+prior `Handle` tests used `fakePolicy`, bypassing the seam). 100% coverage,
+`make quality` green under `-race`. A `TestHandle_EmptyReplies_NothingSent`
+in `internal/router` anchors the router-side half of the no-reply contract.
+
+`cmd/demo-brain` runs the whole path against real Ollama + Groq (Groq
+auto-skips without `GROQ_API_KEY`). With no provider reachable it
+demonstrates the no-answer path: fan-out tried, policy returned
+`ErrNoUsableOutcome`, the Brain logged the provenance and returned the
+fallback reply with addressing preserved.
+
+### What is NOT yet wired (Stage 11)
+
+The Brain end-to-end exists and is demonstrated by a demo that calls
+`Handle` directly. The **single-binary wiring** — channel → router → brain →
+channel inside a real `cmd/korvun` `main.go` — is Stage 11. That is the
+last step for V1 checklist criterion 1 (a real message in/out through a
+real binary, not a demo). See `docs/ROADMAP-V1.md`.
+
+---
+
 ## Memory pointers
 
 User-level project memory lives at
@@ -395,16 +459,18 @@ Key entries currently:
   engine is the frame; only post-dispatch reducers exist so far (no
   pre-dispatch `Selector` yet). The `Decision` contract is now validated
   by two reducers of different nature.
-- **Post-dispatch policy engine is CONSOLIDATED and coherent**: two
-  reducers on the unchanged `Decision` contract, `cmd/demo-policy` proving
-  the differentiator, ADR-0012/0013 reconciled with master (`AsModel`
-  annotated deferred). A clean stopping point.
+- **Stage 7 (Brain) is CLOSED**: the `Orchestrator` is the first live
+  end-to-end path (Envelope → fan-out → policy → Envelope), stateless glue
+  on master, `cmd/demo-brain` running it against real Ollama + Groq. The
+  five pieces are now one system through `Handle`. See "Stage 7" above.
 - **Next step is undecided — to be chosen by the operator + copilot next
-  turn.** Candidates: (a) **the Brain (Stage 7)** — gives `AsModel` and the
-  fail-over their consumer and brings the first live end-to-end skeleton
-  (message in → route → fan-out → policy → reply out); (b) the pre-dispatch
+  turn.** Candidates: (a) **Stage 11 single-binary wiring** (`cmd/korvun`
+  `main.go`: channel → router → brain → channel) — closes V1 checklist
+  criterion 1, turns the demo into a real binary; (b) the pre-dispatch
   `Selector` (privacy + cost routing — needs an Envelope sensitivity model
   first); (c) the sequential coordinator (sibling of fan-out) for
-  cost-saving fail-over (its own ADR). No code until the direction is chosen.
+  cost-saving fail-over (its own ADR); (d) conversation memory (Stage 9 —
+  needs a persistence ADR + an injected conversation-keyed store, per
+  ADR-0014 §4). No code until the direction is chosen.
 - `make quality` green with `-race` is the bar — do not advance a
   phase until the whole tree (not just the new code) is green.
