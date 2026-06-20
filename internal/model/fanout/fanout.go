@@ -94,6 +94,34 @@ func New(opts ...Option) *Coordinator {
 	return c
 }
 
+// ValidateRunInputs checks the mechanism-level preconditions shared by
+// every dispatch shape before any model is called: a non-nil ctx, a valid
+// request (any of the model.Err* validation sentinels), a non-empty model
+// slice (ErrNoModels), no nil model entry (ErrNilModel), and a ctx not
+// already cancelled at entry. It returns the same sentinels callers match
+// with errors.Is. Both fanout.Coordinator.Run and the sequential
+// coordinator (ADR-0016) call it so the two reject identical
+// misconfigurations identically. The nil-ctx message is
+// dispatch-shape-neutral so a sequential error never falsely reads
+// "fanout".
+func ValidateRunInputs(ctx context.Context, req *model.Request, models []model.Model) error {
+	if ctx == nil {
+		return errors.New("model dispatch: nil ctx")
+	}
+	if err := model.ValidateRequest(req); err != nil {
+		return err
+	}
+	if len(models) == 0 {
+		return ErrNoModels
+	}
+	for _, m := range models {
+		if m == nil {
+			return ErrNilModel
+		}
+	}
+	return ctx.Err()
+}
+
 // Run dispatches req to every model in parallel and returns when
 // every goroutine has finished. Returns *Result for mechanism-level
 // success (input was valid, every goroutine returned) regardless of
@@ -128,21 +156,7 @@ func (c *Coordinator) Run(
 	req *model.Request,
 	models []model.Model,
 ) (*Result, error) {
-	if ctx == nil {
-		return nil, errors.New("fanout: nil ctx")
-	}
-	if err := model.ValidateRequest(req); err != nil {
-		return nil, err
-	}
-	if len(models) == 0 {
-		return nil, ErrNoModels
-	}
-	for _, m := range models {
-		if m == nil {
-			return nil, ErrNilModel
-		}
-	}
-	if err := ctx.Err(); err != nil {
+	if err := ValidateRunInputs(ctx, req, models); err != nil {
 		return nil, err
 	}
 
