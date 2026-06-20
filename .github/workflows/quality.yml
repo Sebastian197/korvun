@@ -153,8 +153,13 @@ jobs:
     needs: quality
     permissions:
       # A job-level permissions block REPLACES the workflow-level one, so
-      # contents must be re-granted here or actions/checkout cannot read the
-      # repo ("Repository not found") and CodeQL never starts.
+      # every permission CodeQL needs must be listed here:
+      #  - contents: read        -> actions/checkout can read the repo
+      #  - security-events: write -> upload the SARIF results
+      #  - actions: read          -> codeql-action reads workflow-run metadata
+      #    (without it, analyze fails with "Resource not accessible by
+      #    integration" on the get-a-workflow-run API call)
+      actions: read
       contents: read
       security-events: write
     steps:
