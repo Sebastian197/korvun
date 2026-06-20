@@ -2,11 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package policy turns the outcomes of a model fan-out into a single
-// Decision according to a configurable dispatch policy. It is the
-// post-dispatch half of the two-phase policy model pinned by ADR-0012:
-// the pre-dispatch Selector (privacy / cost routing) is deferred; this
-// package ships the reducer that decides what to do with the []Outcome
-// a completed fan-out returns.
+// Decision according to a configurable dispatch policy. It holds both
+// halves of the two-phase policy model pinned by ADR-0012.
+//
+// The post-dispatch half is the Policy interface and its reducers
+// (PriorityReducer, ConsensusReducer): they decide what to do with the
+// []Outcome a completed fan-out returns.
+//
+// The pre-dispatch half is the privacy Selector in its per-Brain form
+// (SelectModels over a CatalogEntry catalog, ADR-0015): it decides which
+// models enter the fan-out before it runs, filtering by a per-Brain
+// declared Sensitivity. The per-MESSAGE Selector (an env-taking interface)
+// and cost-tier selection remain deferred (ADR-0015 §4, §7).
 //
 // The central abstraction is the Policy interface, which CONSUMES a
 // *fanout.Result and produces a rich *Decision (chosen Response plus

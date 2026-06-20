@@ -35,4 +35,24 @@ var (
 	// (and the paired fanout.Result). The Brain surfaces an
 	// operator-configured fallback on this sentinel. (ADR-0013 §7.)
 	ErrNoConsensus = errors.New("policy: no consensus")
+
+	// ErrNoEligibleModels is returned by SelectModels when the catalog is
+	// non-empty (or empty) but the sensitivity filter leaves no model
+	// permitted — typically a Private Brain wired with only Cloud models,
+	// or an empty catalog. It is an operator misconfiguration that must
+	// fail LOUD at construction (where SelectModels runs in the per-Brain
+	// cut) rather than yield a Brain that can never answer (ADR-0015 §4).
+	// Distinct from fanout.ErrNoModels, which means the model slice handed
+	// to Run was empty; this one means the filter emptied it.
+	ErrNoEligibleModels = errors.New("policy: no eligible models")
+
+	// ErrUnknownSensitivity is returned by SelectModels when handed a
+	// Sensitivity value it does not recognise — including the zero value of
+	// an unconfigured Brain. Selection fails loud rather than silently
+	// defaulting to Public (which would leak to cloud providers) or Private
+	// (which would hide the misconfiguration). Privacy is declared, never
+	// guessed (ADR-0012 §5e, ADR-0015 §8); an undeclared sensitivity is an
+	// error, not a default. The offending value is wrapped behind this
+	// sentinel via %w so errors.Is keeps working.
+	ErrUnknownSensitivity = errors.New("policy: unknown sensitivity")
 )
