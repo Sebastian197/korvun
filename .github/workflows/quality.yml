@@ -152,6 +152,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     permissions:
+      # A job-level permissions block REPLACES the workflow-level one, so
+      # contents must be re-granted here or actions/checkout cannot read the
+      # repo ("Repository not found") and CodeQL never starts.
+      contents: read
       security-events: write
     steps:
       - uses: actions/checkout@v6
