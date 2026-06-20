@@ -22,9 +22,9 @@ import (
 // fakeModel is the universal test adapter. It is concurrency-safe for
 // the access patterns the fan-out applies (one Run call → one
 // Generate call per model — the Coordinator does not re-enter
-// Generate on the same Model within a single Run). The few fields
-// the tests inspect concurrently (callCount, lastCtx) use atomics
-// and a mutex.
+// Generate on the same Model within a single Run). callCount is an
+// atomic so tests that count invocations across goroutines stay
+// race-free.
 type fakeModel struct {
 	name string
 
@@ -37,8 +37,6 @@ type fakeModel struct {
 
 	// Observation.
 	callCount int32
-	mu        sync.Mutex
-	lastCtx   context.Context
 }
 
 func (f *fakeModel) Name() string {
@@ -50,9 +48,6 @@ func (f *fakeModel) Name() string {
 
 func (f *fakeModel) Generate(ctx context.Context, req *model.Request) (*model.Response, error) {
 	atomic.AddInt32(&f.callCount, 1)
-	f.mu.Lock()
-	f.lastCtx = ctx
-	f.mu.Unlock()
 	// Delay first so a panicking fake can simulate "panic after doing
 	// real work" — necessary for the I1 Latency-on-panic test.
 	if f.delay > 0 {
@@ -283,6 +278,40 @@ func TestRun_preservesErrProviderResponse(t *testing.T) {
 	}
 }
 
+func TestRun_responseIsNilOnEveryErrorPath(t *testing.T) {
+	// I8: the Outcome doc invariant "exactly one of Response or Err is
+	// non-nil" must hold across every error class — adapter sentinel,
+	// adapter ctx-cancel, Generate panic, Name panic. A regression that
+	// pre-assigned out.Response before the err check (or that retained
+	// stale Response across a panic) would break the invariant silently.
+	c := New()
+	cases := []struct {
+		name  string
+		model model.Model
+	}{
+		{"plain error", &fakeModel{name: "p", err: errors.New("boom")}},
+		{"sentinel error", &fakeModel{name: "s", err: fmt.Errorf("x: %w", model.ErrAuthInvalid)}},
+		{"rate-limit struct", &fakeModel{name: "r", err: &model.RateLimitError{Provider: "r", RetryAfter: time.Second}}},
+		{"panic in Generate", &fakeModel{name: "pg", panicOnGen: "boom"}},
+		{"panic in Name", &fakeModel{name: "pn", panicOnName: errors.New("name boom")}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := c.Run(context.Background(), validRequest(), []model.Model{tc.model})
+			if err != nil {
+				t.Fatalf("Run err = %v", err)
+			}
+			if res.Outcomes[0].Err == nil {
+				t.Fatal("Outcomes[0].Err = nil, want non-nil for this case")
+			}
+			if res.Outcomes[0].Response != nil {
+				t.Errorf("Outcomes[0].Response = %+v, want nil when Err is non-nil (exactly-one invariant)",
+					res.Outcomes[0].Response)
+			}
+		})
+	}
+}
+
 func TestRun_mixedSentinelsResultReturned(t *testing.T) {
 	c := New()
 	models := []model.Model{
@@ -336,6 +365,14 @@ func TestRun_ctxCancelMidFlight(t *testing.T) {
 	if res.Outcomes[0].Err == nil {
 		t.Errorf("Outcome.Err = nil after ctx cancel, want non-nil")
 	}
+	// I3: the upstream sentinel grammar must survive ctx cancellation.
+	// The fake wraps ctx.Done into ErrProviderUnavailable; the contract
+	// is that Outcome.Err round-trips that sentinel for the policy
+	// layer to branch on.
+	if !errors.Is(res.Outcomes[0].Err, model.ErrProviderUnavailable) {
+		t.Errorf("errors.Is(Outcome.Err, ErrProviderUnavailable) = false after ctx cancel; got %v",
+			res.Outcomes[0].Err)
+	}
 }
 
 func TestRun_perModelTimeoutFires(t *testing.T) {
@@ -354,6 +391,14 @@ func TestRun_perModelTimeoutFires(t *testing.T) {
 	}
 	if res.Outcomes[0].Err == nil {
 		t.Errorf("slow Outcome.Err = nil, want timeout-derived error")
+	}
+	// I3: same as TestRun_ctxCancelMidFlight — the per-model timeout's
+	// ctx.Done branch round-trips through ErrProviderUnavailable (the
+	// fake wraps it; real adapters do the same in their HTTP-cancel
+	// paths). Policy must be able to branch on the sentinel.
+	if !errors.Is(res.Outcomes[0].Err, model.ErrProviderUnavailable) {
+		t.Errorf("errors.Is(slow Outcome.Err, ErrProviderUnavailable) = false after per-model timeout; got %v",
+			res.Outcomes[0].Err)
 	}
 	if res.Outcomes[1].Err != nil {
 		t.Errorf("fast Outcome.Err = %v, want nil", res.Outcomes[1].Err)
@@ -483,7 +528,12 @@ func TestRun_latencyCapturedOnPanicDuringGenerate(t *testing.T) {
 func TestRun_panicInNameBecomesOutcome(t *testing.T) {
 	c := New()
 	boom := &fakeModel{name: "boom", panicOnName: errors.New("name panic")}
-	res, err := c.Run(context.Background(), validRequest(), []model.Model{boom})
+	// I5: cross-slot isolation must hold when the panic happens in
+	// Name() (a slightly different code path than Generate-panic: it
+	// fires BEFORE the perModelTimeout ctx-derivation, before start
+	// := c.now()). A sibling ok model must complete normally.
+	ok := &fakeModel{name: "ok", response: okResponse("ok", "ok", "fine")}
+	res, err := c.Run(context.Background(), validRequest(), []model.Model{boom, ok})
 	if err != nil {
 		t.Fatalf("Run err = %v", err)
 	}
@@ -494,6 +544,12 @@ func TestRun_panicInNameBecomesOutcome(t *testing.T) {
 		t.Errorf("Outcomes[0].Err = %q, want 'fanout: provider panicked' prefix", res.Outcomes[0].Err.Error())
 	}
 	// Provider may legitimately be "" — Name() never returned.
+	if res.Outcomes[1].Err != nil {
+		t.Errorf("Outcomes[1].Err = %v, want nil (Name() panic must NOT contaminate other slots)", res.Outcomes[1].Err)
+	}
+	if res.Outcomes[1].Response == nil || res.Outcomes[1].Response.Message.Content != "fine" {
+		t.Errorf("Outcomes[1].Response broken after sibling Name() panic: %+v", res.Outcomes[1].Response)
+	}
 }
 
 // --- zero-value Coordinator -------------------------------------------------
