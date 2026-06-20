@@ -42,11 +42,11 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | 3       | Router / gateway core                     | closed |
 | **4**   | **Models (interface + Ollama + Groq + fan-out)** | **closed** |
 
-Stage 5 (policy engine) has STARTED. ADR-0012 is accepted and on master
-(commit `c4e519b`). The first cut (`internal/policy` — `Policy`,
-`Decision`, `PriorityReducer`) is **closed on master**: `/office-hours`-framed,
-`/plan-eng-review`-stressed, `/review`-checked, `make quality` green.
-See "Stage 5 — first cut" below.
+Stage 5 (policy engine) has STARTED. **Two post-dispatch reducers are on
+master**: `PriorityReducer` (ADR-0012) and `ConsensusReducer` (ADR-0013),
+both on the unchanged `Policy` / `Decision` contract, both `/review`-checked,
+`make quality` green. `cmd/demo-policy` shows them deciding over a hand-built
+Result. See "Stage 5 — policy reducers" below.
 
 ### What landed on master in Stage 4
 
@@ -90,12 +90,14 @@ internal/
     ollama/           Ollama adapter (Stage 4.1)
     groq/             Groq adapter (Stage 4.2)
     fanout/           parallel dispatch coordinator (Stage 4.3)
-  policy/             policy engine: Policy + Decision + PriorityReducer (Stage 5, ADR-0012)
+  policy/             policy engine: Policy + Decision + PriorityReducer (ADR-0012)
+                      + ConsensusReducer (ADR-0013); shared rankByOrder helper
 cmd/
   korvun/             placeholder for the real bootstrap (Stage 5+)
   demo-model/         Ollama live skeleton (delete in Stage 5+)
   demo-groq/          Groq live skeleton (delete in Stage 5+)
   demo-fanout/        Ollama + Groq fan-out live skeleton (delete in Stage 5+)
+  demo-policy/        both reducers over a hand-built Result (delete in Stage 7)
 docs/
   HANDOFF.md          this file
   adr/                ADRs 0001 through 0011
@@ -195,7 +197,9 @@ future cloud adapter.
 
 ---
 
-## Stage 5 — first cut (policy engine reducer)
+## Stage 5 — policy reducers
+
+### First reducer — priority (ADR-0012)
 
 ADR-0012 (`docs/adr/0012-policy-engine.md`, **accepted**) pins the
 policy-engine protocol. It was framed by `/office-hours` and
@@ -256,7 +260,54 @@ adapter was deliberately NOT in this cut (the operator scoped the cut to
 `AsModel` as deferred. Decide next turn: annotate the ADR §6 /
 out-of-scope to mark `AsModel` deferred, or ship it as a small follow-up.
 
-### Still ahead in Stages 5–6 (deferred by ADR-0012, with constraints)
+### Second reducer — consensus (ADR-0013)
+
+ADR-0013 (`docs/adr/0013-consensus-reducer.md`, **accepted**, commit
+`0b1d6b7`) adds `ConsensusReducer` on the SAME `Policy` / `Decision`
+contract. This was the contract's fitness test — a reducer of a different
+nature (several Outcomes jointly decide by agreeing) — and **`Decision`
+held unchanged**, exactly as Groq validated the `Model` interface against a
+differently-shaped provider. Multiple `Contribution.Used == true` is the
+case `Contribution`'s godoc already anticipated; no field added.
+
+Decisions locked by ADR-0013:
+
+- **Votes over a normalized form of `Response.Message.Content`** — for
+  structured / label output, never free prose (the `Normalize` seam
+  enforces it; default trim + lowercase, configurable). `ConsensusReducer{
+  Order, Normalize}`, both optional, zero value valid.
+- **Strict majority of the successful outcomes, plus a floor of two.** A
+  2-2 tie is not a majority → `ErrNoConsensus` (this dissolves the
+  group-tie question). A single success is not consensus → `ErrNoConsensus`
+  (compose `ConsensusReducer` → `PriorityReducer` for "agree if you can,
+  else prefer the trusted provider").
+- **`ErrNoConsensus`** (new, bare sentinel) for disagreement, distinct from
+  `ErrNoUsableOutcome` (all-failed, checked first, joins causes). The
+  representative reply reuses `PriorityReducer`'s ranking (shared
+  `rankByOrder`); latency rejected as a tie-break (not reproducible).
+- **`Contribution.Class` named but NOT added** — per-minority-voter class is
+  recoverable from the paired `fanout.Result`; additive only if the builder
+  ever needs the spread from `Decision` alone (ADR-0013 §9).
+
+`/review` ran again (two independent reviewers): **zero correctness bugs**
+— the threshold math was proven to yield a unique winner (so the early
+`break` is safe), determinism holds under map iteration, and the
+`rank → rankByOrder` refactor is behaviorally identical. Same inverse-of-4.3
+signal. Test-quality findings applied: a `normalize()` double-call hoisted;
+added tests for a both-non-nil voter (must not vote), a both-nil outcome
+(bare `ErrNoUsableOutcome`), an empty-string winning class, a minimal
+2-of-2 consensus, and `Accounting` value assertions across all consensus
+paths. `internal/policy` 100% coverage, `make quality` green under `-race`.
+
+`cmd/demo-policy` (disposable, delete in Stage 7) runs both reducers over
+the same hand-built `Result` and prints each `Decision`. The flagship
+contrast: on identical data, `PriorityReducer` follows the top-priority
+provider while `ConsensusReducer` follows the agreeing majority — and on a
+2-2 split, priority still decides while consensus returns `no consensus`.
+First visible proof of the differentiator (fabricated data; live
+model-driven dispatch arrives with the Brain in Stage 7).
+
+### Still ahead in Stages 5–6 (deferred by ADR-0012/0013, with constraints)
 
 This is the project's differentiator. The mechanism layer (Stage 4)
 returns every Outcome; Stages 5–6 turn those Outcomes into the
@@ -338,10 +389,12 @@ Key entries currently:
   separately from this integration on the user's call — it is
   neither committed nor discussed in this handoff. Confirm with the
   user before any work that would touch it.
-- Stage 5 first cut is CLOSED on master: ADR-0012 accepted; the
-  `internal/policy` `PriorityReducer` reducer reviewed (`/review`) and
-  landed, `make quality` green. The two-phase engine is the frame;
-  only the post-dispatch reducer is implemented so far.
+- Stage 5 has TWO post-dispatch reducers on master: `PriorityReducer`
+  (ADR-0012) and `ConsensusReducer` (ADR-0013), both `/review`-checked,
+  `make quality` green, `cmd/demo-policy` showing them off. The two-phase
+  engine is the frame; only post-dispatch reducers exist so far (no
+  pre-dispatch `Selector` yet). The `Decision` contract is now validated
+  by two reducers of different nature.
 - **Next step is undecided — to be chosen by the operator + copilot next
   turn.** Candidates: (a) a second reducer (consensus/majority over
   structured output, or quality-pick); (b) the pre-dispatch `Selector`

@@ -24,4 +24,15 @@ var (
 	// surfaces an operator-configured fallback on this sentinel rather
 	// than crashing or going silent.
 	ErrNoUsableOutcome = errors.New("policy: no usable outcome")
+
+	// ErrNoConsensus is returned by a consensus Policy (alongside a
+	// non-nil *Decision with Response == nil) when usable outcomes
+	// existed but no class reached the agreement threshold — the answers
+	// disagreed. Distinct from ErrNoUsableOutcome, where there were no
+	// usable answers at all. It is a bare sentinel (no errors.Join of
+	// causes): disagreement is the absence of a majority, not a set of
+	// provider failures. The vote breakdown lives in Decision.Provenance
+	// (and the paired fanout.Result). The Brain surfaces an
+	// operator-configured fallback on this sentinel. (ADR-0013 §7.)
+	ErrNoConsensus = errors.New("policy: no consensus")
 )

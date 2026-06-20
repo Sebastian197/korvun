@@ -85,7 +85,7 @@ func (r PriorityReducer) Apply(ctx context.Context, result *fanout.Result) (*Dec
 		}
 		// Strict `<` keeps the earlier (lower-index) outcome on a tie, so
 		// ties resolve to the lower fan-out index deterministically.
-		if rank := r.rank(oc.Provider); rank < bestRank {
+		if rank := rankByOrder(r.Order, oc.Provider); rank < bestRank {
 			bestIdx = i
 			bestRank = rank
 		}
@@ -115,14 +115,16 @@ func (r PriorityReducer) Apply(ctx context.Context, result *fanout.Result) (*Dec
 	return decision, nil
 }
 
-// rank returns the priority of provider: its index in Order (lower is
-// higher priority), or len(Order) for a provider not listed (ranked
-// below every listed provider).
-func (r PriorityReducer) rank(provider string) int {
-	for i, name := range r.Order {
+// rankByOrder returns the priority of provider within order: its index
+// (lower is higher priority), or len(order) for a provider not listed
+// (ranked below every listed provider). Shared by PriorityReducer and
+// ConsensusReducer so both compute provider priority identically
+// (ADR-0013 §9).
+func rankByOrder(order []string, provider string) int {
+	for i, name := range order {
 		if name == provider {
 			return i
 		}
 	}
-	return len(r.Order)
+	return len(order)
 }
