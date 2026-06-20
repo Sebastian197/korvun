@@ -41,7 +41,11 @@ más las piezas de robustez que un producto de verdad necesita.
     semántico es trabajo futuro.
 
 - **`AsModel` adapter.** El adaptador `Policy → model.Model`.
-  - *Por qué se difirió:* hasta que el Brain (Stage 7) lo consuma.
+  - *Qué falta:* implementar el adaptador (no está en master).
+  - *Cobertura:* ADR-0012 §1/§6 (anotado como **diferido**); **Stage 7 (Brain)**.
+  - *Por qué se difirió:* es la conveniencia lossy *secundaria* (el camino primario
+    es `Policy.Apply` sobre un `*fanout.Result`) y no tiene consumidor hasta que el
+    Brain lo use; un adaptador lossy sin consumidor no se valida bien.
 
 - **Streaming (`StreamingModel`).**
   - *Qué falta:* implementación; la interfaz `Model` está preparada pero no

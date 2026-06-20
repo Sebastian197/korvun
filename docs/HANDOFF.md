@@ -253,12 +253,12 @@ assertions (provider + latency, not just length). Plus one robustness
 touch-up in `priority.go`: `bestRank` now starts at `math.MaxInt` so the
 rank comparison can never collide with a genuine rank 0.
 
-**Known follow-up (ADR consistency, not a code bug):** ADR-0012 §6
-package layout lists `model.go` (`AsModel`) and §1 features it, but the
-adapter was deliberately NOT in this cut (the operator scoped the cut to
-`Policy` + `Decision` + `PriorityReducer`). The ADR does not yet mark
-`AsModel` as deferred. Decide next turn: annotate the ADR §6 /
-out-of-scope to mark `AsModel` deferred, or ship it as a small follow-up.
+**ADR consistency — RECONCILED.** ADR-0012 §1 and §6 now carry a
+"Deferred (reconciliation note)" marking `AsModel` (`Policy → model.Model`)
+as **not on master**, deferred to **Stage 7 (Brain)**, its natural consumer
+— a lossy secondary adapter with no consumer cannot be validated well
+before one exists. The ADR stays `accepted`; only the note was added. The
+ADR now matches the code on master.
 
 ### Second reducer — consensus (ADR-0013)
 
@@ -395,12 +395,16 @@ Key entries currently:
   engine is the frame; only post-dispatch reducers exist so far (no
   pre-dispatch `Selector` yet). The `Decision` contract is now validated
   by two reducers of different nature.
+- **Post-dispatch policy engine is CONSOLIDATED and coherent**: two
+  reducers on the unchanged `Decision` contract, `cmd/demo-policy` proving
+  the differentiator, ADR-0012/0013 reconciled with master (`AsModel`
+  annotated deferred). A clean stopping point.
 - **Next step is undecided — to be chosen by the operator + copilot next
-  turn.** Candidates: (a) a second reducer (consensus/majority over
-  structured output, or quality-pick); (b) the pre-dispatch `Selector`
-  (privacy + cost routing — needs an Envelope sensitivity model first);
-  (c) the sequential coordinator (sibling of fan-out) that unlocks
-  cost-saving fail-over; (d) reconcile the `AsModel` ADR-consistency
-  follow-up. No code on any of these until the direction is chosen.
+  turn.** Candidates: (a) **the Brain (Stage 7)** — gives `AsModel` and the
+  fail-over their consumer and brings the first live end-to-end skeleton
+  (message in → route → fan-out → policy → reply out); (b) the pre-dispatch
+  `Selector` (privacy + cost routing — needs an Envelope sensitivity model
+  first); (c) the sequential coordinator (sibling of fan-out) for
+  cost-saving fail-over (its own ADR). No code until the direction is chosen.
 - `make quality` green with `-race` is the bar — do not advance a
   phase until the whole tree (not just the new code) is green.

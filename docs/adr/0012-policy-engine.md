@@ -141,6 +141,16 @@ self-declared provider label is *available* but is not the *reliable* identity
 (the fan-out routes by `Model.Name()` instead). `AsModel` is available; it is not
 the reliable path. When in doubt, use `Policy.Apply`.
 
+> **Deferred (reconciliation note, added 2026-06-20).** The `AsModel` adapter
+> described here was NOT implemented in the first cut (ADR-0012, `PriorityReducer`)
+> nor with the consensus reducer (ADR-0013, `ConsensusReducer`). It is deferred to
+> **Stage 7 (Brain)**, its natural consumer: a lossy secondary adapter with no
+> consumer cannot be validated well before one exists. The first cut was scoped to
+> `Policy` + `Decision` + `PriorityReducer`; the first-class path remains
+> `Policy.Apply` over a `*fanout.Result`, and `AsModel` is the secondary lossy
+> convenience, not the primary path. The decisions above are unchanged — this note
+> only reconciles the ADR with the code on master.
+
 ### 2. `Decision` is defined rich on day one; the first reducer fills a subset
 
 ```go
@@ -378,9 +388,16 @@ internal/
     policy.go       Policy interface, Decision/Provenance/Contribution/ProviderCost
     errors.go       ErrNoUsableOutcome
     priority.go     PriorityReducer (the first concrete Policy)
-    model.go        AsModel convenience adapter (lossy, opt-in)
+    model.go        AsModel convenience adapter (lossy, opt-in) — DEFERRED, see note
   brain/            Stage 7 consumer — will import policy
 ```
+
+> **Deferred (reconciliation note, added 2026-06-20).** `model.go` / `AsModel` is
+> NOT on master. It is deferred to **Stage 7 (Brain)**, its natural consumer (see
+> the §1 note). What actually shipped in `internal/policy` is `policy.go`,
+> `errors.go`, `priority.go` (ADR-0012), and `consensus.go` (ADR-0013, adding
+> `ErrNoConsensus` and a shared `rankByOrder` helper). The layout above is the
+> intended end state, not the first cut.
 
 Dependency direction (one way, boundary intact):
 
