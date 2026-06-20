@@ -13,6 +13,7 @@ permissions:
 jobs:
   quality:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -71,6 +72,20 @@ jobs:
           # gate.
           go test -race -coverprofile=coverage.out ./internal/... \
             | tee coverage-test.log
+
+          # --- TEMP DIAGNOSTICS (ci/diagnose-coverage-macos) ---
+          echo "=== DIAG env ==="
+          go version
+          echo "GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) CGO_ENABLED=$(go env CGO_ENABLED)"
+          echo "=== DIAG coverage.out after '-race' run ==="
+          ls -la coverage.out 2>&1 || echo "coverage.out MISSING"
+          echo "lines: $(wc -l < coverage.out 2>/dev/null || echo NA)"
+          echo "head:"; head -3 coverage.out 2>/dev/null || true
+          echo "=== DIAG retry WITHOUT -race ==="
+          go test -coverprofile=coverage-norace.out ./internal/... >/dev/null 2>&1 || true
+          ls -la coverage-norace.out 2>&1 || echo "coverage-norace.out MISSING"
+          echo "norace lines: $(wc -l < coverage-norace.out 2>/dev/null || echo NA)"
+          # --- END TEMP DIAGNOSTICS ---
 
           if ! grep -q '^mode:' coverage.out 2>/dev/null \
              || ! grep -v '^mode:' coverage.out | grep -q '.' 2>/dev/null; then
