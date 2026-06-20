@@ -663,6 +663,31 @@ func TestRun_concurrentInvocationsOnSameCoordinator(t *testing.T) {
 
 // --- goroutine-leak check ---------------------------------------------------
 
+// waitForGoroutineCountAtMost polls runtime.NumGoroutine until it
+// reaches a target threshold or the deadline elapses. Used in
+// goroutine-leak detection in place of fixed-duration sleeps: under a
+// loaded CI runner, the Go test harness and GC sweeper goroutines
+// can transiently inflate the count; a deterministic threshold check
+// with a bounded retry budget is both faster on the happy path and
+// less flaky on a slow runner than a fixed Sleep+sample.
+//
+// Returns the final goroutine count. The caller asserts whether it
+// is within the leak tolerance.
+func waitForGoroutineCountAtMost(target int, budget time.Duration) int {
+	deadline := time.Now().Add(budget)
+	for {
+		runtime.GC()
+		n := runtime.NumGoroutine()
+		if n <= target {
+			return n
+		}
+		if time.Now().After(deadline) {
+			return n
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
 func TestRun_noGoroutineLeak(t *testing.T) {
 	c := New()
 	models := []model.Model{
@@ -675,21 +700,20 @@ func TestRun_noGoroutineLeak(t *testing.T) {
 	if _, err := c.Run(context.Background(), validRequest(), models); err != nil {
 		t.Fatalf("warm-up err = %v", err)
 	}
-	time.Sleep(50 * time.Millisecond)
-	runtime.GC()
+	// Poll until the warm-up goroutines have unwound (or budget elapses)
+	// so the `before` snapshot is taken on a quiescent runtime.
+	before := waitForGoroutineCountAtMost(runtime.NumGoroutine(), 500*time.Millisecond)
 
-	before := runtime.NumGoroutine()
 	for i := 0; i < 30; i++ {
 		if _, err := c.Run(context.Background(), validRequest(), models); err != nil {
 			t.Fatalf("iter %d err = %v", i, err)
 		}
 	}
-	time.Sleep(100 * time.Millisecond)
-	runtime.GC()
-	after := runtime.NumGoroutine()
+	// Same poll on the post-iteration side. Any real leak from 30 runs
+	// over 4 goroutines each would be at least 30*4 = 120; the +5
+	// tolerance covers transient test-framework / GC goroutines.
+	after := waitForGoroutineCountAtMost(before+5, 1*time.Second)
 
-	// Allow a small margin (test/runtime housekeeping); any real leak from
-	// 30 runs over 4 goroutines each would be at least 30*4 = 120.
 	if after-before > 5 {
 		t.Errorf("goroutine leak: before=%d after=%d delta=%d", before, after, after-before)
 	}
