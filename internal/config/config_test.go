@@ -156,6 +156,56 @@ func TestValidate_fieldErrors(t *testing.T) {
 			wantField: "brains[0].models[0].api_key_env",
 		},
 		{
+			name:      "empty channel type",
+			json:      `{"channels":[{"type":"","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "channels[0].type",
+		},
+		{
+			name:      "missing channel mode",
+			json:      `{"channels":[{"type":"telegram","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "channels[0].mode",
+		},
+		{
+			name:      "missing brain name",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains[0].name",
+		},
+		{
+			name:      "duplicate brain name",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]},{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains[1].name",
+		},
+		{
+			name:      "missing sensitivity",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains[0].sensitivity",
+		},
+		{
+			name:      "missing policy kind",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains[0].policy.kind",
+		},
+		{
+			name:      "missing provider",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains[0].models[0].provider",
+		},
+		{
+			name:      "missing locality",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains[0].models[0].locality",
+		},
+		{
+			name:      "no brains",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains",
+		},
+		{
+			name:      "no routes",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[]}`,
+			wantField: "routes",
+		},
+		{
 			name:      "dangling route channel",
 			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"nope","brain":"d"}]}`,
 			wantField: "routes[0].channel",
