@@ -71,6 +71,12 @@ var (
 	// outbound saturation surfaces as an explicit event to the error
 	// hook rather than as silent message loss.
 	ErrChannelSaturated = errors.New("router: channel outbound queue saturated")
+
+	// ErrChannelReceive is returned by RegisterChannel when the channel's
+	// Receive call fails: the router refuses to start an inbound pump over
+	// a stream it could not obtain (ADR-0017 §2). The channel's own error
+	// is wrapped behind it.
+	ErrChannelReceive = errors.New("router: channel Receive failed")
 )
 
 // ErrorKind classifies the failure mode an asynchronous router event
@@ -95,6 +101,16 @@ const (
 	// timeout; the reply was dropped. The wrapped error is
 	// ErrChannelSaturated.
 	ErrKindOutboundSaturated
+
+	// ErrKindInboundDispatch indicates the inbound pump's DispatchInbound
+	// call for a received Envelope failed (e.g. a malformed Envelope, or a
+	// saturated brain). The pump logs and continues — a single bad Envelope
+	// never crashes the process (ADR-0017 §2). Channel names the source
+	// channel; Envelope is the offending Envelope. Failures caused by the
+	// router's own Shutdown are best-effort suppressed by notifyError's
+	// context-cancellation guard (a narrow TOCTOU window means a shutdown
+	// error may still slip through once).
+	ErrKindInboundDispatch
 )
 
 // String returns the short human-readable name of the error kind.
@@ -106,6 +122,8 @@ func (k ErrorKind) String() string {
 		return "send"
 	case ErrKindOutboundSaturated:
 		return "outbound_saturated"
+	case ErrKindInboundDispatch:
+		return "inbound_dispatch"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(k))
 	}
@@ -117,9 +135,9 @@ func (k ErrorKind) String() string {
 // surfaced from a brain worker or a channel worker.
 //
 // Brain is populated when Kind is ErrKindHandle; Channel is populated
-// when Kind is ErrKindSend or ErrKindOutboundSaturated. Envelope is
-// the envelope being processed when the failure occurred. Err is the
-// underlying cause.
+// when Kind is ErrKindSend, ErrKindOutboundSaturated, or
+// ErrKindInboundDispatch. Envelope is the envelope being processed when
+// the failure occurred. Err is the underlying cause.
 type RouterError struct {
 	Kind     ErrorKind
 	Brain    string
