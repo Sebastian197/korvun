@@ -18,6 +18,21 @@ import (
 // Compile-time assertion that *Orchestrator satisfies the Brain seam.
 var _ Brain = (*Orchestrator)(nil)
 
+// Coordinator is the dispatch seam the Orchestrator runs each request through.
+// It abstracts the dispatch SHAPE — parallel fan-out (fanout.Coordinator) vs
+// serial cost-saving fail-over (sequential.Coordinator) — so the binary can
+// mount either from config (ADR-0017 §3). Both concrete coordinators satisfy it
+// unchanged: identical Run signature, both returning *fanout.Result, so the
+// policy layer downstream is agnostic to which shape produced the Result.
+type Coordinator interface {
+	Run(ctx context.Context, req *model.Request, models []model.Model) (*fanout.Result, error)
+}
+
+// Compile-time assertion that the parallel fan-out satisfies the seam. The
+// serial sequential.Coordinator is asserted in the test package, keeping this
+// production package's import graph minimal (it need not import sequential).
+var _ Coordinator = (*fanout.Coordinator)(nil)
+
 // defaultFallback is the reply sent when no usable answer exists and the
 // operator did not configure one (ADR-0014 §3).
 const defaultFallback = "Sorry, no answer is available right now. Please try again."
@@ -38,7 +53,7 @@ const defaultFallback = "Sorry, no answer is available right now. Please try aga
 // models and policy are interfaces so a future SelectingBrain (per-message
 // model/policy selection) can wrap this Orchestrator without changing it.
 type Orchestrator struct {
-	coord        *fanout.Coordinator
+	coord        Coordinator
 	models       []model.Model
 	policy       policy.Policy
 	fallback     string
@@ -73,10 +88,11 @@ func WithLogger(l *slog.Logger) Option {
 	}
 }
 
-// NewOrchestrator constructs a stateless Brain over the given fan-out
-// coordinator, model set, and policy. models should be assembled with
-// WithModelID so each provider receives its own model id (ADR-0014 §2).
-func NewOrchestrator(coord *fanout.Coordinator, models []model.Model, p policy.Policy, opts ...Option) *Orchestrator {
+// NewOrchestrator constructs a stateless Brain over the given dispatch
+// coordinator (fan-out or sequential — ADR-0017 §3), model set, and policy.
+// models should be assembled with WithModelID so each provider receives its own
+// model id (ADR-0014 §2).
+func NewOrchestrator(coord Coordinator, models []model.Model, p policy.Policy, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
 		coord:    coord,
 		models:   models,

@@ -12,8 +12,44 @@ import (
 	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/model/fanout"
+	"github.com/Sebastian197/korvun/internal/model/sequential"
 	"github.com/Sebastian197/korvun/internal/policy"
 )
+
+// Compile-time assertions that BOTH concrete dispatch shapes satisfy the
+// Coordinator seam (ADR-0017 §3). The fan-out assertion lives in production
+// (orchestrator.go); the sequential one lives here so the production package
+// need not import sequential just to prove the seam.
+var (
+	_ Coordinator = (*fanout.Coordinator)(nil)
+	_ Coordinator = (*sequential.Coordinator)(nil)
+)
+
+// TestOrchestrator_Handle_sequentialCoordinator proves the Brain runs through a
+// NON-fanout coordinator via the Coordinator seam: the serial fail-over stops at
+// the first success, so a PriorityReducer reads off that single outcome. This is
+// the product reason §3 widened the field — the binary can mount the cost-saving
+// sequential shape, not only fan-out.
+func TestOrchestrator_Handle_sequentialCoordinator(t *testing.T) {
+	t.Parallel()
+
+	// local fails, cloud succeeds → sequential advances and returns cloud's reply.
+	local := &recordingModel{name: "local", err: model.ErrProviderUnavailable}
+	cloud := &recordingModel{name: "cloud", response: "from-cloud"}
+	models := []model.Model{WithModelID(local, "local"), WithModelID(cloud, "cloud")}
+
+	o := NewOrchestrator(sequential.New(), models,
+		policy.PriorityReducer{Order: []string{"local", "cloud"}},
+		WithLogger(quietLogger()))
+
+	out, err := o.Handle(context.Background(), inboundText("telegram", "c", "hi"))
+	if err != nil {
+		t.Fatalf("Handle through sequential coordinator: %v", err)
+	}
+	if len(out) != 1 || out[0].Parts[0].Content != "from-cloud" {
+		t.Fatalf("want fail-over reply %q, got %+v", "from-cloud", out)
+	}
+}
 
 // quietLogger discards no-answer log output so the suite stays clean.
 func quietLogger() *slog.Logger { return slog.New(slog.DiscardHandler) }
