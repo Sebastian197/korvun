@@ -44,14 +44,16 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | 5       | Policy engine — post-dispatch phase (2 reducers) | closed |
 | **6**   | **Policy engine — pre-dispatch phase (privacy selector + sequential fail-over)** | **closed** |
 | 7       | Brain orchestrator (first live end-to-end path) | closed |
+| **9**   | **Persistence — durable conversation memory (ADR-A interface+MemStore, ADR-B SQLite)** | **closed** |
 | **11**  | **The real assembly — `cmd/korvun` (config + app + main + router pump)** | **closed** |
 
-**Stages 0–7 and 11 are all closed, each with its own stage doc — zero
+**Stages 0–7, 9 and 11 are all closed, each with its own stage doc — zero
 half-open stages.** The policy-engine block (Stages 5+6) plus its orchestration
 (Stage 7) gave the full differentiator; **Stage 11 assembled it into a binary
 that boots**: `korvun` reads one JSON config and wires channel → router → brain
-→ channel into one long-running process. The four demos are deleted — the binary
-replaces them. **CI is green.**
+→ channel into one long-running process. **Stage 9 gave it durable conversation
+memory** that survives restarts (including a graceful shutdown). The four demos
+are deleted — the binary replaces them. **CI is green.**
 
 **Stage 11 is CLOSED** (`docs/stages/STAGE-11.md`, ADR-0017). The `korvun`
 binary boots, loads + validates config, resolves env-only secrets, runs the
@@ -60,13 +62,19 @@ the inbound pump (closing the outbound/inbound asymmetry the demos had hidden),
 and `Orchestrator.coord` is the `brain.Coordinator` interface so the binary can
 mount fan-out OR the cost-saving sequential fail-over from config.
 
-**Stage 9 (persistence) is IN PROGRESS — Phase 1 closed, Phase 2 is next.**
-See "Stage 9 — persistence (in progress)" below for the full you-are-here.
-Recommended order after Stage 9 closes: **12 (observability) → 8 (agents) →
-10 (bus) → 13 (control API) → 14 (no-code builder) → 15 (packaging) → 16
-(hardening + release)**.
+**Stage 9 (persistence) is CLOSED — both phases done.** See
+"Stage 9 — persistence (closed)" below for the summary.
+**Recommended order for what's next (NOT started — user picks): 12 (observability)
+→ 8 (agents) → 10 (bus) → 13 (control API) → 14 (no-code builder) → 15 (packaging)
+→ 16 (hardening + release)**. Each heavyweight phase still earns
+`/office-hours` + `/plan-eng-review` before its ADR.
 
-### Stage 9 — persistence (in progress)
+### Stage 9 — persistence (closed)
+
+> **CLOSED 2026-06-21** (`docs/stages/STAGE-09.md`). Both phases on master.
+> Korvun has durable conversation memory keyed by `channel::conversation.id`
+> that survives restarts, including a graceful shutdown. `go.mod` now has TWO
+> direct dependencies (`go-telegram/bot` + `modernc.org/sqlite v1.53.0`).
 
 Stage 9 is split into two ADRs (the store abstraction vs the durable engine —
 different blast radii, framed by `/office-hours` + `/plan-eng-review`).
@@ -94,28 +102,27 @@ green with `-race`, coverage 94.2%. What landed:
   contiguous); **F2** — the load-bearing test strengthened to assert pair identity
   (`uid == aid`) and positional Seq (`Seq == i`), under `-race -count=10`.
 
-**Phase 2 / ADR-B (durable SQLite store) — NEXT, not started.** The plan:
+**Phase 2 / ADR-0019 (durable SQLite store) — DONE, merged to master in `65549cf`**
+(`feat/sqlite-store`, `--no-ff`). What landed:
 
-- **Driver: `modernc.org/sqlite`** (pure-Go, no cgo — decisive for the Raspberry
-  Pi / ARM cross-compile). It is the FIRST external dependency beyond
-  `go-telegram/bot`, so before adopting: **verify version + concurrency history via
-  Context7** (CLAUDE.md non-negotiable) AND run the four-axis dependency test +
-  write the dependency ADR.
-- **Schema**: a `turns` table by channel/conversation/seq/role/content/ts (`ts`+`seq`
-  already on `Turn`, so retention/compaction is an additive query, not a migration).
-- **Bootstrap**: `CREATE TABLE IF NOT EXISTS` on first boot, open if present; DB
-  path from config with a sensible default (additive over the Stage 11 JSON
-  descriptor).
-- **Concurrency**: the SQLite impl inherits ADR-0018's contract (WAL +
-  `busy_timeout`, or a serialized writer).
-- **Decisions for the ADR**: boot-fatal if a store is configured and fails to open;
-  stateless if no store is configured (same spirit as the `getMe` boot-fatal).
-  Reconsider **crash-consistency** of the user+assistant group (a durable store must
-  not leave orphaned turns after a crash mid-group — `AppendTurns` is the seam to
-  make the group one transaction).
-- Open ADR-B **deliberately with its framing** (`/office-hours` +
-  `/plan-eng-review`) in a fresh session. **Stage 9 closes when ADR-B is done +
-  `STAGE-09.md` is written.**
+- **`internal/conversation/sqlite`** — `SqliteStore` (the `Store` seam, durable),
+  a subpackage so `conversation` stays a pure leaf. Driver
+  **`modernc.org/sqlite v1.53.0`** (pure-Go, no cgo): semver pinned at `go get`,
+  Context7-verified, four-axis test passed on the cross-compile axis.
+- **Schema** `turns(key, seq, role, content, ts)`, natural PK `(key, seq)`
+  `WITHOUT ROWID`, opaque `key`. **Concurrency = single serialized writer**
+  (`MaxOpenConns(1)`): zero `SQLITE_BUSY`/deadlock. `AppendTurns` = one
+  transaction per group → atomic **and** crash-consistent (closes ADR-0018 §5).
+- **Boot-fatal-vs-stateless** reuses ADR-0017 §5: configured store that fails to
+  open → named fatal boot error; no store → stateless. Path from additive
+  top-level `storage.path` config (empty → `<os.UserConfigDir>/korvun/korvun.db`).
+- **Durable through graceful shutdown**: `persistTurns` writes on a
+  cancellation-detached context so the final turn commits despite the router
+  cancelling its context; `App.Shutdown` closes the store only after a clean
+  router drain (no `AppendTurns` races into a closing DB).
+- **`/review` shaped the design**: caught the shutdown-durability gap (the headline
+  fix), a zero-`Timestamp`→~1754 round-trip bug, and a `?`-in-path DSN bug; all
+  fixed. Cross-compile ×6 `CGO_ENABLED=0` green with the driver in the graph.
 
 ### CI status (session 2026-06-20)
 
@@ -242,9 +249,10 @@ docs/
 | `internal/router`                | 96.3%    |
 | **total**                        | **94.3%** |
 
-`make quality` green with `-race`. `go.mod` still has a single
-direct dependency (`github.com/go-telegram/bot v1.21.0`); four
-stages have shipped without adding a Go module.
+`make quality` green with `-race`. (NOTE: this snapshot predates Stage 9 —
+`go.mod` now has TWO direct dependencies, `github.com/go-telegram/bot v1.21.0`
+and `modernc.org/sqlite v1.53.0`, the latter added by ADR-0019 behind the
+`Store` seam after a four-axis test + dependency gate.)
 
 ---
 
@@ -472,9 +480,10 @@ phase shape:
 
 ### Hard constraints carried forward
 
-- `go.mod` stays at one direct dependency unless an ADR justifies a
-  new one with the four-axis test (dep size vs hand-roll cost vs
-  API volatility vs maintenance gain).
+- `go.mod` adds a direct dependency ONLY when an ADR justifies it with the
+  four-axis test (dep size vs hand-roll cost vs API volatility vs maintenance
+  gain) + a dependency gate. Currently TWO: `go-telegram/bot` and
+  `modernc.org/sqlite` (ADR-0019, won the cross-compile axis).
 - API keys env-only, never argv, never logged, never in errors.
   ADR-0010 §3 binds every future cloud adapter.
 - Sentinel grammar preserved end-to-end. `errors.Is` and
@@ -618,18 +627,18 @@ Key entries currently:
   fixed 5s timeout (intermittent `context deadline exceeded` on slow networks)
   and clearer example-config docs that `token_env`/`api_key_env` are env-var
   NAMES, not values.
-- **Stage 9 (persistence) is IN PROGRESS.** Phase 1 / ADR-0018
-  (`internal/conversation` store + `MemStore` + Brain injection) is DONE and merged
-  to master (`057ee73`), `make quality` green, coverage 94.2%. **The next step is
-  Phase 2 / ADR-B (durable SQLite store)** — NOT started, open it deliberately with
-  `/office-hours` + `/plan-eng-review` in a fresh session, including the Context7
-  verification of `modernc.org/sqlite` (first external dep beyond `go-telegram/bot`
-  → four-axis test + dependency ADR). See "Stage 9 — persistence (in progress)"
-  above for the full plan. **Stage 9 closes when ADR-B is done + `STAGE-09.md` is
-  written.** Recommended order after Stage 9: **12 (observability) → 8 (agents) →
-  10 (bus) → 13 (control API) → 14 (no-code builder) → 15 (packaging) → 16
-  (hardening + release)**. Each heavyweight phase still earns `/office-hours` +
-  `/plan-eng-review` before its ADR.
+- **Stage 9 (persistence) is CLOSED** (`docs/stages/STAGE-09.md`). Both phases on
+  master: Phase 1 / ADR-0018 (`internal/conversation` interface + `MemStore` +
+  stateless Brain injection, `057ee73`) and Phase 2 / ADR-0019
+  (`internal/conversation/sqlite` durable `SqliteStore` via pure-Go
+  `modernc.org/sqlite v1.53.0`, single-writer, atomic+crash-consistent group
+  transaction, boot-fatal-vs-stateless, persist on a cancellation-detached context
+  so durable memory survives a graceful shutdown, `65549cf`). `make quality` green
+  with `-race`, cross-compile ×6 `CGO_ENABLED=0` green. **`go.mod` now has TWO
+  direct dependencies.** **No next stage is open — the user picks.** Recommended
+  order: **12 (observability) → 8 (agents) → 10 (bus) → 13 (control API) → 14
+  (no-code builder) → 15 (packaging) → 16 (hardening + release)**. Each heavyweight
+  phase still earns `/office-hours` + `/plan-eng-review` before its ADR.
 - **Parked, intact — do not touch:**
   - `CLAUDE.md` modified in the working tree (the "Design spec first" step), on
     hold, NOT committed. Confirm with the user before any work touching it.

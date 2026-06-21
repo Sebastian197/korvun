@@ -37,8 +37,10 @@ más las piezas de robustez que un producto de verdad necesita.
   `cmd/demo-sequential`.
 
 - **Coste con estado (budget diario por Brain).**
-  - *Qué falta:* una capa de persistencia que el proyecto aún no tiene.
-  - *Por qué se difirió:* bloqueado por un ADR de persistencia.
+  - *Qué falta:* el contador de budget con estado y su política de corte.
+  - *Estado:* el bloqueo de persistencia **se ha levantado** (Stage 9 entregó el
+    seam `Store` durable), pero el budget con estado en sí sigue **fuera de
+    alcance** — es trabajo aditivo sobre la capa de persistencia ya existente.
 
 - **Consenso sobre prosa / equivalencia semántica.**
   - *Qué falta:* consenso semántico real (parafraseo), no solo sobre salida
@@ -79,9 +81,17 @@ más las piezas de robustez que un producto de verdad necesita.
   - *Pendiente futuro:* reañadir CodeQL si el repo pasa a público o se habilita
     GHAS; proteger la rama `master` (ruleset web).
 
-- **Persistencia.** Ninguna etapa hecha tiene capa de storage. La V1 necesita
-  decidir SQLite/Postgres/NATS (ya en el stack previsto) y un ADR de
-  persistencia — es prerequisito de budget, historial y estado de los brains.
+- **✓ HECHO (parcial) — Persistencia.** **Cerrado en Stage 9**
+  (`docs/stages/STAGE-09.md`, ADR-0018 + ADR-0019): la capa de storage existe —
+  el seam `conversation.Store` append-only + atómico, con `MemStore` in-memory y
+  `SqliteStore` durable (SQLite vía `modernc.org/sqlite` Go-puro, escritor único,
+  transacción por grupo crash-consistente, boot-fatal-vs-stateless). Es la
+  **primera dependencia externa** más allá de `go-telegram/bot`, adoptada tras el
+  test de cuatro ejes + gate de dependencia (ganó el eje de cross-compile).
+  - *Qué cubre hoy:* memoria de conversación durable. *Aditivo detrás del mismo
+    seam (no en v1 todavía):* budget con estado, historial analítico/queryable,
+    Postgres/multi-nodo, compactación/retención (el `ts`+`seq` ya viaja en cada
+    fila → query aditiva, no migración).
 
 - **Observabilidad.** Métricas, logs estructurados, trazas. ADR-0008 §4c dejó la
   métrica de saturación (`DroppedCount`) como dependencia dura de Stage 12. La
@@ -169,7 +179,17 @@ más las piezas de robustez que un producto de verdad necesita.
           `token_env` / `api_key_env` esperan el **NOMBRE** de la variable de
           entorno, no el valor del secreto — un operador podría confundirse y
           pegar el secreto en el fichero (rompería ADR-0010).
-- [ ] Persiste estado entre reinicios.
+- [x] Persiste estado entre reinicios. **COMPLETO (Stage 9).**
+      - *Entregado:* memoria de conversación durable keyed por
+        `channel::conversation.id`, que sobrevive a reinicios — incluido un
+        **apagado limpio** (el último turno se persiste sobre un contexto
+        desacoplado de la cancelación del shutdown). ADR-0018 (interfaz
+        append-only + `MemStore`) + ADR-0019 (`SqliteStore` durable con
+        `modernc.org/sqlite` Go-puro, escritor único `MaxOpenConns(1)`,
+        transacción por grupo atómica + crash-consistente).
+      - *Alcance honesto:* persiste **memoria de conversación**, no aún budget
+        con estado, historial analítico, ni Postgres (todos aditivos detrás del
+        mismo seam `Store`, ver Sección 1 y 2).
 - [ ] Es observable (sé qué está pasando dentro sin leer el código).
 - [ ] Lo configura alguien por fichero, sin recompilar.
 - [ ] Lo instala alguien que no soy yo, en su máquina, siguiendo la documentación.
