@@ -93,8 +93,12 @@ func New(opts ...Option) *Router {
 }
 
 // RegisterChannel makes a channel available to the router and starts
-// its outbound worker. The channel's Name() is used as its registry
-// key and must be non-empty.
+// BOTH of its workers: the outbound worker that drains replies to
+// Channel.Send, and the inbound pump that drains Channel.Receive() into
+// DispatchInbound (ADR-0017 §2). The router thus owns inbound and
+// outbound symmetrically. The channel's Name() is used as its registry
+// key and must be non-empty. If Channel.Receive fails, registration
+// fails with ErrChannelReceive and no worker is started.
 func (r *Router) RegisterChannel(ch channel.Channel) error {
 	if ch == nil {
 		return ErrNilChannel
@@ -103,6 +107,16 @@ func (r *Router) RegisterChannel(ch channel.Channel) error {
 	if name == "" {
 		return ErrEmptyChannelName
 	}
+
+	// Obtain the inbound stream before committing any state, so a Receive
+	// failure aborts registration cleanly. r.ctx is the router's lifetime
+	// context; a well-behaved channel may use it, though Stop closing the
+	// stream (ADR-0008) is the primary drain signal the pump relies on.
+	inbound, err := ch.Receive(r.ctx)
+	if err != nil {
+		return fmt.Errorf("%w: channel %q: %w", ErrChannelReceive, name, err)
+	}
+
 	r.mu.Lock()
 	if r.shutdown {
 		r.mu.Unlock()
@@ -114,10 +128,14 @@ func (r *Router) RegisterChannel(ch channel.Channel) error {
 		queue:   make(chan *envelope.Envelope, r.outboundQueueCapacity),
 	}
 	r.channels[name] = cw
-	r.channelWg.Add(1)
+	// Two goroutines under one WaitGroup: the outbound worker and the
+	// inbound pump. Shutdown waits on channelWg, so both join before it
+	// returns.
+	r.channelWg.Add(2)
 	r.mu.Unlock()
 
 	go r.runChannelWorker(cw)
+	go r.runChannelPump(cw, inbound)
 	return nil
 }
 
@@ -303,6 +321,59 @@ func (r *Router) runChannelWorker(cw *channelWorker) {
 		case <-r.ctx.Done():
 			return
 		}
+	}
+}
+
+// runChannelPump drains the channel's inbound Envelope stream and hands
+// each Envelope to DispatchInbound. It is the inbound mirror of
+// runChannelWorker — RegisterChannel starts both — so the router owns
+// inbound and outbound symmetrically (ADR-0017 §2).
+//
+// Exit is dual, matching runChannelWorker:
+//
+//   - The inbound channel is closed (Channel.Stop's clean "no more
+//     updates" signal, ADR-0008): the receive yields ok==false and the
+//     pump returns, after draining whatever was already buffered. The
+//     pump only ever READS this channel, so a close can never make it
+//     send on a closed channel.
+//   - The router context is cancelled (Shutdown): the pump returns at
+//     once.
+//
+// Per the ADR-0008 ordering (channel.Stop BEFORE router.Shutdown), the
+// usual path is the first: Stop closes the stream, the pump drains and
+// exits, then Shutdown joins it via channelWg. If Shutdown races ahead,
+// the second path fires; either way the pump joins before Shutdown
+// returns, with no goroutine left behind.
+func (r *Router) runChannelPump(cw *channelWorker, inbound <-chan *envelope.Envelope) {
+	defer r.channelWg.Done()
+	for {
+		select {
+		case env, ok := <-inbound:
+			if !ok {
+				return
+			}
+			r.dispatchFromPump(cw.name, env)
+		case <-r.ctx.Done():
+			return
+		}
+	}
+}
+
+// dispatchFromPump enqueues one received Envelope via DispatchInbound.
+// A failure is log-and-continue: a single malformed Envelope (or a
+// transiently saturated brain) must never crash the long-running
+// process. The failure is surfaced to the async error hook as
+// ErrKindInboundDispatch; errors that are an artefact of the router's
+// own Shutdown are suppressed by notifyError (its ctx-cancellation
+// guard), exactly as on the outbound path.
+func (r *Router) dispatchFromPump(channelName string, env *envelope.Envelope) {
+	if err := r.DispatchInbound(r.ctx, env); err != nil {
+		r.notifyError(RouterError{
+			Kind:     ErrKindInboundDispatch,
+			Channel:  channelName,
+			Envelope: env,
+			Err:      err,
+		})
 	}
 }
 
