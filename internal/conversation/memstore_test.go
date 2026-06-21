@@ -5,6 +5,8 @@ package conversation_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -220,15 +222,18 @@ func TestMemStore_ConcurrentAppendTurnsSameKey(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(n)
 	for i := 0; i < n; i++ {
-		go func() {
+		go func(i int) {
 			defer wg.Done()
+			// Unique content per message so the assertion can prove pair
+			// IDENTITY (the assistant belongs to the same message as the user),
+			// not merely role-alternation: "u7" must pair with "a7".
 			if _, err := s.AppendTurns(ctx, key,
-				conversation.Turn{Role: conversation.RoleUser, Content: "u"},
-				conversation.Turn{Role: conversation.RoleAssistant, Content: "a"},
+				conversation.Turn{Role: conversation.RoleUser, Content: fmt.Sprintf("u%d", i)},
+				conversation.Turn{Role: conversation.RoleAssistant, Content: fmt.Sprintf("a%d", i)},
 			); err != nil {
 				t.Errorf("AppendTurns: %v", err)
 			}
-		}()
+		}(i)
 	}
 	wg.Wait()
 
@@ -239,7 +244,10 @@ func TestMemStore_ConcurrentAppendTurnsSameKey(t *testing.T) {
 	if len(turns) != 2*n {
 		t.Fatalf("got %d turns, want %d", len(turns), 2*n)
 	}
-	// Every pair is contiguous and ordered: even index = user, odd = assistant.
+	// Every pair is contiguous, ordered, and intact: even index = user, odd =
+	// assistant, both from the SAME message (matching numeric suffix), and Seq
+	// positional. A per-turn-lock impl would split a pair and fail this.
+	seenMsg := make(map[string]bool, n)
 	for j := 0; j < n; j++ {
 		u, a := turns[2*j], turns[2*j+1]
 		if u.Role != conversation.RoleUser || a.Role != conversation.RoleAssistant {
@@ -248,5 +256,17 @@ func TestMemStore_ConcurrentAppendTurnsSameKey(t *testing.T) {
 		if u.Seq != 2*j || a.Seq != 2*j+1 {
 			t.Fatalf("pair at %d Seqs = %d,%d, want %d,%d", 2*j, u.Seq, a.Seq, 2*j, 2*j+1)
 		}
+		uid := strings.TrimPrefix(u.Content, "u")
+		aid := strings.TrimPrefix(a.Content, "a")
+		if uid != aid {
+			t.Fatalf("pair at %d crossed messages: user %q with assistant %q", 2*j, u.Content, a.Content)
+		}
+		if seenMsg[uid] {
+			t.Fatalf("message %q persisted twice", uid)
+		}
+		seenMsg[uid] = true
+	}
+	if len(seenMsg) != n {
+		t.Fatalf("saw %d distinct messages, want %d", len(seenMsg), n)
 	}
 }

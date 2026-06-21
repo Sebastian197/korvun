@@ -184,10 +184,10 @@ func (o *Orchestrator) Handle(ctx context.Context, env *envelope.Envelope) ([]*e
 	}
 
 	content := dec.Response.Message.Content
-	// Persist on the happy path only: two independent Appends, user then
-	// assistant (ADR-0018 §5; pair atomicity is reconsidered in ADR-B). key is
-	// the empty Key when no store is configured or no conversation id is present,
-	// in which case persistTurns is a no-op.
+	// Persist on the happy path only: the user+assistant pair as one atomic group
+	// via AppendTurns, so the pair stays contiguous under concurrency (ADR-0018
+	// reconciliation note). key is the empty Key when no store is configured or no
+	// conversation id is present, in which case persistTurns is a no-op.
 	o.persistTurns(ctx, key, latestText(env.Parts), content)
 	return decisionToEnvelopes(content, env), nil
 }
