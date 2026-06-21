@@ -27,6 +27,10 @@ go.work.sum
 # env file
 .env
 
+# Local (non-committed) config overrides — may contain secrets
+*.local.json
+configs/*.local.json
+
 # Editor/IDE
 .idea/
 # .vscode/
