@@ -19,14 +19,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/channel/telegram"
 	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/conversation"
+	"github.com/Sebastian197/korvun/internal/conversation/sqlite"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/model/fanout"
 	"github.com/Sebastian197/korvun/internal/model/groq"
@@ -55,6 +59,11 @@ type App struct {
 	router   *router.Router
 	channels []Channel
 	logger   *slog.Logger
+	// store is the durable conversation store's closer, owned so Shutdown can
+	// close it LAST (after the router drains). nil when no storage is configured
+	// (stateless). Held as io.Closer, set only from a non-nil concrete store, so
+	// it is never a typed-nil interface (ADR-0019 §6).
+	store io.Closer
 }
 
 // builder holds resolved construction settings, including the channel factory
@@ -63,6 +72,9 @@ type builder struct {
 	logger          *slog.Logger
 	perModelTimeout time.Duration
 	newChannel      func(b *builder, cc config.ChannelConfig) (Channel, error)
+	// store is the shared conversation memory injected into every brain. A true
+	// nil interface (no storage configured) leaves each Orchestrator stateless.
+	store conversation.Store
 }
 
 // Option configures Build.
@@ -99,6 +111,17 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		o(b)
 	}
 
+	// Open the durable store ONCE, before wiring the brains, and share it across
+	// every brain (the Key namespaces by channel::conversation, ADR-0019 §6). A
+	// configured store that fails to open is a fatal boot error (ADR-0017 §5).
+	store, err := openStore(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if store != nil {
+		b.store = store // concrete non-nil -> real conversation.Store, never typed-nil
+	}
+
 	r := router.New(router.WithErrorHandler(func(re router.RouterError) {
 		b.logger.Error("router error",
 			"kind", re.Kind.String(), "channel", re.Channel, "brain", re.Brain, "error", re.Err)
@@ -106,12 +129,42 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 
 	channels, err := b.wire(r, cfg)
 	if err != nil {
-		// Clean up any brain/channel workers the partial wiring started, so a
-		// failed Build leaks nothing.
+		// Clean up any brain/channel workers the partial wiring started, plus the
+		// store we just opened, so a failed Build leaks nothing.
 		_ = r.Shutdown(context.Background())
+		if store != nil {
+			_ = store.Close()
+		}
 		return nil, err
 	}
-	return &App{router: r, channels: channels, logger: b.logger}, nil
+	app := &App{router: r, channels: channels, logger: b.logger}
+	if store != nil {
+		app.store = store // owned closer, set only from a non-nil concrete store
+	}
+	return app, nil
+}
+
+// openStore opens the durable conversation store when storage is configured, or
+// returns (nil, nil) for the stateless case (no storage block). An empty Path
+// resolves to <os.UserConfigDir>/korvun/korvun.db. A configured-but-unopenable
+// store returns a named error (the boot-fatal path, ADR-0019 §5).
+func openStore(cfg *config.Config) (*sqlite.SqliteStore, error) {
+	if cfg.Storage == nil {
+		return nil, nil
+	}
+	path := cfg.Storage.Path
+	if path == "" {
+		dir, err := os.UserConfigDir()
+		if err != nil {
+			return nil, fmt.Errorf("app: resolve default storage dir: %w", err)
+		}
+		path = filepath.Join(dir, "korvun", "korvun.db")
+	}
+	s, err := sqlite.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("app: open conversation store: %w", err)
+	}
+	return s, nil
 }
 
 // wire registers brains, builds and registers channels, and binds routes.
@@ -167,7 +220,13 @@ func (b *builder) buildBrain(bc config.BrainConfig) (*brain.Orchestrator, error)
 		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 	}
 	coord := buildCoordinator(bc.Dispatch, b.perModelTimeout)
-	return brain.NewOrchestrator(coord, selected, pol, brain.WithLogger(b.logger)), nil
+	orchOpts := []brain.Option{brain.WithLogger(b.logger)}
+	if b.store != nil {
+		// Shared durable memory; recentTurns 0 => the Orchestrator default
+		// (ADR-0019: config stays minimal, history depth is a Brain concern).
+		orchOpts = append(orchOpts, brain.WithConversationStore(b.store, 0))
+	}
+	return brain.NewOrchestrator(coord, selected, pol, orchOpts...), nil
 }
 
 // buildCatalog constructs one CatalogEntry per model, tagging each with its
@@ -276,8 +335,29 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) Shutdown(ctx context.Context) error {
 	var errs []error
 	errs = append(errs, a.stopChannels(ctx, a.channels)...)
-	if err := a.router.Shutdown(ctx); err != nil {
-		errs = append(errs, fmt.Errorf("app: router shutdown: %w", err))
+	routerErr := a.router.Shutdown(ctx)
+	if routerErr != nil {
+		errs = append(errs, fmt.Errorf("app: router shutdown: %w", routerErr))
+	}
+	// Close the store only once the router has FULLY drained (routerErr == nil).
+	// Brain workers persist the final turn on a cancellation-detached context
+	// (brain.persistTurns, so the last turn survives a graceful shutdown —
+	// ADR-0019 §6), which means an AppendTurns can still be in flight after the
+	// router context is cancelled. router.Shutdown returns nil only after every
+	// brain worker has returned, so gating Close on that guarantees no AppendTurns
+	// races into a closing DB. If router.Shutdown instead timed out on ctx, a
+	// worker may still be mid-persist; leave the store open and let process exit
+	// reclaim the handle (SQLite WAL is crash-consistent, so no corruption) rather
+	// than race Close against the in-flight write.
+	if a.store != nil {
+		switch {
+		case routerErr != nil:
+			a.logger.Warn("conversation store left open: router did not drain within the shutdown deadline")
+		default:
+			if err := a.store.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("app: close conversation store: %w", err))
+			}
+		}
 	}
 	return errors.Join(errs...)
 }

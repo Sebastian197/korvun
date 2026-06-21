@@ -24,11 +24,25 @@ import (
 )
 
 // Config is the root deployment descriptor: the channels to run, the brains to
-// orchestrate, and the routes binding the two.
+// orchestrate, the routes binding the two, and optional durable storage.
 type Config struct {
 	Channels []ChannelConfig `json:"channels"`
 	Brains   []BrainConfig   `json:"brains"`
 	Routes   []RouteConfig   `json:"routes"`
+	// Storage is the optional durable conversation store (ADR-0019). It is a
+	// pointer so absence is distinguishable from presence: nil (block omitted)
+	// means run stateless (Stage 11 / ADR-0018 behavior, unchanged); a present
+	// block means open a durable store at boot. An empty Path defaults to an
+	// OS-appropriate data dir, resolved in internal/app.
+	Storage *StorageConfig `json:"storage,omitempty"`
+}
+
+// StorageConfig declares the durable conversation store. Path is the SQLite
+// database file; an empty Path resolves to <os.UserConfigDir>/korvun/korvun.db
+// at boot (internal/app). The block is additive over the Stage 11 schema:
+// existing configs without it keep their exact stateless behavior.
+type StorageConfig struct {
+	Path string `json:"path"`
 }
 
 // ChannelConfig declares one messaging channel. Type selects the adapter
@@ -105,6 +119,10 @@ func Load(path string) (*Config, error) {
 // structure and enum membership only; semantic wiring (resolving secrets,
 // reaching providers) happens in internal/app.
 func (c *Config) Validate() error {
+	// Note: Storage is intentionally NOT validated here. storage.path is resolved
+	// and checked at boot (internal/app openStore, which returns a named fatal
+	// error) because resolving the default path and verifying writability depend
+	// on the OS, not on the static schema (ADR-0019 §5).
 	channelNames, err := c.validateChannels()
 	if err != nil {
 		return err

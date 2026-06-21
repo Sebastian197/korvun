@@ -43,6 +43,10 @@ const defaultFallback = "Sorry, no answer is available right now. Please try aga
 // conversation store is configured but the caller passes a non-positive count.
 const defaultHistoryTurns = 10
 
+// persistTimeout bounds the cancellation-detached write in persistTurns: it must
+// outlast a slow Append yet never let a hung store stall a graceful shutdown.
+const persistTimeout = 5 * time.Second
+
 // Orchestrator is the stateless Brain (ADR-0014). It translates an inbound
 // Envelope to a request, fans the request out to a fixed set of models,
 // applies a fixed policy to the outcomes, and translates the decision back to
@@ -225,6 +229,16 @@ func (o *Orchestrator) loadHistory(ctx context.Context, env *envelope.Envelope) 
 // conversation id). Empty-content turns are skipped: an empty turn would fail
 // model.ValidateRequest when reloaded into a later request. A store error is
 // logged, not propagated, so a memory write never breaks the reply path.
+//
+// The write runs on a context DETACHED from ctx (context.WithoutCancel) and
+// bounded by persistTimeout. The router cancels its context on shutdown
+// (router.Shutdown → r.cancel()); without detaching, an AppendTurns in flight at
+// a graceful shutdown would run on the cancelled context and roll back — silently
+// losing the very turn the user just got a reply to, the most visible thing a
+// "durable memory" store could drop (ADR-0019 §6). Detaching lets that final
+// write commit; the timeout caps a hung store so the write cannot, in turn, stall
+// the shutdown. Benign for MemStore (no transaction to abort); load-bearing for
+// the durable SqliteStore.
 func (o *Orchestrator) persistTurns(ctx context.Context, key conversation.Key, userText, assistantText string) {
 	if o.store == nil || key == "" {
 		return
@@ -240,7 +254,9 @@ func (o *Orchestrator) persistTurns(ctx context.Context, key conversation.Key, u
 	if len(turns) == 0 {
 		return
 	}
-	if _, err := o.store.AppendTurns(ctx, key, turns...); err != nil {
+	persistCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), persistTimeout)
+	defer cancel()
+	if _, err := o.store.AppendTurns(persistCtx, key, turns...); err != nil {
 		o.logger.Warn("brain: append turns failed", "key", string(key), "cause", err)
 	}
 }
