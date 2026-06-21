@@ -299,8 +299,9 @@ func ConversationKey(env *envelope.Envelope) string {
 // ---------- internal workers ----------------------------------------------
 
 // runBrainWorker drains its brain's inbound queue, invoking
-// handleAndReply for each envelope. The worker exits on either queue
-// close (Shutdown closed it) or router context cancellation.
+// handleAndReply for each envelope. The worker exits on router context
+// cancellation (Shutdown calls r.cancel()); Shutdown does not close the
+// queue, so the ok==false guard below is defensive only.
 func (r *Router) runBrainWorker(bw *brainWorker) {
 	defer r.brainWg.Done()
 	for {
