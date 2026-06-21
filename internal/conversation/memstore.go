@@ -29,16 +29,36 @@ func NewMemStore() *MemStore {
 	return &MemStore{m: make(map[Key][]Turn)}
 }
 
-// Append atomically appends turn to key under the lock, assigning Seq as the
-// next index in that key's history, and returns the stored Turn. Concurrent
-// Appends to the same key are serialized by mu, so no write is lost and Seq
-// values stay contiguous (ADR-0018 §1, §7).
-func (s *MemStore) Append(_ context.Context, key Key, turn Turn) (Turn, error) {
+// Append atomically appends a single turn to key, assigning its Seq. It
+// delegates to AppendTurns so the Seq-assignment logic lives in one place.
+func (s *MemStore) Append(ctx context.Context, key Key, turn Turn) (Turn, error) {
+	out, err := s.AppendTurns(ctx, key, turn)
+	if err != nil {
+		return Turn{}, err
+	}
+	return out[0], nil
+}
+
+// AppendTurns atomically appends a group of turns to key under a single lock,
+// assigning consecutive Seq values (the next indices in that key's history) and
+// returning the stored turns. Holding the lock across the whole group is what
+// keeps the group contiguous: two concurrent AppendTurns to the same key cannot
+// interleave their turns, so a user+assistant pair never gets split (ADR-0018
+// §1, §7; reconciliation note). An empty group is a no-op.
+func (s *MemStore) AppendTurns(_ context.Context, key Key, turns ...Turn) ([]Turn, error) {
+	if len(turns) == 0 {
+		return nil, nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	turn.Seq = len(s.m[key])
-	s.m[key] = append(s.m[key], turn)
-	return turn, nil
+	out := make([]Turn, len(turns))
+	base := len(s.m[key])
+	for i, t := range turns {
+		t.Seq = base + i
+		s.m[key] = append(s.m[key], t)
+		out[i] = t
+	}
+	return out, nil
 }
 
 // LoadRecent returns a copy of up to the last n turns for key, oldest first, so

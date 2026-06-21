@@ -107,6 +107,15 @@ func WithLogger(l *slog.Logger) Option {
 // ADR-0018 §5). A nil store is ignored, leaving the Brain stateless (Stage 11
 // behavior). The store is consulted only for envelopes that carry a conversation
 // id; without one, the Brain answers statelessly rather than dropping the reply.
+//
+// Concurrency: the user+assistant pair of a reply is persisted atomically via
+// Store.AppendTurns, so the pair stays contiguous even when two messages of the
+// same conversation are handled concurrently (brainWorkers > 1). One assumption
+// remains and is accepted for context memory: the order BETWEEN concurrent
+// messages of the same conversation is not guaranteed without per-conversation
+// worker affinity, and two concurrent messages each load history without the
+// other's turn. This is fine for best-effort context; revisit if strict
+// per-conversation ordering is needed (would require worker affinity).
 func WithConversationStore(store conversation.Store, recentTurns int) Option {
 	return func(o *Orchestrator) {
 		if store == nil {
@@ -207,30 +216,32 @@ func (o *Orchestrator) loadHistory(ctx context.Context, env *envelope.Envelope) 
 	return key, history
 }
 
-// persistTurns appends the user turn then the assistant turn for a successful
-// reply. It is a no-op when key is empty (no store / no conversation id).
+// persistTurns appends the user turn and the assistant turn for a successful
+// reply as ONE atomic group via AppendTurns, so the pair stays contiguous in the
+// history even when two messages of the same conversation are handled
+// concurrently (brainWorkers > 1). Two separate Appends would let the pairs
+// interleave into a non-alternating, provider-rejected history (ADR-0018
+// reconciliation note). It is a no-op when key is empty (no store / no
+// conversation id). Empty-content turns are skipped: an empty turn would fail
+// model.ValidateRequest when reloaded into a later request. A store error is
+// logged, not propagated, so a memory write never breaks the reply path.
 func (o *Orchestrator) persistTurns(ctx context.Context, key conversation.Key, userText, assistantText string) {
 	if o.store == nil || key == "" {
 		return
 	}
-	o.appendTurn(ctx, key, conversation.RoleUser, userText)
-	o.appendTurn(ctx, key, conversation.RoleAssistant, assistantText)
-}
-
-// appendTurn persists one turn, logging (not propagating) a store error so a
-// memory write never breaks the reply path. Empty content is skipped: an empty
-// turn would fail model.ValidateRequest when reloaded into a later request.
-func (o *Orchestrator) appendTurn(ctx context.Context, key conversation.Key, role conversation.Role, content string) {
-	if content == "" {
+	now := time.Now()
+	turns := make([]conversation.Turn, 0, 2)
+	if userText != "" {
+		turns = append(turns, conversation.Turn{Role: conversation.RoleUser, Content: userText, Timestamp: now})
+	}
+	if assistantText != "" {
+		turns = append(turns, conversation.Turn{Role: conversation.RoleAssistant, Content: assistantText, Timestamp: now})
+	}
+	if len(turns) == 0 {
 		return
 	}
-	if _, err := o.store.Append(ctx, key, conversation.Turn{
-		Role:      role,
-		Content:   content,
-		Timestamp: time.Now(),
-	}); err != nil {
-		o.logger.Warn("brain: append turn failed",
-			"key", string(key), "role", string(role), "cause", err)
+	if _, err := o.store.AppendTurns(ctx, key, turns...); err != nil {
+		o.logger.Warn("brain: append turns failed", "key", string(key), "cause", err)
 	}
 }
 

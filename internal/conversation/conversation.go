@@ -52,6 +52,12 @@ const (
 // from day one (even though ADR-A uses neither for retention) so a future
 // compaction / retention query is an additive read, not a schema migration. Seq
 // is assigned by the Store on Append; callers leave it zero.
+//
+// INVARIANT: Turn is value-only — every field is a value type (no pointer, slice,
+// or map). MemStore.LoadRecent relies on this: it returns turns via a shallow
+// copy, which fully detaches the caller from stored state only because there is
+// nothing to share by reference. Do NOT add a pointer/slice/map field without
+// making LoadRecent deep-copy it, or callers could mutate stored history.
 type Turn struct {
 	Role      Role
 	Content   string
@@ -75,10 +81,23 @@ type Store interface {
 	LoadRecent(ctx context.Context, key Key, n int) ([]Turn, error)
 
 	// Append atomically adds one turn to key and returns it with its
-	// store-assigned Seq filled in (callers never set Seq). It is the only
-	// writer path; the Brain never read-modify-writes history. Concurrent
-	// Appends to the same key are serialized by the implementation.
+	// store-assigned Seq filled in (callers never set Seq). Concurrent Appends
+	// to the same key are serialized by the implementation. For a group of turns
+	// that must stay together (a user+assistant pair), use AppendTurns — a single
+	// Append per turn does NOT keep the pair contiguous under concurrency.
 	Append(ctx context.Context, key Key, turn Turn) (Turn, error)
+
+	// AppendTurns atomically appends a group of turns to key under a single
+	// critical section, assigning them consecutive Seq values (the next indices
+	// in the key's history) and returning them Seq-filled. It is the only way to
+	// guarantee a group stays contiguous and ordered: when two messages of the
+	// same conversation are persisted concurrently (the router does not serialize
+	// a conversation — N workers, no per-conversation affinity), their groups do
+	// not interleave, so a user+assistant pair never ends up split by another
+	// message's turn (which would yield a non-alternating, provider-rejected
+	// history). The order BETWEEN concurrent groups may vary; each group stays
+	// intact. An empty group is a no-op returning (nil, nil).
+	AppendTurns(ctx context.Context, key Key, turns ...Turn) ([]Turn, error)
 }
 
 // KeyFromEnvelope derives the canonical conversation Key from an inbound
