@@ -7,6 +7,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -415,5 +417,100 @@ func TestRunShutdown_lifecycle(t *testing.T) {
 	}
 	if !fake.isStopped() {
 		t.Error("Shutdown did not stop the channel")
+	}
+}
+
+// --- Stage 9 ADR-B: durable conversation store wiring (ADR-0019 §6) ----------
+
+// TestBuild_noStorage_stateless confirms the default: with no storage block, no
+// store is opened and the app owns no closer — exact Stage 11 / ADR-0018 behavior.
+func TestBuild_noStorage_stateless(t *testing.T) {
+	app, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = app.Shutdown(ctx)
+	})
+	if app.store != nil {
+		t.Fatalf("app.store = %v, want nil (no storage configured)", app.store)
+	}
+}
+
+// TestBuild_storage_opensSharedStoreAndOwnsCloser confirms a configured store is
+// opened once, the app owns its closer, the DB file is created, and Shutdown
+// closes it cleanly. Two brains share the one store (opened before the brain loop).
+func TestBuild_storage_opensSharedStoreAndOwnsCloser(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "korvun.db")
+	cfg := &config.Config{
+		Channels: []config.ChannelConfig{telegramChannel()},
+		Brains: []config.BrainConfig{
+			{Name: "a", Sensitivity: "public", Policy: config.PolicyConfig{Kind: "priority"},
+				Models: []config.ModelConfig{{Provider: "ollama", ModelID: "m", Locality: "local"}}},
+			{Name: "b", Sensitivity: "public", Policy: config.PolicyConfig{Kind: "priority"},
+				Models: []config.ModelConfig{{Provider: "ollama", ModelID: "m", Locality: "local"}}},
+		},
+		Routes:  []config.RouteConfig{{Channel: "telegram", Brain: "a"}},
+		Storage: &config.StorageConfig{Path: dbPath},
+	}
+	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	if err != nil {
+		t.Fatalf("Build with storage: %v", err)
+	}
+	if app.store == nil {
+		t.Fatal("app.store is nil, want the opened store's closer")
+	}
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Fatalf("DB file was not created at %q: %v", dbPath, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := app.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown closing the store: %v", err)
+	}
+}
+
+// TestBuild_storage_openFailureIsFatal confirms a configured-but-unopenable store
+// fails Build loudly (the boot-fatal path, ADR-0019 §5): a path whose parent is a
+// regular file cannot be created.
+func TestBuild_storage_openFailureIsFatal(t *testing.T) {
+	dir := t.TempDir()
+	blocker := filepath.Join(dir, "afile")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	cfg := cfgWith(ollamaBrain())
+	cfg.Storage = &config.StorageConfig{Path: filepath.Join(blocker, "korvun.db")}
+	_, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	if err == nil {
+		t.Fatal("Build with an unopenable store returned nil error, want a fatal boot error")
+	}
+	if !strings.Contains(err.Error(), "conversation store") {
+		t.Errorf("error %q should name the conversation store open step", err.Error())
+	}
+}
+
+// TestBuild_storage_emptyPathUsesDefault confirms an empty Path resolves to the
+// OS config dir default. HOME (darwin) and XDG_CONFIG_HOME (linux) are redirected
+// to a temp dir so the test never writes to the real user config dir.
+func TestBuild_storage_emptyPathUsesDefault(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)            // darwin: <HOME>/Library/Application Support
+	t.Setenv("XDG_CONFIG_HOME", tmp) // linux: <XDG_CONFIG_HOME>
+	cfg := cfgWith(ollamaBrain())
+	cfg.Storage = &config.StorageConfig{} // present, empty path → default
+	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	if err != nil {
+		t.Fatalf("Build with default storage path: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = app.Shutdown(ctx)
+	})
+	if app.store == nil {
+		t.Fatal("app.store is nil, want the default-path store")
 	}
 }
