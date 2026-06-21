@@ -335,19 +335,28 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) Shutdown(ctx context.Context) error {
 	var errs []error
 	errs = append(errs, a.stopChannels(ctx, a.channels)...)
-	if err := a.router.Shutdown(ctx); err != nil {
-		errs = append(errs, fmt.Errorf("app: router shutdown: %w", err))
+	routerErr := a.router.Shutdown(ctx)
+	if routerErr != nil {
+		errs = append(errs, fmt.Errorf("app: router shutdown: %w", routerErr))
 	}
-	// Close the store LAST (after router.Shutdown) so a brain worker can never
-	// write to a closed DB (ADR-0019 §6). NOTE: this ordering prevents the
-	// write-to-closed-DB race; it does NOT guarantee the final in-flight turn was
-	// persisted — router.Shutdown cancels the router context, so an AppendTurns
-	// in flight at shutdown is rolled back (its error is logged, not surfaced).
-	// Whether the last turn must survive a graceful shutdown is an open decision
-	// (would need a cancellation-detached persist context); see review notes.
+	// Close the store only once the router has FULLY drained (routerErr == nil).
+	// Brain workers persist the final turn on a cancellation-detached context
+	// (brain.persistTurns, so the last turn survives a graceful shutdown —
+	// ADR-0019 §6), which means an AppendTurns can still be in flight after the
+	// router context is cancelled. router.Shutdown returns nil only after every
+	// brain worker has returned, so gating Close on that guarantees no AppendTurns
+	// races into a closing DB. If router.Shutdown instead timed out on ctx, a
+	// worker may still be mid-persist; leave the store open and let process exit
+	// reclaim the handle (SQLite WAL is crash-consistent, so no corruption) rather
+	// than race Close against the in-flight write.
 	if a.store != nil {
-		if err := a.store.Close(); err != nil {
-			errs = append(errs, fmt.Errorf("app: close conversation store: %w", err))
+		switch {
+		case routerErr != nil:
+			a.logger.Warn("conversation store left open: router did not drain within the shutdown deadline")
+		default:
+			if err := a.store.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("app: close conversation store: %w", err))
+			}
 		}
 	}
 	return errors.Join(errs...)

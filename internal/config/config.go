@@ -119,6 +119,10 @@ func Load(path string) (*Config, error) {
 // structure and enum membership only; semantic wiring (resolving secrets,
 // reaching providers) happens in internal/app.
 func (c *Config) Validate() error {
+	// Note: Storage is intentionally NOT validated here. storage.path is resolved
+	// and checked at boot (internal/app openStore, which returns a named fatal
+	// error) because resolving the default path and verifying writability depend
+	// on the OS, not on the static schema (ADR-0019 §5).
 	channelNames, err := c.validateChannels()
 	if err != nil {
 		return err

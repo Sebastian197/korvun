@@ -472,6 +472,28 @@ func TestBuild_storage_opensSharedStoreAndOwnsCloser(t *testing.T) {
 	}
 }
 
+// recordingCloser counts Close calls for the shutdown-ordering tests.
+type recordingCloser struct{ closed int }
+
+func (c *recordingCloser) Close() error { c.closed++; return nil }
+
+// TestShutdown_closesStoreAfterCleanDrain asserts the store is closed exactly
+// once when the router drains cleanly (routerErr == nil) — the gated Close path
+// (ADR-0019 §6). An idle router.New() drains immediately, so Shutdown reaches the
+// store Close.
+func TestShutdown_closesStoreAfterCleanDrain(t *testing.T) {
+	rc := &recordingCloser{}
+	a := &App{router: router.New(), logger: slog.Default(), store: rc}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := a.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if rc.closed != 1 {
+		t.Fatalf("store Close called %d times, want 1 (clean drain must close it)", rc.closed)
+	}
+}
+
 // TestBuild_storage_openFailureIsFatal confirms a configured-but-unopenable store
 // fails Build loudly (the boot-fatal path, ADR-0019 §5): a path whose parent is a
 // regular file cannot be created.
