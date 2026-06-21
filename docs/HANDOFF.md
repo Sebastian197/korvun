@@ -486,13 +486,21 @@ fallback reply with addressing preserved.
 The single-binary wiring — channel → router → brain → channel inside a real
 `cmd/korvun` `main.go` — **shipped in Stage 11** (`docs/stages/STAGE-11.md`,
 ADR-0017). `korvun` reads `configs/korvun.example.json`-shaped config and runs
-the whole path. **Live-verified:** boot, config load+validate, env-secret
-resolution, and the `getMe` boot health-check (a bogus token fails loud with
-`unauthorized`). **NOT live-verified in the build environment:** the real
-message round-trip (no valid bot token / Ollama / Groq key here) — proven only
-by package tests. V1 criterion 1 is therefore **partial** in `ROADMAP-V1.md`:
-the binary boots and validates end to end; a live message in/out still needs an
-operator with real credentials + Ollama.
+the whole path. **V1 criterion 1 is COMPLETE — verified live on 2026-06-21:**
+the operator booted `cmd/korvun` with a real config (Telegram polling + brain
+with Ollama `llama3.2:1b` local + Groq `llama-3.3-70b-versatile` cloud +
+`PriorityReducer`), sent "hola" to the bot over Telegram, and got the model's
+reply back in the chat — a full round-trip (Telegram → fan-out → policy →
+reply) through the real binary, not a demo. The fallback contract (ADR-0014 §3)
+was also observed live (models failing before the `model_id` was fixed), then
+the happy path. Boot, config validate, env-secret resolution, and the `getMe`
+boot health-check were verified earlier in the build environment.
+
+Two live findings parked for hardening (Stage 16), recorded in `ROADMAP-V1.md`:
+(a) `getMe`'s fixed 5s timeout (inside `bot.New`) gave intermittent
+`context deadline exceeded` on slow networks — make it configurable / retried;
+(b) make the example config unambiguous that `token_env` / `api_key_env` are
+env-var NAMES, not secret values.
 
 ---
 
@@ -551,11 +559,13 @@ Key entries currently:
   deleted — the binary replaces them. ADR-0017 §4 carries a reconciliation note:
   the `getMe` token check already lives in `bot.New` (verified via Context7), so
   the gap is closed by construction, not a new call.
-- **V1 criterion 1 is PARTIAL.** Live-verified: boot + config load/validate +
-  env-secret resolution + `getMe` boot health-check (bogus token → loud
-  `unauthorized` fatal). NOT verified in the build environment: the live message
-  round-trip (no real bot token / Ollama / Groq key) — proven only by package
-  tests. An operator with credentials + Ollama closes the criterion fully.
+- **V1 criterion 1 is COMPLETE — verified live (2026-06-21).** The operator ran
+  `cmd/korvun` with a real config and had a full Telegram conversation with the
+  models (round-trip Telegram → fan-out → policy → reply, plus the ADR-0014 §3
+  fallback observed). Two findings parked for hardening (Stage 16): the `getMe`
+  fixed 5s timeout (intermittent `context deadline exceeded` on slow networks)
+  and clearer example-config docs that `token_env`/`api_key_env` are env-var
+  NAMES, not values.
 - **The next big step is Stage 9 (persistence).** Recommended order:
   **9 (persistence) → 12 (observability) → 8 (agents) → 10 (bus) → 13 (control
   API) → 14 (no-code builder) → 15 (packaging) → 16 (hardening + release)**.

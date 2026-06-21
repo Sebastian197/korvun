@@ -146,20 +146,29 @@ más las piezas de robustez que un producto de verdad necesita.
 
 > Una checklist honesta para saber cuándo parar de llamarlo beta.
 
-- [~] Un mensaje real entra por un canal, se enruta, varios modelos responden,
+- [x] Un mensaje real entra por un canal, se enruta, varios modelos responden,
       una política decide, y la respuesta vuelve — todo en un binario real
-      (`main.go`), no en demos. **PARCIAL (Stage 11).**
-      - *Hecho y verificado en vivo:* el binario `korvun` arranca, carga y valida
-        el config, resuelve los secretos env-only, y ejecuta el `getMe` de boot
-        (un token bogus falla ruidosamente con `unauthorized` y exit≠0). El
-        cableado canal → router (con pump inbound) → brain → canal existe en un
-        `main.go` real; los demos están borrados.
-      - *Falta para marcarlo completo:* el **round-trip de mensaje real** end-to-end
-        (mensaje de Telegram → fan-out → política → respuesta de vuelta). No se
-        pudo verificar en el entorno de build (sin token de bot válido, sin
-        Ollama alcanzable, sin `GROQ_API_KEY`); está cubierto solo por tests de
-        paquete (`TestOrchestrator_Handle_*`, routing del router, entrega del
-        pump). Lo cierra un operador con credenciales reales + Ollama corriendo.
+      (`main.go`), no en demos. **COMPLETO (Stage 11).**
+      - *Verificado EN VIVO (2026-06-21):* el operador arrancó `cmd/korvun` con un
+        config real (Telegram polling + brain con Ollama `llama3.2:1b` local +
+        Groq `llama-3.3-70b-versatile` cloud + `PriorityReducer`), escribió
+        "hola" al bot por Telegram y recibió la respuesta del modelo de vuelta en
+        el chat — conversación completa, incluido cambio de idioma. El round-trip
+        end-to-end (Telegram → fan-out → política → respuesta) corrió por el
+        binario real, no por un demo.
+      - *También observado en vivo:* el **contrato de fallback** (ADR-0014 §3)
+        cuando los modelos fallaban (antes de corregir el `model_id`), y luego el
+        camino feliz tras corregirlo. Los demos están borrados; el binario es el
+        producto.
+      - *Hallazgos de la prueba en vivo (para hardening, Stage 16):*
+        - **(a)** el `getMe` de boot tiene un **timeout fijo de 5s** (interno a
+          `bot.New` de go-telegram/bot) y dio `context deadline exceeded`
+          intermitente en redes lentas — candidato a hacerlo
+          configurable / con reintento en la etapa de hardening.
+        - **(b)** documentar de forma inequívoca en el config de ejemplo que
+          `token_env` / `api_key_env` esperan el **NOMBRE** de la variable de
+          entorno, no el valor del secreto — un operador podría confundirse y
+          pegar el secreto en el fichero (rompería ADR-0010).
 - [ ] Persiste estado entre reinicios.
 - [ ] Es observable (sé qué está pasando dentro sin leer el código).
 - [ ] Lo configura alguien por fichero, sin recompilar.
