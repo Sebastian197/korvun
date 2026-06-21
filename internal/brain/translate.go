@@ -6,6 +6,7 @@ package brain
 import (
 	"strings"
 
+	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/Sebastian197/korvun/internal/model"
 )
@@ -28,19 +29,47 @@ var assistant = envelope.Participant{ID: "korvun", Name: "Korvun"}
 // a location, a bare callback) yields false, so Handle returns no reply rather
 // than feeding an invalid request to the fan-out (ADR-0014 §5).
 //
-// v1 is single-turn and stateless: the latest non-empty text Part becomes one
-// RoleUser Message; a configured systemPrompt prepends a RoleSystem Message.
+// The latest non-empty text Part becomes one RoleUser Message; a configured
+// systemPrompt prepends a RoleSystem Message. It is the memoryless path: a thin
+// wrapper over requestWithHistory with no prior turns.
 func envelopeToRequest(in *envelope.Envelope, systemPrompt string) (*model.Request, bool) {
+	return requestWithHistory(in, systemPrompt, nil)
+}
+
+// requestWithHistory builds the request for the current Envelope with prior
+// conversation turns placed between an optional systemPrompt and the current
+// user message (oldest first), so the models answer with memory in context
+// (ADR-0018 §5). It is pure. The bool reports whether there was anything to ask;
+// an Envelope with no text yields false (no reply, no fan-out). A nil/empty
+// history degenerates to the single-turn stateless request.
+func requestWithHistory(in *envelope.Envelope, systemPrompt string, history []conversation.Turn) (*model.Request, bool) {
 	text := latestText(in.Parts)
 	if text == "" {
 		return nil, false
 	}
-	msgs := make([]model.Message, 0, 2)
+	msgs := make([]model.Message, 0, len(history)+2)
 	if systemPrompt != "" {
 		msgs = append(msgs, model.Message{Role: model.RoleSystem, Content: systemPrompt})
 	}
+	for _, t := range history {
+		msgs = append(msgs, model.Message{Role: toModelRole(t.Role), Content: t.Content})
+	}
 	msgs = append(msgs, model.Message{Role: model.RoleUser, Content: text})
 	return &model.Request{Model: fanoutModelPlaceholder, Messages: msgs}, true
+}
+
+// toModelRole maps a stored conversation.Role to the model role the providers
+// understand. This translation lives in the Orchestrator side (ADR-0018 §2,
+// resolution 3) so the conversation package stays a leaf with no model import.
+func toModelRole(r conversation.Role) model.Role {
+	switch r {
+	case conversation.RoleSystem:
+		return model.RoleSystem
+	case conversation.RoleAssistant:
+		return model.RoleAssistant
+	default:
+		return model.RoleUser
+	}
 }
 
 // latestText returns the Content of the last Text Part with non-whitespace

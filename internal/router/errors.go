@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
 )
 
@@ -23,9 +24,12 @@ var (
 
 	// ErrNoConversationID is returned when an inbound Envelope is
 	// missing the canonical Meta["conversation.id"] entry, or carries
-	// it empty. This is the router-side enforcement of the
-	// correlation convention defined in ADR-0003.
-	ErrNoConversationID = errors.New(`router: envelope is missing Meta["conversation.id"]`)
+	// it empty. This is the router-side enforcement of the correlation
+	// convention defined in ADR-0003. The canonical sentinel lives in
+	// internal/conversation; this alias is the SAME error value, so
+	// errors.Is treats router.ErrNoConversationID and
+	// conversation.ErrNoConversationID identically.
+	ErrNoConversationID = conversation.ErrNoConversationID
 
 	// ErrNilChannel is returned when RegisterChannel is called with a
 	// nil channel.Channel.

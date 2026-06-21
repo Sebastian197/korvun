@@ -11,6 +11,7 @@ import (
 
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/channel"
+	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
 )
 
@@ -282,18 +283,17 @@ func (r *Router) Shutdown(ctx context.Context) error {
 	}
 }
 
-// ConversationKey returns the routing key for an envelope, joining
-// the channel name and the conversation id with "::". Returns "" if
-// the envelope is nil or its conversation id is absent or empty.
+// ConversationKey returns the routing key for an envelope, joining the channel
+// name and the conversation id with "::". Returns "" if the envelope is nil or
+// its conversation id is absent or empty. It delegates to
+// conversation.KeyFromEnvelope so the composition is defined exactly once;
+// the legacy string return is preserved (an error maps to "").
 func ConversationKey(env *envelope.Envelope) string {
-	if env == nil {
+	k, err := conversation.KeyFromEnvelope(env)
+	if err != nil {
 		return ""
 	}
-	v := env.Meta[MetaConversationID]
-	if v == "" {
-		return ""
-	}
-	return env.Channel + "::" + v
+	return string(k)
 }
 
 // ---------- internal workers ----------------------------------------------

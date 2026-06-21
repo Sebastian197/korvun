@@ -22,13 +22,19 @@
 // and will introduce a per-channel outbound queue.
 package router
 
-import "time"
+import (
+	"time"
 
-// Meta key for the conversation correlation field every inbound
-// Envelope must carry. Channels populate it from their native
-// conversation identifier (Telegram chat ID, webhook conversation
-// field, ...) so the router stays unaware of channel-specific keys.
-const MetaConversationID = "conversation.id"
+	"github.com/Sebastian197/korvun/internal/conversation"
+)
+
+// MetaConversationID is the Meta key for the conversation correlation field
+// every inbound Envelope must carry. Channels populate it from their native
+// conversation identifier (Telegram chat ID, webhook conversation field, ...)
+// so the router stays unaware of channel-specific keys. The canonical
+// definition lives in internal/conversation; this is a backward-compatible
+// alias so existing router callers keep working unchanged.
+const MetaConversationID = conversation.MetaConversationID
 
 // Tuning defaults pinned in ADR-0003. They are deliberately
 // conservative; Phase 3.1's job was to make the wiring correct and
