@@ -60,10 +60,62 @@ the inbound pump (closing the outbound/inbound asymmetry the demos had hidden),
 and `Orchestrator.coord` is the `brain.Coordinator` interface so the binary can
 mount fan-out OR the cost-saving sequential fail-over from config.
 
-**The next big step is DECIDED: Stage 9 (persistence).** Recommended order from
-here: **9 (persistence) → 12 (observability) → 8 (agents) → 10 (bus) → 13
-(control API) → 14 (no-code builder) → 15 (packaging) → 16 (hardening +
-release)**.
+**Stage 9 (persistence) is IN PROGRESS — Phase 1 closed, Phase 2 is next.**
+See "Stage 9 — persistence (in progress)" below for the full you-are-here.
+Recommended order after Stage 9 closes: **12 (observability) → 8 (agents) →
+10 (bus) → 13 (control API) → 14 (no-code builder) → 15 (packaging) → 16
+(hardening + release)**.
+
+### Stage 9 — persistence (in progress)
+
+Stage 9 is split into two ADRs (the store abstraction vs the durable engine —
+different blast radii, framed by `/office-hours` + `/plan-eng-review`).
+
+**Phase 1 / ADR-0018 (ConversationStore) — DONE, merged to master in `057ee73`**
+(`--no-ff`, accepted ADR with an `AppendTurns` reconciliation note). `make quality`
+green with `-race`, coverage 94.2%. What landed:
+
+- **`internal/conversation`** — a leaf package (imports only `envelope`): `Key`,
+  `Turn` (Role, Content, Timestamp, Seq — value-only invariant; `ts`+`seq` carried
+  so retention is later additive), `Role`, the **append-only `Store` seam**
+  (`LoadRecent` + `Append` + the atomic-per-group `AppendTurns`), the in-memory
+  `MemStore`, `KeyFromEnvelope`, and `MetaConversationID`.
+- **`router`** delegates `ConversationKey` and aliases `MetaConversationID` /
+  `ErrNoConversationID` to `conversation` — one canonical key composition, no
+  import cycle, Telegram adapter and `DispatchInbound` behaviorally unchanged.
+- **`Orchestrator`** takes an optional injected store (`WithConversationStore`):
+  `LoadRecent` before dispatch, `AppendTurns` (user+assistant as one group) after a
+  successful reply. It stays **stateless** (state in the store, never instance
+  fields — closes ADR-0014 §4). No store, or no conversation id → exact Stage 11
+  behavior (stateless, no dropped reply).
+- **`/review` caught and resolved two P1s**: **F3** — the user+assistant pair split
+  under `brainWorkers > 1` (the router does not serialize a conversation), fixed by
+  the atomic-per-group `AppendTurns` (one lock, consecutive Seq, pair stays
+  contiguous); **F2** — the load-bearing test strengthened to assert pair identity
+  (`uid == aid`) and positional Seq (`Seq == i`), under `-race -count=10`.
+
+**Phase 2 / ADR-B (durable SQLite store) — NEXT, not started.** The plan:
+
+- **Driver: `modernc.org/sqlite`** (pure-Go, no cgo — decisive for the Raspberry
+  Pi / ARM cross-compile). It is the FIRST external dependency beyond
+  `go-telegram/bot`, so before adopting: **verify version + concurrency history via
+  Context7** (CLAUDE.md non-negotiable) AND run the four-axis dependency test +
+  write the dependency ADR.
+- **Schema**: a `turns` table by channel/conversation/seq/role/content/ts (`ts`+`seq`
+  already on `Turn`, so retention/compaction is an additive query, not a migration).
+- **Bootstrap**: `CREATE TABLE IF NOT EXISTS` on first boot, open if present; DB
+  path from config with a sensible default (additive over the Stage 11 JSON
+  descriptor).
+- **Concurrency**: the SQLite impl inherits ADR-0018's contract (WAL +
+  `busy_timeout`, or a serialized writer).
+- **Decisions for the ADR**: boot-fatal if a store is configured and fails to open;
+  stateless if no store is configured (same spirit as the `getMe` boot-fatal).
+  Reconsider **crash-consistency** of the user+assistant group (a durable store must
+  not leave orphaned turns after a crash mid-group — `AppendTurns` is the seam to
+  make the group one transaction).
+- Open ADR-B **deliberately with its framing** (`/office-hours` +
+  `/plan-eng-review`) in a fresh session. **Stage 9 closes when ADR-B is done +
+  `STAGE-09.md` is written.**
 
 ### CI status (session 2026-06-20)
 
@@ -566,11 +618,24 @@ Key entries currently:
   fixed 5s timeout (intermittent `context deadline exceeded` on slow networks)
   and clearer example-config docs that `token_env`/`api_key_env` are env-var
   NAMES, not values.
-- **The next big step is Stage 9 (persistence).** Recommended order:
-  **9 (persistence) → 12 (observability) → 8 (agents) → 10 (bus) → 13 (control
-  API) → 14 (no-code builder) → 15 (packaging) → 16 (hardening + release)**.
-  Each heavyweight phase still earns `/office-hours` + `/plan-eng-review` before
-  its ADR.
+- **Stage 9 (persistence) is IN PROGRESS.** Phase 1 / ADR-0018
+  (`internal/conversation` store + `MemStore` + Brain injection) is DONE and merged
+  to master (`057ee73`), `make quality` green, coverage 94.2%. **The next step is
+  Phase 2 / ADR-B (durable SQLite store)** — NOT started, open it deliberately with
+  `/office-hours` + `/plan-eng-review` in a fresh session, including the Context7
+  verification of `modernc.org/sqlite` (first external dep beyond `go-telegram/bot`
+  → four-axis test + dependency ADR). See "Stage 9 — persistence (in progress)"
+  above for the full plan. **Stage 9 closes when ADR-B is done + `STAGE-09.md` is
+  written.** Recommended order after Stage 9: **12 (observability) → 8 (agents) →
+  10 (bus) → 13 (control API) → 14 (no-code builder) → 15 (packaging) → 16
+  (hardening + release)**. Each heavyweight phase still earns `/office-hours` +
+  `/plan-eng-review` before its ADR.
+- **Parked, intact — do not touch:**
+  - `CLAUDE.md` modified in the working tree (the "Design spec first" step), on
+    hold, NOT committed. Confirm with the user before any work touching it.
+  - Branch `chore/repo-hygiene` — half-done badges / `SECURITY.md` /
+    `CONTRIBUTING.md` + the improved `.gitignore`; deferred to Stage 16.
+  - `.gstack/` untracked (tooling dir, ignored on the hygiene branch).
 - **Minor pending (operator's call, web setting):** protect the `master` branch
   (Settings → Branches → ruleset: block force-push/deletion, require status
   checks). Does not block anything.
