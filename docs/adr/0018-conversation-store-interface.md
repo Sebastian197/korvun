@@ -202,16 +202,15 @@ store.Append(ctx, key, assistantTurn)           // independent append (see below
 ... translate(reply) -> outbound Envelope
 ```
 
-**Pair atomicity — decided for ADR-A, flagged for ADR-B.** ADR-A appends the
-user turn and the assistant turn as **two independent `Append`s**. With the
-in-memory store a crash is moot (nothing persists), and a half-written pair is
-self-healing: the next message simply continues the history. **ADR-B (durable
-SQLite) MUST reconsider this**: with a durable store a crash between the two
-Appends could leave an **orphaned user turn persisted with no reply**, so ADR-B
-decides whether to commit the pair atomically (e.g. an `AppendTurns(ctx, key,
-...Turn)` in one transaction) or to tolerate and self-heal orphans. The
-interface in ADR-A does not foreclose either: `AppendTurns` is an additive
-method, not a breaking change.
+**Pair atomicity — superseded in implementation (see reconciliation note).**
+The ADR as drafted appended the user and assistant turns as two independent
+`Append`s and deferred pair atomicity to ADR-B as a *crash-consistency* concern.
+Implementation review (`/review` + copilot) found a second, non-crash failure:
+under `brainWorkers > 1`, two concurrent messages of the same conversation
+interleave their two-Append sequences into a **non-alternating history**
+(user,user,assistant,assistant) that providers reject. That is a contract bug,
+not a durable-engine concern, so it is fixed in ADR-A — see the reconciliation
+note below.
 
 **The store is optional.** With no store injected, `Handle` behaves exactly as
 today: single-turn, stateless, no memory. This preserves Stage 11's behavior
@@ -347,6 +346,44 @@ where a conversation key is meant.
   the minimal cut stays minimal.
 - **Per-sender-within-a-group keying** — deferred; the canonical key is the chat
   (§3). Revisited only when a group channel with per-sender memory is needed.
+
+## Reconciliation note — `AppendTurns` added in implementation (2026-06-21)
+
+Not in the original ADR; added during ADR-A implementation after `/review` and
+copilot review surfaced a concurrency bug the drafted "two independent Appends"
+design carried.
+
+**Problem.** The router does not serialize a conversation (N workers, one shared
+queue, no per-conversation affinity). With `brainWorkers > 1`, two messages of
+the same conversation run `Handle` concurrently; two separate
+`Append(user)` / `Append(assistant)` sequences interleave, e.g. stored order
+`user(M1), user(M2), assistant(M1), assistant(M2)`. The next `LoadRecent` then
+feeds the models a non-alternating role history, which many providers reject.
+This is steady-state ordering corruption, distinct from the crash-consistency
+gap the draft deferred, and it is a bug in the **interface contract**, not the
+durable engine — so it belongs in ADR-A.
+
+**Fix.** A third Store method, additive (does not change `Append`):
+
+```go
+AppendTurns(ctx context.Context, key Key, turns ...Turn) ([]Turn, error)
+```
+
+It appends a whole group under a single critical section with consecutive Seq,
+so a user+assistant pair stays contiguous and ordered no matter how concurrent
+messages interleave. `MemStore.AppendTurns` is the primitive; `Append` delegates
+to it (single source of Seq logic). The Orchestrator's `persistTurns` now calls
+`AppendTurns(key, userTurn, assistantTurn)` instead of two `Append`s.
+
+**Remaining, accepted, documented (in `WithConversationStore`):** the order
+BETWEEN concurrent messages of the same conversation is still not guaranteed
+without per-conversation worker affinity, and two concurrent messages each load
+history without the other's just-written turn. Accepted for best-effort context
+memory; revisit only if strict per-conversation ordering is required.
+
+**Still deferred to ADR-B:** crash atomicity of the group (a durable store must
+not leave a half-written group after a crash) — `AppendTurns` gives ADR-B the
+natural seam to make the group a single transaction.
 
 ## Resolved in review (copilot, 2026-06-21)
 
