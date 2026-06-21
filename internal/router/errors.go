@@ -107,7 +107,9 @@ const (
 	// saturated brain). The pump logs and continues — a single bad Envelope
 	// never crashes the process (ADR-0017 §2). Channel names the source
 	// channel; Envelope is the offending Envelope. Failures caused by the
-	// router's own Shutdown are suppressed and never reach the hook.
+	// router's own Shutdown are best-effort suppressed by notifyError's
+	// context-cancellation guard (a narrow TOCTOU window means a shutdown
+	// error may still slip through once).
 	ErrKindInboundDispatch
 )
 

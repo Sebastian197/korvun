@@ -128,6 +128,41 @@ func TestPump_ConcurrentShutdownAndChannelClose(t *testing.T) {
 	}
 }
 
+// TestPump_ConcurrentRegisterAndShutdown stresses the load-bearing invariant
+// that channelWg.Add(2) stays serialized against Shutdown's flag set, so a
+// RegisterChannel racing a Shutdown can never trigger a WaitGroup
+// "Add called concurrently with Wait" panic. Register must return either nil
+// (it won the race; both workers start and Shutdown joins them) or ErrShutdown
+// (Shutdown won; nothing started) — never panic. Run under -race -count for
+// interleaving coverage; the inner loop multiplies interleavings per run.
+func TestPump_ConcurrentRegisterAndShutdown(t *testing.T) {
+	const iterations = 200
+	for i := 0; i < iterations; i++ {
+		r := router.New()
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			err := r.RegisterChannel(newFakeChannel("telegram"))
+			if err != nil && !errors.Is(err, router.ErrShutdown) {
+				t.Errorf("iter %d RegisterChannel: %v, want nil or ErrShutdown", i, err)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := r.Shutdown(ctx); err != nil {
+				t.Errorf("iter %d Shutdown: %v", i, err)
+			}
+		}()
+		wg.Wait()
+		// Shutdown's Wait joined whatever Register started; a second Shutdown
+		// is idempotent and must not hang or panic.
+		shutdown(t, r)
+	}
+}
+
 // TestPump_NoGoroutineLeak confirms the pump goroutine does not outlive
 // Shutdown: the goroutine count returns to its pre-registration baseline once
 // the router is shut down (the same shape as the fan-out's no-leak test).

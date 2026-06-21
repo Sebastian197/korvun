@@ -131,6 +131,15 @@ func (r *Router) RegisterChannel(ch channel.Channel) error {
 	// Two goroutines under one WaitGroup: the outbound worker and the
 	// inbound pump. Shutdown waits on channelWg, so both join before it
 	// returns.
+	//
+	// INVARIANT (load-bearing, do not move): this Add MUST stay inside the
+	// r.mu section that also performs the r.shutdown re-check above, and
+	// Shutdown sets r.shutdown under the SAME mutex before it cancels and
+	// Waits. That ordering is the only thing preventing a WaitGroup
+	// "Add called concurrently with Wait" panic: any Add that runs has
+	// already observed shutdown==false under the lock, so it happens-before
+	// Shutdown releases the lock, hence before Shutdown's cancel + Wait.
+	// Moving this Add outside the lock reopens that panic.
 	r.channelWg.Add(2)
 	r.mu.Unlock()
 
