@@ -319,6 +319,25 @@ part of *"the binary really boots"*, not deferrable debt. (Mechanism: an explici
 the exact placement is an implementation detail for the spec, but the behaviour —
 loud fatal on an invalid token — is decided here.)
 
+> **Reconciliation note (Stage 11 close, 2026-06-21 — status stays `accepted`).**
+> The premise above ("`telegram.New` does no network check") was **partially
+> wrong**, verified against the `go-telegram/bot` v1.21.0 docs via Context7:
+> `bot.New` **already calls `getMe`** (with a 5-second timeout) and returns an
+> error on an invalid token, UNLESS `WithSkipGetMe()` is passed. The Korvun
+> adapter does **not** pass that option, so `telegram.New` → `bot.New` →
+> `getMe` already validates the token over the network at construction. The
+> getMe boot health-check is therefore **not a new addition** — it lives in the
+> library, and `internal/app`'s channel construction (`telegram.New`) surfaces
+> its failure, which `app.Build` propagates as a fatal boot error. **The §4
+> intent — "fail loud on an invalid token" — is met by construction**, leaning
+> on the existing `getMe`, with no redundant explicit call added. Verified live
+> at Stage 11 close: with a bogus `TELEGRAM_BOT_TOKEN`, the `korvun` binary
+> fails at boot with `telegram: bot.New: error call getMe, unauthorized` and
+> exits non-zero (see `docs/stages/STAGE-11.md`). The "silently deaf binary"
+> for an invalid token does not occur. (The separate `startPolling`
+> `DeleteWebhook`-only-logs behaviour concerns webhook *conflicts*, not token
+> validity, and is unaffected.)
+
 ### 5. The golden rule — config/boot errors are FATAL and loud; runtime provider errors DEGRADE, never fatal
 
 The whole error model of the binary, fixed in one rule:

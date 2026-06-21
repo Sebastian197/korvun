@@ -88,9 +88,14 @@ más las piezas de robustez que un producto de verdad necesita.
   *provenance* del motor de políticas es la base para depurar políticas, pero
   falta el sistema de observabilidad que la consuma.
 
-- **El ensamblaje real (`main.go`).** Hoy las piezas (canal, router, modelos,
-  política) funcionan por separado con demos. Stage 11 las cablea en un binario
-  real. Sin esto no hay producto, solo componentes.
+- **✓ HECHO — El ensamblaje real (`main.go`).** **Cerrado en Stage 11**
+  (ADR-0017, `docs/stages/STAGE-11.md`): el binario `korvun` lee un config JSON
+  (`configs/korvun.example.json`) y cablea canal → router → brain → canal en un
+  proceso de larga duración. El router ahora posee el pump inbound;
+  `Orchestrator.coord` es la interfaz `brain.Coordinator` (fan-out o secuencial
+  desde config); `internal/config` (parse+validate) + `internal/app` (wiring +
+  getMe de boot + lifecycle) + `cmd/korvun` (main fino). Los siete `cmd/demo-*`
+  borrados — el binario los reemplaza.
 
 - **Configuración.** Un producto self-hosted necesita config por fichero (los
   perfiles `edge.yaml` para Raspberry Pi / `cloud.yaml` ya previstos), no
@@ -141,16 +146,20 @@ más las piezas de robustez que un producto de verdad necesita.
 
 > Una checklist honesta para saber cuándo parar de llamarlo beta.
 
-- [ ] Un mensaje real entra por un canal, se enruta, varios modelos responden,
+- [~] Un mensaje real entra por un canal, se enruta, varios modelos responden,
       una política decide, y la respuesta vuelve — todo en un binario real
-      (`main.go`), no en demos.
-      - *Estado:* **el motor de políticas completo está hecho** — post-dispatch
-        (reducers, Stage 5), pre-dispatch (selector de privacidad, Stage 6.1) y
-        el fail-over secuencial que ahorra coste (Stage 6.2), todo orquestado por
-        el Brain (Stage 7, `cmd/demo-brain`). Lo **único** que falta para marcar
-        este criterio es el **ensamblaje en un binario real** (`cmd/korvun`,
-        Stage 11): hoy los demos llaman a las piezas directamente, sin canal +
-        router vivos cableados en un `main.go`. Ese cableado es el último paso.
+      (`main.go`), no en demos. **PARCIAL (Stage 11).**
+      - *Hecho y verificado en vivo:* el binario `korvun` arranca, carga y valida
+        el config, resuelve los secretos env-only, y ejecuta el `getMe` de boot
+        (un token bogus falla ruidosamente con `unauthorized` y exit≠0). El
+        cableado canal → router (con pump inbound) → brain → canal existe en un
+        `main.go` real; los demos están borrados.
+      - *Falta para marcarlo completo:* el **round-trip de mensaje real** end-to-end
+        (mensaje de Telegram → fan-out → política → respuesta de vuelta). No se
+        pudo verificar en el entorno de build (sin token de bot válido, sin
+        Ollama alcanzable, sin `GROQ_API_KEY`); está cubierto solo por tests de
+        paquete (`TestOrchestrator_Handle_*`, routing del router, entrega del
+        pump). Lo cierra un operador con credenciales reales + Ollama corriendo.
 - [ ] Persiste estado entre reinicios.
 - [ ] Es observable (sé qué está pasando dentro sin leer el código).
 - [ ] Lo configura alguien por fichero, sin recompilar.

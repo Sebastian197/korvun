@@ -29,7 +29,7 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of session close, 2026-06-20)
+## Current state (as of session close, 2026-06-21)
 
 ### Stages closed on master
 
@@ -44,20 +44,26 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | 5       | Policy engine — post-dispatch phase (2 reducers) | closed |
 | **6**   | **Policy engine — pre-dispatch phase (privacy selector + sequential fail-over)** | **closed** |
 | 7       | Brain orchestrator (first live end-to-end path) | closed |
+| **11**  | **The real assembly — `cmd/korvun` (config + app + main + router pump)** | **closed** |
 
-**Stages 0–7 are all closed, each with its own stage doc — zero half-open
-stages.** With Stage 6 closed, **the entire policy-engine block (Stages 5+6)
-plus its orchestration (Stage 7) is complete**: post-dispatch reducers +
-pre-dispatch privacy selector + cost-saving sequential fail-over, all wired
-through the Brain. The full differentiator is built and demonstrable with four
-demos. **CI is green.**
+**Stages 0–7 and 11 are all closed, each with its own stage doc — zero
+half-open stages.** The policy-engine block (Stages 5+6) plus its orchestration
+(Stage 7) gave the full differentiator; **Stage 11 assembled it into a binary
+that boots**: `korvun` reads one JSON config and wires channel → router → brain
+→ channel into one long-running process. The four demos are deleted — the binary
+replaces them. **CI is green.**
 
-**The next big step is DECIDED: Stage 11** — the real `cmd/korvun` assembly
-(channel → router → brain → channel; the binary that boots and lets Telegram
-talk to real models). It closes V1 checklist criterion 1. Stage 11 is taken
-**ahead of Stages 8/9/10 on purpose** — assembling first yields a product that
-boots. See "Notes for the next session" for the framing and the recommended
-order afterwards.
+**Stage 11 is CLOSED** (`docs/stages/STAGE-11.md`, ADR-0017). The `korvun`
+binary boots, loads + validates config, resolves env-only secrets, runs the
+`getMe` boot health-check, and serves until SIGINT/SIGTERM. The router now owns
+the inbound pump (closing the outbound/inbound asymmetry the demos had hidden),
+and `Orchestrator.coord` is the `brain.Coordinator` interface so the binary can
+mount fan-out OR the cost-saving sequential fail-over from config.
+
+**The next big step is DECIDED: Stage 9 (persistence).** Recommended order from
+here: **9 (persistence) → 12 (observability) → 8 (agents) → 10 (bus) → 13
+(control API) → 14 (no-code builder) → 15 (packaging) → 16 (hardening +
+release)**.
 
 ### CI status (session 2026-06-20)
 
@@ -475,13 +481,18 @@ demonstrates the no-answer path: fan-out tried, policy returned
 `ErrNoUsableOutcome`, the Brain logged the provenance and returned the
 fallback reply with addressing preserved.
 
-### What is NOT yet wired (Stage 11)
+### Stage 11 — DONE (the single-binary wiring)
 
-The Brain end-to-end exists and is demonstrated by a demo that calls
-`Handle` directly. The **single-binary wiring** — channel → router → brain →
-channel inside a real `cmd/korvun` `main.go` — is Stage 11. That is the
-last step for V1 checklist criterion 1 (a real message in/out through a
-real binary, not a demo). See `docs/ROADMAP-V1.md`.
+The single-binary wiring — channel → router → brain → channel inside a real
+`cmd/korvun` `main.go` — **shipped in Stage 11** (`docs/stages/STAGE-11.md`,
+ADR-0017). `korvun` reads `configs/korvun.example.json`-shaped config and runs
+the whole path. **Live-verified:** boot, config load+validate, env-secret
+resolution, and the `getMe` boot health-check (a bogus token fails loud with
+`unauthorized`). **NOT live-verified in the build environment:** the real
+message round-trip (no valid bot token / Ollama / Groq key here) — proven only
+by package tests. V1 criterion 1 is therefore **partial** in `ROADMAP-V1.md`:
+the binary boots and validates end to end; a live message in/out still needs an
+operator with real credentials + Ollama.
 
 ---
 
@@ -531,21 +542,25 @@ Key entries currently:
   — exists end-to-end in code and is shown by four disposable demos
   (`demo-policy`, `demo-brain`, `demo-selector`, `demo-sequential`). What
   remains is operability, not more engine.
-- **The next big step is DECIDED: Stage 11** — the real `cmd/korvun` `main.go`
-  wiring channel → router → brain → channel; the binary that boots and lets
-  Telegram talk to real models. It closes V1 checklist criterion 1 (a real
-  message in/out through a real binary, not a demo) and deletes the four demos.
-  The closest single step to a usable product.
-  - **Open it with `/office-hours` + `/plan-eng-review` before the ADR.** This
-    is a structural integration point: config decisions, secrets via env,
-    boot/stop lifecycle, catalog wiring. It earns the heavyweight phase shape.
-  - **Stage 11 is taken ahead of 8/9/10 deliberately** — assembling first gives
-    a product that boots. Recommended order afterwards: **9 (persistence) → 12
-    (observability) → 8 (agents) → 10 (bus) → 13 (control API) → 14 (builder) →
-    15 (packaging) → 16 (hardening + release)**.
-- **`cmd/demo-selector` and `cmd/demo-sequential` are temporary**, deleted in
-  Stage 11 with `demo-policy`/`demo-brain` when the engine runs through the
-  real binary.
+- **Stage 11 is CLOSED** (`docs/stages/STAGE-11.md`, ADR-0017): the real
+  `cmd/korvun` binary wires channel → router → brain → channel. The router now
+  owns the inbound pump; `Orchestrator.coord` is the `brain.Coordinator`
+  interface (fan-out OR sequential from config); config is JSON via stdlib (YAML
+  deferred, same schema); secrets are env-only by reference; boot errors are
+  fatal+named, runtime provider errors degrade. The seven `cmd/demo-*` are
+  deleted — the binary replaces them. ADR-0017 §4 carries a reconciliation note:
+  the `getMe` token check already lives in `bot.New` (verified via Context7), so
+  the gap is closed by construction, not a new call.
+- **V1 criterion 1 is PARTIAL.** Live-verified: boot + config load/validate +
+  env-secret resolution + `getMe` boot health-check (bogus token → loud
+  `unauthorized` fatal). NOT verified in the build environment: the live message
+  round-trip (no real bot token / Ollama / Groq key) — proven only by package
+  tests. An operator with credentials + Ollama closes the criterion fully.
+- **The next big step is Stage 9 (persistence).** Recommended order:
+  **9 (persistence) → 12 (observability) → 8 (agents) → 10 (bus) → 13 (control
+  API) → 14 (no-code builder) → 15 (packaging) → 16 (hardening + release)**.
+  Each heavyweight phase still earns `/office-hours` + `/plan-eng-review` before
+  its ADR.
 - **Minor pending (operator's call, web setting):** protect the `master` branch
   (Settings → Branches → ruleset: block force-push/deletion, require status
   checks). Does not block anything.

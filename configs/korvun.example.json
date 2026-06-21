@@ -1,0 +1,37 @@
+{
+  "channels": [
+    {
+      "type": "telegram",
+      "mode": "polling",
+      "token_env": "TELEGRAM_BOT_TOKEN"
+    }
+  ],
+  "brains": [
+    {
+      "name": "default",
+      "sensitivity": "public",
+      "dispatch": "fanout",
+      "policy": {
+        "kind": "priority",
+        "order": ["ollama", "groq"]
+      },
+      "models": [
+        {
+          "provider": "ollama",
+          "model_id": "llama3.2",
+          "locality": "local",
+          "base_url": "http://localhost:11434"
+        },
+        {
+          "provider": "groq",
+          "model_id": "llama-3.3-70b-versatile",
+          "locality": "cloud",
+          "api_key_env": "GROQ_API_KEY"
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {"channel": "telegram", "brain": "default"}
+  ]
+}
