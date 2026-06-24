@@ -319,8 +319,7 @@ Pendiente de Chano en panel GitHub (no delegable a Claude Code):
 - Descripción del repo + topics (go, ai, llm, messaging-gateway, self-hosted,
   orchestration).
 - Social preview (si hay logo).
-- Branch protection en `master` — activar SOLO tras CI en verde (ya lo está),
-  o bloqueará los propios merges.
+- ✓ **Branch protection en `master` — ACTIVADA** (CI ya estaba en verde).
 
 ---
 
@@ -720,9 +719,7 @@ Key entries currently:
     hold, NOT committed. Confirm with the user before any work touching it.
   - `.gstack/` untracked (tooling dir) — on hold, NOT committed and NOT added to
     `.gitignore`, per the user's call.
-- **Minor pending (operator's call, web setting):** protect the `master` branch
-  (Settings → Branches → ruleset: block force-push/deletion, require status
-  checks) — if not already done; CI is now green so it is safe to enable. Does
-  not block anything.
+- **`master` is branch-protected** (Settings → Branches ruleset: block
+  force-push/deletion, require status checks). Enabled now that CI is green.
 - `make quality` green with `-race` is the bar — do not advance a
   phase until the whole tree (not just the new code) is green.
