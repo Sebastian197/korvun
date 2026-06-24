@@ -12,6 +12,7 @@ import (
 
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/metrics"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/model/fanout"
 	"github.com/Sebastian197/korvun/internal/policy"
@@ -75,6 +76,10 @@ type Orchestrator struct {
 	// behaving exactly as Stage 11. historyN is how many prior turns to load.
 	store    conversation.Store
 	historyN int
+	// metrics records observability funnels (messages, per-provider duration and
+	// failures, persisted turns). Defaults to metrics.Nop, so the hot path always
+	// has a non-nil recorder and never nil-checks (ADR-0020 §2).
+	metrics metrics.Metrics
 }
 
 // Option configures an Orchestrator at construction.
@@ -133,6 +138,17 @@ func WithConversationStore(store conversation.Store, recentTurns int) Option {
 	}
 }
 
+// WithMetrics injects the observability backend the Brain records through. A nil
+// argument is ignored (the default stays metrics.Nop). The recorder must be
+// concurrency-safe: the router's N workers share one Orchestrator (ADR-0014 §4).
+func WithMetrics(m metrics.Metrics) Option {
+	return func(o *Orchestrator) {
+		if m != nil {
+			o.metrics = m
+		}
+	}
+}
+
 // NewOrchestrator constructs a stateless Brain over the given dispatch
 // coordinator (fan-out or sequential — ADR-0017 §3), model set, and policy.
 // models should be assembled with WithModelID so each provider receives its own
@@ -144,6 +160,7 @@ func NewOrchestrator(coord Coordinator, models []model.Model, p policy.Policy, o
 		policy:   p,
 		fallback: defaultFallback,
 		logger:   slog.Default(),
+		metrics:  metrics.Nop{},
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -167,12 +184,19 @@ func (o *Orchestrator) Handle(ctx context.Context, env *envelope.Envelope) ([]*e
 		return nil, nil // nothing to ask — clean no-reply (ADR-0014 §5)
 	}
 
+	// One inbound dispatched to this brain.
+	o.metrics.IncMessages(env.Channel)
+
 	res, err := o.coord.Run(ctx, req, o.models)
 	if err != nil {
 		// nil ctx / no models / nil model / request validation: the Brain is
 		// misconfigured, not "no answer". Surface to the router error hook.
 		return nil, fmt.Errorf("brain: fan-out: %w", err)
 	}
+
+	// Observe each provider's already-captured latency (fanout.Outcome.Latency)
+	// and outcome, off the hot path (post-Run, no added contention).
+	o.observeOutcomes(res)
 
 	dec, err := o.policy.Apply(ctx, res)
 	if err != nil {
@@ -194,6 +218,22 @@ func (o *Orchestrator) Handle(ctx context.Context, env *envelope.Envelope) ([]*e
 	// conversation id is present, in which case persistTurns is a no-op.
 	o.persistTurns(ctx, key, latestText(env.Parts), content)
 	return decisionToEnvelopes(content, env), nil
+}
+
+// observeOutcomes records each provider's latency and outcome from a fan-out
+// Result (the Latency is already captured by the mechanism; this only reads it).
+// A failed outcome also bumps the per-provider failure counter (ADR-0020 §3).
+func (o *Orchestrator) observeOutcomes(res *fanout.Result) {
+	if res == nil {
+		return
+	}
+	for _, oc := range res.Outcomes {
+		ok := oc.Err == nil
+		o.metrics.ObserveProviderDuration(oc.Provider, ok, oc.Latency)
+		if !ok {
+			o.metrics.IncProviderFailure(oc.Provider)
+		}
+	}
 }
 
 // loadHistory derives the conversation key and loads the recent turns when a
@@ -258,7 +298,9 @@ func (o *Orchestrator) persistTurns(ctx context.Context, key conversation.Key, u
 	defer cancel()
 	if _, err := o.store.AppendTurns(persistCtx, key, turns...); err != nil {
 		o.logger.Warn("brain: append turns failed", "key", string(key), "cause", err)
+		return
 	}
+	o.metrics.ObserveTurnsPersisted(len(turns))
 }
 
 // logNoAnswer records a no-answer outcome with its provenance, so the operator

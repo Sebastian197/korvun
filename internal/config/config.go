@@ -35,6 +35,14 @@ type Config struct {
 	// block means open a durable store at boot. An empty Path defaults to an
 	// OS-appropriate data dir, resolved in internal/app.
 	Storage *StorageConfig `json:"storage,omitempty"`
+	// Observability is the optional admin HTTP server (ADR-0020). It is a
+	// pointer for parse-time presence detection, but note the DELIBERATE
+	// asymmetry with Storage: an ABSENT block means the server is ON with safe
+	// loopback defaults (observability is safe on loopback and always useful),
+	// whereas an absent Storage block means OFF. The operator disables the
+	// server explicitly with observability.enabled = false. Resolve via
+	// ObservabilitySettings.
+	Observability *ObservabilityConfig `json:"observability,omitempty"`
 }
 
 // StorageConfig declares the durable conversation store. Path is the SQLite
@@ -43,6 +51,39 @@ type Config struct {
 // existing configs without it keep their exact stateless behavior.
 type StorageConfig struct {
 	Path string `json:"path"`
+}
+
+// DefaultObservabilityAddr is the admin server's default bind address: loopback
+// so a fresh boot exposes nothing to the network, on port 2112 (the conventional
+// client_golang exporter port, distinct from 9090 the Prometheus server port).
+// An operator who wants external access sets observability.addr to 0.0.0.0:PORT
+// consciously and owns the auth/TLS/firewall that go with it (ADR-0020 §4).
+const DefaultObservabilityAddr = "127.0.0.1:2112"
+
+// ObservabilityConfig declares the admin HTTP server (/metrics + /healthz,
+// ADR-0020). Enabled is a *bool so an unset value (block present, "enabled"
+// omitted) is distinguishable from an explicit false and defaults to true. An
+// empty Addr resolves to DefaultObservabilityAddr. The block is additive over
+// the prior schema. Resolve both fields via Config.ObservabilitySettings.
+type ObservabilityConfig struct {
+	Enabled *bool  `json:"enabled,omitempty"`
+	Addr    string `json:"addr,omitempty"`
+}
+
+// ObservabilitySettings resolves the effective admin-server settings, applying
+// the absent-is-on asymmetry and the default address. It is the single place the
+// defaulting rules live, so internal/app stays thin.
+func (c *Config) ObservabilitySettings() (enabled bool, addr string) {
+	o := c.Observability
+	if o == nil {
+		return true, DefaultObservabilityAddr
+	}
+	enabled = o.Enabled == nil || *o.Enabled
+	addr = o.Addr
+	if addr == "" {
+		addr = DefaultObservabilityAddr
+	}
+	return enabled, addr
 }
 
 // ChannelConfig declares one messaging channel. Type selects the adapter

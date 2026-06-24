@@ -31,6 +31,9 @@ import (
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/conversation/sqlite"
+	"github.com/Sebastian197/korvun/internal/httpserver"
+	"github.com/Sebastian197/korvun/internal/metrics"
+	"github.com/Sebastian197/korvun/internal/metrics/prom"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/model/fanout"
 	"github.com/Sebastian197/korvun/internal/model/groq"
@@ -64,6 +67,13 @@ type App struct {
 	// (stateless). Held as io.Closer, set only from a non-nil concrete store, so
 	// it is never a typed-nil interface (ADR-0019 §6).
 	store io.Closer
+	// adminServer is the observability HTTP server (/metrics + /healthz). nil
+	// when observability is disabled. Started FIRST in Run and stopped LAST in
+	// Shutdown so it stays observable across the whole drain (ADR-0020 §4).
+	adminServer *httpserver.Server
+	// metrics is the domain's observability backend: the Prometheus impl when
+	// observability is on, metrics.Nop when off. Never nil.
+	metrics metrics.Metrics
 }
 
 // builder holds resolved construction settings, including the channel factory
@@ -75,6 +85,9 @@ type builder struct {
 	// store is the shared conversation memory injected into every brain. A true
 	// nil interface (no storage configured) leaves each Orchestrator stateless.
 	store conversation.Store
+	// metrics is the observability backend injected into the domain. Defaults to
+	// metrics.Nop; set to the Prometheus impl when observability is enabled.
+	metrics metrics.Metrics
 }
 
 // Option configures Build.
@@ -106,9 +119,26 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		logger:          slog.Default(),
 		perModelTimeout: DefaultPerModelTimeout,
 		newChannel:      defaultChannelFactory,
+		metrics:         metrics.Nop{},
 	}
 	for _, o := range opts {
 		o(b)
+	}
+
+	// Resolve observability BEFORE the router, so the Prometheus backend exists
+	// when the domain is wired (ADR-0020 §4). Absent block = on with loopback
+	// defaults (the asymmetry with Storage, documented in config). When enabled,
+	// the domain records through the Prometheus impl and the admin server serves
+	// its /metrics; when disabled, the domain records through Nop and no server
+	// is built.
+	enabled, addr := cfg.ObservabilitySettings()
+	var adminServer *httpserver.Server
+	var pm *prom.Metrics
+	if enabled {
+		pm = prom.New()
+		b.metrics = pm
+		adminServer = httpserver.New(addr, b.logger)
+		adminServer.Handle("/metrics", pm.Handler(b.logger))
 	}
 
 	// Open the durable store ONCE, before wiring the brains, and share it across
@@ -123,8 +153,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	}
 
 	r := router.New(router.WithErrorHandler(func(re router.RouterError) {
-		b.logger.Error("router error",
-			"kind", re.Kind.String(), "channel", re.Channel, "brain", re.Brain, "error", re.Err)
+		onRouterError(b.logger, b.metrics, re)
 	}))
 
 	channels, err := b.wire(r, cfg)
@@ -137,11 +166,80 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		}
 		return nil, err
 	}
-	app := &App{router: r, channels: channels, logger: b.logger}
+	// Register the pull dropped-count source for every channel that exposes one
+	// (telegram). Done after wiring so the adapters exist; only when the
+	// Prometheus backend is active (pm != nil).
+	if pm != nil {
+		registerDroppedSources(pm, channels, b.logger)
+	}
+
+	app := &App{
+		router:      r,
+		channels:    channels,
+		logger:      b.logger,
+		adminServer: adminServer,
+		metrics:     b.metrics,
+	}
 	if store != nil {
 		app.store = store // owned closer, set only from a non-nil concrete store
 	}
 	return app, nil
+}
+
+// droppedRegistrar registers a pull source for a channel's cumulative dropped
+// count. *prom.Metrics satisfies it; kept as a narrow interface so the wiring is
+// testable with a fake and so app does not hard-depend on the concrete type.
+type droppedRegistrar interface {
+	RegisterDroppedSource(channel string, count func() uint64) error
+}
+
+// droppedCounter is a channel that maintains a cumulative inbound-drop count
+// (the telegram adapter). Other channels do not implement it and are skipped.
+type droppedCounter interface {
+	DroppedCount() uint64
+}
+
+// registerDroppedSources wires each channel's DroppedCount (when it has one) as
+// a pull metric, so the drop count is read at scrape time rather than
+// double-instrumented (ADR-0020 §3). A registration error (e.g. a duplicate
+// channel name) is logged and skipped, never fatal: a metric must not take down
+// boot (review F2).
+func registerDroppedSources(reg droppedRegistrar, channels []Channel, logger *slog.Logger) {
+	for _, ch := range channels {
+		if dc, ok := ch.(droppedCounter); ok {
+			if err := reg.RegisterDroppedSource(ch.Name(), dc.DroppedCount); err != nil {
+				logger.Warn("observability: dropped-count source not registered",
+					"channel", ch.Name(), "error", err)
+			}
+		}
+	}
+}
+
+// onRouterError is the single sink the router's WithErrorHandler funnel feeds:
+// it both logs the failure (standardized fields) and counts it by kind on the
+// metrics backend (ADR-0020 §1, §3). Keeping both off one funnel is the
+// near-zero-blast-radius wiring the stage relies on.
+func onRouterError(logger *slog.Logger, m metrics.Metrics, re router.RouterError) {
+	logRouterError(logger, re)
+	m.IncRouterError(re.Kind.String())
+}
+
+// logRouterError records one asynchronous router failure with the standardized
+// observability funnel fields (ADR-0020 §1): kind, channel, brain, envelope_id,
+// error. envelope_id is the empty string when the RouterError carries no
+// envelope (some kinds do not). Extracted from the WithErrorHandler closure so
+// the field vocabulary is testable in isolation.
+func logRouterError(logger *slog.Logger, re router.RouterError) {
+	envID := ""
+	if re.Envelope != nil {
+		envID = re.Envelope.ID
+	}
+	logger.Error("router error",
+		"kind", re.Kind.String(),
+		"channel", re.Channel,
+		"brain", re.Brain,
+		"envelope_id", envID,
+		"error", re.Err)
 }
 
 // openStore opens the durable conversation store when storage is configured, or
@@ -220,7 +318,7 @@ func (b *builder) buildBrain(bc config.BrainConfig) (*brain.Orchestrator, error)
 		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 	}
 	coord := buildCoordinator(bc.Dispatch, b.perModelTimeout)
-	orchOpts := []brain.Option{brain.WithLogger(b.logger)}
+	orchOpts := []brain.Option{brain.WithLogger(b.logger), brain.WithMetrics(b.metrics)}
 	if b.store != nil {
 		// Shared durable memory; recentTurns 0 => the Orchestrator default
 		// (ADR-0019: config stays minimal, history depth is a Brain concern).
@@ -313,10 +411,23 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 // channel fails to start, channels already started are stopped before the error
 // is returned, so Run never leaves a half-started system behind.
 func (a *App) Run(ctx context.Context) error {
+	// Start the admin server FIRST (ADR-0020 §4): /healthz is up before any
+	// channel connects, so an operator sees the process is alive during boot. A
+	// bind failure is a loud boot error (the golden rule).
+	if a.adminServer != nil {
+		if err := a.adminServer.Start(ctx); err != nil {
+			return fmt.Errorf("app: start admin server: %w", err)
+		}
+		a.logger.Info("admin server listening", "addr", a.adminServer.Addr())
+	}
+
 	started := make([]Channel, 0, len(a.channels))
 	for _, ch := range a.channels {
 		if err := ch.Start(ctx); err != nil {
 			a.stopChannels(context.Background(), started)
+			if a.adminServer != nil {
+				_ = a.adminServer.Shutdown(context.Background())
+			}
 			return fmt.Errorf("app: start channel %q: %w", ch.Name(), err)
 		}
 		started = append(started, ch)
@@ -357,6 +468,14 @@ func (a *App) Shutdown(ctx context.Context) error {
 			if err := a.store.Close(); err != nil {
 				errs = append(errs, fmt.Errorf("app: close conversation store: %w", err))
 			}
+		}
+	}
+	// Stop the admin server LAST (ADR-0020 §4): /metrics and /healthz stay
+	// observable across the whole drain above, then the last network surface
+	// closes. Its error is joined like a channel's, never masking the rest.
+	if a.adminServer != nil {
+		if err := a.adminServer.Shutdown(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("app: shutdown admin server: %w", err))
 		}
 	}
 	return errors.Join(errs...)
