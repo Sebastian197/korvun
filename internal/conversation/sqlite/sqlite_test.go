@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -307,6 +308,10 @@ func TestTimestamp_ZeroRoundTrips(t *testing.T) {
 // query: the store must function (WAL applied, writes persist across reopen) and
 // the DB file must live at the intended path.
 func TestOpen_PathWithQueryCharIsRobust(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("'?' is an illegal filename char on Windows (SQLITE_CANTOPEN); " +
+			"DSN construction for '?' paths is covered portably by dsn_test.go")
+	}
 	dir := t.TempDir()
 	weird := filepath.Join(dir, "weird?name.db")
 	ctx := context.Background()

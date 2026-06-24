@@ -256,6 +256,36 @@ and `modernc.org/sqlite v1.53.0`, the latter added by ADR-0019 behind the
 
 ---
 
+## Repo-hygiene — adelantado desde Stage 16 (rama chore/repo-hygiene)
+
+Decisión de Chano: presentación profesional del repo adelantada a ahora, fuera
+del orden de roadmap original (estaba en Stage 16). En curso en rama
+`chore/repo-hygiene`, pendiente de revisión de copiloto antes de merge.
+
+Incluye: `README.md` con badges (CI, Go Report Card, Go version, License, OpenSSF
+Scorecard, release), `SECURITY.md`, `CONTRIBUTING.md`, `CODEOWNERS`, plantillas
+`.github/` (issues + PR), workflow `scorecard.yml`, mejoras `.gitignore`.
+
+OJO badges: el de CI y el de OpenSSF Scorecard NO se pondrán verdes hasta que
+(1) el billing de GitHub Actions esté desbloqueado y (2) corran sus workflows.
+Hasta entonces aparecerán rojos/unknown. No es regresión.
+
+Pendiente de Chano en panel GitHub (no delegable a Claude Code):
+
+- **Hacer el repo PÚBLICO si se quieren badges funcionales.** shields.io
+  (License, Go version, Release), Go Report Card y el badge de OpenSSF Scorecard
+  NO renderizan en repos privados; el badge de CI tampoco es visible para
+  usuarios anónimos, y `scorecard.yml` (`publish_results` + SARIF upload) sólo
+  funciona en repo público. Este es el requisito MAYOR de toda la fila de badges.
+- Descripción del repo + topics (go, ai, llm, messaging-gateway, self-hosted,
+  orchestration).
+- Social preview (si hay logo).
+- Branch protection en `master` — activar SOLO tras CI en verde, o bloqueará los
+  propios merges.
+- Desbloquear billing de Actions (cuello de botella de los badges de CI/Scorecard).
+
+---
+
 ## What was tried, what got fixed late (honest record)
 
 ### `/review` caught two contract bugs the manual review missed (Phase 4.3)
@@ -642,9 +672,13 @@ Key entries currently:
 - **Parked, intact — do not touch:**
   - `CLAUDE.md` modified in the working tree (the "Design spec first" step), on
     hold, NOT committed. Confirm with the user before any work touching it.
-  - Branch `chore/repo-hygiene` — half-done badges / `SECURITY.md` /
-    `CONTRIBUTING.md` + the improved `.gitignore`; deferred to Stage 16.
-  - `.gstack/` untracked (tooling dir, ignored on the hygiene branch).
+  - Branch `chore/repo-hygiene` — **NO LONGER deferred: brought forward from
+    Stage 16** (full README+badges, `SECURITY.md`, `CONTRIBUTING.md`,
+    `CODEOWNERS`, `.github/` templates, `scorecard.yml`, `.gitignore`). In
+    progress, pending copilot review before merge. See "Repo-hygiene —
+    adelantado desde Stage 16" above.
+  - `.gstack/` untracked (tooling dir) — on hold, NOT committed and NOT added to
+    `.gitignore`, per the user's call.
 - **Minor pending (operator's call, web setting):** protect the `master` branch
   (Settings → Branches → ruleset: block force-push/deletion, require status
   checks). Does not block anything.

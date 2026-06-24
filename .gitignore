@@ -39,3 +39,24 @@ configs/*.local.json
 KORVUN-Documento-Maestro.pdf
 # Compiled CLI binary produced by `go build` at the module root.
 /korvun
+
+# OS cruft
+.DS_Store
+
+# Local SQLite databases (conversation store) and their WAL/SHM sidecars
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Security/CI artefacts generated locally
+results.sarif
+*.spdx.json
+
+# Release/distribution output (GoReleaser, future packaging)
+/dist/
+
+# Frontend tooling (future no-code builder)
+node_modules/
+frontend/dist/
