@@ -29,7 +29,12 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of session close, 2026-06-21)
+## Current state (as of session close, 2026-06-24)
+
+> **master is at `ab04ee3`, green on all three OSes** (ubuntu / macos /
+> **windows-latest** verified — Actions billing is unblocked). Stages closed:
+> 0–7, 9, 11. Repo-hygiene (public presentation) was brought forward from
+> Stage 16 and is **merged on master**. Next step: **Stage 12 (observability)**.
 
 ### Stages closed on master
 
@@ -53,7 +58,10 @@ half-open stages.** The policy-engine block (Stages 5+6) plus its orchestration
 that boots**: `korvun` reads one JSON config and wires channel → router → brain
 → channel into one long-running process. **Stage 9 gave it durable conversation
 memory** that survives restarts (including a graceful shutdown). The four demos
-are deleted — the binary replaces them. **CI is green.**
+are deleted — the binary replaces them. **CI is green on all three OSes**
+(`ab04ee3`, Quality Gate: ubuntu + macos + **windows-latest** all pass, plus
+cross-compile ×5 and SBOM). The Windows-specific fixes (drive-letter `file:` DSN
+and the `?`-in-path test skip) are verified on a real `windows-latest` runner.
 
 **Stage 11 is CLOSED** (`docs/stages/STAGE-11.md`, ADR-0017). The `korvun`
 binary boots, loads + validates config, resolves env-only secrets, runs the
@@ -256,33 +264,40 @@ and `modernc.org/sqlite v1.53.0`, the latter added by ADR-0019 behind the
 
 ---
 
-## Repo-hygiene — adelantado desde Stage 16 (rama chore/repo-hygiene)
+## Repo-hygiene — adelantado desde Stage 16 (MERGEADO en master)
 
 Decisión de Chano: presentación profesional del repo adelantada a ahora, fuera
-del orden de roadmap original (estaba en Stage 16). En curso en rama
-`chore/repo-hygiene`, pendiente de revisión de copiloto antes de merge.
+del orden de roadmap original (estaba en Stage 16). **YA MERGEADO en master**
+(`ab04ee3`, merge de la rama `chore/repo-hygiene`); la rama cumplió su función.
 
-Incluye: `README.md` con badges (CI, Go Report Card, Go version, License, OpenSSF
-Scorecard, release), `SECURITY.md`, `CONTRIBUTING.md`, `CODEOWNERS`, plantillas
-`.github/` (issues + PR), workflow `scorecard.yml`, mejoras `.gitignore`.
+En master ahora: `README.md` con badges (CI, Go Report Card, Go version, License,
+OpenSSF Scorecard, release), `SECURITY.md`, `CONTRIBUTING.md`, `CODEOWNERS`,
+plantillas `.github/` (issues + PR), workflow `scorecard.yml`, `.gitignore`
+endurecido.
 
-OJO badges: el de CI y el de OpenSSF Scorecard NO se pondrán verdes hasta que
-(1) el billing de GitHub Actions esté desbloqueado y (2) corran sus workflows.
-Hasta entonces aparecerán rojos/unknown. No es regresión.
+**Billing de GitHub Actions: RESUELTO.** `windows-latest` corre y pasa
+(Quality Gate de `ab04ee3`, 9m34s en su runner real). El badge de CI ya refleja
+verde para los tres SOs.
+
+OJO badges restantes: shields.io (License, Go version, Release), Go Report Card y
+el badge de OpenSSF Scorecard NO renderizan en repos privados. **El workflow
+OpenSSF Scorecard falla esperadamente mientras el repo sea privado**
+(`publish_results` + SARIF upload requieren repo público; el análisis aborta con
+`git exit 128`) — **no es regresión ni bug del código**, se resuelve al hacer el
+repo público en Stage 16.
 
 Pendiente de Chano en panel GitHub (no delegable a Claude Code):
 
-- **Hacer el repo PÚBLICO si se quieren badges funcionales.** shields.io
-  (License, Go version, Release), Go Report Card y el badge de OpenSSF Scorecard
-  NO renderizan en repos privados; el badge de CI tampoco es visible para
-  usuarios anónimos, y `scorecard.yml` (`publish_results` + SARIF upload) sólo
-  funciona en repo público. Este es el requisito MAYOR de toda la fila de badges.
+- **Hacer el repo PÚBLICO si se quieren badges funcionales y Scorecard verde.**
+  shields.io, Go Report Card y OpenSSF Scorecard NO renderizan en repos privados;
+  el badge de CI tampoco es visible para usuarios anónimos, y `scorecard.yml`
+  sólo funciona en repo público. Requisito MAYOR de toda la fila de badges.
+  (Diferido a Stage 16 junto con el resto del hardening / release.)
 - Descripción del repo + topics (go, ai, llm, messaging-gateway, self-hosted,
   orchestration).
 - Social preview (si hay logo).
-- Branch protection en `master` — activar SOLO tras CI en verde, o bloqueará los
-  propios merges.
-- Desbloquear billing de Actions (cuello de botella de los badges de CI/Scorecard).
+- Branch protection en `master` — activar SOLO tras CI en verde (ya lo está),
+  o bloqueará los propios merges.
 
 ---
 
@@ -669,18 +684,21 @@ Key entries currently:
   order: **12 (observability) → 8 (agents) → 10 (bus) → 13 (control API) → 14
   (no-code builder) → 15 (packaging) → 16 (hardening + release)**. Each heavyweight
   phase still earns `/office-hours` + `/plan-eng-review` before its ADR.
+- **Repo-hygiene — MERGED on master** (`ab04ee3`, brought forward from Stage 16):
+  README+badges, `SECURITY.md`, `CONTRIBUTING.md`, `CODEOWNERS`, `.github/`
+  templates, `scorecard.yml`, hardened `.gitignore`. Branch `chore/repo-hygiene`
+  has served its purpose. Actions billing is **resolved** (windows-latest passes).
+  OpenSSF Scorecard workflow fails expectedly while the repo is private — not a
+  regression; resolves when the repo goes public in Stage 16. See "Repo-hygiene —
+  adelantado desde Stage 16" above.
 - **Parked, intact — do not touch:**
   - `CLAUDE.md` modified in the working tree (the "Design spec first" step), on
     hold, NOT committed. Confirm with the user before any work touching it.
-  - Branch `chore/repo-hygiene` — **NO LONGER deferred: brought forward from
-    Stage 16** (full README+badges, `SECURITY.md`, `CONTRIBUTING.md`,
-    `CODEOWNERS`, `.github/` templates, `scorecard.yml`, `.gitignore`). In
-    progress, pending copilot review before merge. See "Repo-hygiene —
-    adelantado desde Stage 16" above.
   - `.gstack/` untracked (tooling dir) — on hold, NOT committed and NOT added to
     `.gitignore`, per the user's call.
 - **Minor pending (operator's call, web setting):** protect the `master` branch
   (Settings → Branches → ruleset: block force-push/deletion, require status
-  checks). Does not block anything.
+  checks) — if not already done; CI is now green so it is safe to enable. Does
+  not block anything.
 - `make quality` green with `-race` is the bar — do not advance a
   phase until the whole tree (not just the new code) is green.
