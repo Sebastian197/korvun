@@ -31,10 +31,13 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ## Current state (as of session close, 2026-06-24)
 
-> **master is at `ab04ee3`, green on all three OSes** (ubuntu / macos /
-> **windows-latest** verified — Actions billing is unblocked). Stages closed:
-> 0–7, 9, 11. Repo-hygiene (public presentation) was brought forward from
-> Stage 16 and is **merged on master**. Next step: **Stage 12 (observability)**.
+> **master is at `cee4a20`** (Stage 12 merged `--no-ff`), green on all three
+> OSes (ubuntu / macos / **windows-latest** verified — Actions billing
+> unblocked). Stages closed: **0–7, 9, 11, 12**. `go.mod` has **3 direct deps**
+> (`go-telegram/bot` + `modernc.org/sqlite` + `prometheus/client_golang`). The
+> binary serves `/metrics` + `/healthz` on a default-on loopback admin server.
+> Next step (user picks): **Stage 8 (agents)** per the order 8 → 10 → 13 → 14 →
+> 15 → 16 (12 is now done).
 
 ### Stages closed on master
 
@@ -51,8 +54,9 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | 7       | Brain orchestrator (first live end-to-end path) | closed |
 | **9**   | **Persistence — durable conversation memory (ADR-A interface+MemStore, ADR-B SQLite)** | **closed** |
 | **11**  | **The real assembly — `cmd/korvun` (config + app + main + router pump)** | **closed** |
+| **12**  | **Observability — slog funnel fields + Metrics seam (Prometheus) + admin HTTP server (`/metrics` + `/healthz`)** | **closed** |
 
-**Stages 0–7, 9 and 11 are all closed, each with its own stage doc — zero
+**Stages 0–7, 9, 11 and 12 are all closed, each with its own stage doc — zero
 half-open stages.** The policy-engine block (Stages 5+6) plus its orchestration
 (Stage 7) gave the full differentiator; **Stage 11 assembled it into a binary
 that boots**: `korvun` reads one JSON config and wires channel → router → brain
@@ -72,10 +76,28 @@ mount fan-out OR the cost-saving sequential fail-over from config.
 
 **Stage 9 (persistence) is CLOSED — both phases done.** See
 "Stage 9 — persistence (closed)" below for the summary.
-**Recommended order for what's next (NOT started — user picks): 12 (observability)
-→ 8 (agents) → 10 (bus) → 13 (control API) → 14 (no-code builder) → 15 (packaging)
-→ 16 (hardening + release)**. Each heavyweight phase still earns
-`/office-hours` + `/plan-eng-review` before its ADR.
+
+**Stage 12 (observability) is CLOSED** (`docs/stages/STAGE-12.md`, ADR-0020,
+merged `--no-ff` as `cee4a20`). The 80% already existed (slog on the hot path,
+`fanout.Outcome.Latency`, the router `WithErrorHandler` funnel, atomic
+`telegram.DroppedCount`), so instrumenting rode those funnels with near-zero
+blast radius. The one new moving part is an admin `http.Server` (`internal/
+httpserver`, default-on, loopback `127.0.0.1:2112`) that starts FIRST in Run and
+stops LAST in Shutdown, serving `/metrics` (six `korvun_*` series behind a
+`metrics.Metrics` seam with a Prometheus impl in `internal/metrics/prom`) and
+`/healthz` (liveness-only). The seam keeps the domain free of any Prometheus
+import. Live-verified: `/healthz`→200, `/metrics`→200 with all six series.
+`/review` found F2 (MustRegister→Register, fixed) and deferred F1 (Start
+re-entrancy). **Process note:** a `git add -A` swept the parked `CLAUDE.md` +
+`.gstack/` into a commit; caught in review and rewritten out before push.
+Lesson now standing: **selective `git add <paths>`, never `-A`, with parked
+files in the tree.**
+
+**Recommended order for what's next (NOT started — user picks): 8 (agents)
+→ 10 (bus) → 13 (control API) → 14 (no-code builder) → 15 (packaging) →
+16 (hardening + release)**. (Stage 12 is done.) Stage 13's control API mounts on
+the SAME `internal/httpserver` mux Stage 12 built. Each heavyweight phase still
+earns `/office-hours` + `/plan-eng-review` before its ADR.
 
 ### Stage 9 — persistence (closed)
 
@@ -258,9 +280,10 @@ docs/
 | **total**                        | **94.3%** |
 
 `make quality` green with `-race`. (NOTE: this snapshot predates Stage 9 —
-`go.mod` now has TWO direct dependencies, `github.com/go-telegram/bot v1.21.0`
-and `modernc.org/sqlite v1.53.0`, the latter added by ADR-0019 behind the
-`Store` seam after a four-axis test + dependency gate.)
+`go.mod` now has THREE direct dependencies: `github.com/go-telegram/bot v1.21.0`,
+`modernc.org/sqlite v1.53.0` (ADR-0019, behind the `Store` seam), and
+`github.com/prometheus/client_golang v1.23.2` (ADR-0020, behind the `Metrics`
+seam) — each added after a four-axis test + dependency gate.)
 
 ---
 
@@ -679,11 +702,12 @@ Key entries currently:
   `modernc.org/sqlite v1.53.0`, single-writer, atomic+crash-consistent group
   transaction, boot-fatal-vs-stateless, persist on a cancellation-detached context
   so durable memory survives a graceful shutdown, `65549cf`). `make quality` green
-  with `-race`, cross-compile ×6 `CGO_ENABLED=0` green. **`go.mod` now has TWO
-  direct dependencies.** **No next stage is open — the user picks.** Recommended
-  order: **12 (observability) → 8 (agents) → 10 (bus) → 13 (control API) → 14
-  (no-code builder) → 15 (packaging) → 16 (hardening + release)**. Each heavyweight
-  phase still earns `/office-hours` + `/plan-eng-review` before its ADR.
+  with `-race`, cross-compile ×6 `CGO_ENABLED=0` green. **`go.mod` now has THREE
+  direct dependencies** (the 3rd added by Stage 12 / ADR-0020). **No next stage is
+  open — the user picks.** Recommended order: **8 (agents) → 10 (bus) → 13 (control
+  API) → 14 (no-code builder) → 15 (packaging) → 16 (hardening + release)** (Stage
+  12 is done). Each heavyweight phase still earns `/office-hours` +
+  `/plan-eng-review` before its ADR.
 - **Repo-hygiene — MERGED on master** (`ab04ee3`, brought forward from Stage 16):
   README+badges, `SECURITY.md`, `CONTRIBUTING.md`, `CODEOWNERS`, `.github/`
   templates, `scorecard.yml`, hardened `.gitignore`. Branch `chore/repo-hygiene`

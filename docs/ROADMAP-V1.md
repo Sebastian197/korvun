@@ -93,10 +93,15 @@ más las piezas de robustez que un producto de verdad necesita.
     Postgres/multi-nodo, compactación/retención (el `ts`+`seq` ya viaja en cada
     fila → query aditiva, no migración).
 
-- **Observabilidad.** Métricas, logs estructurados, trazas. ADR-0008 §4c dejó la
-  métrica de saturación (`DroppedCount`) como dependencia dura de Stage 12. La
-  *provenance* del motor de políticas es la base para depurar políticas, pero
-  falta el sistema de observabilidad que la consuma.
+- **✓ HECHO — Observabilidad.** **Cerrado en Stage 12** (`docs/stages/STAGE-12.md`,
+  ADR-0020, merge `cee4a20`). Logs estructurados estandarizados en los funnels +
+  un seam `Metrics` (interfaz en el dominio, impl Prometheus en
+  `internal/metrics/prom`) + un admin `http.Server` (`internal/httpserver`,
+  default-on, loopback `127.0.0.1:2112`) sirviendo `/metrics` (seis series
+  `korvun_*`, entre ellas la métrica de saturación `DroppedCount` que ADR-0008
+  §4c dejó como dependencia dura de esta etapa, expuesta vía pull `NewCounterFunc`)
+  y `/healthz` (liveness-only). Trazas **diferidas**; dashboards/alerting son del
+  lado operador. El control API que montará en el mismo mux es Stage 13.
 
 - **✓ HECHO — El ensamblaje real (`main.go`).** **Cerrado en Stage 11**
   (ADR-0017, `docs/stages/STAGE-11.md`): el binario `korvun` lee un config JSON
@@ -203,7 +208,16 @@ más las piezas de robustez que un producto de verdad necesita.
       - *Alcance honesto:* persiste **memoria de conversación**, no aún budget
         con estado, historial analítico, ni Postgres (todos aditivos detrás del
         mismo seam `Store`, ver Sección 1 y 2).
-- [ ] Es observable (sé qué está pasando dentro sin leer el código).
+- [x] Es observable (sé qué está pasando dentro sin leer el código). **COMPLETO
+      (Stage 12).**
+      - *Entregado:* logs `slog` estandarizados en los funnels + seis métricas
+        Prometheus en `/metrics` (mensajes procesados, histograma de latencia por
+        provider, fallos por provider, errores de router por kind, mensajes
+        dropeados por canal, turnos persistidos) detrás de un seam `Metrics`, más
+        `/healthz` liveness-only. Admin server default-on en loopback, con forma
+        de seam para el control API de Stage 13. ADR-0020.
+      - *Alcance honesto:* sin trazas distribuidas (diferidas), sin dashboards ni
+        alerting (lado operador), sin auth/TLS en el admin server (Stage 13).
 - [ ] Lo configura alguien por fichero, sin recompilar.
 - [ ] Lo instala alguien que no soy yo, en su máquina, siguiendo la documentación.
 - [ ] Aguanta un proveedor caído sin caerse.
