@@ -123,8 +123,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	}
 
 	r := router.New(router.WithErrorHandler(func(re router.RouterError) {
-		b.logger.Error("router error",
-			"kind", re.Kind.String(), "channel", re.Channel, "brain", re.Brain, "error", re.Err)
+		logRouterError(b.logger, re)
 	}))
 
 	channels, err := b.wire(r, cfg)
@@ -142,6 +141,24 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		app.store = store // owned closer, set only from a non-nil concrete store
 	}
 	return app, nil
+}
+
+// logRouterError records one asynchronous router failure with the standardized
+// observability funnel fields (ADR-0020 §1): kind, channel, brain, envelope_id,
+// error. envelope_id is the empty string when the RouterError carries no
+// envelope (some kinds do not). Extracted from the WithErrorHandler closure so
+// the field vocabulary is testable in isolation.
+func logRouterError(logger *slog.Logger, re router.RouterError) {
+	envID := ""
+	if re.Envelope != nil {
+		envID = re.Envelope.ID
+	}
+	logger.Error("router error",
+		"kind", re.Kind.String(),
+		"channel", re.Channel,
+		"brain", re.Brain,
+		"envelope_id", envID,
+		"error", re.Err)
 }
 
 // openStore opens the durable conversation store when storage is configured, or

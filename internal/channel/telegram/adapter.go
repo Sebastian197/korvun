@@ -305,6 +305,8 @@ func (a *Adapter) dispatchUpdate(ctx context.Context, u *models.Update) {
 		a.dropped.Add(1)
 		a.cfg.logger.WarnContext(ctx,
 			"telegram: dropped inbound envelope after enqueue timeout",
+			"channel", a.Name(),
+			"envelope_id", env.ID,
 			"conversation_id", convID,
 			"chat_id", env.Meta[MetaChatID],
 			"timeout", a.cfg.enqueueTimeout.String(),
