@@ -19,3 +19,5 @@ High-level summary of the approach.
 - [ ] ADR written for new external dependencies
 - [ ] Godoc on all exported symbols
 - [ ] Conventional Commit messages
+- [ ] No AI attribution in commits or this PR (no "Generated with/by", no
+      co-author trailers, no reference to Claude/Anthropic or any assistant)

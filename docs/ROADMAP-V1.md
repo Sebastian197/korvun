@@ -129,9 +129,22 @@ más las piezas de robustez que un producto de verdad necesita.
 
 - **Control API (Stage 13).** Gestionar brains, políticas y canales en caliente.
 
-- **Documentación de producto (Stage 16).** Quickstart, instalación por SO
-  (incluido Raspberry Pi), guía de extensión (nuevo canal, nuevo agente),
-  referencia de config. Sin esto, nadie que no seas tú puede usarlo.
+- **Documentación de producto y presentación del repo (Stage 16).**
+  - **✓ ADELANTADO (rama `chore/repo-hygiene`, ejecutado antes de Stage 12) —
+    presentación profesional del repo.** Por decisión de Chano, esta parte salió
+    del orden de roadmap: ~~README con badges (CI, Go Report Card, Go version,
+    License, OpenSSF Scorecard, release), `SECURITY.md`, `CONTRIBUTING.md`,
+    `CODEOWNERS`, plantillas `.github/` (issues + PR), OpenSSF Scorecard
+    (`scorecard.yml`), mejoras `.gitignore`.~~ Hecho en `chore/repo-hygiene`,
+    pendiente de revisión + merge. **No reintroducir en Stage 16** (se deja
+    anotado aquí para no duplicarlo por error). Badges dependen de billing de
+    Actions desbloqueado + repo público — ver `docs/HANDOFF.md`.
+  - *Resto del alcance de Stage 16 (SIGUE PENDIENTE):* documentación
+    developer-facing completa — quickstart, instalación por SO (incluido
+    Raspberry Pi), perfiles `edge`/`cloud`, referencia de config, guía de
+    extensión (nuevo canal, nuevo agente), referencia de la control API, guía del
+    builder no-code; GoReleaser; skill `/cso`. Sin esto, nadie que no seas tú
+    puede usarlo.
 
 - **Empaquetado y distribución (Stage 15).** Binarios por plataforma,
   instaladores, contenedores.

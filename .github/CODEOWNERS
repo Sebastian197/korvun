@@ -1,0 +1,6 @@
+# Code owners for Korvun.
+# These owners are requested for review on any matching PR.
+# Docs: https://docs.github.com/en/repositories/managing-your-repos-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo.
+*       @Sebastian197
