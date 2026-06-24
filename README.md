@@ -70,7 +70,7 @@ is tracked in [`docs/ROADMAP-V1.md`](docs/ROADMAP-V1.md).
 
 ## Quickstart
 
-Requires **Go 1.26+** (see [`go.mod`](go.mod)).
+Requires **Go 1.26.4+** (see [`go.mod`](go.mod)).
 
 ```sh
 # Build the binary
