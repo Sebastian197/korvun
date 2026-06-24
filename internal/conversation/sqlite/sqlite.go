@@ -54,6 +54,24 @@ CREATE TABLE IF NOT EXISTS turns (
     PRIMARY KEY (key, seq)
 ) WITHOUT ROWID;`
 
+// buildFileDSN builds the SQLite "file:" DSN from a forward-slashed absolute
+// path (the result of filepath.ToSlash). dsnQuery is emitted verbatim as the
+// query so the _pragma settings survive a path containing URI-significant
+// characters.
+//
+// A Windows drive-letter path is forward-slashed but rootless ("C:/Users/x"):
+// without a leading slash, url.URL renders it as "file://C:/..." and the SQLite
+// driver reads "C:" as the URI authority ("invalid uri authority"). Prepending
+// '/' yields the canonical "file:///C:/Users/x" — empty authority, drive letter
+// in the path — which SQLite resolves correctly on Windows. Unix paths already
+// start with '/', so this is a no-op for them and leaves their DSN unchanged.
+func buildFileDSN(slashed string) string {
+	if len(slashed) == 0 || slashed[0] != '/' {
+		slashed = "/" + slashed
+	}
+	return (&url.URL{Scheme: "file", Path: slashed, RawQuery: dsnQuery}).String()
+}
+
 // SqliteStore persists conversation turns in a single SQLite database file. It
 // implements conversation.Store and is closable.
 type SqliteStore struct {
@@ -80,7 +98,11 @@ func Open(path string) (*SqliteStore, error) {
 			return nil, fmt.Errorf("sqlite: create data dir %q: %w", dir, err)
 		}
 	}
-	dsn := (&url.URL{Scheme: "file", Path: abs, RawQuery: dsnQuery}).String()
+	// filepath.ToSlash makes the path separator '/' on every OS (a no-op on Unix;
+	// on Windows it turns C:\Users\x into C:/Users/x) so buildFileDSN sees the
+	// same shape everywhere — letting the Windows drive-letter case be tested
+	// from a Unix host (see dsn_test.go).
+	dsn := buildFileDSN(filepath.ToSlash(abs))
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
