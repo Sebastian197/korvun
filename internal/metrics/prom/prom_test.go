@@ -158,7 +158,9 @@ func TestHandler_servesMetricsExposition(t *testing.T) {
 func TestRegisterDroppedSource_isPull(t *testing.T) {
 	m := New()
 	var dropped atomic.Uint64
-	m.RegisterDroppedSource("telegram", dropped.Load)
+	if err := m.RegisterDroppedSource("telegram", dropped.Load); err != nil {
+		t.Fatalf("RegisterDroppedSource: %v", err)
+	}
 
 	const before = `
 # HELP korvun_channel_messages_dropped_total Inbound messages dropped after enqueue timeout, by channel.
@@ -178,5 +180,21 @@ korvun_channel_messages_dropped_total{channel="telegram"} 3
 `
 	if err := testutil.GatherAndCompare(m.Gatherer(), strings.NewReader(after), "korvun_channel_messages_dropped_total"); err != nil {
 		t.Errorf("dropped after 3 (pull semantics):\n%v", err)
+	}
+}
+
+// TestRegisterDroppedSource_duplicateReturnsErrorNoPanic asserts a second
+// registration for the same channel returns an error instead of panicking
+// (MustRegister would panic). Defensive: today the router rejects duplicate
+// channel names, but a future second channel type must not turn a config into a
+// hard boot panic (review F2).
+func TestRegisterDroppedSource_duplicateReturnsErrorNoPanic(t *testing.T) {
+	m := New()
+	var dropped atomic.Uint64
+	if err := m.RegisterDroppedSource("telegram", dropped.Load); err != nil {
+		t.Fatalf("first RegisterDroppedSource: %v", err)
+	}
+	if err := m.RegisterDroppedSource("telegram", dropped.Load); err == nil {
+		t.Error("second RegisterDroppedSource for the same channel returned nil, want a registration error (not a panic)")
 	}
 }

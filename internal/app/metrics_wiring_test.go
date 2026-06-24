@@ -77,11 +77,12 @@ type fakeRegistrar struct {
 	got map[string]func() uint64
 }
 
-func (f *fakeRegistrar) RegisterDroppedSource(channel string, count func() uint64) {
+func (f *fakeRegistrar) RegisterDroppedSource(channel string, count func() uint64) error {
 	if f.got == nil {
 		f.got = map[string]func() uint64{}
 	}
 	f.got[channel] = count
+	return nil
 }
 
 // droppingChannel is a Channel that also exposes a cumulative DroppedCount.
@@ -99,7 +100,7 @@ func TestRegisterDroppedSources(t *testing.T) {
 	plain := newFakeChannel("webhook") // no DroppedCount: must be skipped
 	reg := &fakeRegistrar{}
 
-	registerDroppedSources(reg, []Channel{dc, plain})
+	registerDroppedSources(reg, []Channel{dc, plain}, slog.New(slog.DiscardHandler))
 
 	if len(reg.got) != 1 {
 		t.Fatalf("registered %d sources, want 1 (only the dropping channel)", len(reg.got))

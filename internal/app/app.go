@@ -170,7 +170,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	// (telegram). Done after wiring so the adapters exist; only when the
 	// Prometheus backend is active (pm != nil).
 	if pm != nil {
-		registerDroppedSources(pm, channels)
+		registerDroppedSources(pm, channels, b.logger)
 	}
 
 	app := &App{
@@ -190,7 +190,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 // count. *prom.Metrics satisfies it; kept as a narrow interface so the wiring is
 // testable with a fake and so app does not hard-depend on the concrete type.
 type droppedRegistrar interface {
-	RegisterDroppedSource(channel string, count func() uint64)
+	RegisterDroppedSource(channel string, count func() uint64) error
 }
 
 // droppedCounter is a channel that maintains a cumulative inbound-drop count
@@ -201,11 +201,16 @@ type droppedCounter interface {
 
 // registerDroppedSources wires each channel's DroppedCount (when it has one) as
 // a pull metric, so the drop count is read at scrape time rather than
-// double-instrumented (ADR-0020 §3).
-func registerDroppedSources(reg droppedRegistrar, channels []Channel) {
+// double-instrumented (ADR-0020 §3). A registration error (e.g. a duplicate
+// channel name) is logged and skipped, never fatal: a metric must not take down
+// boot (review F2).
+func registerDroppedSources(reg droppedRegistrar, channels []Channel, logger *slog.Logger) {
 	for _, ch := range channels {
 		if dc, ok := ch.(droppedCounter); ok {
-			reg.RegisterDroppedSource(ch.Name(), dc.DroppedCount)
+			if err := reg.RegisterDroppedSource(ch.Name(), dc.DroppedCount); err != nil {
+				logger.Warn("observability: dropped-count source not registered",
+					"channel", ch.Name(), "error", err)
+			}
 		}
 	}
 }

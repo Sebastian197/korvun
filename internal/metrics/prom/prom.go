@@ -150,8 +150,13 @@ func (m *Metrics) ObserveTurnsPersisted(n int) {
 // metric layer reads it rather than incrementing a parallel one (ADR-0020 §3).
 // The channel name is a ConstLabel because CounterFunc carries no variable
 // labels; call once per channel.
-func (m *Metrics) RegisterDroppedSource(channel string, count func() uint64) {
-	m.reg.MustRegister(prometheus.NewCounterFunc(prometheus.CounterOpts{
+//
+// It returns the registration error rather than panicking (Register, not
+// MustRegister): a duplicate channel name yields prometheus.AlreadyRegisteredError
+// instead of crashing boot. The caller logs and continues — a metrics
+// registration must never take down the serve path (review F2).
+func (m *Metrics) RegisterDroppedSource(channel string, count func() uint64) error {
+	return m.reg.Register(prometheus.NewCounterFunc(prometheus.CounterOpts{
 		Name:        "korvun_channel_messages_dropped_total",
 		Help:        "Inbound messages dropped after enqueue timeout, by channel.",
 		ConstLabels: prometheus.Labels{"channel": channel},
