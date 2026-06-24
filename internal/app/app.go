@@ -133,8 +133,9 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	// is built.
 	enabled, addr := cfg.ObservabilitySettings()
 	var adminServer *httpserver.Server
+	var pm *prom.Metrics
 	if enabled {
-		pm := prom.New()
+		pm = prom.New()
 		b.metrics = pm
 		adminServer = httpserver.New(addr, b.logger)
 		adminServer.Handle("/metrics", pm.Handler(b.logger))
@@ -152,7 +153,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	}
 
 	r := router.New(router.WithErrorHandler(func(re router.RouterError) {
-		logRouterError(b.logger, re)
+		onRouterError(b.logger, b.metrics, re)
 	}))
 
 	channels, err := b.wire(r, cfg)
@@ -165,6 +166,13 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		}
 		return nil, err
 	}
+	// Register the pull dropped-count source for every channel that exposes one
+	// (telegram). Done after wiring so the adapters exist; only when the
+	// Prometheus backend is active (pm != nil).
+	if pm != nil {
+		registerDroppedSources(pm, channels)
+	}
+
 	app := &App{
 		router:      r,
 		channels:    channels,
@@ -176,6 +184,39 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		app.store = store // owned closer, set only from a non-nil concrete store
 	}
 	return app, nil
+}
+
+// droppedRegistrar registers a pull source for a channel's cumulative dropped
+// count. *prom.Metrics satisfies it; kept as a narrow interface so the wiring is
+// testable with a fake and so app does not hard-depend on the concrete type.
+type droppedRegistrar interface {
+	RegisterDroppedSource(channel string, count func() uint64)
+}
+
+// droppedCounter is a channel that maintains a cumulative inbound-drop count
+// (the telegram adapter). Other channels do not implement it and are skipped.
+type droppedCounter interface {
+	DroppedCount() uint64
+}
+
+// registerDroppedSources wires each channel's DroppedCount (when it has one) as
+// a pull metric, so the drop count is read at scrape time rather than
+// double-instrumented (ADR-0020 §3).
+func registerDroppedSources(reg droppedRegistrar, channels []Channel) {
+	for _, ch := range channels {
+		if dc, ok := ch.(droppedCounter); ok {
+			reg.RegisterDroppedSource(ch.Name(), dc.DroppedCount)
+		}
+	}
+}
+
+// onRouterError is the single sink the router's WithErrorHandler funnel feeds:
+// it both logs the failure (standardized fields) and counts it by kind on the
+// metrics backend (ADR-0020 §1, §3). Keeping both off one funnel is the
+// near-zero-blast-radius wiring the stage relies on.
+func onRouterError(logger *slog.Logger, m metrics.Metrics, re router.RouterError) {
+	logRouterError(logger, re)
+	m.IncRouterError(re.Kind.String())
 }
 
 // logRouterError records one asynchronous router failure with the standardized
@@ -272,7 +313,7 @@ func (b *builder) buildBrain(bc config.BrainConfig) (*brain.Orchestrator, error)
 		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 	}
 	coord := buildCoordinator(bc.Dispatch, b.perModelTimeout)
-	orchOpts := []brain.Option{brain.WithLogger(b.logger)}
+	orchOpts := []brain.Option{brain.WithLogger(b.logger), brain.WithMetrics(b.metrics)}
 	if b.store != nil {
 		// Shared durable memory; recentTurns 0 => the Orchestrator default
 		// (ADR-0019: config stays minimal, history depth is a Brain concern).
