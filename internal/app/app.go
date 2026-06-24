@@ -31,6 +31,9 @@ import (
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/conversation/sqlite"
+	"github.com/Sebastian197/korvun/internal/httpserver"
+	"github.com/Sebastian197/korvun/internal/metrics"
+	"github.com/Sebastian197/korvun/internal/metrics/prom"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/model/fanout"
 	"github.com/Sebastian197/korvun/internal/model/groq"
@@ -64,6 +67,13 @@ type App struct {
 	// (stateless). Held as io.Closer, set only from a non-nil concrete store, so
 	// it is never a typed-nil interface (ADR-0019 §6).
 	store io.Closer
+	// adminServer is the observability HTTP server (/metrics + /healthz). nil
+	// when observability is disabled. Started FIRST in Run and stopped LAST in
+	// Shutdown so it stays observable across the whole drain (ADR-0020 §4).
+	adminServer *httpserver.Server
+	// metrics is the domain's observability backend: the Prometheus impl when
+	// observability is on, metrics.Nop when off. Never nil.
+	metrics metrics.Metrics
 }
 
 // builder holds resolved construction settings, including the channel factory
@@ -75,6 +85,9 @@ type builder struct {
 	// store is the shared conversation memory injected into every brain. A true
 	// nil interface (no storage configured) leaves each Orchestrator stateless.
 	store conversation.Store
+	// metrics is the observability backend injected into the domain. Defaults to
+	// metrics.Nop; set to the Prometheus impl when observability is enabled.
+	metrics metrics.Metrics
 }
 
 // Option configures Build.
@@ -106,9 +119,25 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		logger:          slog.Default(),
 		perModelTimeout: DefaultPerModelTimeout,
 		newChannel:      defaultChannelFactory,
+		metrics:         metrics.Nop{},
 	}
 	for _, o := range opts {
 		o(b)
+	}
+
+	// Resolve observability BEFORE the router, so the Prometheus backend exists
+	// when the domain is wired (ADR-0020 §4). Absent block = on with loopback
+	// defaults (the asymmetry with Storage, documented in config). When enabled,
+	// the domain records through the Prometheus impl and the admin server serves
+	// its /metrics; when disabled, the domain records through Nop and no server
+	// is built.
+	enabled, addr := cfg.ObservabilitySettings()
+	var adminServer *httpserver.Server
+	if enabled {
+		pm := prom.New()
+		b.metrics = pm
+		adminServer = httpserver.New(addr, b.logger)
+		adminServer.Handle("/metrics", pm.Handler(b.logger))
 	}
 
 	// Open the durable store ONCE, before wiring the brains, and share it across
@@ -136,7 +165,13 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		}
 		return nil, err
 	}
-	app := &App{router: r, channels: channels, logger: b.logger}
+	app := &App{
+		router:      r,
+		channels:    channels,
+		logger:      b.logger,
+		adminServer: adminServer,
+		metrics:     b.metrics,
+	}
 	if store != nil {
 		app.store = store // owned closer, set only from a non-nil concrete store
 	}
@@ -330,10 +365,23 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 // channel fails to start, channels already started are stopped before the error
 // is returned, so Run never leaves a half-started system behind.
 func (a *App) Run(ctx context.Context) error {
+	// Start the admin server FIRST (ADR-0020 §4): /healthz is up before any
+	// channel connects, so an operator sees the process is alive during boot. A
+	// bind failure is a loud boot error (the golden rule).
+	if a.adminServer != nil {
+		if err := a.adminServer.Start(ctx); err != nil {
+			return fmt.Errorf("app: start admin server: %w", err)
+		}
+		a.logger.Info("admin server listening", "addr", a.adminServer.Addr())
+	}
+
 	started := make([]Channel, 0, len(a.channels))
 	for _, ch := range a.channels {
 		if err := ch.Start(ctx); err != nil {
 			a.stopChannels(context.Background(), started)
+			if a.adminServer != nil {
+				_ = a.adminServer.Shutdown(context.Background())
+			}
 			return fmt.Errorf("app: start channel %q: %w", ch.Name(), err)
 		}
 		started = append(started, ch)
@@ -374,6 +422,14 @@ func (a *App) Shutdown(ctx context.Context) error {
 			if err := a.store.Close(); err != nil {
 				errs = append(errs, fmt.Errorf("app: close conversation store: %w", err))
 			}
+		}
+	}
+	// Stop the admin server LAST (ADR-0020 §4): /metrics and /healthz stay
+	// observable across the whole drain above, then the last network surface
+	// closes. Its error is joined like a channel's, never masking the rest.
+	if a.adminServer != nil {
+		if err := a.adminServer.Shutdown(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("app: shutdown admin server: %w", err))
 		}
 	}
 	return errors.Join(errs...)

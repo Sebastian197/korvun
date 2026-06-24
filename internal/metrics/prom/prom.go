@@ -15,11 +15,15 @@
 package prom
 
 import (
+	"fmt"
+	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // providerDurationBuckets are LLM-shaped, not HTTP-shaped: provider calls run to
@@ -85,6 +89,26 @@ func New() *Metrics {
 // HTTP server can build a promhttp handler over it (ADR-0020 §4) without
 // importing Prometheus elsewhere in the domain.
 func (m *Metrics) Gatherer() prometheus.Gatherer { return m.reg }
+
+// Handler returns the http.Handler that serves the private registry's metrics
+// in Prometheus text format. Built here so promhttp stays inside this leaf; the
+// admin server mounts the returned handler at /metrics as a plain http.Handler.
+// Collection errors are logged through the supplied slog logger rather than the
+// default (which writes to the response body only).
+func (m *Metrics) Handler(logger *slog.Logger) http.Handler {
+	return promhttp.HandlerFor(m.reg, promhttp.HandlerOpts{
+		ErrorLog: slogPromLogger{logger: logger},
+	})
+}
+
+// slogPromLogger adapts a *slog.Logger to promhttp.Logger (a single Println
+// method) so metric-collection errors land in Korvun's structured logs.
+type slogPromLogger struct{ logger *slog.Logger }
+
+// Println implements promhttp.Logger.
+func (l slogPromLogger) Println(v ...any) {
+	l.logger.Error("metrics handler error", "detail", fmt.Sprint(v...))
+}
 
 // IncMessages counts one inbound message handed to a brain, by channel.
 func (m *Metrics) IncMessages(channel string) {

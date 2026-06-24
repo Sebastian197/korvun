@@ -4,6 +4,9 @@
 package prom
 
 import (
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -124,6 +127,27 @@ func TestObserveProviderDuration_outcomeSplitsSeries(t *testing.T) {
 	}
 	if got != 2 {
 		t.Errorf("series count = %d, want 2 (ok and error split into distinct series)", got)
+	}
+}
+
+// TestHandler_servesMetricsExposition asserts Handler() returns an http.Handler
+// that serves the registry's metrics in Prometheus text format, so the admin
+// server can mount it at /metrics without importing promhttp itself (ADR-0020
+// §2, §4).
+func TestHandler_servesMetricsExposition(t *testing.T) {
+	m := New()
+	m.IncMessages("telegram")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	m.Handler(slog.New(slog.DiscardHandler)).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "korvun_messages_processed_total") {
+		t.Errorf("exposition missing korvun_messages_processed_total:\n%s", body)
 	}
 }
 
