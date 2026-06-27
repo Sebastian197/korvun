@@ -90,6 +90,17 @@ func TestLoad_fileErrors(t *testing.T) {
 	})
 }
 
+// TestValidate_agentConfigValid proves a well-formed agent block passes Validate
+// (ADR-0021): the brain mounts a tool-use AgentBrain instead of the Orchestrator.
+func TestValidate_agentConfigValid(t *testing.T) {
+	t.Parallel()
+	js := `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}],"agent":{"tools":["calc","echo","time"],"max_iterations":4,"system_prompt":"be terse"}}],"routes":[{"channel":"telegram","brain":"d"}]}`
+	path := writeConfig(t, js)
+	if _, err := config.Load(path); err != nil {
+		t.Fatalf("valid agent config rejected: %v", err)
+	}
+}
+
 // TestValidate_fieldErrors drives one mutation per offending field and asserts
 // the error wraps ErrInvalidConfig and NAMES the field (ADR-0017 §5).
 func TestValidate_fieldErrors(t *testing.T) {
@@ -154,6 +165,16 @@ func TestValidate_fieldErrors(t *testing.T) {
 			name:      "cloud provider missing api_key_env",
 			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"groq","model_id":"m","locality":"cloud"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
 			wantField: "brains[0].models[0].api_key_env",
+		},
+		{
+			name:      "agent with empty tools",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}],"agent":{"tools":[]}}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains[0].agent.tools",
+		},
+		{
+			name:      "agent with negative max_iterations",
+			json:      `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}],"agent":{"tools":["calc"],"max_iterations":-1}}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "brains[0].agent.max_iterations",
 		},
 		{
 			name:      "empty channel type",

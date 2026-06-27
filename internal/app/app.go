@@ -41,6 +41,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/model/sequential"
 	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/router"
+	"github.com/Sebastian197/korvun/internal/tool"
 )
 
 // DefaultPerModelTimeout bounds each provider call. It is applied to every
@@ -297,10 +298,13 @@ func (b *builder) wire(r *router.Router, cfg *config.Config) ([]Channel, error) 
 	return channels, nil
 }
 
-// buildBrain assembles one Orchestrator: catalog → privacy selector → policy →
-// coordinator. The selector runs once here (ADR-0015), so a Private brain wired
-// with only cloud models fails loudly at boot (ErrNoEligibleModels).
-func (b *builder) buildBrain(bc config.BrainConfig) (*brain.Orchestrator, error) {
+// buildBrain assembles one brain.Brain: catalog → privacy selector → then either
+// the default fan-out Orchestrator OR, when an agent block is present, a tool-use
+// AgentBrain (ADR-0021). Both satisfy brain.Brain, so wire() registers either the
+// same way and the router/cmd/korvun stay agnostic. The selector runs once here
+// (ADR-0015), so a Private brain wired with only cloud models fails loudly at boot
+// (ErrNoEligibleModels).
+func (b *builder) buildBrain(bc config.BrainConfig) (brain.Brain, error) {
 	catalog, err := b.buildCatalog(bc)
 	if err != nil {
 		return nil, err
@@ -312,6 +316,9 @@ func (b *builder) buildBrain(bc config.BrainConfig) (*brain.Orchestrator, error)
 	selected, err := policy.SelectModels(catalog, sens)
 	if err != nil {
 		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+	}
+	if bc.Agent != nil {
+		return b.buildAgentBrain(bc, selected)
 	}
 	pol, err := buildPolicy(bc.Policy)
 	if err != nil {
@@ -325,6 +332,43 @@ func (b *builder) buildBrain(bc config.BrainConfig) (*brain.Orchestrator, error)
 		orchOpts = append(orchOpts, brain.WithConversationStore(b.store, 0))
 	}
 	return brain.NewOrchestrator(coord, selected, pol, orchOpts...), nil
+}
+
+// buildAgentBrain assembles a single-model tool-use AgentBrain (ADR-0021). The
+// agent is single-model (§1), so exactly one model must survive selection
+// (ErrAgentModelCount otherwise). The tool registry is resolved from the
+// configured names through tool.Builtin — the one place the safe-toolset boundary
+// lives, so a dangerous name fails loudly at boot (ErrUnknownTool, §8). The shared
+// durable store and metrics are injected like the Orchestrator's; only the FINAL
+// user+assistant pair is persisted (§6).
+func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model) (brain.Brain, error) {
+	if len(selected) != 1 {
+		return nil, fmt.Errorf("%w: brain %q: got %d", ErrAgentModelCount, bc.Name, len(selected))
+	}
+	reg := make(tool.Registry, len(bc.Agent.Tools))
+	for _, name := range bc.Agent.Tools {
+		tl, ok := tool.Builtin(name)
+		if !ok {
+			return nil, fmt.Errorf("%w: %q (brain %q; available: %v)", ErrUnknownTool, name, bc.Name, tool.BuiltinNames())
+		}
+		reg[tl.Name()] = tl
+	}
+	opts := []brain.AgentOption{
+		brain.WithAgentLogger(b.logger),
+		brain.WithAgentMetrics(b.metrics),
+		brain.WithAgentPerModelTimeout(b.perModelTimeout),
+	}
+	if bc.Agent.MaxIterations > 0 {
+		opts = append(opts, brain.WithAgentMaxIterations(bc.Agent.MaxIterations))
+	}
+	if bc.Agent.SystemPrompt != "" {
+		opts = append(opts, brain.WithAgentSystemPrompt(bc.Agent.SystemPrompt))
+	}
+	if b.store != nil {
+		opts = append(opts, brain.WithAgentConversationStore(b.store, 0))
+	}
+	b.logger.Info("agent brain wired", "brain", bc.Name, "tools", bc.Agent.Tools, "max_iterations", bc.Agent.MaxIterations)
+	return brain.NewAgentBrain(selected[0], reg, opts...), nil
 }
 
 // buildCatalog constructs one CatalogEntry per model, tagging each with its

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/envelope"
@@ -90,6 +91,75 @@ func ollamaBrain() config.BrainConfig {
 		Models: []config.ModelConfig{
 			{Provider: "ollama", ModelID: "llama3.2", Locality: "local"},
 		},
+	}
+}
+
+// testBuilder is a minimal builder for direct buildBrain unit tests, with a
+// discard logger so the wired-brain Info line stays out of the suite output.
+func testBuilder() *builder {
+	return &builder{logger: slog.New(slog.DiscardHandler), perModelTimeout: time.Second}
+}
+
+// TestBuildBrain_agent_success proves an agent block mounts a *brain.AgentBrain
+// (NOT the Orchestrator), assembled single-model with the configured safe tools —
+// and that it satisfies brain.Brain, so wire()/the router stay agnostic (ADR-0021
+// §1).
+func TestBuildBrain_agent_success(t *testing.T) {
+	t.Parallel()
+	bc := config.BrainConfig{
+		Name:        "agent",
+		Sensitivity: "public",
+		Policy:      config.PolicyConfig{Kind: "priority"},
+		Models:      []config.ModelConfig{{Provider: "ollama", ModelID: "llama3.2", Locality: "local"}},
+		Agent:       &config.AgentConfig{Tools: []string{"calc", "echo"}, MaxIterations: 4},
+	}
+	br, err := testBuilder().buildBrain(bc)
+	if err != nil {
+		t.Fatalf("buildBrain(agent): %v", err)
+	}
+	if _, ok := br.(*brain.AgentBrain); !ok {
+		t.Fatalf("buildBrain returned %T, want *brain.AgentBrain", br)
+	}
+	var _ brain.Brain = br // mountable exactly like the Orchestrator
+}
+
+// TestBuildBrain_agent_unknownTool proves the safe-toolset boundary fails loud at
+// boot: a dangerous tool name never resolves (ADR-0021 §8).
+func TestBuildBrain_agent_unknownTool(t *testing.T) {
+	t.Parallel()
+	bc := config.BrainConfig{
+		Name:        "agent",
+		Sensitivity: "public",
+		Policy:      config.PolicyConfig{Kind: "priority"},
+		Models:      []config.ModelConfig{{Provider: "ollama", ModelID: "m", Locality: "local"}},
+		Agent:       &config.AgentConfig{Tools: []string{"shell"}},
+	}
+	_, err := testBuilder().buildBrain(bc)
+	if !errors.Is(err, ErrUnknownTool) {
+		t.Fatalf("err = %v, want ErrUnknownTool", err)
+	}
+	if !strings.Contains(err.Error(), "shell") {
+		t.Errorf("error %q does not name the rejected tool", err.Error())
+	}
+}
+
+// TestBuildBrain_agent_multiModel proves the single-model invariant (ADR-0021 §1):
+// an agent surviving selection with more than one model fails loud at boot.
+func TestBuildBrain_agent_multiModel(t *testing.T) {
+	t.Parallel()
+	bc := config.BrainConfig{
+		Name:        "agent",
+		Sensitivity: "public",
+		Policy:      config.PolicyConfig{Kind: "priority"},
+		Models: []config.ModelConfig{
+			{Provider: "ollama", ModelID: "m1", Locality: "local"},
+			{Provider: "ollama", ModelID: "m2", Locality: "local"},
+		},
+		Agent: &config.AgentConfig{Tools: []string{"calc"}},
+	}
+	_, err := testBuilder().buildBrain(bc)
+	if !errors.Is(err, ErrAgentModelCount) {
+		t.Fatalf("err = %v, want ErrAgentModelCount", err)
 	}
 }
 

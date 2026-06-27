@@ -106,6 +106,21 @@ type BrainConfig struct {
 	Policy      PolicyConfig  `json:"policy"`
 	Dispatch    string        `json:"dispatch"`
 	Models      []ModelConfig `json:"models"`
+	// Agent, when present, mounts a tool-use AgentBrain instead of the default
+	// fan-out Orchestrator (ADR-0021). Both satisfy brain.Brain, so the router and
+	// cmd/korvun are agnostic to which one a brain wires. nil = the Orchestrator.
+	Agent *AgentConfig `json:"agent,omitempty"`
+}
+
+// AgentConfig configures a tool-use AgentBrain (ADR-0021). Tools names the
+// built-in tools to register (time, echo, calc — the safe, pure set; resolution
+// and the dangerous-tool boundary live in internal/tool.Builtin, ADR-0021 §8).
+// MaxIterations is the hard loop cap (0 => the AgentBrain default). SystemPrompt
+// is the operator prompt appended after the protocol block.
+type AgentConfig struct {
+	Tools         []string `json:"tools"`
+	MaxIterations int      `json:"max_iterations"`
+	SystemPrompt  string   `json:"system_prompt"`
 }
 
 // PolicyConfig selects the reducer. Kind is "priority" or "consensus"; Order is
@@ -240,8 +255,32 @@ func (c *Config) validateBrains() (map[string]bool, error) {
 		if err := validateModels(i, b.Models); err != nil {
 			return nil, err
 		}
+		if err := validateAgent(i, b.Agent); err != nil {
+			return nil, err
+		}
 	}
 	return names, nil
+}
+
+// validateAgent checks the optional agent block's structure (ADR-0021). Tool-name
+// resolution (the safe-toolset boundary) is a semantic concern handled in
+// internal/app, mirroring how unknown provider names surface there, not here.
+func validateAgent(brainIdx int, a *AgentConfig) error {
+	if a == nil {
+		return nil
+	}
+	if len(a.Tools) == 0 {
+		return fmt.Errorf("%w: brains[%d].agent.tools: at least one tool is required", ErrInvalidConfig, brainIdx)
+	}
+	for j, name := range a.Tools {
+		if name == "" {
+			return fmt.Errorf("%w: brains[%d].agent.tools[%d]: tool name is required", ErrInvalidConfig, brainIdx, j)
+		}
+	}
+	if a.MaxIterations < 0 {
+		return fmt.Errorf("%w: brains[%d].agent.max_iterations: must be >= 0 (0 => default)", ErrInvalidConfig, brainIdx)
+	}
+	return nil
 }
 
 func validateModels(brainIdx int, models []ModelConfig) error {
