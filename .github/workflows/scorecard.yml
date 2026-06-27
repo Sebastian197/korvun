@@ -8,12 +8,16 @@ name: OpenSSF Scorecard
 # will not produce a working badge — see docs/HANDOFF.md.
 
 on:
-  # Re-run when branch protection rules change (improves the Branch-Protection check).
-  branch_protection_rule:
-  schedule:
-    - cron: "0 6 * * 1" # weekly, Mondays 06:00 UTC
-  push:
-    branches: [master]
+  # Scorecard requires a PUBLIC repo (publish_results/SARIF); on a private repo it
+  # fails at checkout (git exit 128). The automatic triggers are disabled until the
+  # repo goes public in Stage 16 — re-enable the push/schedule/branch_protection_rule
+  # triggers below then. Left runnable manually so nothing is lost.
+  workflow_dispatch:
+  # branch_protection_rule:
+  # schedule:
+  #   - cron: "0 6 * * 1" # weekly, Mondays 06:00 UTC
+  # push:
+  #   branches: [master]
 
 # Declare default token permissions as read-only; the job elevates only what it needs.
 permissions: read-all
