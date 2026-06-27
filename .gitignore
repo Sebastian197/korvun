@@ -60,3 +60,4 @@ results.sarif
 # Frontend tooling (future no-code builder)
 node_modules/
 frontend/dist/
+.gstack/
