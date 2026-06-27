@@ -29,15 +29,16 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of session close, 2026-06-24)
+## Current state (as of session close, 2026-06-27)
 
-> **master is at `cee4a20`** (Stage 12 merged `--no-ff`), green on all three
-> OSes (ubuntu / macos / **windows-latest** verified — Actions billing
-> unblocked). Stages closed: **0–7, 9, 11, 12**. `go.mod` has **3 direct deps**
-> (`go-telegram/bot` + `modernc.org/sqlite` + `prometheus/client_golang`). The
-> binary serves `/metrics` + `/healthz` on a default-on loopback admin server.
-> Next step (user picks): **Stage 8 (agents)** per the order 8 → 10 → 13 → 14 →
-> 15 → 16 (12 is now done).
+> **master is at `34d699d`** (Stage 8 merged `--no-ff`), `make quality` green with
+> `-race` + cross-compile ×6 `CGO_ENABLED=0`. Stages closed: **0–8, 9, 11, 12**.
+> `go.mod` stays at **3 direct deps** (`go-telegram/bot` + `modernc.org/sqlite` +
+> `prometheus/client_golang`) — Stage 8 added nothing. The binary can now mount a
+> tool-use `AgentBrain` from config alongside the fan-out Orchestrator.
+> **Next step: Stage 10 (bus)** per the order **10 → 13 → 14 → 15 → 16** (8 and 12
+> are done). Each heavyweight phase still earns `/office-hours` +
+> `/plan-eng-review` before its ADR.
 
 ### Stages closed on master
 
@@ -52,11 +53,31 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | 5       | Policy engine — post-dispatch phase (2 reducers) | closed |
 | **6**   | **Policy engine — pre-dispatch phase (privacy selector + sequential fail-over)** | **closed** |
 | 7       | Brain orchestrator (first live end-to-end path) | closed |
+| **8**   | **Agents — tool-use `AgentBrain` (B2), `Tool` seam + 3 pure tools, prompt-protocol (ADR-0021)** | **closed** |
 | **9**   | **Persistence — durable conversation memory (ADR-A interface+MemStore, ADR-B SQLite)** | **closed** |
 | **11**  | **The real assembly — `cmd/korvun` (config + app + main + router pump)** | **closed** |
 | **12**  | **Observability — slog funnel fields + Metrics seam (Prometheus) + admin HTTP server (`/metrics` + `/healthz`)** | **closed** |
 
-**Stages 0–7, 9, 11 and 12 are all closed, each with its own stage doc — zero
+**Stage 8 (agents) is CLOSED** (`docs/stages/STAGE-08.md`, ADR-0021, merged
+`--no-ff` as `34d699d`). A new `AgentBrain` (decision B2 — a `brain.Brain` sibling
+of the `Orchestrator`, NOT a Coordinator and NOT a mutation of it) runs a bounded
+single-model model→tool→model loop. The `Tool` seam lives in the leaf
+`internal/tool` package with three PURE built-ins (`time`/`echo`/`calc`; `calc` is
+a bounded custom parser, NEVER `eval` — a security decision, §8). Tool-use rides
+the prompt-protocol (decision D2: zero change to `model.Model`); native
+function-calling is deferred as a sibling `ToolCallingModel` interface. The safety
+invariants (hard max-iterations, total timeout inherited from the `Handle` ctx,
+per-tool timeout, tool-failure as an OBSERVATION, model-failure → fallback) are
+the central property. The Brain stays stateless (loop state local to `Handle`),
+proven by a `-race` test with a stateful fake tool under concurrent `Handle`. Only
+the final user+assistant pair is persisted, never the tool-use trace.
+`buildBrain` mounts an `AgentBrain` from an optional `agent` config block, so the
+router and `cmd/korvun` stay agnostic. `/review` found 1 P2 (empty-reply →
+fallback) + 3 P3 (fenced tool line, calc length/overflow bounds), all fixed.
+**Process note:** `.gstack/` was gitignored in a SEPARATE `chore:` commit on
+master, not mixed into the agents merge.
+
+**Stages 0–8, 9, 11 and 12 are all closed, each with its own stage doc — zero
 half-open stages.** The policy-engine block (Stages 5+6) plus its orchestration
 (Stage 7) gave the full differentiator; **Stage 11 assembled it into a binary
 that boots**: `korvun` reads one JSON config and wires channel → router → brain
@@ -93,11 +114,11 @@ re-entrancy). **Process note:** a `git add -A` swept the parked `CLAUDE.md` +
 Lesson now standing: **selective `git add <paths>`, never `-A`, with parked
 files in the tree.**
 
-**Recommended order for what's next (NOT started — user picks): 8 (agents)
-→ 10 (bus) → 13 (control API) → 14 (no-code builder) → 15 (packaging) →
-16 (hardening + release)**. (Stage 12 is done.) Stage 13's control API mounts on
-the SAME `internal/httpserver` mux Stage 12 built. Each heavyweight phase still
-earns `/office-hours` + `/plan-eng-review` before its ADR.
+**Next stage: 10 (bus)** per the order **10 (bus) → 13 (control API) → 14 (no-code
+builder) → 15 (packaging) → 16 (hardening + release)**. (Stages 8 and 12 are
+done.) Stage 13's control API mounts on the SAME `internal/httpserver` mux Stage
+12 built. Each heavyweight phase still earns `/office-hours` + `/plan-eng-review`
+before its ADR.
 
 ### Stage 9 — persistence (closed)
 
@@ -702,11 +723,19 @@ Key entries currently:
   transaction, boot-fatal-vs-stateless, persist on a cancellation-detached context
   so durable memory survives a graceful shutdown, `65549cf`). `make quality` green
   with `-race`, cross-compile ×6 `CGO_ENABLED=0` green. **`go.mod` now has THREE
-  direct dependencies** (the 3rd added by Stage 12 / ADR-0020). **No next stage is
-  open — the user picks.** Recommended order: **8 (agents) → 10 (bus) → 13 (control
-  API) → 14 (no-code builder) → 15 (packaging) → 16 (hardening + release)** (Stage
-  12 is done). Each heavyweight phase still earns `/office-hours` +
-  `/plan-eng-review` before its ADR.
+  direct dependencies** (the 3rd added by Stage 12 / ADR-0020; Stage 8 added
+  none). **Next stage: 10 (bus)**, order **10 → 13 (control API) → 14 (no-code
+  builder) → 15 (packaging) → 16 (hardening + release)** (Stages 8 and 12 are
+  done). Each heavyweight phase still earns `/office-hours` + `/plan-eng-review`
+  before its ADR.
+- **Stage 8 (agents) is CLOSED** (`docs/stages/STAGE-08.md`, ADR-0021, `34d699d`):
+  a tool-use `AgentBrain` (B2 — a `brain.Brain` sibling of the Orchestrator) runs a
+  bounded single-model tool loop over the leaf `internal/tool` seam (3 pure tools;
+  `calc` is a bounded custom parser, no `eval`), prompt-protocol D2 (zero change to
+  `model.Model`; native deferred as `ToolCallingModel`). Safety invariants
+  (max-iter / inherited timeout / per-tool / tool-failure-as-observation /
+  model-failure→fallback), stateless + `-race`-tested, final-pair-only persistence.
+  `/review`: 1 P2 + 3 P3 fixed. `go.mod` still 3 deps.
 - **Repo-hygiene — MERGED on master** (`ab04ee3`, brought forward from Stage 16):
   README+badges, `SECURITY.md`, `CONTRIBUTING.md`, `CODEOWNERS`, `.github/`
   templates, `scorecard.yml`, hardened `.gitignore`. Branch `chore/repo-hygiene`
@@ -714,11 +743,14 @@ Key entries currently:
   OpenSSF Scorecard workflow fails expectedly while the repo is private — not a
   regression; resolves when the repo goes public in Stage 16. See "Repo-hygiene —
   adelantado desde Stage 16" above.
+- **`.gstack/` is now gitignored** (`chore: gitignore .gstack tooling dir`,
+  committed separately on master in Stage 8 close, NOT mixed into the agents
+  merge). It is local gstack tooling state (browse/design binaries, session files,
+  analytics) — never project code, so it is ignored by construction. This
+  supersedes the earlier "NOT added to `.gitignore`" hold.
 - **Parked, intact — do not touch:**
   - `CLAUDE.md` modified in the working tree (the "Design spec first" step), on
     hold, NOT committed. Confirm with the user before any work touching it.
-  - `.gstack/` untracked (tooling dir) — on hold, NOT committed and NOT added to
-    `.gitignore`, per the user's call.
 - **`master` is branch-protected** (Settings → Branches ruleset: block
   force-push/deletion, require status checks). Enabled now that CI is green.
 - `make quality` green with `-race` is the bar — do not advance a

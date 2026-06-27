@@ -162,8 +162,19 @@ más las piezas de robustez que un producto de verdad necesita.
   por brain (cola acotada + workers por ADR-0003), un número concreto de brains
   concurrentes soportados.
 
-- **Agentes (Stage 8).** Que los brains llamen a herramientas/sistemas externos
-  (ERP, etc.). Concurrencia pesada — zona de `/review`.
+- **Agentes (Stage 8). CERRADA** (`docs/stages/STAGE-08.md`, ADR-0021). Un
+  `AgentBrain` (B2 — `brain.Brain` hermano del Orchestrator) corre un bucle
+  acotado modelo→herramienta→modelo de un solo modelo. El primer corte es un
+  *slice de validación de seam*: el `Tool` seam (`internal/tool`, leaf) + tres
+  herramientas PURAS (`time`/`echo`/`calc`; `calc` es un parser propio acotado,
+  sin `eval` — decisión de seguridad). Tool-use por prompt-protocol (D2, cero
+  cambio a `model.Model`); function-calling nativo diferido como interfaz hermana
+  `ToolCallingModel`. Invariantes de seguridad (max-iter duro, timeout heredado
+  del `Handle`, per-tool timeout, tool-failure como observación, model-failure →
+  fallback), stateless con test `-race` (fake tool con estado), persistencia
+  solo-par-final. Diferido: herramientas peligrosas (shell/HTTP/fs/ERP), agentes
+  multi-model, planning, multi-agente, native function-calling. Concurrencia
+  pesada — pasó por `/review` (1 P2 + 3 P3 arreglados).
 
 - **Bus de eventos (Stage 10).** Comunicación entre componentes. Concurrencia
   pesada — zona de `/review`.
