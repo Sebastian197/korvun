@@ -30,4 +30,14 @@ var (
 	// ErrUnknownLocality is returned when a model declares a locality that is
 	// neither local nor cloud.
 	ErrUnknownLocality = errors.New("app: unknown locality")
+
+	// ErrUnknownTool is returned when an agent brain configures a tool name this
+	// build cannot resolve. Only the safe built-ins (time, echo, calc) resolve;
+	// a dangerous name like "shell" fails loudly at boot (ADR-0021 §8).
+	ErrUnknownTool = errors.New("app: unknown agent tool")
+
+	// ErrAgentModelCount is returned when an agent brain is configured with a
+	// number of (post-selection) models other than exactly one: the Stage 8 cut
+	// is a SINGLE-model tool-use loop (ADR-0021 §1).
+	ErrAgentModelCount = errors.New("app: agent brain requires exactly one model")
 )
