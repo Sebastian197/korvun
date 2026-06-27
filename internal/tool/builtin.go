@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 )
@@ -91,13 +92,29 @@ func (calcTool) Description() string {
 	return "evaluates a basic arithmetic expression (+ - * / and parentheses) over numbers. args = the expression, e.g. 2+2*3."
 }
 
-// Execute parses and evaluates the bounded arithmetic in args. A malformed
-// expression returns an error, which the loop surfaces to the model as an
-// OBSERVATION (ADR-0021 §2), never a panic.
+// maxCalcLen bounds the expression length. The recursive-descent parser recurses
+// once per '(' and per unary '-', so an unbounded input could in principle
+// exhaust the goroutine stack (uncatchable). Model output is already bounded, but
+// a hard cap closes the defensive gap by construction, keeping the tool's blast
+// radius near zero (ADR-0021 §8).
+const maxCalcLen = 1024
+
+// Execute parses and evaluates the bounded arithmetic in args. A malformed or
+// over-long expression, or a non-finite result, returns an error, which the loop
+// surfaces to the model as an OBSERVATION (ADR-0021 §2), never a panic.
 func (calcTool) Execute(_ context.Context, args string) (string, error) {
+	if len(args) > maxCalcLen {
+		return "", fmt.Errorf("%w: expression too long (%d > %d)", errCalc, len(args), maxCalcLen)
+	}
 	v, err := evalArithmetic(args)
 	if err != nil {
 		return "", err
+	}
+	// Reject non-finite results: a finite-literal overflow (huge product) or an
+	// Inf-Inf yields ±Inf / NaN, which would violate the bounded-arithmetic
+	// contract by emitting non-numeric tokens to the model.
+	if math.IsInf(v, 0) || math.IsNaN(v) {
+		return "", fmt.Errorf("%w: non-finite result", errCalc)
 	}
 	// FormatFloat with -1 precision prints whole results without a decimal
 	// point (4, 8, 20) and fractional ones minimally (2.5).

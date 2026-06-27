@@ -35,6 +35,7 @@ func TestParseReply_toolCalls(t *testing.T) {
 		{"mixed case keyword and name", "Tool: Calc(2+2)", "calc", "2+2"},
 		{"no space after colon", "TOOL:calc(2+2)", "calc", "2+2"},
 		{"space before colon", "TOOL : calc(2+2)", "calc", "2+2"},
+		{"single-line fenced tool", "```TOOL: calc(2+2)```", "calc", "2+2"},
 		{"args with inner parens", "TOOL: calc((1+2)*3)", "calc", "(1+2)*3"},
 		{"args preserved verbatim", "TOOL: echo( spaced )", "echo", " spaced "},
 		{"trailing CRLF", "TOOL: calc(2+2)\r\n", "calc", "2+2"},

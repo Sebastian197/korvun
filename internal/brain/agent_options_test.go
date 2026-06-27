@@ -122,6 +122,30 @@ func TestAgentBrain_noConversationID(t *testing.T) {
 	}
 }
 
+// TestAgentBrain_emptyModelReply proves an empty (non-error) model reply degrades
+// to the fallback rather than shipping a blank message and persisting a one-sided
+// turn (the adversarial-review P2). Nothing is persisted.
+func TestAgentBrain_emptyModelReply(t *testing.T) {
+	t.Parallel()
+	store := conversation.NewMemStore()
+	m := &scriptedModel{name: "m", replies: []string{"   "}} // blank, non-error
+	a := NewAgentBrain(m, builtinRegistry(),
+		WithAgentLogger(quietLogger()), WithAgentConversationStore(store, 5))
+
+	out, err := a.Handle(context.Background(), inboundConv("telegram", "c-empty", "hi"))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if out[0].Parts[0].Content != defaultFallback {
+		t.Fatalf("got %q, want the fallback on an empty model reply", out[0].Parts[0].Content)
+	}
+	// No asymmetric persistence: a blank answer is not stored.
+	turns, _ := store.LoadRecent(context.Background(), conversation.Key("telegram::c-empty"), 5)
+	if len(turns) != 0 {
+		t.Fatalf("persisted %d turns, want 0 (blank answer must not persist a one-sided pair)", len(turns))
+	}
+}
+
 // errLoadStore errors on LoadRecent but delegates writes, proving the agent
 // answers without memory when history load fails (loadHistory error branch).
 type errLoadStore struct{ inner conversation.Store }

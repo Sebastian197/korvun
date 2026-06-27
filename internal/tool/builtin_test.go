@@ -120,6 +120,8 @@ func TestCalc_errors(t *testing.T) {
 		{"double operator", "2++2"},
 		{"exponent rejected", "2^8"},
 		{"letters", "abc"},
+		{"too long", strings.Repeat("1+", 600) + "1"},
+		{"overflow to inf", strings.Repeat("9", 200) + "*" + strings.Repeat("9", 200)},
 	}
 	for _, tc := range bad {
 		t.Run(tc.name, func(t *testing.T) {

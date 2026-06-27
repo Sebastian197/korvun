@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/conversation"
@@ -241,6 +242,15 @@ func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *m
 		content := out.Response.Message.Content
 		name, args, isToolCall := parseReply(content)
 		if !isToolCall {
+			if strings.TrimSpace(content) == "" {
+				// An empty (non-error) model reply is not a usable answer:
+				// shipping it would send the user a blank message and persist a
+				// user-only turn (asymmetric memory). Degrade to the fallback,
+				// the same as a model-call failure.
+				a.logger.Warn("agent: empty model reply, no answer",
+					"envelope_id", env.ID, "channel", env.Channel, "iter", iter)
+				return "", false
+			}
 			return content, true // final answer
 		}
 

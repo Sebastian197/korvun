@@ -32,6 +32,14 @@ import (
 // anchors with ^...$ to reject prose that merely mentions the keyword.
 var toolLineRe = regexp.MustCompile(`(?i)^tool\s*:\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\((.*)\)$`)
 
+// fenceDelimRe matches a PURE code-fence delimiter line: a run of backticks plus
+// an optional bare language tag and nothing else (``` or ```text). Such lines are
+// formatting noise and are skipped. A line that merely STARTS with backticks but
+// carries real payload (a tool call wrapped in a single-line fence,
+// "```TOOL: calc(2+2)```") does NOT match, so its backticks are stripped and the
+// payload is kept rather than dropped.
+var fenceDelimRe = regexp.MustCompile("^`{3,}[a-zA-Z0-9]*$")
+
 // parseReply classifies a model reply as either a tool call or a final answer
 // (ADR-0021 §3.2, §3.3).
 //
@@ -67,10 +75,10 @@ func firstMeaningfulLine(content string) (string, bool) {
 		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(line, "```") {
-			continue // a code-fence delimiter (``` or ```lang) — formatting noise
+		if fenceDelimRe.MatchString(line) {
+			continue // a pure code-fence delimiter (``` or ```lang) — formatting noise
 		}
-		line = strings.TrimSpace(strings.Trim(line, "`")) // strip inline-code backticks
+		line = strings.TrimSpace(strings.Trim(line, "`")) // strip inline-code backticks / single-line fences
 		if line == "" {
 			continue
 		}
