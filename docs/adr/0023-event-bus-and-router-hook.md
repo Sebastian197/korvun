@@ -96,7 +96,10 @@ type Event struct {
 type Handler func(Event)
 
 type Bus interface {
-    Publish(ev Event)                                // best-effort, non-blocking, never errors
+    // best-effort, non-blocking, never errors. ctx is the natsBus seam; the
+    // in-memory impl is non-blocking and does not consult it (cf. ADR-0015,
+    // PriorityReducer ignoring its ctx).
+    Publish(ctx context.Context, ev Event)
     Subscribe(t EventType, h Handler) (unsubscribe func())
 }
 ```
@@ -131,10 +134,16 @@ zero cost (a nil check). It is the only router change, and it is additive — th
 queues, workers, `WaitGroup` lifecycle, and shutdown order are untouched.
 
 ```go
-// EventPublisher is the narrow seam the router publishes lifecycle events to. The
-// bus satisfies it; kept as an interface so the router does not import internal/bus.
-type EventPublisher interface{ Publish(ev bus.Event) }   // (or a router-local Event mirror)
+// EventPublisher is the narrow publish-side seam the router publishes lifecycle
+// events to (defined in package router). *bus.InMemoryBus satisfies it; kept as an
+// interface so the router does not hard-depend on a concrete bus and tests use a fake.
+type EventPublisher interface{ Publish(ctx context.Context, ev bus.Event) }
 ```
+
+As implemented, package `router` imports `internal/bus` (a leaf — it imports only
+`envelope`, so no cycle) and constructs `bus.Event` values directly; the
+`EventPublisher` interface keeps the dependency on the *concrete* bus out, for
+testability.
 
 **Exact publish points and what each event means to the operator:**
 
@@ -211,6 +220,15 @@ a visible drop counter is the contract.
 
 ## Out of scope (recorded, not silently dropped)
 
+- **Binding the bus into the running binary (app wiring)** — giving the router its
+  real `EventPublisher`, publishing `MessageDropped` / `HandleFailed` from the
+  existing `onRouterError` funnel, exposing `bus.DroppedCount()` on `/metrics`, and
+  `Close`-ing the bus on shutdown — **lands in ADR-0024 alongside the SSE
+  consumer**, so the producer is wired together with its consumer, not before it
+  (the project's "no seam without a consumer" discipline). This ADR (1a) delivers
+  the bus package and the router hook CAPABILITY, validated by unit tests with a
+  fake publisher and a concurrency `-race` test — the binary's hook stays dormant
+  (nil publisher, zero cost) until ADR-0024 wires it.
 - **The SSE live-view and the UI** — ADR-0024 (Phase 1b).
 - **Mutation, auth, the edit UI, the visual canvas** — Phase 2+ (each its own ADR).
 - **NATS, event persistence, event sourcing, replay, webhooks-out** — the `Bus`
