@@ -180,8 +180,23 @@ más las piezas de robustez que un producto de verdad necesita.
     builder no-code; GoReleaser; skill `/cso`. Sin esto, nadie que no seas tú
     puede usarlo.
 
-- **Empaquetado y distribución (Stage 15).** Binarios por plataforma,
-  instaladores, contenedores.
+- **✓ HECHO (la maquinaria) — Empaquetado y distribución (Stage 15). CERRADO**
+  (`docs/stages/STAGE-15.md`, ADR-0025, `a8075f9`): pipeline GoReleaser (build-time,
+  no toca go.mod) disparado por tag SemVer → GitHub Release con ×6 binarios
+  `CGO_ENABLED=0` + checksums SHA256 + archivos `.tar.gz`/`.zip` + changelog
+  Conventional-Commits + SBOM por-release (Syft); `--version` por ldflags vía el
+  helper `internal/buildinfo` (100%, TDD); ejemplos `configs/edge.json`+`cloud.json`
+  (ficheros, NO sistema de perfiles runtime); `docs/packaging/` (install guide +
+  systemd de ejemplo sin endurecer). Validado con `goreleaser release --snapshot
+  --clean` (6 archivos + 6 SBOMs + checksums). Alcance honesto: 15 = autor
+  cross-machine + maquinaria probada, NO instalable-por-cualquiera hasta el flip
+  público de Stage 16.
+  - *Pendiente — decisión consciente:* **ningún tag `vX.Y.Z` real pusheado todavía**;
+    el primer release (¿`v0.1.0`?) es una decisión aparte usando la maquinaria que
+    ya existe.
+  - *Diferido a Stage 16:* flip público + firma/provenance/SLSA + Scorecard revive
+    + systemd endurecida + docs developer-facing completas. *Diferido hasta demanda:*
+    `.deb`/`.rpm`/Homebrew/contenedores.
 
 ---
 
@@ -217,9 +232,10 @@ más las piezas de robustez que un producto de verdad necesita.
 
 > **Orden de trabajo (actualizado 2026-06-28):**
 > **Stage 13 (control API) ✓ → Stage 14 Fase 1 (fundamentos: bus + live-view) ✓
-> → Stage 14 Fase 2 (builder: mutación + auth + UI edición + lienzo) O Stage 15
-> (packaging) → Stage 16 (hardening + release).**
-> Stages 0–9, 11, 12, 13 y **14 Fase 1** cerradas. Stage 10 (bus) cerrada dentro
+> → Stage 15 (packaging, la maquinaria) ✓ → [decisión: primer tag `v0.1.0` O
+> Stage 16] → Stage 16 (hardening + flip público + firma/SLSA + Scorecard) →
+> Stage 14 Fase 2 (builder: mutación + auth + UI edición + lienzo, diferido).**
+> Stages 0–9, 11, 12, 13, **14 Fase 1 y 15** cerradas. Stage 10 (bus) cerrada dentro
 > de 14 Fase 1a. Próximo = decidir 14 Fase 2 vs 15.
 
 ---

@@ -31,15 +31,17 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ## Current state (as of session close, 2026-06-28)
 
-> **master is at `4f36447`** (Stage 14 Phase 1b merged `--no-ff`), `make quality`
-> green with `-race` + cross-compile ×6 `CGO_ENABLED=0`. Stages closed: **0–9, 11,
-> 12, 13, and 14 Phase 1 (foundation)**. `go.mod` stays at **3 direct deps**
-> (`go-telegram/bot` + `modernc.org/sqlite` + `prometheus/client_golang`) — all of
-> Stage 14 Phase 1 added none. The binary boots, serves Telegram live, remembers
+> **master is at `a8075f9`** (Stage 15 packaging machinery, direct to master),
+> `make quality` green with `-race` + cross-compile ×6 `CGO_ENABLED=0`. Stages
+> closed: **0–9, 11, 12, 13, 14 Phase 1 (foundation), and 15 (packaging
+> machinery)**. `go.mod` stays at **3 direct deps** (`go-telegram/bot` +
+> `modernc.org/sqlite` + `prometheus/client_golang`) — Stage 15 added none
+> (GoReleaser is build-time). The binary boots, serves Telegram live, remembers
 > across restarts, is observable (`/metrics` + `/healthz`), uses tools
 > (`AgentBrain`), is introspectable read-only (`/api/brains` + `/api/channels`),
-> and now **streams its message-pipeline lifecycle live** (`/api/events` SSE + an
-> embedded `/ui`).
+> **streams its message-pipeline lifecycle live** (`/api/events` SSE + an embedded
+> `/ui`), reports `--version`, and has a **validated GoReleaser release pipeline**
+> (tag → ×6 binaries + checksums + archives + SBOM; no real tag pushed yet).
 >
 > **Stage 14 Phase 1 (the builder's FOUNDATION, not the builder) is CLOSED**
 > (`docs/stages/STAGE-14.md`, ADR-0023 + ADR-0024), split by blast radius:
@@ -64,41 +66,42 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > The Stage 10 bus deferral is now closed correctly (built when, and only when, a
 > consumer arrived to validate it).
 >
-> **Decided: open Stage 15 (packaging); Stage 14 Phase 2 (the builder proper)
-> DEFERRED.** The builder's mutation wants a real consumer (a non-author operator,
-> which only exists once Korvun is installable); packaging unlocks the value
-> already built and de-risks the path to release. Phase 2, when it comes, is
-> **mutation** (add-only or reload-and-rebuild, **NEVER granular live editing** —
-> the router registry is boot-time and has **no per-brain cancel**, so live
-> granular mutation is a router concurrency/lifecycle change, not a handler) +
+> **Stage 14 Phase 2 (the builder proper) DEFERRED.** The builder's mutation wants
+> a real consumer (a non-author operator, which only exists once Korvun is
+> installable); packaging unlocked the value already built first. Phase 2, when it
+> comes, is **mutation** (add-only or reload-and-rebuild, **NEVER granular live
+> editing** — the router registry is boot-time and has **no per-brain cancel**, so
+> live granular mutation is a router concurrency/lifecycle change, not a handler) +
 > **AUTH** (the trigger of mutation; read-only is what keeps loopback-no-auth valid
 > today) + the edit UI + the visual canvas.
 >
-> **Stage 15 (packaging) is FRAMED** (`/office-hours` + `/plan-eng-review`,
-> copilot-approved) and pinned by **ADR-0025 (status: proposed — committed as
-> proposed, pending the copilot's cold approval before it flips to accepted)**.
-> Approach A (GoReleaser). Minimal cut:
-> ×6 versioned binaries + SHA256 checksums + `.tar.gz`/`.zip` archives + changelog,
-> via a **SemVer tag → GitHub Release**; `--version` by ldflags (a tested
-> `internal/buildinfo` helper keeps `main` thin — the ONLY production-code touch);
-> example `edge`/`cloud` JSON configs (NOT a runtime profile system); a short
-> install guide; a basic (un-hardened) systemd example; a per-release SBOM. The
-> 15/16 line: **Stage 16** owns the public repo flip, signing/provenance/SLSA, the
-> Scorecard reviving, the hardened systemd unit, and the full docs site;
-> `.deb`/`.rpm`/Homebrew/containers are deferred until demand. The honest scope
-> (do not oversell): Stage 15 does NOT make Korvun installable by anyone — that is
-> Stage 16's public flip; it delivers the author installing versioned artifacts
-> cross-machine (`gh release download`) + the proven machinery so the flip is one
-> line. `goreleaser-action` SHA verified: **v7.0.0 =
-> `ec59f474b9834571250b370d4735c50f8e2d1e29`**.
+> **Stage 15 (packaging) is CLOSED** (`docs/stages/STAGE-15.md`, ADR-0025,
+> `a8075f9`) — the release **machinery**, validated with `--snapshot` but with **NO
+> real release tag pushed yet** (a conscious pending decision). Approach A
+> (GoReleaser, build-time, never in `go.mod`). What landed: a `.goreleaser.yaml`
+> (×6 `CGO_ENABLED=0` binaries + SHA256 `checksums.txt` + `.tar.gz`/`.zip` archives
+> with binary+LICENSE+README + git Conventional-Commits changelog + per-release SBOM
+> via Syft + ldflags `-X main.version=v{{.Version}}`); a tag-triggered
+> `release.yml` (pinned SHAs: goreleaser `ec59f47`/v7.0.0, syft `e22c389`/v0.24.0;
+> tags pushed by hand); `--version` via a TDD'd `internal/buildinfo.Format` helper
+> (100%) — the ONLY production-code touch, short-circuiting before any config load;
+> example `configs/edge.json` (Pi, local, private, storage on) + `configs/cloud.json`
+> (groq+ollama fan-out) — files, NOT a runtime profile system; `docs/packaging/`
+> (INSTALL.md + a basic un-hardened `korvun.service`). `/review`: 0 P1, 1 P2 (the
+> `{{.Version}}` v-prefix strip) found and fixed. SBOM = describe (15); signing/
+> provenance/SLSA = prove (16).
 >
-> **Next step: copilot reviews ADR-0025 cold.** If approved → flip it to `accepted`
-> + commit → start the TDD implementation (`internal/buildinfo` helper red-first →
-> `.goreleaser.yaml` → release CI workflow → example configs/docs/systemd →
-> `goreleaser release --snapshot --clean` locally + a CI dry-run before the first
-> real `vX.Y.Z` tag). After Stage 15: **16 (hardening + release; repo goes public,
-> Scorecard revives)**. Each heavyweight phase still earns `/office-hours` +
-> `/plan-eng-review` before its ADR.
+> **Honest scope (do not oversell):** Stage 15 does NOT make Korvun installable by
+> anyone — that is Stage 16's public flip. It delivers the author installing
+> versioned artifacts cross-machine (`gh release download`) + the proven machinery
+> so the flip is one line.
+>
+> **Next step: a decision (NOT yet taken) — push the first real release tag
+> `v0.1.0` using the machinery that now exists, OR open Stage 16 (hardening +
+> release) first.** Stage 16 = the public repo flip + signing/provenance/SLSA + the
+> Scorecard reviving + the hardened systemd unit + the full developer-facing docs
+> site (`.deb`/`.rpm`/Homebrew/containers deferred until demand). Each heavyweight
+> phase still earns `/office-hours` + `/plan-eng-review` before its ADR.
 
 ### Stages closed on master
 
@@ -119,6 +122,7 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | **12**  | **Observability — slog funnel fields + Metrics seam (Prometheus) + admin HTTP server (`/metrics` + `/healthz`)** | **closed** |
 | **13**  | **Control API — read-only operator introspection (`internal/controlapi`, `GET /api/brains` + `/api/channels`) on the admin server (ADR-0022)** | **closed** |
 | **14·P1** | **Builder foundation — event bus (`internal/bus`, ADR-0023) + read-only live-view (`internal/liveview`: SSE `/api/events` + `go:embed` `/ui`, ADR-0024)** | **closed** |
+| **15**  | **Packaging — GoReleaser release pipeline (tag → ×6 binaries + checksums + archives + changelog + SBOM), `--version` (`internal/buildinfo`), example `edge`/`cloud` configs + install/systemd docs (ADR-0025); machinery validated, no real tag pushed yet** | **closed** |
 
 **Stage 13 (control API) is CLOSED** (`docs/stages/STAGE-13.md`, ADR-0022,
 `ac88478`). A read-only `internal/controlapi` leaf serves two GET endpoints on the
