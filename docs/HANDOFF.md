@@ -64,17 +64,41 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > The Stage 10 bus deferral is now closed correctly (built when, and only when, a
 > consumer arrived to validate it).
 >
-> **Next step: a decision — Stage 14 Phase 2 OR Stage 15.** Stage 14 Phase 2 is
-> the builder proper: **mutation** of the wiring (add-only or reload-and-rebuild,
-> **NEVER granular live editing** — the router registry is boot-time and has **no
-> per-brain cancel**: you cannot tear down/replace a single brain's workers in
-> place, so live granular mutation is a router concurrency/lifecycle change, not a
-> handler) + **AUTH**
-> (the trigger of mutation — read-only is what keeps loopback-no-auth valid today)
-> + the edit UI + the visual canvas (where React/TS/Vite earns its token). Stage 15
-> is packaging. After all of Stage 14: **15 (packaging) -> 16 (hardening + release;
-> repo goes public, Scorecard revives)**. Each heavyweight phase still earns
-> `/office-hours` + `/plan-eng-review` before its ADR.
+> **Decided: open Stage 15 (packaging); Stage 14 Phase 2 (the builder proper)
+> DEFERRED.** The builder's mutation wants a real consumer (a non-author operator,
+> which only exists once Korvun is installable); packaging unlocks the value
+> already built and de-risks the path to release. Phase 2, when it comes, is
+> **mutation** (add-only or reload-and-rebuild, **NEVER granular live editing** —
+> the router registry is boot-time and has **no per-brain cancel**, so live
+> granular mutation is a router concurrency/lifecycle change, not a handler) +
+> **AUTH** (the trigger of mutation; read-only is what keeps loopback-no-auth valid
+> today) + the edit UI + the visual canvas.
+>
+> **Stage 15 (packaging) is FRAMED** (`/office-hours` + `/plan-eng-review`,
+> copilot-approved) and pinned by **ADR-0025 (status: proposed — committed as
+> proposed, pending the copilot's cold approval before it flips to accepted)**.
+> Approach A (GoReleaser). Minimal cut:
+> ×6 versioned binaries + SHA256 checksums + `.tar.gz`/`.zip` archives + changelog,
+> via a **SemVer tag → GitHub Release**; `--version` by ldflags (a tested
+> `internal/buildinfo` helper keeps `main` thin — the ONLY production-code touch);
+> example `edge`/`cloud` JSON configs (NOT a runtime profile system); a short
+> install guide; a basic (un-hardened) systemd example; a per-release SBOM. The
+> 15/16 line: **Stage 16** owns the public repo flip, signing/provenance/SLSA, the
+> Scorecard reviving, the hardened systemd unit, and the full docs site;
+> `.deb`/`.rpm`/Homebrew/containers are deferred until demand. The honest scope
+> (do not oversell): Stage 15 does NOT make Korvun installable by anyone — that is
+> Stage 16's public flip; it delivers the author installing versioned artifacts
+> cross-machine (`gh release download`) + the proven machinery so the flip is one
+> line. `goreleaser-action` SHA verified: **v7.0.0 =
+> `ec59f474b9834571250b370d4735c50f8e2d1e29`**.
+>
+> **Next step: copilot reviews ADR-0025 cold.** If approved → flip it to `accepted`
+> + commit → start the TDD implementation (`internal/buildinfo` helper red-first →
+> `.goreleaser.yaml` → release CI workflow → example configs/docs/systemd →
+> `goreleaser release --snapshot --clean` locally + a CI dry-run before the first
+> real `vX.Y.Z` tag). After Stage 15: **16 (hardening + release; repo goes public,
+> Scorecard revives)**. Each heavyweight phase still earns `/office-hours` +
+> `/plan-eng-review` before its ADR.
 
 ### Stages closed on master
 
