@@ -10,10 +10,21 @@ import (
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/brain"
+	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
 )
+
+// EventPublisher is the optional, best-effort lifecycle-event sink the router
+// publishes to (ADR-0023). *bus.InMemoryBus satisfies it. It is the bus's publish
+// side, narrowed to what the router needs; kept as an interface so the router does
+// not hard-depend on a concrete bus and tests can use a fake. Publishing MUST be
+// non-blocking (the bus drops on a slow subscriber) so it never stalls the hot
+// path.
+type EventPublisher interface {
+	Publish(ctx context.Context, ev bus.Event)
+}
 
 // Router wires inbound Envelopes from channels to brains and outbound
 // replies back to channels. Phase 3.2 adds configurable worker pools,
@@ -37,6 +48,10 @@ type Router struct {
 	outboundQueueCapacity  int
 	outboundEnqueueTimeout time.Duration
 	errorHandler           func(RouterError)
+
+	// eventPublisher is the optional ADR-0023 lifecycle-event sink. nil (the
+	// default) disables publishing at zero cost. Set via WithEventPublisher.
+	eventPublisher EventPublisher
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -240,6 +255,7 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 	if r.enqueueTimeout <= 0 {
 		select {
 		case bw.queue <- env:
+			r.publishReceived(env, brainName)
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
@@ -249,6 +265,7 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 	defer timer.Stop()
 	select {
 	case bw.queue <- env:
+		r.publishReceived(env, brainName)
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -479,6 +496,32 @@ func (r *Router) deliver(cw *channelWorker, env *envelope.Envelope) {
 			Envelope: env,
 			Err:      err,
 		})
+		return
+	}
+	// ReplySent is published only after a SUCCESSFUL Send: enqueue is not
+	// delivery, and a Send failure surfaces as ErrKindSend above (ADR-0023 §3).
+	r.publishEvent(bus.Event{Type: bus.ReplySent, Envelope: env, Channel: cw.name})
+}
+
+// publishReceived emits a MessageReceived lifecycle event for an Envelope the
+// router just accepted into a brain's queue (ADR-0023 §3). It is the inbound half
+// of the optional event hook.
+func (r *Router) publishReceived(env *envelope.Envelope, brainName string) {
+	r.publishEvent(bus.Event{
+		Type:     bus.MessageReceived,
+		Envelope: env,
+		Channel:  env.Channel,
+		Brain:    brainName,
+	})
+}
+
+// publishEvent emits a lifecycle event to the optional event publisher, nil-safe
+// and best-effort. The publisher (the bus) is non-blocking and drops on a slow
+// subscriber, so this never stalls the hot path (ADR-0023). r.ctx is passed for
+// the EventPublisher seam; the in-memory bus does not consult it.
+func (r *Router) publishEvent(ev bus.Event) {
+	if r.eventPublisher != nil {
+		r.eventPublisher.Publish(r.ctx, ev)
 	}
 }
 

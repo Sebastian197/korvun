@@ -82,3 +82,14 @@ func WithOutboundEnqueueTimeout(d time.Duration) Option {
 func WithErrorHandler(h func(RouterError)) Option {
 	return func(r *Router) { r.errorHandler = h }
 }
+
+// WithEventPublisher sets the optional lifecycle-event sink (ADR-0023). The
+// router publishes MessageReceived (on a successful inbound enqueue in
+// DispatchInbound) and ReplySent (after a successful Channel.Send in deliver) to
+// it. Publishing is best-effort and MUST be non-blocking — the bus drops on a
+// slow subscriber rather than backpressuring the hot path. nil (the default)
+// disables publishing at zero cost. MessageDropped / HandleFailed are NOT
+// published here; they ride the existing WithErrorHandler funnel app-side.
+func WithEventPublisher(p EventPublisher) Option {
+	return func(r *Router) { r.eventPublisher = p }
+}
