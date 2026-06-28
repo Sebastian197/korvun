@@ -96,12 +96,38 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > versioned artifacts cross-machine (`gh release download`) + the proven machinery
 > so the flip is one line.
 >
-> **Next step: a decision (NOT yet taken) — push the first real release tag
-> `v0.1.0` using the machinery that now exists, OR open Stage 16 (hardening +
-> release) first.** Stage 16 = the public repo flip + signing/provenance/SLSA + the
-> Scorecard reviving + the hardened systemd unit + the full developer-facing docs
-> site (`.deb`/`.rpm`/Homebrew/containers deferred until demand). Each heavyweight
-> phase still earns `/office-hours` + `/plan-eng-review` before its ADR.
+> **Stage 16 (hardening + public release) is FRAMED** (`/office-hours` +
+> `/plan-eng-review`, copilot-approved) and pinned by **ADR-0026 (status: proposed,
+> committed as proposed, pending the copilot's cold review — especially the
+> pre-flip checklist)**. Phasing is **Order 1**, ordered by reversibility:
+> - **Phase A (pre-flip, ALL additive/reversible — Claude Code builds + runs the
+>   gate):** cosign keyless signing of `checksums.txt` (GoReleaser `signs:`, pinned
+>   `cosign-installer@v4.1.2`); hardened systemd unit (**static `User=korvun` +
+>   `StateDirectory=korvun` + `ReadWritePaths`, NOT `DynamicUser`** — Korvun writes
+>   the SQLite DB — plus `ProtectSystem=strict` etc.); developer-facing docs
+>   (CONSOLIDATE the 15 STAGE docs + 26 ADRs + godoc + `INSTALL.md`, not from
+>   scratch); delete the 9 stale remote branches; run the pre-flip checklist. SLSA
+>   provenance (`attest-build-provenance@v4.1.1`) is a fast-follow in A if cheap.
+> - **Phase B (THE FLIP — the one hard one-way door, SEBASTIÁN in Settings, gated
+>   on A green):** repo → public; re-enable `scorecard.yml`; badges; address
+>   findings.
+> - **Phase C (first public release — SEBASTIÁN pushes the tag):** `v0.1.0` →
+>   first public, signed release + SBOM. Green before: `make quality` + signed
+>   `release.yml` validated by `--snapshot`/dry-run.
+>
+> **Reversibility:** everything is additive/reversible EXCEPT the flip (hard
+> one-way door — history public forever) and a pushed tag (soft — a tag/release is
+> deletable; only a downloaded artifact is not). The strongest gate is on the flip.
+> **EXPLICIT: the flip and the tag are SEBASTIÁN's acts, NOT Claude Code's and NOT
+> autonomous.** The pre-flip checklist (gitleaks/trufflehog over all history +
+> Actions-logs review + non-git surface + `.gitignore` + the parked `CLAUDE.md`
+> resolved + the email decision + panel settings) is the gate's heart, run by
+> Claude Code on the Mac against real git.
+>
+> **Next step: the copilot reviews ADR-0026 cold (especially the pre-flip
+> checklist).** If approved → Phase A (the machinery) → run the gate → Sebastián's
+> flip → Sebastián's `v0.1.0`. Each Action SHA is re-verified at source before it
+> lands in a workflow.
 
 ### Stages closed on master
 
