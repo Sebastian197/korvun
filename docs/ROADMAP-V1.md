@@ -130,9 +130,13 @@ más las piezas de robustez que un producto de verdad necesita.
 
 - **El builder no-code (Stage 14).** El diferenciador de cara al usuario:
   expresar políticas de forma declarativa y visual. La V1 potente lo necesita;
-  el MVP solo tiene las políticas en código.
+  el MVP solo tiene las políticas en código. **Su fase 1 es el bus de eventos**
+  (Stage 10 absorbida aquí): el live-view del builder es el primer suscriptor
+  real que lo justifica. Ver `docs/notes/bus-design-sketch.md`.
 
 - **Control API (Stage 13).** Gestionar brains, políticas y canales en caliente.
+  Monta en el mismo mux del `internal/httpserver` de Stage 12. **Es la próxima
+  etapa** tras el reorden (ver nota de orden abajo).
 
 - **Documentación de producto y presentación del repo (Stage 16).**
   - **✓ ADELANTADO (rama `chore/repo-hygiene`, ejecutado antes de Stage 12) —
@@ -176,8 +180,26 @@ más las piezas de robustez que un producto de verdad necesita.
   multi-model, planning, multi-agente, native function-calling. Concurrencia
   pesada — pasó por `/review` (1 P2 + 3 P3 arreglados).
 
-- **Bus de eventos (Stage 10).** Comunicación entre componentes. Concurrencia
-  pesada — zona de `/review`.
+- **Bus de eventos (Stage 10). DIFERIDA — absorbida como fase 1 de Stage 14.**
+  Decisión consciente de YAGNI tras el encuadre (`/office-hours` +
+  `/plan-eng-review`, 2026-06-28), **no es deuda ni un hueco inexplicado.** El
+  bus es infra especulativa hoy: cero suscriptores reales, el router ya
+  desacopla vía sus colas point-to-point, y las métricas de Stage 12 se
+  cablearon directamente a los funnels (sin bus). El primer suscriptor real es
+  el live-view del builder, así que el bus se construye **como primera fase de
+  Stage 14**, diseñado y validado contra ese consumidor. Argumento decisivo:
+  reversibilidad — Korvun ya añade seams aditivamente cuando llega el consumidor
+  (`Store→SqliteStore`, `Metrics→prom`, `Coordinator→fanout/sequential`) con el
+  router intacto y testeado a `-race` desde Stage 3, así que diferir es gratis.
+  El espacio de diseño esbozado queda guardado en
+  `docs/notes/bus-design-sketch.md` para cuando se construya. Sigue siendo
+  concurrencia pesada — zona de `/review`.
+
+> **Orden de trabajo (reordenado 2026-06-28):**
+> **Stage 13 (control API) → Stage 14 (builder no-code; su fase 1 es el bus,
+> antes Stage 10) → Stage 15 (packaging) → Stage 16 (hardening + release).**
+> Stages 0–9, 11, 12 cerradas. Stage 10 (bus) diferida y absorbida en Stage 14
+> fase 1 (YAGNI: sin suscriptor real hasta el builder). Próxima etapa = 13.
 
 ---
 

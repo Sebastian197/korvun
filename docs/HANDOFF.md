@@ -36,9 +36,14 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > `go.mod` stays at **3 direct deps** (`go-telegram/bot` + `modernc.org/sqlite` +
 > `prometheus/client_golang`) — Stage 8 added nothing. The binary can now mount a
 > tool-use `AgentBrain` from config alongside the fan-out Orchestrator.
-> **Next step: Stage 10 (bus)** per the order **10 → 13 → 14 → 15 → 16** (8 and 12
-> are done). Each heavyweight phase still earns `/office-hours` +
-> `/plan-eng-review` before its ADR.
+> **Next step: Stage 13 (control API).** Stage 10 (bus) was **DEFERRED**
+> 2026-06-28 after framing (`/office-hours` + `/plan-eng-review`) and absorbed as
+> **phase 1 of Stage 14** — a conscious YAGNI call, not debt: no real subscriber
+> exists until the builder's live-view (the router's point-to-point queues
+> already give the decoupling; Stage 12 wired metrics directly without a bus).
+> New order: **13 -> 14 (phase 1 = bus) -> 15 -> 16**. Design sketch parked in
+> `docs/notes/bus-design-sketch.md`. Each heavyweight phase still earns
+> `/office-hours` + `/plan-eng-review` before its ADR.
 
 ### Stages closed on master
 
@@ -114,11 +119,15 @@ re-entrancy). **Process note:** a `git add -A` swept the parked `CLAUDE.md` +
 Lesson now standing: **selective `git add <paths>`, never `-A`, with parked
 files in the tree.**
 
-**Next stage: 10 (bus)** per the order **10 (bus) → 13 (control API) → 14 (no-code
-builder) → 15 (packaging) → 16 (hardening + release)**. (Stages 8 and 12 are
+**Next stage: 13 (control API).** Stage 10 (bus) was DEFERRED 2026-06-28 and
+absorbed as **phase 1 of Stage 14** (YAGNI: no real subscriber until the
+builder's live-view; the router queues already decouple; Stage 12 wired metrics
+directly, no bus). New order: **13 (control API) -> 14 (no-code builder; phase 1
+= bus) -> 15 (packaging) -> 16 (hardening + release)**. (Stages 8 and 12 are
 done.) Stage 13's control API mounts on the SAME `internal/httpserver` mux Stage
-12 built. Each heavyweight phase still earns `/office-hours` + `/plan-eng-review`
-before its ADR.
+12 built. Design sketch parked in `docs/notes/bus-design-sketch.md`. Each
+heavyweight phase still earns `/office-hours` + `/plan-eng-review` before its
+ADR.
 
 ### Stage 9 — persistence (closed)
 
@@ -724,10 +733,32 @@ Key entries currently:
   so durable memory survives a graceful shutdown, `65549cf`). `make quality` green
   with `-race`, cross-compile ×6 `CGO_ENABLED=0` green. **`go.mod` now has THREE
   direct dependencies** (the 3rd added by Stage 12 / ADR-0020; Stage 8 added
-  none). **Next stage: 10 (bus)**, order **10 → 13 (control API) → 14 (no-code
-  builder) → 15 (packaging) → 16 (hardening + release)** (Stages 8 and 12 are
+  none). **Next stage: 13 (control API).** Stage 10 (bus) DEFERRED 2026-06-28,
+  absorbed as phase 1 of Stage 14 (YAGNI — see "Stage 10 (bus) — DEFERRED" note
+  below). Order: **13 (control API) -> 14 (no-code builder; phase 1 = bus) -> 15
+  (packaging) -> 16 (hardening + release)** (Stages 8 and 12 are
   done). Each heavyweight phase still earns `/office-hours` + `/plan-eng-review`
   before its ADR.
+- **Stage 10 (bus) — DEFERRED 2026-06-28 (conscious YAGNI, NOT debt or a gap).**
+  Framed with `/office-hours` + `/plan-eng-review` (no ADR, no code — stopped at
+  the framing for joint review; copiloto confirmed the verdict). The bus is
+  speculative infra today: **zero real subscribers.** The channel<->router<->brain
+  decoupling a bus would give **already exists** via the router's point-to-point
+  queues (bounded per-brain inbound queue + N workers, per-channel outbound
+  queue, async error hook, saturation/drop with `ErrBrainSaturated` /
+  `ErrKindOutboundSaturated` / `DroppedCount`). The one second-consumer that
+  could have justified it (metrics) was already wired **directly** into the
+  funnels in Stage 12, no bus. Stage 13 (control API) is request/response CRUD,
+  not an event consumer. The **first real subscriber is the builder's live-view**
+  (Stage 14), so the bus is built as **phase 1 of Stage 14**, designed/validated
+  against that consumer. Decisive lens: **reversibility** — Korvun already adds
+  seams additively when the consumer arrives (`Store->SqliteStore`,
+  `Metrics->prom`, `Coordinator->fanout/sequential`) with the router intact and
+  `-race`-tested since Stage 3, so "do it now while it's fresh" is NOT
+  load-bearing; deferring is free. Same discipline as `AsModel` /
+  `Envelope.Sensitivity` / the pre-dispatch Selector (no seam without a consumer
+  to validate it). The sketched design space is parked in
+  `docs/notes/bus-design-sketch.md` so the analysis is not lost.
 - **Stage 8 (agents) is CLOSED** (`docs/stages/STAGE-08.md`, ADR-0021, `34d699d`):
   a tool-use `AgentBrain` (B2 — a `brain.Brain` sibling of the Orchestrator) runs a
   bounded single-model tool loop over the leaf `internal/tool` seam (3 pure tools;
