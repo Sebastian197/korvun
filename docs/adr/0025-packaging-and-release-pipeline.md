@@ -1,6 +1,6 @@
 # ADR-0025: Stage 15 — Packaging + release pipeline (GoReleaser)
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-06-28
 > **Deciders:** Sebastián Moreno Saavedra (+ copilot review)
 
