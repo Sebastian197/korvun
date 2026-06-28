@@ -29,6 +29,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/channel/telegram"
 	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/controlapi"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/conversation/sqlite"
 	"github.com/Sebastian197/korvun/internal/httpserver"
@@ -75,6 +76,25 @@ type App struct {
 	// metrics is the domain's observability backend: the Prometheus impl when
 	// observability is on, metrics.Nop when off. Never nil.
 	metrics metrics.Metrics
+	// brainSummaries is the read-only control API's boot SNAPSHOT of the resolved
+	// brains (ADR-0022 §3): assembled in wire() where the config is in hand, it
+	// is the live truth for the process lifetime because brains are immutable at
+	// runtime in this read-only cut. App serves it via BrainSummaries().
+	brainSummaries []controlapi.BrainSummary
+	// channelInfos carries each channel's static facts (type/mode/name) plus a
+	// LIVE drop-count reader, so ChannelSummaries() reflects the current count at
+	// request time (the count is the one non-static field).
+	channelInfos []channelInfo
+}
+
+// channelInfo is App's per-channel record for the control API: the static
+// wiring facts captured at wire() time, plus a live reader of the cumulative
+// inbound-drop count (ok == false for a channel that has no counter).
+type channelInfo struct {
+	typ     string
+	mode    string
+	name    string
+	dropped func() (uint64, bool)
 }
 
 // builder holds resolved construction settings, including the channel factory
@@ -157,7 +177,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		onRouterError(b.logger, b.metrics, re)
 	}))
 
-	channels, err := b.wire(r, cfg)
+	channels, brainSummaries, channelInfos, err := b.wire(r, cfg)
 	if err != nil {
 		// Clean up any brain/channel workers the partial wiring started, plus the
 		// store we just opened, so a failed Build leaks nothing.
@@ -175,16 +195,56 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	}
 
 	app := &App{
-		router:      r,
-		channels:    channels,
-		logger:      b.logger,
-		adminServer: adminServer,
-		metrics:     b.metrics,
+		router:         r,
+		channels:       channels,
+		logger:         b.logger,
+		adminServer:    adminServer,
+		metrics:        b.metrics,
+		brainSummaries: brainSummaries,
+		channelInfos:   channelInfos,
 	}
 	if store != nil {
 		app.store = store // owned closer, set only from a non-nil concrete store
 	}
+	// Mount the read-only control API on the EXISTING admin server (ADR-0022 §1):
+	// Handle runs here in Build, before Run starts the server. When observability
+	// is disabled there is no admin server, so /api is simply not served — the
+	// conscious coupling documented in ADR-0022 §5.
+	if adminServer != nil {
+		controlapi.Register(adminServer, app)
+	}
 	return app, nil
+}
+
+// BrainSummaries implements controlapi.Reader: it returns a defensive copy of
+// the boot snapshot (ADR-0022 §3) so a caller can never mutate App's state. The
+// per-brain Models slice is copied too (the snapshot is shared otherwise).
+func (a *App) BrainSummaries() []controlapi.BrainSummary {
+	out := make([]controlapi.BrainSummary, len(a.brainSummaries))
+	for i, bs := range a.brainSummaries {
+		models := make([]controlapi.ModelSummary, len(bs.Models))
+		copy(models, bs.Models)
+		bs.Models = models
+		out[i] = bs
+	}
+	return out
+}
+
+// ChannelSummaries implements controlapi.Reader: it reads each channel's LIVE
+// drop count at call time (atomic, safe under concurrent requests — the same
+// concurrency discipline the rest of the domain carries) and omits the count
+// for a channel with no counter.
+func (a *App) ChannelSummaries() []controlapi.ChannelSummary {
+	out := make([]controlapi.ChannelSummary, 0, len(a.channelInfos))
+	for _, ci := range a.channelInfos {
+		cs := controlapi.ChannelSummary{Type: ci.typ, Mode: ci.mode, Name: ci.name}
+		if n, ok := ci.dropped(); ok {
+			dropped := n
+			cs.Dropped = &dropped
+		}
+		out = append(out, cs)
+	}
+	return out
 }
 
 // droppedRegistrar registers a pull source for a channel's cumulative dropped
@@ -266,36 +326,97 @@ func openStore(cfg *config.Config) (*sqlite.SqliteStore, error) {
 	return s, nil
 }
 
-// wire registers brains, builds and registers channels, and binds routes.
-func (b *builder) wire(r *router.Router, cfg *config.Config) ([]Channel, error) {
+// wire registers brains, builds and registers channels, and binds routes. It
+// also assembles the read-only control API's boot snapshot (ADR-0022 §3): one
+// BrainSummary per brain (resolved through the same selector rule the brain
+// uses) and one channelInfo per channel (static facts + a live drop reader).
+// These are additive — they neither change the wiring nor touch the router.
+func (b *builder) wire(r *router.Router, cfg *config.Config) ([]Channel, []controlapi.BrainSummary, []channelInfo, error) {
+	brainSummaries := make([]controlapi.BrainSummary, 0, len(cfg.Brains))
 	for _, bc := range cfg.Brains {
 		orch, err := b.buildBrain(bc)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		if err := r.RegisterBrain(bc.Name, orch); err != nil {
-			return nil, fmt.Errorf("app: register brain %q: %w", bc.Name, err)
+			return nil, nil, nil, fmt.Errorf("app: register brain %q: %w", bc.Name, err)
 		}
+		bs, err := brainSummary(bc)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("app: brain summary %q: %w", bc.Name, err)
+		}
+		brainSummaries = append(brainSummaries, bs)
 	}
 
 	channels := make([]Channel, 0, len(cfg.Channels))
+	channelInfos := make([]channelInfo, 0, len(cfg.Channels))
 	for _, cc := range cfg.Channels {
 		ch, err := b.newChannel(b, cc)
 		if err != nil {
-			return nil, fmt.Errorf("app: build channel %q: %w", cc.Type, err)
+			return nil, nil, nil, fmt.Errorf("app: build channel %q: %w", cc.Type, err)
 		}
 		if err := r.RegisterChannel(ch); err != nil {
-			return nil, fmt.Errorf("app: register channel %q: %w", ch.Name(), err)
+			return nil, nil, nil, fmt.Errorf("app: register channel %q: %w", ch.Name(), err)
 		}
 		channels = append(channels, ch)
+		channelInfos = append(channelInfos, newChannelInfo(cc, ch))
 	}
 
 	for _, rc := range cfg.Routes {
 		if err := r.Route(rc.Channel, rc.Brain); err != nil {
-			return nil, fmt.Errorf("app: route %q->%q: %w", rc.Channel, rc.Brain, err)
+			return nil, nil, nil, fmt.Errorf("app: route %q->%q: %w", rc.Channel, rc.Brain, err)
 		}
 	}
-	return channels, nil
+	return channels, brainSummaries, channelInfos, nil
+}
+
+// newChannelInfo captures one channel's static facts and binds a live reader of
+// its cumulative drop count when the adapter exposes one (telegram), or a
+// no-counter reader otherwise. The static facts come from the config (type,
+// mode); the registered name from the adapter.
+func newChannelInfo(cc config.ChannelConfig, ch Channel) channelInfo {
+	ci := channelInfo{typ: cc.Type, mode: cc.Mode, name: ch.Name()}
+	if dc, ok := ch.(droppedCounter); ok {
+		ci.dropped = func() (uint64, bool) { return dc.DroppedCount(), true }
+	} else {
+		ci.dropped = func() (uint64, bool) { return 0, false }
+	}
+	return ci
+}
+
+// brainSummary builds the read-only control API summary for one brain. The
+// surviving-model set is computed with the SAME rule as policy.SelectModels
+// (ADR-0015: Public keeps all models, Private keeps Local only), sourced from
+// the config so it needs no adapter construction and leaves buildBrain
+// untouched. TestBrainSummary_matchesSelector cross-checks it against the real
+// selector so the two can never silently diverge. The summary is secret-free:
+// only provider + model id, never an env-var name (ADR-0022 §4).
+func brainSummary(bc config.BrainConfig) (controlapi.BrainSummary, error) {
+	sens, err := parseSensitivity(bc.Sensitivity)
+	if err != nil {
+		return controlapi.BrainSummary{}, err
+	}
+	models := make([]controlapi.ModelSummary, 0, len(bc.Models))
+	for _, m := range bc.Models {
+		loc, err := parseLocality(m.Locality)
+		if err != nil {
+			return controlapi.BrainSummary{}, err
+		}
+		if sens == policy.Public || loc == policy.Local {
+			models = append(models, controlapi.ModelSummary{Provider: m.Provider, ModelID: m.ModelID})
+		}
+	}
+	dispatch := bc.Dispatch
+	if dispatch == "" {
+		dispatch = "fanout" // buildCoordinator's default (ADR-0017 §3)
+	}
+	return controlapi.BrainSummary{
+		Name:        bc.Name,
+		Sensitivity: bc.Sensitivity,
+		Policy:      bc.Policy.Kind,
+		Dispatch:    dispatch,
+		Models:      models,
+	}, nil
 }
 
 // buildBrain assembles one brain.Brain: catalog → privacy selector → then either
