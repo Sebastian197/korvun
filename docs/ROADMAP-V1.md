@@ -134,9 +134,21 @@ más las piezas de robustez que un producto de verdad necesita.
   (Stage 10 absorbida aquí): el live-view del builder es el primer suscriptor
   real que lo justifica. Ver `docs/notes/bus-design-sketch.md`.
 
-- **Control API (Stage 13).** Gestionar brains, políticas y canales en caliente.
-  Monta en el mismo mux del `internal/httpserver` de Stage 12. **Es la próxima
-  etapa** tras el reorden (ver nota de orden abajo).
+- **✓ HECHO (corte read-only) — Control API (Stage 13).** **Cerrado**
+  (`docs/stages/STAGE-13.md`, ADR-0022, `ac88478`): `internal/controlapi` sirve
+  `GET /api/brains` (brains resueltos, incl. los modelos que sobrevivieron al
+  selector de privacidad) + `GET /api/channels` en el mismo mux del
+  `internal/httpserver` de Stage 12, bajo `/api`, read-only, secret-free, additive
+  (router intacto). Read-only mantiene el cálculo loopback-sin-auth de Stage 12
+  intacto — diferir la mutación ES la decisión de seguridad.
+  - *Diferido a Stage 14 (mutación, el consumidor real es el builder):* gestionar
+    brains/políticas/canales en caliente (POST/PUT/DELETE), hot-reload de config,
+    navegación de conversaciones, salud per-provider, auth/token (el trigger de la
+    mutación), TLS, exposición a red, `GET /api/info`. El seam `Reader` sobrevive:
+    en Stage 14 su impl pasa de snapshot de boot a vista viva sin cambiar la
+    interfaz.
+  - *Follow-up P3 (F1):* los agent brains reportan `dispatch`/`policy` inertes en
+    `/api/brains` — decisión de forma de API para agents, diferida (ADR-0022 §2).
 
 - **Documentación de producto y presentación del repo (Stage 16).**
   - **✓ ADELANTADO (rama `chore/repo-hygiene`, ejecutado antes de Stage 12) —

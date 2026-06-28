@@ -36,14 +36,17 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > `go.mod` stays at **3 direct deps** (`go-telegram/bot` + `modernc.org/sqlite` +
 > `prometheus/client_golang`) — Stage 8 added nothing. The binary can now mount a
 > tool-use `AgentBrain` from config alongside the fan-out Orchestrator.
-> **Next step: Stage 13 (control API).** Stage 10 (bus) was **DEFERRED**
-> 2026-06-28 after framing (`/office-hours` + `/plan-eng-review`) and absorbed as
-> **phase 1 of Stage 14** — a conscious YAGNI call, not debt: no real subscriber
-> exists until the builder's live-view (the router's point-to-point queues
-> already give the decoupling; Stage 12 wired metrics directly without a bus).
-> New order: **13 -> 14 (phase 1 = bus) -> 15 -> 16**. Design sketch parked in
-> `docs/notes/bus-design-sketch.md`. Each heavyweight phase still earns
-> `/office-hours` + `/plan-eng-review` before its ADR.
+> **Next step: Stage 14 (no-code builder), whose phase 1 is the deferred bus
+> (Stage 10).** **Stage 13 (control API) is CLOSED** 2026-06-28
+> (`docs/stages/STAGE-13.md`, ADR-0022, `ac88478`): a read-only `internal/controlapi`
+> serving `GET /api/brains` + `GET /api/channels` on the existing admin server
+> under `/api`, additive (router 100% untouched). Read-only keeps Stage 12's
+> loopback-no-auth calculus intact; mutation (and the auth it needs) is deferred
+> to Stage 14. Stage 10 (bus) stays **DEFERRED** into Stage 14 phase 1 (YAGNI; the
+> builder's live-view is the first real subscriber; sketch parked in
+> `docs/notes/bus-design-sketch.md`). New order: **14 (phase 1 = bus) -> 15 -> 16**.
+> Each heavyweight phase still earns `/office-hours` + `/plan-eng-review` before
+> its ADR.
 
 ### Stages closed on master
 
@@ -62,6 +65,27 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | **9**   | **Persistence — durable conversation memory (ADR-A interface+MemStore, ADR-B SQLite)** | **closed** |
 | **11**  | **The real assembly — `cmd/korvun` (config + app + main + router pump)** | **closed** |
 | **12**  | **Observability — slog funnel fields + Metrics seam (Prometheus) + admin HTTP server (`/metrics` + `/healthz`)** | **closed** |
+| **13**  | **Control API — read-only operator introspection (`internal/controlapi`, `GET /api/brains` + `/api/channels`) on the admin server (ADR-0022)** | **closed** |
+
+**Stage 13 (control API) is CLOSED** (`docs/stages/STAGE-13.md`, ADR-0022,
+`ac88478`). A read-only `internal/controlapi` leaf serves two GET endpoints on the
+EXISTING admin server (`internal/httpserver`) under `/api`: `GET /api/brains`
+(brains resolved — name, sensitivity, policy, dispatch, and **the models that
+survived the privacy selector**, state only the running binary knows) and
+`GET /api/channels` (type, mode, name, live dropped count). Handlers depend on a
+small `Reader` seam implemented by `App` (a boot snapshot for brains, assembled in
+`wire()`; a live atomic read for channel drops), NEVER on router/brain concretes.
+**The router is 100% untouched** (additive). The headline made concrete (live):
+a Private brain's `/api/brains` shows only the local survivor, the cloud model
+dropped by the selector. The load-bearing decision is security: read-only keeps
+Stage 12's loopback-no-auth calculus exactly intact (mutation is what would break
+it), so **deferring mutation IS the security decision**; AUTH is the trigger of
+Stage 14's mutation. Responses are secret-free (no value, not even an env-var
+name), test-asserted. `/review` confirmed additive/race-safe/secret-free/no-drift
+by trying to break them; 1 P3 deferred (F1, agent brains report inert
+dispatch/policy — an API-shape decision, see deferred list). `go.mod` stays at
+3 direct deps (stdlib `net/http`, zero new). `make quality` green with `-race`,
+cross-compile ×6, `controlapi` 100%.
 
 **Stage 8 (agents) is CLOSED** (`docs/stages/STAGE-08.md`, ADR-0021, merged
 `--no-ff` as `34d699d`). A new `AgentBrain` (decision B2 — a `brain.Brain` sibling
@@ -119,14 +143,14 @@ re-entrancy). **Process note:** a `git add -A` swept the parked `CLAUDE.md` +
 Lesson now standing: **selective `git add <paths>`, never `-A`, with parked
 files in the tree.**
 
-**Next stage: 13 (control API).** Stage 10 (bus) was DEFERRED 2026-06-28 and
-absorbed as **phase 1 of Stage 14** (YAGNI: no real subscriber until the
-builder's live-view; the router queues already decouple; Stage 12 wired metrics
-directly, no bus). New order: **13 (control API) -> 14 (no-code builder; phase 1
-= bus) -> 15 (packaging) -> 16 (hardening + release)**. (Stages 8 and 12 are
-done.) Stage 13's control API mounts on the SAME `internal/httpserver` mux Stage
-12 built. Design sketch parked in `docs/notes/bus-design-sketch.md`. Each
-heavyweight phase still earns `/office-hours` + `/plan-eng-review` before its
+**Next stage: 14 (no-code builder), whose phase 1 is the deferred bus.** Stage 13
+(control API) is CLOSED (`ac88478`, ADR-0022; it mounted on the SAME
+`internal/httpserver` mux Stage 12 built). Stage 10 (bus) stays DEFERRED 2026-06-28,
+absorbed as **phase 1 of Stage 14** (YAGNI: no real subscriber until the builder's
+live-view; the router queues already decouple; Stage 12 wired metrics directly, no
+bus). New order: **14 (no-code builder; phase 1 = bus) -> 15 (packaging) -> 16
+(hardening + release)**. Design sketch parked in `docs/notes/bus-design-sketch.md`.
+Each heavyweight phase still earns `/office-hours` + `/plan-eng-review` before its
 ADR.
 
 ### Stage 9 — persistence (closed)
@@ -733,12 +757,24 @@ Key entries currently:
   so durable memory survives a graceful shutdown, `65549cf`). `make quality` green
   with `-race`, cross-compile ×6 `CGO_ENABLED=0` green. **`go.mod` now has THREE
   direct dependencies** (the 3rd added by Stage 12 / ADR-0020; Stage 8 added
-  none). **Next stage: 13 (control API).** Stage 10 (bus) DEFERRED 2026-06-28,
+  none). **Next stage: 14 (no-code builder; phase 1 = the deferred bus).** Stage 13
+  (control API) CLOSED (`ac88478`, ADR-0022). Stage 10 (bus) DEFERRED 2026-06-28,
   absorbed as phase 1 of Stage 14 (YAGNI — see "Stage 10 (bus) — DEFERRED" note
-  below). Order: **13 (control API) -> 14 (no-code builder; phase 1 = bus) -> 15
-  (packaging) -> 16 (hardening + release)** (Stages 8 and 12 are
-  done). Each heavyweight phase still earns `/office-hours` + `/plan-eng-review`
-  before its ADR.
+  below). Order: **14 (no-code builder; phase 1 = bus) -> 15 (packaging) -> 16
+  (hardening + release)** (Stages 8, 12, 13 are done). Each heavyweight phase still
+  earns `/office-hours` + `/plan-eng-review` before its ADR.
+- **Stage 13 (control API) — CLOSED 2026-06-28** (`docs/stages/STAGE-13.md`,
+  ADR-0022, `ac88478`). Read-only `internal/controlapi` (`GET /api/brains` +
+  `GET /api/channels`) on the existing admin server under `/api`; router untouched;
+  read-only keeps the loopback-no-auth calculus intact (deferring mutation IS the
+  security decision); secret-free invariant test-asserted; boot snapshot for brains
+  whose `Reader` interface survives Stage 14 (only the impl moves to a live registry
+  view when mutation lands). **Deferred follow-up (F1, P3):** agent brains report
+  inert `dispatch`/`policy` fields in `/api/brains` (a brain with an `agent` block
+  ignores both) — deciding the API shape for agents (omit / mark N/A / flag as
+  agent) is a conscious API-form decision (ADR-0022 §2 does not carve out agents),
+  deferred from Stage 13, likely revisited with Stage 14's mutation surface. The
+  `models` field stays correct; nothing leaks or crashes.
 - **Stage 10 (bus) — DEFERRED 2026-06-28 (conscious YAGNI, NOT debt or a gap).**
   Framed with `/office-hours` + `/plan-eng-review` (no ADR, no code — stopped at
   the framing for joint review; copiloto confirmed the verdict). The bus is
