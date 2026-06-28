@@ -22,7 +22,11 @@
 //     concurrent Publish.
 //   - Panic-safety: a subscriber Handler that panics is recovered at the bus
 //     boundary; it never crashes the bus, a publisher, or another subscriber.
-//   - Teardown: unsubscribe (and Close) stop a subscriber's goroutine; no leak.
+//   - Teardown: unsubscribe (and Close) stop a subscriber's goroutine; no leak —
+//     PROVIDED the Handler eventually returns. A Handler that blocks forever parks
+//     its goroutine in user code; the bus cannot reclaim it until it returns.
+//     Handlers must therefore be non-blocking or bounded (the SSE consumer drains
+//     its own bounded buffer, ADR-0024).
 //
 // The Bus interface is the seam for a future natsBus (multi-process); NATS itself
 // stays out of this build (the single-binary Pi promise). The ctx on Publish is
@@ -76,9 +80,16 @@ func (t EventType) String() string {
 // Event is a typed lifecycle fact that WRAPS A REFERENCE to the Envelope plus
 // metadata. It is NOT the Envelope itself and not a copy of the domain message.
 //
-// Envelope is a shared reference: subscribers MUST treat it as read-only (it is
-// also held by the router) and consumers that serialize it MUST emit only
-// non-secret fields (never message content nor any secret/secret-reference),
+// INVARIANT — a published Envelope is IMMUTABLE. The Envelope is a shared
+// reference read by subscriber goroutines concurrently with the rest of the
+// pipeline, so it must be frozen at publish time: the PRODUCER must not mutate an
+// Envelope after publishing it, and SUBSCRIBERS must treat it as strictly
+// read-only. This holds today by construction (MessageReceived publishes the
+// inbound after dispatch freezes it; ReplySent publishes the reply only after
+// Channel.Send returns, and brains build new output envelopes rather than mutating
+// inputs) — but -race cannot police a future regression, so the invariant is
+// stated here, not just assumed. Consumers that serialize the Envelope MUST emit
+// only non-secret fields (never message content nor any secret/secret-reference),
 // ADR-0024 §1.
 type Event struct {
 	Type     EventType
@@ -102,6 +113,11 @@ type Bus interface {
 	Publish(ctx context.Context, ev Event)
 	// Subscribe registers h for events of type t and returns an idempotent
 	// unsubscribe func that stops delivery and the subscriber's goroutine.
+	// unsubscribe is NOT synchronous with handler quiescence: events already
+	// buffered may still be delivered and an in-flight handler runs to completion
+	// AFTER unsubscribe returns. A consumer that tears down external state on
+	// unsubscribe (e.g. an HTTP ResponseWriter) must tolerate one more handler
+	// firing for already-buffered events.
 	Subscribe(t EventType, h Handler) (unsubscribe func())
 }
 

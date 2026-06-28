@@ -6,6 +6,7 @@ package router_test
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -143,6 +144,40 @@ func TestEventHook_saturatedQueueIsNotReceived(t *testing.T) {
 	if received != 2 {
 		t.Errorf("MessageReceived count = %d, want 2 (the saturated 3rd is a drop, not a receive)", received)
 	}
+}
+
+// TestEventHook_realBusSubscriberReadsEnvelope_race wires the REAL bus and a
+// subscriber that reads Envelope fields on its own goroutine while the router
+// dispatches concurrently. Under -race it exercises the ADR-0023 "published
+// Envelope is immutable" invariant: a producer-side mutation would surface as a
+// read/write race here, which the fake-publisher tests cannot catch.
+func TestEventHook_realBusSubscriberReadsEnvelope_race(t *testing.T) {
+	eb := bus.New()
+	defer eb.Close()
+
+	r := router.New(router.WithEventPublisher(eb))
+	t.Cleanup(func() { shutdown(t, r) })
+
+	ch := newFakeChannel("telegram")
+	b := newFakeBrain(mkOutbound("telegram", "c-1", "ok"))
+	_ = r.RegisterChannel(ch)
+	_ = r.RegisterBrain("brain-x", b)
+	_ = r.Route("telegram", "brain-x")
+
+	var seen atomic.Int64
+	unsub := eb.Subscribe(bus.MessageReceived, func(ev bus.Event) {
+		if ev.Envelope != nil { // read envelope fields concurrently with the router
+			_ = ev.Envelope.ID
+			_ = ev.Envelope.Channel
+		}
+		seen.Add(1)
+	})
+	defer unsub()
+
+	for i := 0; i < 20; i++ {
+		_ = r.DispatchInbound(context.Background(), mkInbound("telegram", "c-1", "hi"))
+	}
+	eventuallyReplyDelivered(t, ch, 1)
 }
 
 // TestEventHook_nilPublisher_dispatchStillWorks proves the default (no publisher)
