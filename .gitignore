@@ -61,3 +61,6 @@ results.sarif
 node_modules/
 frontend/dist/
 .gstack/
+
+# GoReleaser build output (ADR-0025, Stage 15)
+dist/

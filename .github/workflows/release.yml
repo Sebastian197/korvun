@@ -1,0 +1,39 @@
+# Release pipeline (ADR-0025, Stage 15). Build-time only: it runs GoReleaser on a
+# pushed SemVer tag to produce the GitHub Release (binaries x6, checksums,
+# archives, changelog, SBOM). Tags are pushed BY HAND — a tag pushed from inside
+# an Action does not retrigger workflows, and the SemVer bump is a deliberate
+# decision, not an automated one.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # create the GitHub Release and upload its assets
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history so the changelog can diff from the previous tag
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      # Syft generates the per-release SBOM (ADR-0025 §6).
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

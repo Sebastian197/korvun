@@ -1,0 +1,35 @@
+{
+  "_comment": "EDGE profile (Raspberry Pi / small box): a single LOCAL model via Ollama, durable memory on, minimal footprint. sensitivity=private keeps the dispatch local-only (the privacy selector drops any cloud model). Secrets resolve from the env-var NAMES below (export them; never inline). Run: korvun -config configs/edge.json",
+  "channels": [
+    {
+      "type": "telegram",
+      "mode": "polling",
+      "token_env": "TELEGRAM_BOT_TOKEN"
+    }
+  ],
+  "brains": [
+    {
+      "name": "default",
+      "sensitivity": "private",
+      "dispatch": "fanout",
+      "policy": {
+        "kind": "priority",
+        "order": ["ollama"]
+      },
+      "models": [
+        {
+          "provider": "ollama",
+          "model_id": "llama3.2",
+          "locality": "local",
+          "base_url": "http://localhost:11434"
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {"channel": "telegram", "brain": "default"}
+  ],
+  "storage": {
+    "path": "korvun.db"
+  }
+}

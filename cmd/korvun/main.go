@@ -12,13 +12,16 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/app"
+	"github.com/Sebastian197/korvun/internal/buildinfo"
 	"github.com/Sebastian197/korvun/internal/config"
 )
 
@@ -26,9 +29,20 @@ import (
 // channel.Stop -> pump exits -> router.Shutdown).
 const shutdownTimeout = 15 * time.Second
 
+// version is the build version, overridden at release time by GoReleaser via
+// -ldflags "-X main.version=vX.Y.Z" (ADR-0025 §2). A local `go build` keeps "dev".
+var version = "dev"
+
 func main() {
 	configPath := flag.String("config", "korvun.json", "path to the Korvun JSON config file")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		bi, _ := debug.ReadBuildInfo()
+		fmt.Println(buildinfo.Format(version, bi))
+		os.Exit(0)
+	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 

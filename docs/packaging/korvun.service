@@ -1,0 +1,38 @@
+# Basic systemd unit to run Korvun as a service on Linux / Raspberry Pi
+# (ADR-0025, Stage 15). This is a FUNCTIONAL EXAMPLE, intentionally NOT hardened:
+# sandboxing and resource limits (DynamicUser, ProtectSystem, NoNewPrivileges,
+# MemoryMax, ReadOnlyPaths, ...) land in Stage 16 (hardening + release).
+#
+# Setup:
+#   1. Place the binary:        sudo install -m755 korvun /usr/local/bin/korvun
+#   2. Config:                  sudo mkdir -p /etc/korvun && sudo cp configs/cloud.json /etc/korvun/korvun.json
+#   3. Secrets (env-var NAMES the config points to), root-only:
+#        sudo install -m600 /dev/null /etc/korvun/korvun.env
+#        # then edit /etc/korvun/korvun.env:
+#        #   TELEGRAM_BOT_TOKEN=...
+#        #   GROQ_API_KEY=...
+#   4. Install + start:
+#        sudo cp docs/packaging/korvun.service /etc/systemd/system/korvun.service
+#        sudo systemctl daemon-reload
+#        sudo systemctl enable --now korvun
+#        systemctl status korvun
+#        journalctl -u korvun -f
+
+[Unit]
+Description=Korvun messaging gateway + multi-model router
+Documentation=https://github.com/Sebastian197/korvun
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/korvun -config /etc/korvun/korvun.json
+# Secrets are read from the environment by NAME; keep them out of the unit file.
+EnvironmentFile=/etc/korvun/korvun.env
+Restart=on-failure
+RestartSec=5s
+# Graceful shutdown: Korvun drains within its own 15s bound on SIGTERM.
+TimeoutStopSec=20s
+
+[Install]
+WantedBy=multi-user.target

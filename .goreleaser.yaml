@@ -1,0 +1,85 @@
+# GoReleaser release pipeline for Korvun (ADR-0025, Stage 15).
+#
+# Build-time only: GoReleaser is invoked by the release CI workflow on a pushed
+# SemVer tag; it never enters go.mod. It cross-compiles the same six targets CI
+# already verifies (linux/darwin/windows x amd64/arm64, CGO_ENABLED=0), produces
+# SHA256 checksums, tar.gz/zip archives, a Conventional-Commits changelog, and a
+# per-release SBOM (Syft). Signing / provenance / public release are Stage 16.
+#
+# Validate locally without publishing:  goreleaser release --snapshot --clean
+# Schema:                               goreleaser check
+version: 2
+
+project_name: korvun
+
+builds:
+  - id: korvun
+    main: ./cmd/korvun
+    binary: korvun
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Inject the SemVer version into cmd/korvun/main.var version (ADR-0025 §2);
+    # GoReleaser's {{ .Version }} strips the leading "v", so prefix it back to
+    # match the documented `korvun vX.Y.Z` (and a snapshot prints vX.Y.Z-snapshot).
+    # -s -w strip the symbol table and DWARF for a smaller binary.
+    ldflags:
+      - -s -w -X main.version=v{{ .Version }}
+
+archives:
+  - id: korvun
+    # tar.gz everywhere except Windows, which gets a .zip.
+    formats: ["tar.gz"]
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+    # Each archive bundles the binary plus the licence and readme.
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  algorithm: sha256
+  name_template: "checksums.txt"
+
+# One SBOM per archive (SPDX JSON via Syft), so every published artifact is
+# self-describing (ADR-0025 §6). Requires `syft` on PATH (the release workflow
+# installs it). Describes the build; signing/provenance/SLSA are Stage 16.
+sboms:
+  - id: korvun
+    artifacts: archive
+
+changelog:
+  # `git` reads the local git log (no GitHub API), so it works on a private repo
+  # and offline during --snapshot.
+  use: git
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^refactor:'
+
+snapshot:
+  # Used by --snapshot (no tag): an unambiguous non-release version string.
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+release:
+  draft: false
+  prerelease: auto

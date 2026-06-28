@@ -1,0 +1,45 @@
+{
+  "_comment": "CLOUD profile (server / VM): a wider fan-out across a local Ollama and a cloud Groq model, durable memory on, observability bound to loopback. sensitivity=public lets both the local and cloud models run. Secrets resolve from the env-var NAMES below (export them; never inline). Run: korvun -config configs/cloud.json",
+  "channels": [
+    {
+      "type": "telegram",
+      "mode": "polling",
+      "token_env": "TELEGRAM_BOT_TOKEN"
+    }
+  ],
+  "brains": [
+    {
+      "name": "default",
+      "sensitivity": "public",
+      "dispatch": "fanout",
+      "policy": {
+        "kind": "priority",
+        "order": ["groq", "ollama"]
+      },
+      "models": [
+        {
+          "provider": "groq",
+          "model_id": "llama-3.3-70b-versatile",
+          "locality": "cloud",
+          "api_key_env": "GROQ_API_KEY"
+        },
+        {
+          "provider": "ollama",
+          "model_id": "llama3.2",
+          "locality": "local",
+          "base_url": "http://localhost:11434"
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {"channel": "telegram", "brain": "default"}
+  ],
+  "storage": {
+    "path": "korvun.db"
+  },
+  "observability": {
+    "enabled": true,
+    "addr": "127.0.0.1:2112"
+  }
+}
