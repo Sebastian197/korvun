@@ -29,24 +29,41 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of session close, 2026-06-27)
+## Current state (as of session close, 2026-06-28)
 
-> **master is at `34d699d`** (Stage 8 merged `--no-ff`), `make quality` green with
-> `-race` + cross-compile ×6 `CGO_ENABLED=0`. Stages closed: **0–8, 9, 11, 12**.
-> `go.mod` stays at **3 direct deps** (`go-telegram/bot` + `modernc.org/sqlite` +
-> `prometheus/client_golang`) — Stage 8 added nothing. The binary can now mount a
-> tool-use `AgentBrain` from config alongside the fan-out Orchestrator.
-> **Next step: Stage 14 (no-code builder), whose phase 1 is the deferred bus
-> (Stage 10).** **Stage 13 (control API) is CLOSED** 2026-06-28
-> (`docs/stages/STAGE-13.md`, ADR-0022, `ac88478`): a read-only `internal/controlapi`
-> serving `GET /api/brains` + `GET /api/channels` on the existing admin server
-> under `/api`, additive (router 100% untouched). Read-only keeps Stage 12's
-> loopback-no-auth calculus intact; mutation (and the auth it needs) is deferred
-> to Stage 14. Stage 10 (bus) stays **DEFERRED** into Stage 14 phase 1 (YAGNI; the
-> builder's live-view is the first real subscriber; sketch parked in
-> `docs/notes/bus-design-sketch.md`). New order: **14 (phase 1 = bus) -> 15 -> 16**.
-> Each heavyweight phase still earns `/office-hours` + `/plan-eng-review` before
-> its ADR.
+> **master is at `464f8c2`** (Stage 14 Phase 1a merged `--no-ff`), `make quality`
+> green with `-race` + cross-compile ×6 `CGO_ENABLED=0`, CI green ×3 OSes. Stages
+> closed: **0–9, 11, 12, 13**. `go.mod` stays at **3 direct deps**
+> (`go-telegram/bot` + `modernc.org/sqlite` + `prometheus/client_golang`) —
+> Stages 13 and 14-Phase-1a added none. The binary boots, serves Telegram live,
+> remembers across restarts, is observable (`/metrics` + `/healthz`), uses tools
+> (`AgentBrain`), and is introspectable read-only (control API `/api/brains` +
+> `/api/channels`).
+>
+> **Stage 14 Phase 1a (event bus + router hook) is MERGED** (ADR-0023, `464f8c2`).
+> `internal/bus` (in-process best-effort pub/sub) is built and `-race`-validated,
+> and the router has one additive nil-safe `WithEventPublisher` hook
+> (MessageReceived on inbound enqueue, ReplySent after Channel.Send). **The hook
+> is DORMANT in the binary** (nil publisher, zero cost) until Phase 1b wires the
+> real bus to its consumer — the project's "no producer without a consumer"
+> discipline. **Stage 14 Phase 1 is NOT closed — Phase 1b remains.**
+>
+> **Next step: Stage 14 Phase 1b (ADR-0024, already accepted on master).** Build
+> the bus's first real consumer: `GET /api/events` (SSE on the existing
+> httpserver — validates the bus end-to-end) + a minimal embedded vanilla
+> read-only UI (`go:embed`, `/ui`) + the app wiring (construct the real
+> `bus.InMemoryBus` in `wire()`, pass it to the router via `WithEventPublisher` to
+> WAKE the hook, wire `onRouterError` to publish `MessageDropped`/`HandleFailed`,
+> expose `bus.DroppedCount()` as a pull metric on `/metrics`). Pure additive,
+> Stage 13 profile, light `/review`. **WATCH-OUTS for 1b:** (a) SSE teardown — the
+> documented F2 foot-gun: `unsubscribe` is NOT synchronous with handler
+> quiescence, a buffered event can fire once more after unsubscribe, so the SSE
+> handler must not write to a torn-down `ResponseWriter`; (b) SSE frames must be
+> secret-free (only non-secret `Event` fields, NEVER Envelope content), with a
+> no-secrets assertion like Stage 13. After Phase 1b: the Stage 14 Phase 1 closure
+> doc + HANDOFF/ROADMAP. After all of Stage 14: **15 (packaging) -> 16 (hardening +
+> release; repo goes public, Scorecard revives)**. Each heavyweight phase still
+> earns `/office-hours` + `/plan-eng-review` before its ADR.
 
 ### Stages closed on master
 
@@ -143,15 +160,14 @@ re-entrancy). **Process note:** a `git add -A` swept the parked `CLAUDE.md` +
 Lesson now standing: **selective `git add <paths>`, never `-A`, with parked
 files in the tree.**
 
-**Next stage: 14 (no-code builder), whose phase 1 is the deferred bus.** Stage 13
-(control API) is CLOSED (`ac88478`, ADR-0022; it mounted on the SAME
-`internal/httpserver` mux Stage 12 built). Stage 10 (bus) stays DEFERRED 2026-06-28,
-absorbed as **phase 1 of Stage 14** (YAGNI: no real subscriber until the builder's
-live-view; the router queues already decouple; Stage 12 wired metrics directly, no
-bus). New order: **14 (no-code builder; phase 1 = bus) -> 15 (packaging) -> 16
-(hardening + release)**. Design sketch parked in `docs/notes/bus-design-sketch.md`.
-Each heavyweight phase still earns `/office-hours` + `/plan-eng-review` before its
-ADR.
+**Next step: Stage 14 Phase 1b (ADR-0024: SSE + UI).** Stage 14 Phase 1a (event
+bus + router hook, ADR-0023) is **MERGED** (`464f8c2`); the bus is built and
+`-race`-validated but the hook stays dormant (nil publisher) until 1b wires it.
+Stage 13 (control API) is CLOSED (`ac88478`, ADR-0022). Stage 10 (bus) was the
+deferred bus, now being built across Stage 14 Phase 1. Order: **14 (Phase 1a DONE,
+Phase 1b next, then closure) -> 15 (packaging) -> 16 (hardening + release)**.
+Design sketch parked in `docs/notes/bus-design-sketch.md`. Each heavyweight phase
+still earns `/office-hours` + `/plan-eng-review` before its ADR.
 
 ### Stage 9 — persistence (closed)
 
@@ -757,12 +773,31 @@ Key entries currently:
   so durable memory survives a graceful shutdown, `65549cf`). `make quality` green
   with `-race`, cross-compile ×6 `CGO_ENABLED=0` green. **`go.mod` now has THREE
   direct dependencies** (the 3rd added by Stage 12 / ADR-0020; Stage 8 added
-  none). **Next stage: 14 (no-code builder; phase 1 = the deferred bus).** Stage 13
-  (control API) CLOSED (`ac88478`, ADR-0022). Stage 10 (bus) DEFERRED 2026-06-28,
-  absorbed as phase 1 of Stage 14 (YAGNI — see "Stage 10 (bus) — DEFERRED" note
-  below). Order: **14 (no-code builder; phase 1 = bus) -> 15 (packaging) -> 16
+  none). **Next step: Stage 14 Phase 1b (ADR-0024: SSE + UI).** Stage 14 Phase 1a
+  (event bus + router hook, ADR-0023) MERGED (`464f8c2`); bus built + `-race`-validated,
+  hook dormant until 1b. Stage 13 (control API) CLOSED (`ac88478`, ADR-0022).
+  Order: **14 (Phase 1a done, 1b next, then closure) -> 15 (packaging) -> 16
   (hardening + release)** (Stages 8, 12, 13 are done). Each heavyweight phase still
   earns `/office-hours` + `/plan-eng-review` before its ADR.
+- **Stage 14 Phase 1a (event bus + router hook) — MERGED 2026-06-28**
+  (ADR-0023 `docs/adr/0023-event-bus-and-router-hook.md`, merge `464f8c2`).
+  `internal/bus` is an in-process best-effort pub/sub: `Bus{Publish(ctx,Event);
+  Subscribe(type,handler) unsubscribe}` + `InMemoryBus`. Non-blocking publish
+  (slow subscriber → drop + `DroppedCount`), at-most-once, panic-safe, no leak
+  (assumes handlers return), `-race`-validated (the load-bearing test: concurrent
+  publishers + a slow subscriber). The router gained ONE additive nil-safe
+  `WithEventPublisher` hook: MessageReceived (DispatchInbound enqueue success),
+  ReplySent (deliver after Send==nil); MessageDropped/HandleFailed are NOT
+  published here — they ride `onRouterError` (wired in 1b). **The hook is DORMANT
+  in the binary** (nil publisher) until 1b. Concurrency `/review` APPROVED
+  (Publish-on-closed-channel proven race-free); F1/F2/F3 doc-hardening applied.
+  **For 1b (ADR-0024, accepted on master):** build `GET /api/events` (SSE — the
+  bus's first real subscriber, validates it) + minimal embedded vanilla UI (`/ui`,
+  `go:embed`, read-only) + app wiring (real bus in `wire()`, `WithEventPublisher`
+  to wake the hook, `onRouterError` → MessageDropped/HandleFailed, `DroppedCount`
+  pull metric). **Watch-outs:** F2 (unsubscribe not synchronous with handler
+  quiescence — SSE handler must not write a torn-down ResponseWriter) and
+  secret-free SSE frames (no Envelope content), test-asserted like Stage 13.
 - **Stage 13 (control API) — CLOSED 2026-06-28** (`docs/stages/STAGE-13.md`,
   ADR-0022, `ac88478`). Read-only `internal/controlapi` (`GET /api/brains` +
   `GET /api/channels`) on the existing admin server under `/api`; router untouched;
