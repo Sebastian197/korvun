@@ -130,9 +130,22 @@ más las piezas de robustez que un producto de verdad necesita.
 
 - **El builder no-code (Stage 14).** El diferenciador de cara al usuario:
   expresar políticas de forma declarativa y visual. La V1 potente lo necesita;
-  el MVP solo tiene las políticas en código. **Su fase 1 es el bus de eventos**
-  (Stage 10 absorbida aquí): el live-view del builder es el primer suscriptor
-  real que lo justifica. Ver `docs/notes/bus-design-sketch.md`.
+  el MVP solo tiene las políticas en código.
+  - **✓ HECHO — Fase 1 (fundamentos, read-only). Cerrada**
+    (`docs/stages/STAGE-14.md`, ADR-0023 + ADR-0024): el **bus de eventos**
+    (`internal/bus`, Stage 10 absorbida y cerrada correctamente — construido cuando,
+    y solo cuando, llegó un consumidor que lo valida) + el **live-view read-only**
+    (`internal/liveview`: SSE `GET /api/events` + UI `/ui` embebida con `go:embed`).
+    El bus despierta en `app` (real solo si observability ON), `onRouterError`
+    publica MessageDropped/HandleFailed, drops del bus y del SSE como métricas pull.
+    F2 resuelto por desacople; frames secret-free por construcción. go.mod sigue en
+    3 deps (SSE stdlib, UI go:embed).
+  - *Pendiente — Fase 2+ (el builder propiamente dicho, futuros ADRs):* **mutación**
+    del wiring (add-only o reload-and-rebuild, **NUNCA edición granular en vivo** —
+    el registro del router es de boot) + **AUTH** (el disparador de la mutación;
+    read-only es lo que mantiene válido el loopback-sin-auth hoy) + la UI de edición
+    + el lienzo visual (donde React/TS/Vite gana su token). NATS/persistencia/replay
+    de eventos siguen fuera (el `Bus` es el punto de entrada del futuro `natsBus`).
 
 - **✓ HECHO (corte read-only) — Control API (Stage 13).** **Cerrado**
   (`docs/stages/STAGE-13.md`, ADR-0022, `ac88478`): `internal/controlapi` sirve
@@ -192,26 +205,22 @@ más las piezas de robustez que un producto de verdad necesita.
   multi-model, planning, multi-agente, native function-calling. Concurrencia
   pesada — pasó por `/review` (1 P2 + 3 P3 arreglados).
 
-- **Bus de eventos (Stage 10). DIFERIDA — absorbida como fase 1 de Stage 14.**
-  Decisión consciente de YAGNI tras el encuadre (`/office-hours` +
-  `/plan-eng-review`, 2026-06-28), **no es deuda ni un hueco inexplicado.** El
-  bus es infra especulativa hoy: cero suscriptores reales, el router ya
-  desacopla vía sus colas point-to-point, y las métricas de Stage 12 se
-  cablearon directamente a los funnels (sin bus). El primer suscriptor real es
-  el live-view del builder, así que el bus se construye **como primera fase de
-  Stage 14**, diseñado y validado contra ese consumidor. Argumento decisivo:
-  reversibilidad — Korvun ya añade seams aditivamente cuando llega el consumidor
-  (`Store→SqliteStore`, `Metrics→prom`, `Coordinator→fanout/sequential`) con el
-  router intacto y testeado a `-race` desde Stage 3, así que diferir es gratis.
-  El espacio de diseño esbozado queda guardado en
-  `docs/notes/bus-design-sketch.md` para cuando se construya. Sigue siendo
-  concurrencia pesada — zona de `/review`.
+- **✓ HECHO — Bus de eventos (Stage 10, absorbido como Stage 14 Fase 1a).**
+  Diferido conscientemente como YAGNI tras el encuadre (`/office-hours` +
+  `/plan-eng-review`, 2026-06-28) y **construido cuando llegó su consumidor real**
+  (el live-view SSE de la Fase 1b). **Cerrado** (`internal/bus`, ADR-0023,
+  `464f8c2`): pub/sub in-process best-effort, non-blocking, drop+contador por
+  suscriptor lento, panic-safe, `-race` bajo `brainWorkers>1`; + un hook aditivo
+  nil-safe `WithEventPublisher` en el router. La disciplina se cumplió: ningún seam
+  sin consumidor que lo valide. El `Bus` interface es el punto de entrada del
+  futuro `natsBus` (NATS fuera). Sketch en `docs/notes/bus-design-sketch.md`.
 
-> **Orden de trabajo (reordenado 2026-06-28):**
-> **Stage 13 (control API) → Stage 14 (builder no-code; su fase 1 es el bus,
-> antes Stage 10) → Stage 15 (packaging) → Stage 16 (hardening + release).**
-> Stages 0–9, 11, 12 cerradas. Stage 10 (bus) diferida y absorbida en Stage 14
-> fase 1 (YAGNI: sin suscriptor real hasta el builder). Próxima etapa = 13.
+> **Orden de trabajo (actualizado 2026-06-28):**
+> **Stage 13 (control API) ✓ → Stage 14 Fase 1 (fundamentos: bus + live-view) ✓
+> → Stage 14 Fase 2 (builder: mutación + auth + UI edición + lienzo) O Stage 15
+> (packaging) → Stage 16 (hardening + release).**
+> Stages 0–9, 11, 12, 13 y **14 Fase 1** cerradas. Stage 10 (bus) cerrada dentro
+> de 14 Fase 1a. Próximo = decidir 14 Fase 2 vs 15.
 
 ---
 

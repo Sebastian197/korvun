@@ -31,39 +31,47 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ## Current state (as of session close, 2026-06-28)
 
-> **master is at `464f8c2`** (Stage 14 Phase 1a merged `--no-ff`), `make quality`
-> green with `-race` + cross-compile ×6 `CGO_ENABLED=0`, CI green ×3 OSes. Stages
-> closed: **0–9, 11, 12, 13**. `go.mod` stays at **3 direct deps**
-> (`go-telegram/bot` + `modernc.org/sqlite` + `prometheus/client_golang`) —
-> Stages 13 and 14-Phase-1a added none. The binary boots, serves Telegram live,
-> remembers across restarts, is observable (`/metrics` + `/healthz`), uses tools
-> (`AgentBrain`), and is introspectable read-only (control API `/api/brains` +
-> `/api/channels`).
+> **master is at `4f36447`** (Stage 14 Phase 1b merged `--no-ff`), `make quality`
+> green with `-race` + cross-compile ×6 `CGO_ENABLED=0`. Stages closed: **0–9, 11,
+> 12, 13, and 14 Phase 1 (foundation)**. `go.mod` stays at **3 direct deps**
+> (`go-telegram/bot` + `modernc.org/sqlite` + `prometheus/client_golang`) — all of
+> Stage 14 Phase 1 added none. The binary boots, serves Telegram live, remembers
+> across restarts, is observable (`/metrics` + `/healthz`), uses tools
+> (`AgentBrain`), is introspectable read-only (`/api/brains` + `/api/channels`),
+> and now **streams its message-pipeline lifecycle live** (`/api/events` SSE + an
+> embedded `/ui`).
 >
-> **Stage 14 Phase 1a (event bus + router hook) is MERGED** (ADR-0023, `464f8c2`).
-> `internal/bus` (in-process best-effort pub/sub) is built and `-race`-validated,
-> and the router has one additive nil-safe `WithEventPublisher` hook
-> (MessageReceived on inbound enqueue, ReplySent after Channel.Send). **The hook
-> is DORMANT in the binary** (nil publisher, zero cost) until Phase 1b wires the
-> real bus to its consumer — the project's "no producer without a consumer"
-> discipline. **Stage 14 Phase 1 is NOT closed — Phase 1b remains.**
+> **Stage 14 Phase 1 (the builder's FOUNDATION, not the builder) is CLOSED**
+> (`docs/stages/STAGE-14.md`, ADR-0023 + ADR-0024), split by blast radius:
+> - **Phase 1a (event bus + router hook, ADR-0023, `464f8c2`)** — `internal/bus`,
+>   an in-process best-effort non-blocking pub/sub (slow-subscriber drop+counter,
+>   panic-safe, `-race`-validated under `brainWorkers>1`) + one additive nil-safe
+>   `WithEventPublisher` router hook (MessageReceived on enqueue, ReplySent after
+>   Send). Concurrency `/review` APPROVED.
+> - **Phase 1b (SSE live-view + UI, ADR-0024, `4f36447`)** — `internal/liveview`:
+>   `GET /api/events` (stdlib `http.Flusher` SSE, the bus's first real subscriber,
+>   validating it end-to-end) + a `go:embed` vanilla read-only `/ui`. The bus is
+>   WOKEN in `app`: real `InMemoryBus` built only when observability is on (its
+>   only consumer rides the admin server), `WithEventPublisher` wakes the hook,
+>   `onRouterError` publishes `MessageDropped`/`HandleFailed`, `bus.DroppedCount`
+>   + `liveview.DroppedCount` exposed as pull metrics. **F2 teardown resolved at
+>   the root by DECOUPLING** (the bus Handler writes only to an in-process
+>   per-connection buffer, never the ResponseWriter, which only the serve loop
+>   touches — so a Handler firing after unsubscribe cannot write a torn-down conn).
+>   **Frames SECRET-FREE by construction** (the `frame` type has no field that can
+>   carry content/Meta/Err), test-asserted. Copilot review APPROVED.
 >
-> **Next step: Stage 14 Phase 1b (ADR-0024, already accepted on master).** Build
-> the bus's first real consumer: `GET /api/events` (SSE on the existing
-> httpserver — validates the bus end-to-end) + a minimal embedded vanilla
-> read-only UI (`go:embed`, `/ui`) + the app wiring (construct the real
-> `bus.InMemoryBus` in `wire()`, pass it to the router via `WithEventPublisher` to
-> WAKE the hook, wire `onRouterError` to publish `MessageDropped`/`HandleFailed`,
-> expose `bus.DroppedCount()` as a pull metric on `/metrics`). Pure additive,
-> Stage 13 profile, light `/review`. **WATCH-OUTS for 1b:** (a) SSE teardown — the
-> documented F2 foot-gun: `unsubscribe` is NOT synchronous with handler
-> quiescence, a buffered event can fire once more after unsubscribe, so the SSE
-> handler must not write to a torn-down `ResponseWriter`; (b) SSE frames must be
-> secret-free (only non-secret `Event` fields, NEVER Envelope content), with a
-> no-secrets assertion like Stage 13. After Phase 1b: the Stage 14 Phase 1 closure
-> doc + HANDOFF/ROADMAP. After all of Stage 14: **15 (packaging) -> 16 (hardening +
-> release; repo goes public, Scorecard revives)**. Each heavyweight phase still
-> earns `/office-hours` + `/plan-eng-review` before its ADR.
+> The Stage 10 bus deferral is now closed correctly (built when, and only when, a
+> consumer arrived to validate it).
+>
+> **Next step: a decision — Stage 14 Phase 2 OR Stage 15.** Stage 14 Phase 2 is
+> the builder proper: **mutation** of the wiring (add-only or reload-and-rebuild,
+> **NEVER granular live editing** — the router registry is boot-time) + **AUTH**
+> (the trigger of mutation — read-only is what keeps loopback-no-auth valid today)
+> + the edit UI + the visual canvas (where React/TS/Vite earns its token). Stage 15
+> is packaging. After all of Stage 14: **15 (packaging) -> 16 (hardening + release;
+> repo goes public, Scorecard revives)**. Each heavyweight phase still earns
+> `/office-hours` + `/plan-eng-review` before its ADR.
 
 ### Stages closed on master
 
@@ -83,6 +91,7 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 | **11**  | **The real assembly — `cmd/korvun` (config + app + main + router pump)** | **closed** |
 | **12**  | **Observability — slog funnel fields + Metrics seam (Prometheus) + admin HTTP server (`/metrics` + `/healthz`)** | **closed** |
 | **13**  | **Control API — read-only operator introspection (`internal/controlapi`, `GET /api/brains` + `/api/channels`) on the admin server (ADR-0022)** | **closed** |
+| **14·P1** | **Builder foundation — event bus (`internal/bus`, ADR-0023) + read-only live-view (`internal/liveview`: SSE `/api/events` + `go:embed` `/ui`, ADR-0024)** | **closed** |
 
 **Stage 13 (control API) is CLOSED** (`docs/stages/STAGE-13.md`, ADR-0022,
 `ac88478`). A read-only `internal/controlapi` leaf serves two GET endpoints on the
@@ -160,14 +169,15 @@ re-entrancy). **Process note:** a `git add -A` swept the parked `CLAUDE.md` +
 Lesson now standing: **selective `git add <paths>`, never `-A`, with parked
 files in the tree.**
 
-**Next step: Stage 14 Phase 1b (ADR-0024: SSE + UI).** Stage 14 Phase 1a (event
-bus + router hook, ADR-0023) is **MERGED** (`464f8c2`); the bus is built and
-`-race`-validated but the hook stays dormant (nil publisher) until 1b wires it.
-Stage 13 (control API) is CLOSED (`ac88478`, ADR-0022). Stage 10 (bus) was the
-deferred bus, now being built across Stage 14 Phase 1. Order: **14 (Phase 1a DONE,
-Phase 1b next, then closure) -> 15 (packaging) -> 16 (hardening + release)**.
-Design sketch parked in `docs/notes/bus-design-sketch.md`. Each heavyweight phase
-still earns `/office-hours` + `/plan-eng-review` before its ADR.
+**Next step: decide Stage 14 Phase 2 (builder proper) OR Stage 15 (packaging).**
+**Stage 14 Phase 1 (foundation) is CLOSED** (`docs/stages/STAGE-14.md`): Phase 1a
+(bus + hook, ADR-0023, `464f8c2`) + Phase 1b (SSE live-view + UI, ADR-0024,
+`4f36447`). The bus is woken and validated end-to-end by its first real consumer
+(the SSE). Stage 10 (deferred bus) is now closed correctly. Order: **14 (Phase 1
+DONE; Phase 2 = mutation + auth + edit UI + canvas, future ADRs) -> 15 (packaging)
+-> 16 (hardening + release)**. Design sketch parked in
+`docs/notes/bus-design-sketch.md`. Each heavyweight phase still earns
+`/office-hours` + `/plan-eng-review` before its ADR.
 
 ### Stage 9 — persistence (closed)
 
@@ -773,31 +783,40 @@ Key entries currently:
   so durable memory survives a graceful shutdown, `65549cf`). `make quality` green
   with `-race`, cross-compile ×6 `CGO_ENABLED=0` green. **`go.mod` now has THREE
   direct dependencies** (the 3rd added by Stage 12 / ADR-0020; Stage 8 added
-  none). **Next step: Stage 14 Phase 1b (ADR-0024: SSE + UI).** Stage 14 Phase 1a
-  (event bus + router hook, ADR-0023) MERGED (`464f8c2`); bus built + `-race`-validated,
-  hook dormant until 1b. Stage 13 (control API) CLOSED (`ac88478`, ADR-0022).
-  Order: **14 (Phase 1a done, 1b next, then closure) -> 15 (packaging) -> 16
-  (hardening + release)** (Stages 8, 12, 13 are done). Each heavyweight phase still
-  earns `/office-hours` + `/plan-eng-review` before its ADR.
-- **Stage 14 Phase 1a (event bus + router hook) — MERGED 2026-06-28**
-  (ADR-0023 `docs/adr/0023-event-bus-and-router-hook.md`, merge `464f8c2`).
-  `internal/bus` is an in-process best-effort pub/sub: `Bus{Publish(ctx,Event);
-  Subscribe(type,handler) unsubscribe}` + `InMemoryBus`. Non-blocking publish
-  (slow subscriber → drop + `DroppedCount`), at-most-once, panic-safe, no leak
-  (assumes handlers return), `-race`-validated (the load-bearing test: concurrent
-  publishers + a slow subscriber). The router gained ONE additive nil-safe
-  `WithEventPublisher` hook: MessageReceived (DispatchInbound enqueue success),
-  ReplySent (deliver after Send==nil); MessageDropped/HandleFailed are NOT
-  published here — they ride `onRouterError` (wired in 1b). **The hook is DORMANT
-  in the binary** (nil publisher) until 1b. Concurrency `/review` APPROVED
-  (Publish-on-closed-channel proven race-free); F1/F2/F3 doc-hardening applied.
-  **For 1b (ADR-0024, accepted on master):** build `GET /api/events` (SSE — the
-  bus's first real subscriber, validates it) + minimal embedded vanilla UI (`/ui`,
-  `go:embed`, read-only) + app wiring (real bus in `wire()`, `WithEventPublisher`
-  to wake the hook, `onRouterError` → MessageDropped/HandleFailed, `DroppedCount`
-  pull metric). **Watch-outs:** F2 (unsubscribe not synchronous with handler
-  quiescence — SSE handler must not write a torn-down ResponseWriter) and
-  secret-free SSE frames (no Envelope content), test-asserted like Stage 13.
+  none). **Next step: decide Stage 14 Phase 2 (builder proper) OR Stage 15
+  (packaging).** Stage 14 Phase 1 (foundation) is CLOSED (`docs/stages/STAGE-14.md`).
+  Order: **14 (Phase 1 done; Phase 2 = mutation + auth + edit UI + canvas) -> 15
+  (packaging) -> 16 (hardening + release)**. Each heavyweight phase still earns
+  `/office-hours` + `/plan-eng-review` before its ADR.
+- **Stage 14 Phase 1 (builder foundation) — CLOSED 2026-06-28**
+  (`docs/stages/STAGE-14.md`), split by blast radius into two ADRs:
+  - **Phase 1a (event bus + router hook, ADR-0023, `464f8c2`):** `internal/bus`,
+    an in-process best-effort pub/sub (`Bus{Publish; Subscribe}` + `InMemoryBus`).
+    Non-blocking publish (slow subscriber → drop + `DroppedCount`), at-most-once,
+    panic-safe, no leak, `-race`-validated under `brainWorkers>1` (the load-bearing
+    test: concurrent publishers + a slow subscriber). ONE additive nil-safe router
+    `WithEventPublisher` hook: MessageReceived (enqueue success), ReplySent (after
+    Send==nil); MessageDropped/HandleFailed ride `onRouterError`, not the hook.
+    Concurrency `/review` APPROVED; F1/F2/F3 doc-hardening applied.
+  - **Phase 1b (SSE live-view + UI, ADR-0024, `4f36447`):** `internal/liveview` —
+    `GET /api/events` (stdlib `http.Flusher` SSE, the bus's FIRST real subscriber,
+    validating it end-to-end) + a `go:embed` vanilla read-only `/ui`. The bus is
+    WOKEN in `app`: real `InMemoryBus` built only when observability is on (its only
+    consumer rides the admin server — "no producer without a consumer"),
+    `WithEventPublisher` wakes the hook, `onRouterError` → MessageDropped/
+    HandleFailed, `bus.DroppedCount` + `liveview.DroppedCount` as pull metrics
+    (`korvun_bus_events_dropped_total`, `korvun_sse_events_dropped_total`).
+    **F2 teardown resolved at the ROOT by DECOUPLING:** the bus Handler writes ONLY
+    to an in-process per-connection buffer (non-blocking), never the ResponseWriter
+    (which only the serve loop touches), so a Handler firing after unsubscribe
+    cannot write a torn-down conn — the correct answer to a foot-gun that says
+    synchronization is impossible. **Frames SECRET-FREE by construction** (the
+    `frame` type has no field that can carry Envelope content, Meta, or Err — Err's
+    detail stays in logs), test-asserted. **Shutdown order:** channels → router
+    drain (producers quiesce) → store → `liveView.Close()` (release SSE streams) →
+    admin server → `eventBus.Close()` LAST (observer torn down once producers AND
+    consumers are quiet). Copilot review APPROVED. `liveview` 92.1%, go.mod still
+    3 deps (SSE stdlib, UI go:embed).
 - **Stage 13 (control API) — CLOSED 2026-06-28** (`docs/stages/STAGE-13.md`,
   ADR-0022, `ac88478`). Read-only `internal/controlapi` (`GET /api/brains` +
   `GET /api/channels`) on the existing admin server under `/api`; router untouched;
