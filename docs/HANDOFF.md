@@ -66,7 +66,10 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 >
 > **Next step: a decision — Stage 14 Phase 2 OR Stage 15.** Stage 14 Phase 2 is
 > the builder proper: **mutation** of the wiring (add-only or reload-and-rebuild,
-> **NEVER granular live editing** — the router registry is boot-time) + **AUTH**
+> **NEVER granular live editing** — the router registry is boot-time and has **no
+> per-brain cancel**: you cannot tear down/replace a single brain's workers in
+> place, so live granular mutation is a router concurrency/lifecycle change, not a
+> handler) + **AUTH**
 > (the trigger of mutation — read-only is what keeps loopback-no-auth valid today)
 > + the edit UI + the visual canvas (where React/TS/Vite earns its token). Stage 15
 > is packaging. After all of Stage 14: **15 (packaging) -> 16 (hardening + release;
@@ -785,9 +788,10 @@ Key entries currently:
   direct dependencies** (the 3rd added by Stage 12 / ADR-0020; Stage 8 added
   none). **Next step: decide Stage 14 Phase 2 (builder proper) OR Stage 15
   (packaging).** Stage 14 Phase 1 (foundation) is CLOSED (`docs/stages/STAGE-14.md`).
-  Order: **14 (Phase 1 done; Phase 2 = mutation + auth + edit UI + canvas) -> 15
-  (packaging) -> 16 (hardening + release)**. Each heavyweight phase still earns
-  `/office-hours` + `/plan-eng-review` before its ADR.
+  Order: **14 (Phase 1 done; Phase 2 = mutation [add-only or reload-and-rebuild,
+  NEVER granular live editing — the router has no per-brain cancel] + auth + edit UI
+  + canvas) -> 15 (packaging) -> 16 (hardening + release)**. Each heavyweight phase
+  still earns `/office-hours` + `/plan-eng-review` before its ADR.
 - **Stage 14 Phase 1 (builder foundation) — CLOSED 2026-06-28**
   (`docs/stages/STAGE-14.md`), split by blast radius into two ADRs:
   - **Phase 1a (event bus + router hook, ADR-0023, `464f8c2`):** `internal/bus`,
