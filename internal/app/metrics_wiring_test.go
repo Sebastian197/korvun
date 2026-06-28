@@ -27,7 +27,7 @@ func (r *routerErrRecorder) IncRouterError(kind string) { r.kinds = append(r.kin
 // metric with the kind string (the WithErrorHandler funnel, ADR-0020 §3).
 func TestOnRouterError_countsByKind(t *testing.T) {
 	rec := &routerErrRecorder{}
-	onRouterError(slog.New(slog.DiscardHandler), rec, router.RouterError{
+	onRouterError(slog.New(slog.DiscardHandler), rec, nil, router.RouterError{
 		Kind:    router.ErrKindSend,
 		Channel: "telegram",
 		Err:     errors.New("boom"),

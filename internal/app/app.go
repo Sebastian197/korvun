@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/brain"
+	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/channel/telegram"
 	"github.com/Sebastian197/korvun/internal/config"
@@ -33,6 +34,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/conversation/sqlite"
 	"github.com/Sebastian197/korvun/internal/httpserver"
+	"github.com/Sebastian197/korvun/internal/liveview"
 	"github.com/Sebastian197/korvun/internal/metrics"
 	"github.com/Sebastian197/korvun/internal/metrics/prom"
 	"github.com/Sebastian197/korvun/internal/model"
@@ -76,6 +78,17 @@ type App struct {
 	// metrics is the domain's observability backend: the Prometheus impl when
 	// observability is on, metrics.Nop when off. Never nil.
 	metrics metrics.Metrics
+	// eventBus is the ADR-0023 in-process event bus, built ONLY when observability
+	// is on (its only consumer, the SSE live-view, rides the admin server —
+	// ADR-0024 §4). nil otherwise, which keeps the router's WithEventPublisher hook
+	// dormant at zero cost (no producer without a consumer). Owned so Shutdown can
+	// Close it LAST, once both its producers (the router) and consumers (the SSE
+	// live-view) are quiescent.
+	eventBus *bus.InMemoryBus
+	// liveView serves the read-only SSE stream (/api/events) + embedded UI (/ui)
+	// over eventBus (ADR-0024). nil when observability is off. Shutdown Closes it
+	// before the admin server drains so the long-lived SSE connections release.
+	liveView *liveview.LiveView
 	// brainSummaries is the read-only control API's boot SNAPSHOT of the resolved
 	// brains (ADR-0022 §3): assembled in wire() where the config is in hand, it
 	// is the live truth for the process lifetime because brains are immutable at
@@ -162,6 +175,17 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		adminServer.Handle("/metrics", pm.Handler(b.logger))
 	}
 
+	// Build the event bus ONLY when the admin server exists: its only consumer —
+	// the SSE live-view (ADR-0024) — rides that server, so with observability off
+	// there is no subscriber and the router's WithEventPublisher hook stays dormant
+	// at zero cost (the "no producer without a consumer" discipline, ADR-0023). A
+	// nil eventBus below means no WithEventPublisher option and no app-level
+	// failure publishing.
+	var eventBus *bus.InMemoryBus
+	if adminServer != nil {
+		eventBus = bus.New()
+	}
+
 	// Open the durable store ONCE, before wiring the brains, and share it across
 	// every brain (the Key namespaces by channel::conversation, ADR-0019 §6). A
 	// configured store that fails to open is a fatal boot error (ADR-0017 §5).
@@ -173,9 +197,18 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		b.store = store // concrete non-nil -> real conversation.Store, never typed-nil
 	}
 
-	r := router.New(router.WithErrorHandler(func(re router.RouterError) {
-		onRouterError(b.logger, b.metrics, re)
-	}))
+	// The router gets the app-level error funnel (logs + counts +, when the bus is
+	// live, publishes MessageDropped/HandleFailed) and — only when the bus exists —
+	// the WithEventPublisher hook that wakes MessageReceived/ReplySent (ADR-0023).
+	ropts := []router.Option{
+		router.WithErrorHandler(func(re router.RouterError) {
+			onRouterError(b.logger, b.metrics, eventBus, re)
+		}),
+	}
+	if eventBus != nil {
+		ropts = append(ropts, router.WithEventPublisher(eventBus))
+	}
+	r := router.New(ropts...)
 
 	channels, brainSummaries, channelInfos, err := b.wire(r, cfg)
 	if err != nil {
@@ -187,11 +220,30 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		}
 		return nil, err
 	}
+	// Build the SSE live-view over the bus (ADR-0024) when both exist (i.e.
+	// observability is on). It is the bus's first real subscriber.
+	var liveView *liveview.LiveView
+	if adminServer != nil && eventBus != nil {
+		liveView = liveview.New(eventBus, liveview.WithLogger(b.logger))
+	}
+
 	// Register the pull dropped-count source for every channel that exposes one
-	// (telegram). Done after wiring so the adapters exist; only when the
-	// Prometheus backend is active (pm != nil).
+	// (telegram), plus the bus and SSE drop counters. Done after wiring so the
+	// adapters exist; only when the Prometheus backend is active (pm != nil).
 	if pm != nil {
 		registerDroppedSources(pm, channels, b.logger)
+		if eventBus != nil {
+			if err := pm.RegisterPullCounter("korvun_bus_events_dropped_total",
+				"Events dropped because a bus subscriber's buffer was full.", eventBus.DroppedCount); err != nil {
+				b.logger.Warn("observability: bus dropped-count source not registered", "error", err)
+			}
+		}
+		if liveView != nil {
+			if err := pm.RegisterPullCounter("korvun_sse_events_dropped_total",
+				"Events dropped because an SSE client could not keep up.", liveView.DroppedCount); err != nil {
+				b.logger.Warn("observability: SSE dropped-count source not registered", "error", err)
+			}
+		}
 	}
 
 	app := &App{
@@ -200,6 +252,8 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		logger:         b.logger,
 		adminServer:    adminServer,
 		metrics:        b.metrics,
+		eventBus:       eventBus,
+		liveView:       liveView,
 		brainSummaries: brainSummaries,
 		channelInfos:   channelInfos,
 	}
@@ -212,6 +266,10 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	// conscious coupling documented in ADR-0022 §5.
 	if adminServer != nil {
 		controlapi.Register(adminServer, app)
+	}
+	// Mount the live-view (SSE + UI) on the same admin server, also before Start.
+	if liveView != nil {
+		liveView.Register(adminServer)
 	}
 	return app, nil
 }
@@ -277,12 +335,39 @@ func registerDroppedSources(reg droppedRegistrar, channels []Channel, logger *sl
 }
 
 // onRouterError is the single sink the router's WithErrorHandler funnel feeds:
-// it both logs the failure (standardized fields) and counts it by kind on the
-// metrics backend (ADR-0020 §1, §3). Keeping both off one funnel is the
-// near-zero-blast-radius wiring the stage relies on.
-func onRouterError(logger *slog.Logger, m metrics.Metrics, re router.RouterError) {
+// it logs the failure (standardized fields), counts it by kind on the metrics
+// backend (ADR-0020 §1, §3), and — when the bus is live — publishes the matching
+// failure event (MessageDropped / HandleFailed) to it (ADR-0023: these two ride
+// the existing app-level funnel, NOT an in-router hook, so the router is
+// untouched for drops/failures). A nil eventBus (observability off) skips the
+// publish at zero cost. Keeping all three off one funnel is the near-zero-blast-
+// radius wiring the stage relies on.
+func onRouterError(logger *slog.Logger, m metrics.Metrics, eventBus *bus.InMemoryBus, re router.RouterError) {
 	logRouterError(logger, re)
 	m.IncRouterError(re.Kind.String())
+	if eventBus != nil {
+		eventBus.Publish(context.Background(), routerErrorToEvent(re))
+	}
+}
+
+// routerErrorToEvent maps a RouterError onto the bus Event it publishes
+// (ADR-0023 §3): ErrKindHandle is a brain failure (HandleFailed); every other
+// kind — inbound-dispatch saturation, outbound saturation, a failed Send — is a
+// message that did not complete its path (MessageDropped). The Envelope/Channel/
+// Brain/Err carry through; the SSE layer serializes only the non-secret subset
+// (ADR-0024 §1), so passing Err here never leaks (it is dropped before the wire).
+func routerErrorToEvent(re router.RouterError) bus.Event {
+	t := bus.MessageDropped
+	if re.Kind == router.ErrKindHandle {
+		t = bus.HandleFailed
+	}
+	return bus.Event{
+		Type:     t,
+		Envelope: re.Envelope,
+		Channel:  re.Channel,
+		Brain:    re.Brain,
+		Err:      re.Err,
+	}
 }
 
 // logRouterError records one asynchronous router failure with the standardized
@@ -635,13 +720,32 @@ func (a *App) Shutdown(ctx context.Context) error {
 			}
 		}
 	}
-	// Stop the admin server LAST (ADR-0020 §4): /metrics and /healthz stay
-	// observable across the whole drain above, then the last network surface
-	// closes. Its error is joined like a channel's, never masking the rest.
+	// Unblock the live-view BEFORE draining the admin server: SSE connections are
+	// long-lived streaming requests that never finish on their own, so without
+	// this signal adminServer.Shutdown would block on them until ctx expires.
+	// Close returns each in-flight SSE serve loop promptly (it selects on this
+	// done signal), so the admin server then drains immediately (ADR-0024 §1
+	// clean-teardown).
+	if a.liveView != nil {
+		a.liveView.Close()
+	}
+	// Stop the admin server LAST among the network surfaces (ADR-0020 §4):
+	// /metrics and /healthz stay observable across the whole drain above, then the
+	// last network surface closes. Its error is joined like a channel's, never
+	// masking the rest.
 	if a.adminServer != nil {
 		if err := a.adminServer.Shutdown(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("app: shutdown admin server: %w", err))
 		}
+	}
+	// Close the bus VERY LAST. It is an observer that sits between producers and
+	// consumers: its producers (the router, via WithEventPublisher + onRouterError)
+	// quiesced at router.Shutdown above, and its consumers (the SSE subscribers)
+	// are gone once the admin server has drained. Closing it here — after both are
+	// quiet — tears down any residual subscriber goroutines with nothing left to
+	// publish into it (ADR-0023 teardown). Idempotent and nil-safe.
+	if a.eventBus != nil {
+		a.eventBus.Close()
 	}
 	return errors.Join(errs...)
 }
