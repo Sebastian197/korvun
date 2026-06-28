@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<!--
+  Copyright 2026 Sebastián Moreno Saavedra
+  SPDX-License-Identifier: Apache-2.0
+
+  Korvun live-view — minimal, read-only, vanilla HTML/JS (no framework, no build
+  toolchain). Embedded in the binary via go:embed (ADR-0024 §2). It renders the
+  resolved wiring from /api/brains + /api/channels and tails the live lifecycle
+  feed from /api/events (Server-Sent Events). Read-only: it never writes.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Korvun — live view</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; padding: 1.5rem; line-height: 1.45; }
+    h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+    .sub { opacity: 0.6; margin: 0 0 1.5rem; font-size: 0.85rem; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    section { border: 1px solid currentColor; border-radius: 8px; padding: 1rem; }
+    section > h2 { margin: 0 0 0.75rem; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; }
+    .card { border-left: 3px solid currentColor; padding: 0.4rem 0.75rem; margin-bottom: 0.5rem; }
+    .muted { opacity: 0.6; }
+    #feed { max-height: 60vh; overflow-y: auto; }
+    .ev { display: flex; gap: 0.75rem; padding: 0.3rem 0.5rem; border-bottom: 1px solid rgba(128,128,128,0.25); font-size: 0.85rem; align-items: baseline; }
+    .ev time { opacity: 0.55; flex: 0 0 auto; }
+    .tag { flex: 0 0 auto; border-radius: 4px; padding: 0 0.4rem; font-weight: 600; }
+    .t-message_received { color: #2563eb; }
+    .t-reply_sent { color: #16a34a; }
+    .t-message_dropped { color: #d97706; }
+    .t-handle_failed { color: #dc2626; }
+    #status { font-size: 0.8rem; }
+    #status.ok::before { content: "● live"; color: #16a34a; }
+    #status.down::before { content: "○ disconnected"; color: #dc2626; }
+  </style>
+</head>
+<body>
+  <h1>Korvun — live view</h1>
+  <p class="sub">read-only · loopback · <span id="status" class="down"></span></p>
+
+  <div class="grid">
+    <section>
+      <h2>Brains</h2>
+      <div id="brains" class="muted">loading…</div>
+    </section>
+    <section>
+      <h2>Channels</h2>
+      <div id="channels" class="muted">loading…</div>
+    </section>
+  </div>
+
+  <section>
+    <h2>Live events</h2>
+    <div id="feed" class="muted">waiting for events…</div>
+  </section>
+
+  <script>
+    "use strict";
+
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+    async function loadJSON(url, render) {
+      try {
+        const resp = await fetch(url);
+        render(await resp.json());
+      } catch (e) {
+        // Read-only view: a failed snapshot just shows nothing, never blocks.
+      }
+    }
+
+    loadJSON("/api/brains", (brains) => {
+      const el = document.getElementById("brains");
+      if (!Array.isArray(brains) || brains.length === 0) { el.textContent = "none"; return; }
+      el.classList.remove("muted");
+      el.innerHTML = brains.map((b) => `
+        <div class="card">
+          <strong>${esc(b.name)}</strong>
+          <span class="muted">${esc(b.sensitivity)} · ${esc(b.policy)} · ${esc(b.dispatch)}</span>
+          <div class="muted">${(b.models || []).map((m) => esc(m.provider + ":" + m.model_id)).join(", ") || "no models"}</div>
+        </div>`).join("");
+    });
+
+    loadJSON("/api/channels", (channels) => {
+      const el = document.getElementById("channels");
+      if (!Array.isArray(channels) || channels.length === 0) { el.textContent = "none"; return; }
+      el.classList.remove("muted");
+      el.innerHTML = channels.map((c) => `
+        <div class="card">
+          <strong>${esc(c.name)}</strong>
+          <span class="muted">${esc(c.type)} · ${esc(c.mode)}</span>
+          ${c.dropped != null ? `<span class="muted"> · dropped ${esc(c.dropped)}</span>` : ""}
+        </div>`).join("");
+    });
+
+    // Live feed via Server-Sent Events. EventSource auto-reconnects; the status
+    // dot reflects the connection. Newest events are prepended.
+    const feed = document.getElementById("feed");
+    const status = document.getElementById("status");
+    const MAX = 200;
+
+    const es = new EventSource("/api/events");
+    es.onopen = () => { status.className = "ok"; };
+    es.onerror = () => { status.className = "down"; };
+    es.onmessage = (msg) => {
+      let ev;
+      try { ev = JSON.parse(msg.data); } catch { return; }
+      if (feed.classList.contains("muted")) { feed.classList.remove("muted"); feed.innerHTML = ""; }
+      const row = document.createElement("div");
+      row.className = "ev";
+      const when = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : "";
+      row.innerHTML = `
+        <time>${esc(when)}</time>
+        <span class="tag t-${esc(ev.type)}">${esc(ev.type)}</span>
+        <span class="muted">${esc(ev.channel || "")}${ev.brain ? " → " + esc(ev.brain) : ""}</span>`;
+      feed.prepend(row);
+      while (feed.childElementCount > MAX) { feed.removeChild(feed.lastChild); }
+    };
+  </script>
+</body>
+</html>

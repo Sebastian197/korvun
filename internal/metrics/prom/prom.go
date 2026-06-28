@@ -162,3 +162,17 @@ func (m *Metrics) RegisterDroppedSource(channel string, count func() uint64) err
 		ConstLabels: prometheus.Labels{"channel": channel},
 	}, func() float64 { return float64(count()) }))
 }
+
+// RegisterPullCounter registers a named PULL counter sourced from a cumulative
+// counter function read at scrape time (prometheus.NewCounterFunc), the same
+// no-double-instrument pattern as RegisterDroppedSource (ADR-0020 §3). The
+// live-view's bus drop count (bus.DroppedCount) and SSE drop count
+// (liveview.DroppedCount) are exposed this way (ADR-0024 §1). Like
+// RegisterDroppedSource it returns the registration error rather than panicking,
+// so a duplicate name never takes down boot (review F2).
+func (m *Metrics) RegisterPullCounter(name, help string, count func() uint64) error {
+	return m.reg.Register(prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name: name,
+		Help: help,
+	}, func() float64 { return float64(count()) }))
+}
