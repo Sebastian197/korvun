@@ -23,14 +23,20 @@ on:
         type: boolean
         default: true
 
+# Least privilege (Scorecard Token-Permissions, High): the default token is
+# read-only for every job; the one job that needs write scopes elevates them at
+# the job level, not here.
 permissions:
-  contents: write # create the GitHub Release and upload its assets
-  id-token: write # keyless cosign: mint an OIDC token to sign checksums.txt (ADR-0026)
-  attestations: write # SLSA build provenance attestation for the checksums (ADR-0026)
+  contents: read
 
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+    # Only the release job needs write scopes:
+    permissions:
+      contents: write # create the GitHub Release and upload its assets
+      id-token: write # keyless cosign: mint an OIDC token to sign checksums.txt (ADR-0026)
+      attestations: write # SLSA build provenance attestation for the checksums (ADR-0026)
     steps:
       # A manual dispatch is dry-run only: a real, published release must come
       # from a pushed v* tag (there is no tag context to publish on dispatch).
