@@ -63,8 +63,10 @@ The mutation endpoint lives on the **admin HTTP server**, which is **part of the
 app)`, `app.go:268`). A handler cannot synchronously shut down the app that hosts
 it — it would cancel its own request goroutine mid-reload. Therefore the reload is
 driven by a **supervisor that owns the lifecycle ABOVE `App`** (in `cmd/korvun`);
-the handler validates, persists, and **signals** the supervisor, then returns. The
-supervisor performs the swap from a goroutine that outlives any single `App`.
+the handler validates and **signals** the supervisor, then returns `202`. The
+handler does **not** persist and does **not** open the store; the supervisor — a
+goroutine that outlives any single `App` — performs the heavy checks, the swap, and
+(only on success) the persist.
 
 ## Decision
 
@@ -74,21 +76,63 @@ router is not touched.
 
 ### The mutation flow
 
-1. **Accept** a new config on the write endpoint (full config document;
-   patch-over-current is a UI convenience deferred to 2b — the wire contract in
-   2a is a full validated config, so the server has one authority to validate and
-   persist). Auth per ADR-0028 gates this endpoint.
-2. **Validate** with the *existing* `config.Validate` (in memory, no side effect).
-   Invalid → `400`, old app **untouched, still serving**.
-3. **Build** a new `*App` from the new config in memory (`app.Build`). Build does
-   the heavy validation (secrets resolve, Telegram token `getMe`, privacy selector
-   per brain). Build failure → report it (`409`/`422`), old app **untouched, still
-   serving** — Build never touches the running app, so a failed build is free.
-4. **Signal the supervisor** and return `202 Accepted` with a status handle. The
-   supervisor (outliving the request) performs the **cutover**: `Shutdown` the old
-   app, `Run` the new app, swap the reference.
-5. **Persist** the new config to the `-config` file **only after a successful
-   cutover** (see §Persistence), so the on-disk config is always a known-good one.
+The flow splits deliberately between a **fast handler** (returns `202` after only
+cheap, effect-free work) and the **supervisor** (does every heavy or stateful step,
+asynchronously, reporting through the status handle). This split is what makes F1
+(no double-open store), F5 (persist only after cutover), F7 (a slow Telegram never
+hangs the request) and F11 (a self-locking config is refused) all hold at once.
+
+**Handler (synchronous — returns `202` or a `4xx`):**
+
+1. **Auth** per ADR-0028 gates the endpoint. **Accept** a full config document
+   (patch-over-current is a 2b UI convenience; the 2a wire contract is a full
+   config, so the server has one authority to validate and persist).
+2. **Validate** with the *existing* `config.Validate` (pure, in memory, no side
+   effect — no store, no network, no worker). Invalid → `400`, old app **untouched**.
+3. **Refuse a self-locking config (F11):** if the mutation surface is currently
+   mounted (a token is configured, ADR-0028) and the new config would leave it
+   **unmounted** (no admin token, or a token env-var that resolves empty), reject
+   with `409` naming the manual recovery (edit `-config` + restart). A builder must
+   not permit the one action that irreversibly disconnects it from itself: a config
+   that both drops the token and persists leaves no API path back, and — because the
+   persisted file survives restart — **not even a restart recovers the control
+   plane**. This check is cross-referenced by ADR-0028 §1.
+4. **Single-flight (F3):** acquire the supervisor's "reload in progress" lock. If a
+   reload is already running, reject the second request with `409` (never a second
+   concurrent build/`openStore`). On acquire, hand the validated config to the
+   supervisor and return **`202 Accepted` with an opaque status-handle ID** (§seam,
+   F4). The handler does **no** network I/O and **no** store open, so a
+   slow/unreachable Telegram cannot hang it (F7).
+
+**Supervisor (asynchronous — updates the status handle, holds the single-flight
+lock until done):**
+
+5. **Pre-cutover checks (effect-free; old app still serving):** resolve secrets from
+   the environment, run the Telegram `getMe` health-check, run the privacy selector
+   per brain — all **without opening the store and without touching the running
+   app**. Any failure → status `failed`, old app **untouched, still serving**, lock
+   released. The common "bad secret / bad token / no eligible model" failures are
+   caught here, cheaply and safely — the heavy network work lives behind the `202`,
+   not in the request (F7).
+6. **Cutover (F1 — the only window the store or the port move):** `Shutdown` the old
+   app (channels → router drain → **old store closed**), **then** build the new app —
+   which is when `openStore` runs and the new store is opened. Because the open
+   happens strictly **after** the old `Shutdown` closed the old store, **the store is
+   never open twice; there is never a second writer.** Then `Run` the new app and
+   swap the supervisor's reference.
+7. **On cutover failure** (build / `openStore` / `Run` fails — e.g. admin re-bind, a
+   channel `Start` error): `Shutdown`/`Close` the partially-built new app so it leaks
+   no worker goroutine or store handle (F2), then roll back per §(c). Status →
+   `rolled-back`, or (if rollback also fails) the process exits — still safe, §(c).
+8. **On success:** the **supervisor** (not the handler) **persists** the new config
+   to the `-config` file (F5 — only now, after a clean cutover), status →
+   `succeeded`, lock released.
+
+**Signal-coordination invariant (F6):** the supervisor is the single owner of the
+app lifecycle, so `SIGINT`/`SIGTERM` and a reload travel the **same** control path.
+A signal arriving mid-cutover is **ordered** by the supervisor (finish or abort the
+in-flight cutover, then shut down), never a second concurrent lifecycle driver
+racing the reload.
 
 ### (a) In-flight messages during the cutover — required section
 
@@ -110,18 +154,33 @@ Honest accounting of what happens to messages around the blip:
 - **The blip itself:** the admin surface (`/api`, `/ui`, SSE) closes and re-binds
   the same loopback port (sub-second). The 2b UI reconnects; SSE clients
   reconnect. Acceptable for a single-operator self-hosted gateway (premise 3).
+- **Telegram single-consumer (F14 caveat):** Telegram allows only **one
+  `getUpdates` long-poll consumer per bot token**, so the cutover is **strictly
+  sequential** — `app.Shutdown` fully stops the old channel's polling **before** the
+  new channel `Start`s — precisely to avoid a `409 Conflict` from an overlapping
+  poll. A botched cutover that transiently overlapped old-polling with new-`Start`
+  would surface that `409`; strict sequencing is what prevents it. Defending the
+  partial-overlap edge is out of scope (§Out of scope).
 
 ### (b) SQLite store handoff — required section
 
-The store is single-writer (`MaxOpenConns(1)`, ADR-0019). Cutover sequence keeps
-it clean: old `app.Shutdown` closes the store **only after the router has fully
-drained** (`app.go:713` — no `AppendTurns` can race a closing DB); the new
-`app.Build` reopens it via `openStore`. Between close and reopen **no writer
-exists** (old router drained, new one not started), so there is no concurrent
-access and no corruption. This is the exact close/reopen a process restart already
-performs; the path is tested. If the old router does **not** drain within the
-cutover deadline, `Shutdown` leaves the store open (SQLite WAL is
-crash-consistent) rather than racing `Close` — the reopen tolerates it.
+The store is single-writer (`MaxOpenConns(1)`, ADR-0019), and the cutover is ordered
+so it is **never open twice** (F1). The key correction over a naive "build the new
+app first" flow: `openStore` does **not** run in advance — it runs **inside** the
+cutover (§ step 6), **after** `app.Shutdown` on the old app has closed the old store
+(`app.go:713` — Close only after the router fully drained, so no `AppendTurns` can
+race a closing DB). The real order is therefore:
+
+```
+old router drains → OLD store Close → NEW openStore → new writer
+```
+
+Between the close and the open **no writer exists** (old drained, new not yet
+opened), so there is no double-writer window and no WAL-lock contention — the exact
+close/reopen a process restart already performs, and the path is tested. If the old
+router does **not** drain within the cutover deadline, `Shutdown` leaves the old
+store open (SQLite WAL is crash-consistent) and the supervisor **rolls back** rather
+than opening a second handle onto the same file.
 
 ### (c) Drop-free cutover + mandatory rollback — required section
 
@@ -129,15 +188,27 @@ crash-consistent) rather than racing `Close` — the reopen tolerates it.
 guarantees the process is always either running the old config or the new one,
 never neither:
 
-- **Bad config (validate/Build fails):** old app keeps running, untouched (steps
-  2-3 never touch it). This is the common failure and it is fully safe.
-- **Cutover fails (new app Built but `Run` fails — e.g. admin re-bind race, a
-  channel `Start` error the token check didn't catch):** the supervisor attempts a
-  **rollback**: re-`Build` + `Run` from the **old** config (still in memory / still
-  on disk, since persistence happens only on success). If rollback also fails, the
-  process exits non-zero; systemd (`ADR-0026` hardened unit, `Restart=on-failure`)
-  restarts, and because the on-disk `-config` was **never overwritten**, it boots
-  the last known-good config. There is no crash-loop into a bad config.
+- **Bad config (validate / self-lock / pre-cutover check fails):** old app keeps
+  running, untouched — the handler's checks (steps 2-3) and the supervisor's
+  pre-cutover checks (step 5) never touch it. This is the common failure and it is
+  fully safe. A config that would self-lock the control plane is refused here (F11).
+- **Cutover fails (old already `Shutdown`; new build / `openStore` / `Run` fails —
+  e.g. admin re-bind, a channel `Start` error the `getMe` check didn't catch):**
+  first `Shutdown`/`Close` the partially-built new app so it leaks no worker
+  goroutine or store handle (F2). Then attempt a **rollback**: rebuild + `Run` the
+  **old** config (still in memory; still on disk, since persistence happens only on
+  success). **Do not oversell the rollback (F8):** for a *bind* failure the rollback
+  re-binds the **same** port that just failed, so it may fail identically. The real
+  backstop is **not** the rollback — it is that the process then exits non-zero,
+  systemd (ADR-0026 hardened unit, `Restart=on-failure`) restarts it, and because
+  the on-disk `-config` was **never overwritten** it boots the last known-good
+  config. There is no crash-loop into a bad config.
+- **Windows re-bind caveat (F8):** the "sub-second re-bind" assumes unix
+  `SO_REUSEADDR` semantics on a just-closed listener. Windows (a supported target)
+  does not grant the same immediate rebind, so on Windows a cutover-time rebind is
+  likelier to fall through to the systemd-style restart backstop than to an
+  in-process rollback. Named, not solved — a single-operator gateway tolerates the
+  restart.
 
 ### Config persistence — named decision
 
@@ -147,15 +218,31 @@ the config file is already the single source of truth at boot (`config.Load(path
 keeping it authoritative means a plain restart reloads exactly what the builder
 produced, and avoids a second config authority. The SQLite store is conversation
 memory — a different lifecycle; mixing config into it would couple the two. The
-write happens **only after a successful cutover**, so the file is always a config
-that is known to boot (the backstop in §c).
+write happens **only after a successful cutover, and it is the supervisor — not the
+request handler — that performs it** (F5): the handler that returned `202` never
+persists, so a failed or rolled-back cutover can never leave an edited config on
+disk. The file is therefore always a config known to boot (the backstop in §c).
 
-### The one new production seam
+### The one new production seam + the status handle (F4)
 
-`App` (or the control API) gains a **reload-request seam** the supervisor injects:
-the handler calls it to hand the validated new config to the supervisor and get a
-status handle. This is the only new coupling; the router, brains, channels, store,
-and the read-only control API are unchanged.
+`cmd/korvun`'s **supervisor** is the one new production element: it owns the app
+lifecycle above `App`, holds the single-flight reload lock, and — crucially — owns
+the **reload status**, which lives **in the supervisor, NOT on the admin server**.
+This is the load-bearing fix for F4: the admin server is part of the `App` the
+cutover tears down and rebuilds, so status kept there would be lost across the very
+blip it reports on. Instead:
+
+- The handler calls a **reload-request seam** to hand the validated config to the
+  supervisor and receives an **opaque status-handle ID**.
+- The supervisor exposes a read-only `GET` status route (re-mounted on each rebuilt
+  admin server, but reading **supervisor-owned** state that survives the cutover)
+  reporting one of: `pending` → `cutover-in-progress` → `succeeded` | `rolled-back`
+  | `failed`.
+- A 2b UI polls this handle to learn the outcome across the reconnect. The heavy
+  work is observable here, not blocking the original request (F7).
+
+This is the only new coupling; the router, brains, channels, store, and the
+read-only control API are unchanged.
 
 ## Consequences
 
@@ -171,7 +258,10 @@ and the read-only control API are unchanged.
 Additive and reversible: the mutation is **one write endpoint + a supervisor loop**
 that wraps the existing Build/Run/Shutdown. Removing the endpoint and collapsing
 the supervisor back to "Build once, Run, Shutdown on signal" reverts to today's
-behavior exactly. No schema, no router change, no data migration.
+behavior exactly at the **code** level. No schema, no router change, no data
+migration. **Precision (F13): reversibility is code-only** — once a mutation has
+rewritten the on-disk `-config`, reverting the *feature* does not revert the
+operator's persisted edits; the file stays as last written.
 
 ### Trade-offs accepted
 
@@ -200,8 +290,10 @@ behavior exactly. No schema, no router change, no data migration.
 
 Granular live editing, per-brain cancel, an add-only fast path parallel to reload,
 a stable-control-plane refactor, config versioning/history/undo, patch-over-current
-on the wire (a 2b UI convenience), webhook-channel mutation loss handling, and the
-visual canvas.
+on the wire (a 2b UI convenience), webhook-channel mutation loss handling, the
+visual canvas, and hardening against a Telegram `getUpdates` `409` from an
+overlapping poll during a botched cutover (strict-sequential cutover avoids it,
+§(a); defending the partial-overlap edge is out of scope — F14).
 
 ## Delivery
 

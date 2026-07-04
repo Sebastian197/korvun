@@ -40,15 +40,34 @@ config file, logs, or errors).
   **read from the environment at boot**, never stored in the file). Suggested
   var: `KORVUN_ADMIN_TOKEN`.
 - Every **mutation** endpoint (the `POST`/`PUT` config route of ADR-0027) is
-  wrapped by a middleware that requires `Authorization: Bearer <token>` and
-  compares it to the resolved token with **`crypto/subtle.ConstantTimeCompare`**
-  (no timing oracle). Missing/wrong token → `401`.
+  wrapped by a middleware that requires `Authorization: Bearer <token>`.
+  Missing/wrong token → `401`. **Constant-time compare, correctly (F12):**
+  `crypto/subtle.ConstantTimeCompare` early-returns `0` on a length mismatch, so
+  comparing the raw variable-length tokens directly still **leaks the token length**
+  through timing — "no timing oracle" was over-stated. The fix is to compare
+  **fixed-length hashes**: `subtle.ConstantTimeCompare(sha256(got), sha256(want))`,
+  so both inputs are always 32 bytes and neither length nor content leaks.
 - **No token configured ⇒ the mutation endpoints are NOT MOUNTED.** Mutation does
   not exist without a token. The safe default is exactly today's behavior: a
   read-only Korvun on loopback. Auth is therefore not an "optional off switch"
   over an open mutation surface — the surface only comes into being when the
-  operator sets the token. (After a reload-and-rebuild, `Build` re-resolves the
-  token from the new config, so enabling/rotating it is itself a config edit.)
+  operator sets the token.
+  - **Token-value rotation needs a restart, not a reload (F9 — correcting an
+    earlier over-claim).** The token *value* lives in the process environment,
+    resolved by `os.Getenv` at `Build` and **fixed for the process lifetime**
+    (ADR-0010: secrets never arrive through the API or the config file). A
+    reload-and-rebuild re-runs `os.Getenv`, but it reads the environment the process
+    was **launched** with, so it returns the **same** value. What a live config edit
+    *can* rotate is the **env-var NAME** the config points at; rotating the actual
+    secret **value** requires re-launching the process with a new environment.
+    (Enabling the token for the first time — naming a var that is already exported —
+    does take effect on reload.)
+  - **Self-lock refusal (F11, ties to ADR-0027 §flow step 3).** Naming a token
+    env-var that resolves **empty** yields "no token ⇒ not mounted", so a reload
+    that drops the token would disable the control plane **and persist that state** —
+    not even a restart brings it back via the API. ADR-0027's mutation handler
+    therefore **refuses** a config that would leave the surface unmounted while it is
+    currently mounted, naming the manual recovery (edit `-config` + restart).
 
 ### 2. Read-only endpoints stay loopback-open (justified, and its limit named)
 
@@ -68,7 +87,15 @@ The gate covers **writes only**. `/api/brains`, `/api/channels`, `/api/events`,
   still the operator's** (ADR-0020 §4 already puts auth/TLS/firewall on them for a
   non-loopback bind). The **mutation** gate, by contrast, is **unconditional** —
   it applies regardless of bind address, because a write is dangerous on loopback
-  too. A future "require the token for all of `/api`" toggle is left as a
+  too. **But the gate is only as strong as the transport (F10):** Korvun terminates
+  no TLS, so on a non-loopback bind the bearer token crosses the network **in
+  cleartext**, where it can be sniffed and replayed into a full config-takeover —
+  strictly worse than the read-only metadata leak above. A non-loopback mutation
+  bind therefore **requires a TLS terminator in front** (reverse proxy / tunnel);
+  without it the gate is theater. On the default loopback bind this does not arise.
+  This is the operator's responsibility, same as ADR-0020 §4, but stated explicitly
+  for the write path because the failure here is **credential compromise**, not just
+  disclosure. A future "require the token for all of `/api`" toggle is left as a
   possible follow-up, not built now (no new risk on the default loopback bind).
 
 ### 3. CSRF neutralized by construction
