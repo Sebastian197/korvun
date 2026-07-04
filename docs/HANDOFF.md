@@ -123,15 +123,30 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > reporting + Dependabot alerts ON; Dependabot security updates deliberately OFF.
 > `scorecard.yml` automatic triggers re-enabled (`8a7becf`, `ci: re-enable
 > scorecard on public repo`). All six README badges resolve (HTTP 200); Quality
-> Gate GREEN on the public repo. **First Scorecard run done — aggregate 5.1/10.**
-> Findings await a conscious decision (NOT auto-fixed): Token-Permissions 0/High
-> (`release.yml` top-level `contents: write`), Pinned-Dependencies 6/Medium
-> (GitHub-owned `actions/checkout`+`setup-go` pinned by tag not SHA), SAST 0
-> (CodeQL removed while private — re-addable now public), Branch-Protection 0
-> (**Sebastián's conscious choice NOT to configure it — not a fix**), Code-Review/
-> Contributors 0 (solo direct-to-master workflow), Signed-Releases/CI-Tests -1
-> (populate at first release). PASSED: Security-Policy, License, Vulnerabilities,
-> Dangerous-Workflow, Binary-Artifacts, Packaging, Dependency-Update-Tool (all 10).
+> Gate GREEN on the public repo. First Scorecard run: aggregate 5.1/10.
+>
+> **Scorecard findings — DECIDED (copilot-reviewed). TWO fixed, the rest are
+> conscious decisions, NOT pending work:**
+> - **FIXED — Token-Permissions (0/High):** `release.yml` top-level dropped to
+>   `contents: read`; `contents`/`id-token`/`attestations: write` moved to the one
+>   `goreleaser` job that needs them (`cdebe0b`). Least privilege, behavior
+>   unchanged.
+> - **FIXED — SAST / CodeQL (0):** re-added `.github/workflows/codeql.yml` for Go
+>   (push/PR/weekly; `github/codeql-action@v4.36.3` SHA-pinned `54f647b7…`,
+>   verified at source) now that code scanning is free on the public repo
+>   (`c893638`).
+> - **Branch-Protection (0/High) — CONSCIOUS SKIP:** single-maintainer repo;
+>   revisit if collaborators join. Not a defect.
+> - **Code-Review / Contributors (0) — STRUCTURAL:** single maintainer, direct to
+>   master; no PR-review chain to score.
+> - **Maintained (0) — TIME:** repo <90 days old; improves with age/activity.
+> - **Signed-Releases / CI-Tests (-1) — AUTO-POPULATE:** Signed-Releases fills at
+>   `v0.1.0` (cosign keyless already proven); CI-Tests fills as PRs appear.
+> - **Pinned-Dependencies (6/Medium) — CONSCIOUS:** `actions/checkout` +
+>   `actions/setup-go` pinned by `@v6` tag (GitHub-owned, repo convention). Left
+>   as-is; not prioritized.
+> - **PASSED (10):** Security-Policy, License, Vulnerabilities, Dangerous-Workflow,
+>   Binary-Artifacts, Packaging, Dependency-Update-Tool.
 >
 > **Phase C (first public release) — PENDING, Sebastián's act.** Push `v0.1.0`
 > (not before the Scorecard-findings decision). The tag fires the signed
@@ -163,11 +178,11 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > resolved + the email decision + panel settings) is the gate's heart, run by
 > Claude Code on the Mac against real git.
 >
-> **Next step: decide which Scorecard findings to address** (Token-Permissions,
-> Pinned-Dependencies, SAST/CodeQL are the actionable ones; Branch-Protection is a
-> conscious skip) → then **Phase C: Sebastián pushes `v0.1.0`** (the first public,
-> signed release). Phase A + Phase B are DONE. Each Action SHA was re-verified at
-> source before it landed in a workflow.
+> **Next step: Phase C — Sebastián pushes `v0.1.0`** (the first public, signed
+> release). Phase A + Phase B are DONE and the two actioned Scorecard findings
+> (Token-Permissions, CodeQL/SAST) are FIXED; the rest are documented conscious
+> decisions above. Each Action SHA was re-verified at source before it landed in a
+> workflow. Do NOT push the tag autonomously — it is Sebastián's act.
 
 ### Stages closed on master
 
