@@ -92,47 +92,84 @@ hangs the request) and F11 (a self-locking config is refused) all hold at once.
 3. **Refuse a self-locking config (F11):** if the mutation surface is currently
    mounted (a token is configured, ADR-0028) and the new config would leave it
    **unmounted** (no admin token, or a token env-var that resolves empty), reject
-   with `409` naming the manual recovery (edit `-config` + restart). A builder must
+   with `409` (machine-readable body code `config_would_self_lock`, N3) naming the
+   manual recovery (edit `-config` + restart). A builder must
    not permit the one action that irreversibly disconnects it from itself: a config
    that both drops the token and persists leaves no API path back, and — because the
    persisted file survives restart — **not even a restart recovers the control
    plane**. This check is cross-referenced by ADR-0028 §1.
 4. **Single-flight (F3):** acquire the supervisor's "reload in progress" lock. If a
-   reload is already running, reject the second request with `409` (never a second
-   concurrent build/`openStore`). On acquire, hand the validated config to the
-   supervisor and return **`202 Accepted` with an opaque status-handle ID** (§seam,
-   F4). The handler does **no** network I/O and **no** store open, so a
-   slow/unreachable Telegram cannot hang it (F7).
+   reload is already running, reject the second request with `409` (distinct
+   machine-readable body code `reload_in_progress`, N3, so a 2b UI tells it apart
+   from the self-lock `409` of step 3; never a second concurrent `openStore`/`wire`).
+   On acquire, hand the validated config to the supervisor and return **`202 Accepted`
+   with an opaque status-handle ID** (§seam, F4). The handler does **no** network I/O
+   and **no** store open, so a slow/unreachable Telegram cannot hang it (F7).
 
 **Supervisor (asynchronous — updates the status handle, holds the single-flight
 lock until done):**
 
-5. **Pre-cutover checks (effect-free; old app still serving):** resolve secrets from
-   the environment, run the Telegram `getMe` health-check, run the privacy selector
-   per brain — all **without opening the store and without touching the running
-   app**. Any failure → status `failed`, old app **untouched, still serving**, lock
-   released. The common "bad secret / bad token / no eligible model" failures are
-   caught here, cheaply and safely — the heavy network work lives behind the `202`,
-   not in the request (F7).
+5. **Preflight — effect-free validation, old app still serving (N1).** Run the
+   Telegram `getMe` health-check, resolve secrets from the environment, and run the
+   privacy selector per brain — **without opening the store and without touching the
+   running app**. These checks are **factored out of `Build`** into a store-less
+   `Preflight` path (see §Implementation note): today they live *inside* `Build`,
+   *after* `openStore`, so this is **real refactor work on `internal/app`**, not an
+   assumed shape. Any failure → status `failed`, old app **untouched, still
+   serving**, clean status, lock released — **no rollback**, because the old app was
+   never touched. `getMe` runs **exactly once**, here (F7). This early bar is the
+   load-bearing property of the whole flow: *failing is cheap and safe*.
 6. **Cutover (F1 — the only window the store or the port move):** `Shutdown` the old
-   app (channels → router drain → **old store closed**), **then** build the new app —
-   which is when `openStore` runs and the new store is opened. Because the open
-   happens strictly **after** the old `Shutdown` closed the old store, **the store is
-   never open twice; there is never a second writer.** Then `Run` the new app and
-   swap the supervisor's reference.
-7. **On cutover failure** (build / `openStore` / `Run` fails — e.g. admin re-bind, a
-   channel `Start` error): `Shutdown`/`Close` the partially-built new app so it leaks
-   no worker goroutine or store handle (F2), then roll back per §(c). Status →
+   app (channels → router drain → **old store closed**), **then** open resources for
+   the new app — `openStore` + `wire` channels/brains. This step **trusts the
+   Preflight** and does **not** re-run `getMe` (no second network round-trip inside
+   the blip). Because `openStore` runs strictly **after** the old `Shutdown` closed
+   the old store, **the store is never open twice; there is never a second writer.**
+   Then `Run` the new app and swap the supervisor's reference.
+7. **On cutover failure** (`openStore` / `wire` / `Run` fails — e.g. admin re-bind, a
+   channel `Start` error a read-only `getMe` could not catch): call **`Shutdown(ctx)`**
+   (App's only teardown method — N4) on the partially-built new app so it leaks no
+   worker goroutine or store handle (F2), then roll back per §(c). Status →
    `rolled-back`, or (if rollback also fails) the process exits — still safe, §(c).
 8. **On success:** the **supervisor** (not the handler) **persists** the new config
    to the `-config` file (F5 — only now, after a clean cutover), status →
    `succeeded`, lock released.
 
-**Signal-coordination invariant (F6):** the supervisor is the single owner of the
-app lifecycle, so `SIGINT`/`SIGTERM` and a reload travel the **same** control path.
-A signal arriving mid-cutover is **ordered** by the supervisor (finish or abort the
-in-flight cutover, then shut down), never a second concurrent lifecycle driver
-racing the reload.
+**Signal-coordination invariant (F6, made concrete by N2):** `App.Run` returns a
+bare `nil` on ctx cancel (`app.go:687`), which alone cannot tell a cutover-cancel
+from a process shutdown. So the supervisor gives **each `App` a derived child context
+that only the supervisor cancels — and only for a cutover.** Process `SIGINT`/
+`SIGTERM` is handled by the **supervisor directly**, on its **own** signal channel,
+**not** through any `App`'s context. The reason `Run` returned is therefore
+distinguishable **by construction**: a child-ctx cancel means "cutover" (the
+supervisor then builds the next app); a signal on the supervisor's channel means
+"shut down" (the supervisor tears the current app down and exits). A signal arriving
+mid-cutover is **ordered** by the supervisor — it finishes or aborts the in-flight
+cutover, then shuts down — never a second concurrent lifecycle driver racing the
+reload.
+
+### Implementation note — the Preflight / Build split is real work on `internal/app` (N1)
+
+The flow above requires a capability `internal/app` does **not** have today, and this
+ADR commits to building it rather than assuming it. `Build` currently opens the store
+(`app.go:192`) **before** `wire` constructs channels/brains (`app.go:213`), and
+`getMe` / secret resolution / the privacy selector all run **inside**
+`wire`/`buildModel`/`buildBrain`, i.e. **after** `openStore`. So the effect-free
+Preflight (step 5) **cannot** be obtained by calling `Build`. Phase 2a therefore
+**factors the effect-free validation out of `Build`** into a store-less
+`Preflight(cfg)` — "validate without side effects" (`getMe`, resolve secrets, privacy
+selector) separated from "open resources" (`openStore` + `wire`, which stays inside
+the cutover, step 6). Named as **explicit implementation work on `app.go`**, not an
+assumed shape. It keeps `getMe` to a **single** call (preflight) and preserves the
+load-bearing property: a bad token/secret/selection fails **before** the old app is
+touched.
+
+**Rejected alternative (A):** accept a single `getMe` **inside** the cutover (call
+`Build` as-is after the old `Shutdown`, no preflight). **Rejected** because it forfeits
+the early, safe failure: a `getMe`/secret/selection error would then surface only
+**after** the old app is already down, forcing a rollback for a failure that could
+have been caught cheaply while the old app still served. The refactor (B) is worth it
+to keep "failing is cheap and safe" true — the whole point of §(c).
 
 ### (a) In-flight messages during the cutover — required section
 
@@ -194,8 +231,9 @@ never neither:
   fully safe. A config that would self-lock the control plane is refused here (F11).
 - **Cutover fails (old already `Shutdown`; new build / `openStore` / `Run` fails —
   e.g. admin re-bind, a channel `Start` error the `getMe` check didn't catch):**
-  first `Shutdown`/`Close` the partially-built new app so it leaks no worker
-  goroutine or store handle (F2). Then attempt a **rollback**: rebuild + `Run` the
+  first call **`Shutdown(ctx)`** (App's only teardown method — N4) on the
+  partially-built new app so it leaks no worker goroutine or store handle (F2). Then
+  attempt a **rollback**: rebuild + `Run` the
   **old** config (still in memory; still on disk, since persistence happens only on
   success). **Do not oversell the rollback (F8):** for a *bind* failure the rollback
   re-binds the **same** port that just failed, so it may fail identically. The real
