@@ -43,6 +43,25 @@ shasum -a 256 -c checksums.txt --ignore-missing
 Get-FileHash .\korvun_VERSION_windows_amd64.zip -Algorithm SHA256
 ```
 
+### Verify the signature (recommended)
+
+Every release signs `checksums.txt` with keyless [cosign](https://docs.sigstore.dev/)
+(Sigstore OIDC) — one signature transitively vouches for every artifact, and there
+is no signing key to distribute or trust. Download `checksums.txt.sig` and
+`checksums.txt.pem` alongside `checksums.txt`, then verify the signature was
+produced by Korvun's release workflow:
+
+```bash
+cosign verify-blob checksums.txt \
+  --signature checksums.txt.sig \
+  --certificate checksums.txt.pem \
+  --certificate-identity-regexp 'https://github.com/Sebastian197/korvun/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+A `Verified OK` means the checksum file — and therefore every artifact it lists —
+was built and signed by the trusted GitHub Actions release workflow.
+
 ## 3. Extract and place the binary
 
 ```bash
@@ -95,5 +114,9 @@ deaf.
 
 ## 5. Run as a service (Linux / Raspberry Pi)
 
-See [`korvun.service`](./korvun.service) for a basic systemd unit and how to use
-it.
+See [`korvun.service`](./korvun.service) for a **hardened** systemd unit (dedicated
+`korvun` system user, `StateDirectory` for the SQLite database, `ProtectSystem=strict`,
+`NoNewPrivileges`, an empty capability set, and `SystemCallFilter=@system-service`)
+and step-by-step setup. Point the config's `storage.path` at
+`/var/lib/korvun/korvun.db` so the database lives in the state directory systemd
+creates and owns. Audit the sandbox with `systemd-analyze security korvun`.

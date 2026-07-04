@@ -1,22 +1,35 @@
-# Basic systemd unit to run Korvun as a service on Linux / Raspberry Pi
-# (ADR-0025, Stage 15). This is a FUNCTIONAL EXAMPLE, intentionally NOT hardened:
-# sandboxing and resource limits (DynamicUser, ProtectSystem, NoNewPrivileges,
-# MemoryMax, ReadOnlyPaths, ...) land in Stage 16 (hardening + release).
+# Hardened systemd unit to run Korvun as a service on Linux / Raspberry Pi
+# (ADR-0026, Stage 16). This REPLACES the basic Stage 15 example: it runs Korvun
+# under a dedicated unprivileged user inside a tight systemd sandbox.
+#
+# WHY a static system user + StateDirectory (and NOT DynamicUser):
+#   Korvun persists conversation memory in a SQLite database it owns. DynamicUser
+#   allocates an unpredictable UID/GID per start, so the file written on one boot
+#   is owned by a UID that no longer maps to the service on the next boot — the DB
+#   becomes unreadable/unwritable across restarts. A fixed `korvun` system user +
+#   `StateDirectory=korvun` (systemd creates and chowns /var/lib/korvun to that
+#   user, reconciled with ProtectSystem=strict) keeps the DB's ownership stable.
+#   Point config `storage.path` at /var/lib/korvun/korvun.db.
 #
 # Setup:
-#   1. Place the binary:        sudo install -m755 korvun /usr/local/bin/korvun
-#   2. Config:                  sudo mkdir -p /etc/korvun && sudo cp configs/cloud.json /etc/korvun/korvun.json
-#   3. Secrets (env-var NAMES the config points to), root-only:
+#   1. Create the system user (no home, no shell):
+#        sudo useradd --system --no-create-home --shell /usr/sbin/nologin korvun
+#   2. Place the binary:        sudo install -m755 korvun /usr/local/bin/korvun
+#   3. Config (set "storage": {"path": "/var/lib/korvun/korvun.db"} inside it):
+#        sudo mkdir -p /etc/korvun && sudo cp configs/cloud.json /etc/korvun/korvun.json
+#   4. Secrets (env-var NAMES the config points to), read by systemd as root
+#      BEFORE dropping to the korvun user, so keep them root-only 600:
 #        sudo install -m600 /dev/null /etc/korvun/korvun.env
 #        # then edit /etc/korvun/korvun.env:
 #        #   TELEGRAM_BOT_TOKEN=...
 #        #   GROQ_API_KEY=...
-#   4. Install + start:
+#   5. Install + start:
 #        sudo cp docs/packaging/korvun.service /etc/systemd/system/korvun.service
 #        sudo systemctl daemon-reload
 #        sudo systemctl enable --now korvun
 #        systemctl status korvun
 #        journalctl -u korvun -f
+#   6. Audit the sandbox:      systemd-analyze security korvun
 
 [Unit]
 Description=Korvun messaging gateway + multi-model router
@@ -33,6 +46,53 @@ Restart=on-failure
 RestartSec=5s
 # Graceful shutdown: Korvun drains within its own 15s bound on SIGTERM.
 TimeoutStopSec=20s
+
+# --- Identity: dedicated unprivileged user, NOT DynamicUser (see header) ---
+User=korvun
+Group=korvun
+# systemd creates /var/lib/korvun owned by korvun; the SQLite DB lives here.
+StateDirectory=korvun
+# Explicit RW for the persistent store, reconciled with ProtectSystem=strict.
+ReadWritePaths=/var/lib/korvun
+
+# --- Filesystem sandbox ---
+# /usr, /boot, /etc read-only; the rest of the FS hidden except StateDirectory.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectProc=invisible
+ProcSubset=pid
+
+# --- Kernel / cgroup / IPC protections ---
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RemoveIPC=yes
+
+# --- Privilege + capability lockdown ---
+# Korvun needs no capabilities: the admin server binds loopback:2112 (>1024, no
+# CAP_NET_BIND_SERVICE), Telegram/model providers are outbound HTTPS.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+MemoryDenyWriteExecute=yes
+
+# --- Syscall / address-family allow-lists ---
+# @system-service is the standard allow-list for a long-running network daemon;
+# SystemCallArchitectures=native stops filter bypass via a secondary ABI.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+# Loopback (admin) + outbound INET (Telegram/providers) + local AF_UNIX only.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
 [Install]
 WantedBy=multi-user.target
