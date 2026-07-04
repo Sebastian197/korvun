@@ -3,11 +3,17 @@
 
 // Package supervisor owns the Korvun app lifecycle ABOVE a single *app.App
 // (ADR-0027). It runs the current app, and on a reload request performs the
-// cutover (Shutdown the old app -> build + Run the new one -> swap the reference)
-// without touching the frozen router. It is deliberately decoupled from the
-// concrete app via func-seams (BuildFunc / PreflightFunc / PersistFunc) and an
-// injectable signal channel, so the dangerous cutover concurrency is unit-testable
-// with deterministic fakes and `-race`.
+// cutover (Shutdown the old app -> build + Start the new one -> persist -> swap ->
+// Serve) without touching the frozen router. It is decoupled from the concrete app
+// via func-seams (BuildFunc / PreflightFunc / PersistFunc) and an injectable signal
+// channel, so the dangerous cutover concurrency is unit-testable with deterministic
+// fakes and `-race`.
+//
+// Persistence is by-construction safe (ADR-0027 §c / §Persistence): the new config
+// is persisted ONLY after the new app's Start returns nil — i.e. after the fallible
+// bind/channel-start steps have all succeeded. Any earlier failure (build or Start)
+// rolls back and NEVER persists, so the on-disk -config is never overwritten with a
+// config that cannot come up, and there is no crash-loop into a bad config.
 package supervisor
 
 import (
@@ -15,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -33,16 +40,18 @@ const defaultShutdownTimeout = 15 * time.Second
 // reload_in_progress).
 var ErrReloadInProgress = errors.New("supervisor: a reload is already in progress")
 
-// App is the lifecycle seam the supervisor drives. *app.App satisfies it (Run
+// App is the lifecycle seam the supervisor drives. *app.App satisfies it. Start
+// brings the app up without blocking (the fallible bind/channel-start steps); Serve
 // blocks until its context is cancelled; Shutdown tears the app down in ADR-0008
-// order).
+// order. A successful Start is the cutover-confirmation the supervisor persists after.
 type App interface {
-	Run(ctx context.Context) error
+	Start(ctx context.Context) error
+	Serve(ctx context.Context) error
 	Shutdown(ctx context.Context) error
 }
 
-// BuildFunc builds a runnable App from a validated config. The real seam wraps
-// app.Build (which opens the store and wires channels/brains); tests inject a fake.
+// BuildFunc builds a (not-yet-started) App from a validated config. The real seam
+// wraps app.Build; tests inject a fake.
 type BuildFunc func(*config.Config) (App, error)
 
 // PreflightFunc validates a config effect-free, before any cutover (the real seam
@@ -50,7 +59,8 @@ type BuildFunc func(*config.Config) (App, error)
 type PreflightFunc func(*config.Config) error
 
 // PersistFunc writes the config to the -config file, and is called ONLY after a
-// successful cutover (ADR-0027 §F5). The real seam is WriteConfigAtomic.
+// confirmed cutover (the new app's Start returned nil, ADR-0027 §F5). The real seam
+// is WriteConfigAtomic.
 type PersistFunc func(*config.Config) error
 
 // State is the observable status of a reload, owned by the supervisor so it
@@ -76,7 +86,7 @@ type stopReason int
 const (
 	reasonShutdown  stopReason = iota // external signal / parent context cancelled
 	reasonReload                      // a reload request wants a cutover
-	reasonAppFailed                   // app.Run returned an error on its own
+	reasonAppFailed                   // app.Serve returned an error on its own
 )
 
 // reloadReq carries a validated config and its status handle from RequestReload
@@ -92,6 +102,7 @@ type Supervisor struct {
 	build      BuildFunc
 	persist    PersistFunc
 	signalCh   <-chan os.Signal
+	logger     *slog.Logger
 
 	reloadCh chan reloadReq
 
@@ -113,9 +124,19 @@ type Option func(*Supervisor)
 // WithBuild sets the App factory (required for Run; the real seam wraps app.Build).
 func WithBuild(f BuildFunc) Option { return func(s *Supervisor) { s.build = f } }
 
-// WithPersist sets the config-persist seam, called only after a successful cutover
+// WithPersist sets the config-persist seam, called only after a confirmed cutover
 // (ADR-0027 §F5). The real seam is WriteConfigAtomic; a nil persist is a no-op.
 func WithPersist(f PersistFunc) Option { return func(s *Supervisor) { s.persist = f } }
+
+// WithLogger sets the structured logger (default slog.Default()). A nil logger is
+// ignored. The supervisor logs persist failures through it (they are not fatal).
+func WithLogger(l *slog.Logger) Option {
+	return func(s *Supervisor) {
+		if l != nil {
+			s.logger = l
+		}
+	}
+}
 
 // WithSignalChan injects the channel the supervisor listens on for an external
 // shutdown signal. Keeping it a seam (rather than calling signal.Notify itself)
@@ -128,6 +149,7 @@ func WithSignalChan(ch <-chan os.Signal) Option { return func(s *Supervisor) { s
 func New(initial *config.Config, opts ...Option) *Supervisor {
 	s := &Supervisor{
 		initialCfg:      initial,
+		logger:          slog.Default(),
 		reloadCh:        make(chan reloadReq, 1),
 		status:          make(map[Handle]State),
 		shutdownTimeout: defaultShutdownTimeout,
@@ -138,23 +160,21 @@ func New(initial *config.Config, opts ...Option) *Supervisor {
 	return s
 }
 
-// Run builds and runs the initial app, then owns its lifecycle until an external
+// Run builds and Starts the initial app, then owns its lifecycle until an external
 // shutdown signal (or the parent context) stops it, performing a cutover on each
 // reload request. It blocks until shutdown and returns nil on a clean stop, or a
 // boot/cutover/rollback error (the caller exits non-zero; systemd restarts).
 func (s *Supervisor) Run(ctx context.Context) error {
-	curCfg := s.initialCfg
-	prevCfg := s.initialCfg
-	var curHandle Handle // "" for the initial app and rolled-back apps
+	curCfg := s.initialCfg // the last config whose app Started successfully
 
-	app, err := s.build(curCfg)
+	app, err := s.buildAndStart(ctx, curCfg)
 	if err != nil {
-		return fmt.Errorf("supervisor: initial build: %w", err)
+		return fmt.Errorf("supervisor: initial start: %w", err)
 	}
 	s.setCurrent(app)
 
 	for {
-		reason, req, runErr := s.serve(ctx, app)
+		reason, req, serveErr := s.serve(ctx, app)
 		_ = s.shutdownApp(app)
 
 		switch reason {
@@ -162,81 +182,80 @@ func (s *Supervisor) Run(ctx context.Context) error {
 			return nil
 
 		case reasonAppFailed:
-			if curHandle == "" {
-				// The initial or an already-rolled-back app crashed: not a cutover
-				// failure, and nothing better to roll back to. Exit fatally and let
-				// systemd restart the last known-good -config (no rollback loop).
-				return fmt.Errorf("supervisor: running app failed: %w", runErr)
-			}
-			// A freshly-reloaded app failed to serve: roll back to the previous
-			// config and re-persist it, so the -config never stays at a config whose
-			// app failed to run (ADR-0027 §c crash-loop guard).
-			s.setStatus(curHandle, StateRolledBack)
-			s.finishReload()
-			rApp, rerr := s.build(prevCfg)
-			if rerr != nil {
-				return fmt.Errorf("supervisor: rollback failed after app run error (%v): %w", runErr, rerr)
-			}
-			s.setCurrent(rApp)
-			s.persistConfig(prevCfg)
-			curCfg, curHandle = prevCfg, ""
-			app = rApp
+			// The serving app returned an error on its own. Its config had already
+			// Started successfully, so a plain restart of it is safe: exit fatally
+			// and let systemd restart (no rollback loop, ADR §c).
+			return fmt.Errorf("supervisor: running app failed: %w", serveErr)
 
 		case reasonReload:
 			s.setStatus(req.handle, StateCutoverInProgress)
-			nApp, berr := s.build(req.cfg)
-			if berr != nil {
-				// Build failed after the old app was shut down: roll back to the
-				// config that was just serving (curCfg). No persist — a failed cutover
-				// must not overwrite the -config (F5).
+			nApp, nerr := s.buildAndStart(ctx, req.cfg)
+			if nerr != nil {
+				// The new config failed to build or Start (the ADR §c "admin re-bind"
+				// failure). Roll back to the config that was serving. persist is NEVER
+				// called on a failed cutover, so the -config on disk is untouched and
+				// still boots (F5).
 				s.setStatus(req.handle, StateRolledBack)
 				s.finishReload()
-				rApp, rerr := s.build(curCfg)
+				rApp, rerr := s.buildAndStart(ctx, curCfg)
 				if rerr != nil {
-					return fmt.Errorf("supervisor: rollback failed after cutover build error (%v): %w", berr, rerr)
+					return fmt.Errorf("supervisor: rollback failed after cutover error (%v): %w", nerr, rerr)
 				}
 				s.setCurrent(rApp)
-				curHandle = ""
 				app = rApp
 				continue
 			}
-			// Successful swap: swap the reference, mark succeeded, persist (F5).
-			prevCfg, curCfg, curHandle = curCfg, req.cfg, req.handle
+			// Start confirmed the new app is serving: swap, mark succeeded, and only
+			// NOW persist (F5). curCfg advances to the new, proven config.
 			s.setCurrent(nApp)
 			s.setStatus(req.handle, StateSucceeded)
 			s.persistConfig(req.cfg)
+			curCfg = req.cfg
 			s.finishReload()
 			app = nApp
 		}
 	}
 }
 
-// serve runs one app under a child context the supervisor alone cancels, and blocks
-// until the app fails, a reload request, an external signal, or the parent context
-// ends. The child context is the "cutover cancel" half of F6/N2: cancelling it is how
-// the supervisor (and only the supervisor) stops the app for a cutover, distinct from
-// the external signal that arrives on its own channel; an app that returns on its own
-// (without our cancel) is reasonAppFailed.
+// buildAndStart builds an app and Starts it. On a Start failure it Shuts the app
+// down (so a half-built app leaks no worker/store) and returns the error.
+func (s *Supervisor) buildAndStart(ctx context.Context, cfg *config.Config) (App, error) {
+	app, err := s.build(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := app.Start(ctx); err != nil {
+		_ = s.shutdownApp(app)
+		return nil, err
+	}
+	return app, nil
+}
+
+// serve runs an already-Started app's Serve under a child context the supervisor
+// alone cancels, and blocks until the app fails, a reload request, an external
+// signal, or the parent context ends. The child context is the "cutover cancel" half
+// of F6/N2 (cancelling it stops the app for a cutover); the external signal arrives
+// on its own channel; a Serve that returns on its own is reasonAppFailed.
 func (s *Supervisor) serve(ctx context.Context, app App) (stopReason, reloadReq, error) {
 	childCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	runErr := make(chan error, 1)
-	go func() { runErr <- app.Run(childCtx) }()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- app.Serve(childCtx) }()
 
 	select {
-	case err := <-runErr:
+	case err := <-serveErr:
 		return reasonAppFailed, reloadReq{}, err
 	case <-ctx.Done():
 		cancel()
-		<-runErr
+		<-serveErr
 		return reasonShutdown, reloadReq{}, nil
 	case <-s.signalCh:
 		cancel()
-		<-runErr
+		<-serveErr
 		return reasonShutdown, reloadReq{}, nil
 	case req := <-s.reloadCh:
 		cancel()
-		<-runErr
+		<-serveErr
 		return reasonReload, req, nil
 	}
 }
@@ -292,9 +311,15 @@ func (s *Supervisor) finishReload() {
 	s.mu.Unlock()
 }
 
+// persistConfig writes the config after a confirmed cutover. A persist failure is
+// logged, not fatal: the new app is already serving (its Start succeeded); only the
+// on-disk record lags, so the reload is live but would not survive a restart.
 func (s *Supervisor) persistConfig(cfg *config.Config) {
-	if s.persist != nil {
-		_ = s.persist(cfg)
+	if s.persist == nil {
+		return
+	}
+	if err := s.persist(cfg); err != nil {
+		s.logger.Error("supervisor: persisting config after a confirmed cutover failed; the reload is live but will not survive a restart", "error", err.Error())
 	}
 }
 
@@ -308,7 +333,7 @@ func (s *Supervisor) shutdownApp(app App) error {
 // WriteConfigAtomic writes cfg to path atomically: it marshals to JSON, writes a
 // temp file in the SAME directory, then renames it over path. A failure before the
 // rename leaves the existing -config untouched (ADR-0027 §Config persistence). This
-// is the real PersistFunc the supervisor calls after a successful cutover.
+// is the real PersistFunc the supervisor calls after a confirmed cutover.
 func WriteConfigAtomic(path string, cfg *config.Config) error {
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

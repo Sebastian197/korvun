@@ -71,6 +71,7 @@ func main() {
 	sup := supervisor.New(cfg,
 		supervisor.WithBuild(build),
 		supervisor.WithPersist(persist),
+		supervisor.WithLogger(logger),
 		supervisor.WithSignalChan(sigCh),
 	)
 	if err := sup.Run(context.Background()); err != nil {
