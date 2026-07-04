@@ -844,6 +844,18 @@ Key entries currently:
 
 ## Notes for the next session
 
+- **NEXT STEP (session close 2026-07-04): formal `/plan-eng-review` over the two
+  written Phase 2a ADRs** — ADR-0027 (config mutation, reload-and-rebuild) +
+  ADR-0028 (admin auth, bearer token), both `proposed`, committed `bbd1bfd`.
+  **Review focus:** (1) concurrent-reload race + the `202` status-handle
+  specification; (2) the admin-port re-bind race during cutover and whether the
+  mandatory rollback covers it; (3) mutation paths that could bypass the auth gate
+  + the token contract carried to 2b; (4) reversibility / out-of-scope.
+  **Decision tree:** P1/P2 → REPORT, do NOT fix (the copilot decides); only-P3 →
+  apply, flip both ADRs to `accepted`, commit "docs: ADR-0027 + ADR-0028 accepted
+  — Phase 2a mutation + auth". **Only after a clean review + explicit copilot OK →**
+  implement 2a on branch `feat/config-mutation`, TDD red-first, with `-race` on the
+  quiesce→rebuild→swap path as the load-bearing test. Do NOT start code before that.
 - **Claude Code skills installed + documented (2026-07-04):** `agent-browser`
   (browser automation — live source/doc verification when Context7 doesn't cover
   something; does NOT relax the Context7-first rule) and `find-skills` (surface
