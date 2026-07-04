@@ -96,10 +96,49 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > versioned artifacts cross-machine (`gh release download`) + the proven machinery
 > so the flip is one line.
 >
-> **Stage 16 (hardening + public release) is FRAMED** (`/office-hours` +
-> `/plan-eng-review`, copilot-approved) and pinned by **ADR-0026 (status: proposed,
-> committed as proposed, pending the copilot's cold review — especially the
-> pre-flip checklist)**. Phasing is **Order 1**, ordered by reversibility:
+> **Stage 16 (hardening + public release) is IN PROGRESS — Phase A + Phase B DONE**
+> (`/office-hours` + `/plan-eng-review`, copilot-approved), pinned by **ADR-0026
+> (status: accepted, `a68a0b8`)**. Phasing is **Order 1**, ordered by reversibility.
+>
+> **Phase A (pre-flip machinery + gate) — DONE** (`master` through `23e6b3c`,
+> checklist report `1bdd8db`): keyless cosign signing of `checksums.txt`
+> (GoReleaser `signs:`; installer SHA-pinned `cosign-installer@v4.1.2`, cosign
+> binary pinned `v2.6.3` — cosign v3's `--new-bundle-format` drops the classic
+> `--output-signature`/`--output-certificate` GoReleaser relies on) + SLSA
+> provenance (`attest-build-provenance@v4.1.1`, SHA-pinned); hardened systemd unit
+> (static `User=korvun` + `StateDirectory`, NOT DynamicUser); consolidated
+> developer docs (`QUICKSTART.md`, `CONFIGURATION.md`, README index); 9 stale
+> remote branches deleted (open Dependabot PR #4 left, then closed by decision);
+> pre-flip checklist run (`docs/notes/stage-16-preflight-checklist.md`) — gitleaks
+> + trufflehog clean over all history, no secrets in Actions logs, `.gitignore`
+> clean. The three human gate items were resolved by Sebastián: the parked
+> operating-rules file COMMITTED (`1bdd8db`), the author email ACCEPTED, panel
+> settings done. **A `workflow_dispatch` `--snapshot` dry-run in CI proved the
+> keyless cosign OIDC signing GREEN** (real Fulcio/Rekor, `tlog` entries) before
+> any tag; provenance is gated to real tag pushes (GitHub cannot persist
+> attestations for user-owned PRIVATE repos).
+>
+> **Phase B (THE FLIP) — DONE 2026-07-04 (Sebastián's act).**
+> `github.com/Sebastian197/korvun` is now **PUBLIC**. Private vulnerability
+> reporting + Dependabot alerts ON; Dependabot security updates deliberately OFF.
+> `scorecard.yml` automatic triggers re-enabled (`8a7becf`, `ci: re-enable
+> scorecard on public repo`). All six README badges resolve (HTTP 200); Quality
+> Gate GREEN on the public repo. **First Scorecard run done — aggregate 5.1/10.**
+> Findings await a conscious decision (NOT auto-fixed): Token-Permissions 0/High
+> (`release.yml` top-level `contents: write`), Pinned-Dependencies 6/Medium
+> (GitHub-owned `actions/checkout`+`setup-go` pinned by tag not SHA), SAST 0
+> (CodeQL removed while private — re-addable now public), Branch-Protection 0
+> (**Sebastián's conscious choice NOT to configure it — not a fix**), Code-Review/
+> Contributors 0 (solo direct-to-master workflow), Signed-Releases/CI-Tests -1
+> (populate at first release). PASSED: Security-Policy, License, Vulnerabilities,
+> Dangerous-Workflow, Binary-Artifacts, Packaging, Dependency-Update-Tool (all 10).
+>
+> **Phase C (first public release) — PENDING, Sebastián's act.** Push `v0.1.0`
+> (not before the Scorecard-findings decision). The tag fires the signed
+> `release.yml` (now with real provenance, repo public) → first public, signed
+> release + SBOM. Do NOT push the tag autonomously.
+>
+> Phasing bullets (original framing) below:
 > - **Phase A (pre-flip, ALL additive/reversible — Claude Code builds + runs the
 >   gate):** cosign keyless signing of `checksums.txt` (GoReleaser `signs:`, pinned
 >   `cosign-installer@v4.1.2`); hardened systemd unit (**static `User=korvun` +
@@ -124,10 +163,11 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > resolved + the email decision + panel settings) is the gate's heart, run by
 > Claude Code on the Mac against real git.
 >
-> **Next step: the copilot reviews ADR-0026 cold (especially the pre-flip
-> checklist).** If approved → Phase A (the machinery) → run the gate → Sebastián's
-> flip → Sebastián's `v0.1.0`. Each Action SHA is re-verified at source before it
-> lands in a workflow.
+> **Next step: decide which Scorecard findings to address** (Token-Permissions,
+> Pinned-Dependencies, SAST/CodeQL are the actionable ones; Branch-Protection is a
+> conscious skip) → then **Phase C: Sebastián pushes `v0.1.0`** (the first public,
+> signed release). Phase A + Phase B are DONE. Each Action SHA was re-verified at
+> source before it landed in a workflow.
 
 ### Stages closed on master
 
