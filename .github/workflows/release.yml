@@ -80,7 +80,15 @@ jobs:
       # checksums.txt already covers integrity of every artifact transitively; this
       # attestation records HOW/WHERE it was built (SLSA Build L3 via OIDC), so the
       # single subject is the checksum file — no per-binary fan-out needed.
+      #
+      # Real releases only (tag push): GitHub CANNOT persist attestations for
+      # user-owned PRIVATE repos ("Feature not available for user-owned private
+      # repositories"), so it would fail a snapshot dry-run while the repo is
+      # private. By the first real release the repo is public (Phase B flip
+      # precedes the Phase C tag), where attestation works. A dispatch dry-run
+      # attesting a throwaway snapshot checksum would be meaningless anyway.
       - name: Attest build provenance
+        if: github.event_name == 'push'
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: dist/checksums.txt
