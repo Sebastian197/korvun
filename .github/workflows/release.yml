@@ -3,12 +3,25 @@
 # archives, changelog, SBOM). Tags are pushed BY HAND — a tag pushed from inside
 # an Action does not retrigger workflows, and the SemVer bump is a deliberate
 # decision, not an automated one.
+#
+# A manual `workflow_dispatch` runs the SAME job as a `--snapshot` DRY-RUN
+# (ADR-0026): it builds, signs checksums.txt with keyless cosign (real Fulcio/
+# Rekor OIDC), and attests build provenance — exercising the id-token/signing/
+# provenance path in the real Actions environment — but publishes NO GitHub
+# Release and consumes NO tag (snapshot ignores the `release:` section). Used to
+# validate the trust machinery before the first real tag.
 name: Release
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Snapshot dry-run only (no release published, no tag consumed). Must stay true — a real release is published by pushing a v* tag.'
+        type: boolean
+        default: true
 
 permissions:
   contents: write # create the GitHub Release and upload its assets
@@ -19,6 +32,14 @@ jobs:
   goreleaser:
     runs-on: ubuntu-latest
     steps:
+      # A manual dispatch is dry-run only: a real, published release must come
+      # from a pushed v* tag (there is no tag context to publish on dispatch).
+      - name: Guard — dispatch must be a dry-run
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run != true
+        run: |
+          echo "::error::Manual dispatch supports dry_run=true only; publish a real release by pushing a v* tag."
+          exit 1
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # full history so the changelog can diff from the previous tag
@@ -43,12 +64,15 @@ jobs:
         with:
           cosign-release: v2.6.3
 
+      # On a pushed tag: a real, published release. On manual dispatch: a
+      # --snapshot dry-run (builds + signs + attests, publishes nothing). Snapshot
+      # still runs the `signs:` block, so keyless cosign is exercised for real.
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean
+          args: ${{ github.event_name == 'workflow_dispatch' && 'release --snapshot --clean' || 'release --clean' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
