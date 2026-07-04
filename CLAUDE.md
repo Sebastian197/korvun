@@ -43,13 +43,18 @@ For every phase:
    memory. See "External documentation verification" below for which tool to use
    in each case. If verification isn't possible, stop and say so instead of
    inventing signatures or versions.
-2. **Tests first (TDD).** Write the test suite that defines the contract BEFORE
+2. **Design spec first.** Before writing any code, draft the design spec using
+   the `docs/superpowers/specs/TEMPLATE.md` template: fill in Goal, FR-IDs,
+   Acceptance Scenarios (Given/When/Then) and Success Criteria; mark anything
+   undefined with `[NEEDS CLARIFICATION]` and stop there until it is resolved.
+   Do not move on to "Tests first" until the Review Checklist is green.
+3. **Tests first (TDD).** Write the test suite that defines the contract BEFORE
    the implementation, and confirm it fails (red). Only then write the minimum
    code to make it pass (green).
-3. **Implementation.** Only the code needed to make the tests pass.
-4. **Quality gate.** `make quality` must be green (lint + vet + tests +
+4. **Implementation.** Only the code needed to make the tests pass.
+5. **Quality gate.** `make quality` must be green (lint + vet + tests +
    coverage) over the WHOLE suite, not just the new code, before closing.
-5. **Documentation.** Update stage docs, ADRs, and the master document.
+6. **Documentation.** Update stage docs, ADRs, and the master document.
 
 ## External documentation verification — which tool for what
 
