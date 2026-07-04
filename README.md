@@ -128,6 +128,17 @@ falling back to cloud Groq, choosing the reply by provider priority:
   switch by configuration, not by recompiling — the basis for the planned
   `edge`/`cloud` profiles.
 
+## Documentation
+
+| Guide | What it covers |
+|-------|----------------|
+| [Quickstart](docs/QUICKSTART.md) | Zero to a running bot — install a release or build from source, configure, run. |
+| [Configuration reference](docs/CONFIGURATION.md) | Every config field, distilled from the schema and ADRs. |
+| [Install & run as a service](docs/packaging/INSTALL.md) | Download, checksum + signature verification, hardened systemd unit. |
+| [Architecture Decision Records](docs/adr/) | Why each piece is built the way it is. |
+| [Stage closure docs](docs/stages/) | What is closed, stage by stage. |
+| [V1 roadmap](docs/ROADMAP-V1.md) | The road to a production V1. |
+
 ## Contributing
 
 Contributions follow strict, non-negotiable conventions (TDD first, Context7
