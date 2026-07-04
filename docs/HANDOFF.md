@@ -856,6 +856,15 @@ Key entries currently:
   — Phase 2a mutation + auth". **Only after a clean review + explicit copilot OK →**
   implement 2a on branch `feat/config-mutation`, TDD red-first, with `-race` on the
   quiesce→rebuild→swap path as the load-bearing test. Do NOT start code before that.
+- **Deferred follow-up (own fix, NOT Phase 2a) — duplicate channel dedupe.**
+  `config.Validate` (`config.go:217`, `validateChannels`) dedupes channels by NAME but
+  not by TYPE, and `router.RegisterChannel`/`RegisterBrain` (`router.go:146,189`)
+  **silently overwrite** on a duplicate registry key rather than erroring. So a config
+  with two channels of the same type/name could pass `Validate` and leak the first
+  adapter's worker goroutines inside `wire`. Pre-existing, unrelated to the Phase 2a
+  Preflight (surfaced by the Unit A `/review`, 2026-07-04). Fix it in its own change
+  (a `Validate` dedupe + a `Register*` duplicate-name error), never folded into the
+  builder units.
 - **Claude Code skills installed + documented (2026-07-04):** `agent-browser`
   (browser automation — live source/doc verification when Context7 doesn't cover
   something; does NOT relax the Context7-first rule) and `find-skills` (surface
