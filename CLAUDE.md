@@ -94,6 +94,34 @@ The rule is always the same — never invent versions or signatures. Only the
 *tool* changes: Context7 for code libraries, the source repo/marketplace for
 Action tags.
 
+## Claude Code skills — available tooling (verified installed) — IMPORTANT
+
+> **Skills COMPLEMENT the project method (Context7-first, TDD, `make quality`,
+> ADRs) — they NEVER replace it.** A skill is a tool, not a shortcut around a
+> non-negotiable rule. Invoke a skill through the project workflow, not instead of
+> it.
+
+Installed and verified in this environment (2026-07-04):
+
+- **`agent-browser`** — browser-automation CLI (navigate, fill forms, screenshot,
+  scrape, test web apps; also Electron apps). In the Korvun flow: use it for
+  **live source/doc verification when Context7 does not cover something** (an
+  Action's `/releases` page, a provider changelog, a page Context7 lacks — the
+  "verify at source" half of the External-docs rule), and later for exercising the
+  builder UI (Stage 14 Phase 2b). **It does NOT relax the Context7-first
+  non-negotiable rule** for external code libraries/SDKs/APIs: that rule stands
+  exactly as written above — Context7 first, always; `agent-browser` is only the
+  fallback for what Context7 cannot answer, never a substitute for it.
+- **`find-skills`** — analyzes the repo and surfaces Claude Code skills from known
+  marketplaces useful for the task at hand. In the Korvun flow: **run it before
+  doing an unfamiliar task by hand**, to check whether an applicable skill already
+  exists — then still apply the project method (Context7-first, TDD, ADRs) through
+  whatever it finds.
+
+A third skill Chano mentioned informally ("open claude") did **not** match any
+installed skill on verification (2026-07-04); it is intentionally **not documented
+here** until Chano confirms the exact name.
+
 ## Go standards
 
 - `gofmt` + `goimports` mandatory.

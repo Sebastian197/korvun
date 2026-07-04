@@ -844,6 +844,14 @@ Key entries currently:
 
 ## Notes for the next session
 
+- **Claude Code skills installed + documented (2026-07-04):** `agent-browser`
+  (browser automation — live source/doc verification when Context7 doesn't cover
+  something; does NOT relax the Context7-first rule) and `find-skills` (surface
+  applicable skills before doing a task by hand). Both are described in CLAUDE.md
+  under "Claude Code skills — available tooling", framed as COMPLEMENTS to the
+  project method, never replacements. A third skill Chano mentioned ("open claude")
+  did NOT match any installed skill on verification — left undocumented pending his
+  confirmation of the exact name.
 - CLAUDE.md is currently **modified in the working tree** with a
   "Design spec first" step the user introduced. That change is held
   separately from this integration on the user's call — it is
