@@ -48,6 +48,35 @@ checksum:
   algorithm: sha256
   name_template: "checksums.txt"
 
+# Sign checksums.txt with keyless cosign (Sigstore OIDC) — ADR-0026, Stage 16.
+# One signature over the checksum file transitively verifies every artifact, so
+# there is exactly one thing to sign and one thing to verify. Keyless means NO
+# key management (no custody, rotation, or HSM): cosign mints an ephemeral
+# certificate from the workflow's OIDC identity (release.yml grants
+# `id-token: write`) and records it in the public Rekor transparency log.
+#
+# Skipped on `--snapshot` (no OIDC available locally); `goreleaser check`
+# validates this config, and the real signing runs only in CI on a pushed tag.
+#
+# Verify a downloaded release:
+#   cosign verify-blob checksums.txt \
+#     --signature checksums.txt.sig \
+#     --certificate checksums.txt.pem \
+#     --certificate-identity-regexp 'https://github.com/Sebastian197/korvun/.*' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+signs:
+  - cmd: cosign
+    # ${signature} defaults to ${artifact}.sig; capture the ephemeral cert too.
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes" # non-interactive: no confirmation prompt in CI
+    artifacts: checksum
+    output: true
+
 # One SBOM per archive (SPDX JSON via Syft), so every published artifact is
 # self-describing (ADR-0025 §6). Requires `syft` on PATH (the release workflow
 # installs it). Describes the build; signing/provenance/SLSA are Stage 16.
