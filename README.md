@@ -10,7 +10,7 @@ Raspberry Pi and scales in the cloud; only I/O pieces change by configuration.
 [![Quality Gate](https://github.com/Sebastian197/korvun/actions/workflows/quality.yml/badge.svg)](https://github.com/Sebastian197/korvun/actions/workflows/quality.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Sebastian197/korvun)](https://goreportcard.com/report/github.com/Sebastian197/korvun)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Sebastian197/korvun)](go.mod)
-[![License](https://img.shields.io/github/license/Sebastian197/korvun)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Sebastian197/korvun/badge)](https://scorecard.dev/viewer/?uri=github.com/Sebastian197/korvun)
 [![Latest Release](https://img.shields.io/github/v/release/Sebastian197/korvun)](https://github.com/Sebastian197/korvun/releases)
 
