@@ -1,0 +1,44 @@
+# CodeQL static analysis for Go (Scorecard SAST). Re-added once the repo went
+# public in Stage 16 — code scanning is free on public repos (it needed GitHub
+# Advanced Security while private, so it was removed; gosec + govulncheck in
+# quality.yml covered SAST in the meantime). Findings surface in Security → Code
+# scanning. The github/codeql-action steps are pinned by commit SHA, matching the
+# repo convention for third-party Actions.
+name: CodeQL
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "0 6 * * 1" # weekly, Mondays 06:00 UTC (catch newly-added queries)
+
+# Least privilege: read-only by default; the analyze job elevates only the one
+# write scope it needs to upload results.
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (Go)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload SARIF to the code-scanning dashboard
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
+        with:
+          languages: go
+
+      # Go is compiled; autobuild runs the module's standard `go build`.
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a # v4.36.3
+        with:
+          category: "/language:go"
