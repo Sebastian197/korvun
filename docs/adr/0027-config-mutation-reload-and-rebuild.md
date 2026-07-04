@@ -1,6 +1,6 @@
 # ADR-0027: Stage 14 Phase 2a — config mutation via reload-and-rebuild
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-04
 > **Deciders:** Sebastián Moreno Saavedra (+ copilot review)
 
@@ -117,15 +117,22 @@ lock until done):**
    *after* `openStore`, so this is **real refactor work on `internal/app`**, not an
    assumed shape. Any failure → status `failed`, old app **untouched, still
    serving**, clean status, lock released — **no rollback**, because the old app was
-   never touched. `getMe` runs **exactly once**, here (F7). This early bar is the
-   load-bearing property of the whole flow: *failing is cheap and safe*.
+   never touched. The Preflight `getMe` is a **throwaway validation** call (a
+   short-lived client, discarded right after the check); the cutover later
+   re-establishes the real client (step 6). The load-bearing property is **not** a
+   literal call count but that *a bad token/secret/selection fails here, cheaply,
+   before the old app is touched* (F7): *failing is cheap and safe*.
 6. **Cutover (F1 — the only window the store or the port move):** `Shutdown` the old
    app (channels → router drain → **old store closed**), **then** open resources for
-   the new app — `openStore` + `wire` channels/brains. This step **trusts the
-   Preflight** and does **not** re-run `getMe` (no second network round-trip inside
-   the blip). Because `openStore` runs strictly **after** the old `Shutdown` closed
-   the old store, **the store is never open twice; there is never a second writer.**
-   Then `Run` the new app and swap the supervisor's reference.
+   the new app — `openStore` + `wire` channels/brains. `wire` re-establishes the real
+   Telegram client, which performs its **own** `getMe` (`bot.New`, ADR-0017 §4). So
+   there are two `getMe` — the Preflight validation and this cutover construction —
+   **strictly sequential, never overlapping** (the Preflight client is already
+   discarded), so no Telegram single-consumer `409` (§(a)/F14). The extra throwaway
+   `getMe` is an **accepted cost**: sub-second, on a rare operator reload. Because
+   `openStore` runs strictly **after** the old `Shutdown` closed the old store, **the
+   store is never open twice; there is never a second writer.** Then `Run` the new app
+   and swap the supervisor's reference.
 7. **On cutover failure** (`openStore` / `wire` / `Run` fails — e.g. admin re-bind, a
    channel `Start` error a read-only `getMe` could not catch): call **`Shutdown(ctx)`**
    (App's only teardown method — N4) on the partially-built new app so it leaks no
@@ -160,16 +167,27 @@ Preflight (step 5) **cannot** be obtained by calling `Build`. Phase 2a therefore
 `Preflight(cfg)` — "validate without side effects" (`getMe`, resolve secrets, privacy
 selector) separated from "open resources" (`openStore` + `wire`, which stays inside
 the cutover, step 6). Named as **explicit implementation work on `app.go`**, not an
-assumed shape. It keeps `getMe` to a **single** call (preflight) and preserves the
-load-bearing property: a bad token/secret/selection fails **before** the old app is
-touched.
+assumed shape. The Preflight's `getMe` is a **throwaway validation** and the
+cutover's `wire` re-establishes the real client with its **own** `getMe`; the two are
+**strictly sequential** (§ step 6), so the extra call is a sub-second accepted cost,
+not a `409` risk. The preserved load-bearing property is that a bad
+token/secret/selection fails **before** the old app is touched — **not** a literal
+one-call count.
 
-**Rejected alternative (A):** accept a single `getMe` **inside** the cutover (call
-`Build` as-is after the old `Shutdown`, no preflight). **Rejected** because it forfeits
-the early, safe failure: a `getMe`/secret/selection error would then surface only
-**after** the old app is already down, forcing a rollback for a failure that could
-have been caught cheaply while the old app still served. The refactor (B) is worth it
-to keep "failing is cheap and safe" true — the whole point of §(c).
+**Rejected alternatives:**
+
+- **No preflight (validate only inside the cutover).** Forfeits the early, safe
+  failure: a `getMe`/secret/selection error would surface only **after** the old app
+  is already down, forcing a rollback for a failure catchable cheaply while the old
+  app still served. The Preflight refactor is worth it to keep "failing is cheap and
+  safe" true — the whole point of §(c).
+- **Thread the preflighted adapter into the cutover** (reuse the live client so
+  `getMe` is literally one call). **Rejected:** it buys a literal call count at the
+  price of **more leak surface** — live channel adapters held open across the
+  pre-cutover window that must be torn down if the reload is rejected — the wrong
+  trade-off right after the F2 lesson (don't hold partially-built resources you then
+  have to remember to close). Two strictly-sequential `getMe` (the chosen path) cost
+  one sub-second throwaway call and hold nothing.
 
 ### (a) In-flight messages during the cutover — required section
 

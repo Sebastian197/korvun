@@ -1,6 +1,6 @@
 # ADR-0028: Stage 14 Phase 2a — admin auth (bearer token)
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-04
 > **Deciders:** Sebastián Moreno Saavedra (+ copilot review)
 
