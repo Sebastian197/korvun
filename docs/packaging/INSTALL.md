@@ -2,11 +2,12 @@
 
 Korvun ships as a single self-contained binary (no runtime dependencies, no Go
 toolchain needed to run it). Each release on GitHub carries a binary for every
-supported OS/arch, a `checksums.txt`, and an SBOM.
+supported OS/arch, a `checksums.txt`, an SBOM, and a cosign signature.
 
-> **Note (Stage 15).** While the repository is private, releases are downloadable
-> only by the owner and authenticated collaborators (`gh release download`). The
-> public download story lands in Stage 16 when the repo goes public.
+> The repository is **public**, so every release is downloadable by anyone (with
+> or without the `gh` CLI). Each release is **verifiable end to end**: the
+> `checksums.txt` covers every artifact, it is signed with keyless cosign
+> (Sigstore OIDC), and its build provenance is attested — the steps below.
 
 ## Supported targets
 
@@ -61,6 +62,10 @@ cosign verify-blob checksums.txt \
 
 A `Verified OK` means the checksum file — and therefore every artifact it lists —
 was built and signed by the trusted GitHub Actions release workflow.
+
+> The `checksums.txt.pem` asset is base64-encoded. `cosign verify-blob` decodes it
+> transparently (the command above just works); you only need to `base64 -d` it
+> first if you want to inspect the certificate directly with `openssl x509`.
 
 ## 3. Extract and place the binary
 
