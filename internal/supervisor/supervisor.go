@@ -8,17 +8,15 @@
 // concrete app via func-seams (BuildFunc / PreflightFunc / PersistFunc) and an
 // injectable signal channel, so the dangerous cutover concurrency is unit-testable
 // with deterministic fakes and `-race`.
-//
-// Scope note: this cut implements the lifecycle skeleton — the initial run, a
-// clean shutdown on an external signal, and the reload cutover with a race-free
-// reference swap. Single-flight, rollback, effect-free Preflight gating, config
-// persistence, and the full status lifecycle are added by later units.
 package supervisor
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -29,6 +27,11 @@ import (
 // the 15s graceful-shutdown budget cmd/korvun guaranteed before the supervisor owned
 // the lifecycle (ADR-0008).
 const defaultShutdownTimeout = 15 * time.Second
+
+// ErrReloadInProgress is returned by RequestReload when a reload is already running
+// (single-flight, ADR-0027 §flow step 4 -> the handler maps it to 409
+// reload_in_progress).
+var ErrReloadInProgress = errors.New("supervisor: a reload is already in progress")
 
 // App is the lifecycle seam the supervisor drives. *app.App satisfies it (Run
 // blocks until its context is cancelled; Shutdown tears the app down in ADR-0008
@@ -43,13 +46,11 @@ type App interface {
 type BuildFunc func(*config.Config) (App, error)
 
 // PreflightFunc validates a config effect-free, before any cutover (the real seam
-// is app.Preflight, ADR-0027 step 5). Reserved for the reload path (B2+); not
-// exercised by the initial-run and cutover skeleton yet.
+// is app.Preflight, ADR-0027 step 5). Reserved for the reload handler (Unit C).
 type PreflightFunc func(*config.Config) error
 
 // PersistFunc writes the config to the -config file, and is called ONLY after a
-// successful cutover (ADR-0027 §F5). The real seam is an atomic temp+rename.
-// Reserved for B6+.
+// successful cutover (ADR-0027 §F5). The real seam is WriteConfigAtomic.
 type PersistFunc func(*config.Config) error
 
 // State is the observable status of a reload, owned by the supervisor so it
@@ -73,8 +74,9 @@ type Handle string
 type stopReason int
 
 const (
-	reasonShutdown stopReason = iota // external signal / parent context cancelled
-	reasonReload                     // a reload request wants a cutover
+	reasonShutdown  stopReason = iota // external signal / parent context cancelled
+	reasonReload                      // a reload request wants a cutover
+	reasonAppFailed                   // app.Run returned an error on its own
 )
 
 // reloadReq carries a validated config and its status handle from RequestReload
@@ -88,17 +90,19 @@ type reloadReq struct {
 type Supervisor struct {
 	initialCfg *config.Config
 	build      BuildFunc
+	persist    PersistFunc
 	signalCh   <-chan os.Signal
 
 	reloadCh chan reloadReq
 
-	// mu guards the mutable observable state (current + status), which the Run
-	// loop writes at the cutover and callers (Current/Status, and the future HTTP
-	// status route) read concurrently.
-	mu      sync.Mutex
-	current App
-	status  map[Handle]State
-	seq     uint64
+	// mu guards the mutable observable state (current, status, reloadInProgress),
+	// which the Run loop writes at the cutover and callers (Current/Status/
+	// RequestReload) read concurrently.
+	mu               sync.Mutex
+	current          App
+	status           map[Handle]State
+	reloadInProgress bool
+	seq              uint64
 
 	shutdownTimeout time.Duration
 }
@@ -108,6 +112,10 @@ type Option func(*Supervisor)
 
 // WithBuild sets the App factory (required for Run; the real seam wraps app.Build).
 func WithBuild(f BuildFunc) Option { return func(s *Supervisor) { s.build = f } }
+
+// WithPersist sets the config-persist seam, called only after a successful cutover
+// (ADR-0027 §F5). The real seam is WriteConfigAtomic; a nil persist is a no-op.
+func WithPersist(f PersistFunc) Option { return func(s *Supervisor) { s.persist = f } }
 
 // WithSignalChan injects the channel the supervisor listens on for an external
 // shutdown signal. Keeping it a seam (rather than calling signal.Notify itself)
@@ -131,72 +139,123 @@ func New(initial *config.Config, opts ...Option) *Supervisor {
 }
 
 // Run builds and runs the initial app, then owns its lifecycle until an external
-// shutdown signal (or the parent context) stops it. On a reload request it performs
-// the cutover. It blocks until shutdown and returns nil on a clean stop, or a
-// boot/cutover error.
+// shutdown signal (or the parent context) stops it, performing a cutover on each
+// reload request. It blocks until shutdown and returns nil on a clean stop, or a
+// boot/cutover/rollback error (the caller exits non-zero; systemd restarts).
 func (s *Supervisor) Run(ctx context.Context) error {
-	app, err := s.build(s.initialCfg)
+	curCfg := s.initialCfg
+	prevCfg := s.initialCfg
+	var curHandle Handle // "" for the initial app and rolled-back apps
+
+	app, err := s.build(curCfg)
 	if err != nil {
 		return fmt.Errorf("supervisor: initial build: %w", err)
 	}
 	s.setCurrent(app)
 
 	for {
-		reason, req := s.serve(ctx, app)
-		// The app that was serving is torn down before we either exit or cut over.
+		reason, req, runErr := s.serve(ctx, app)
 		_ = s.shutdownApp(app)
-		if reason == reasonShutdown {
-			return nil
-		}
 
-		// Cutover: build the new app AFTER the old one has been shut down, then
-		// swap the reference under the lock so a concurrent reader never races it.
-		s.setStatus(req.handle, StateCutoverInProgress)
-		newApp, berr := s.build(req.cfg)
-		if berr != nil {
-			// Rollback is a later unit; for now surface the failure loudly.
-			s.setStatus(req.handle, StateFailed)
-			return fmt.Errorf("supervisor: cutover build: %w", berr)
+		switch reason {
+		case reasonShutdown:
+			return nil
+
+		case reasonAppFailed:
+			if curHandle == "" {
+				// The initial or an already-rolled-back app crashed: not a cutover
+				// failure, and nothing better to roll back to. Exit fatally and let
+				// systemd restart the last known-good -config (no rollback loop).
+				return fmt.Errorf("supervisor: running app failed: %w", runErr)
+			}
+			// A freshly-reloaded app failed to serve: roll back to the previous
+			// config and re-persist it, so the -config never stays at a config whose
+			// app failed to run (ADR-0027 §c crash-loop guard).
+			s.setStatus(curHandle, StateRolledBack)
+			s.finishReload()
+			rApp, rerr := s.build(prevCfg)
+			if rerr != nil {
+				return fmt.Errorf("supervisor: rollback failed after app run error (%v): %w", runErr, rerr)
+			}
+			s.setCurrent(rApp)
+			s.persistConfig(prevCfg)
+			curCfg, curHandle = prevCfg, ""
+			app = rApp
+
+		case reasonReload:
+			s.setStatus(req.handle, StateCutoverInProgress)
+			nApp, berr := s.build(req.cfg)
+			if berr != nil {
+				// Build failed after the old app was shut down: roll back to the
+				// config that was just serving (curCfg). No persist — a failed cutover
+				// must not overwrite the -config (F5).
+				s.setStatus(req.handle, StateRolledBack)
+				s.finishReload()
+				rApp, rerr := s.build(curCfg)
+				if rerr != nil {
+					return fmt.Errorf("supervisor: rollback failed after cutover build error (%v): %w", berr, rerr)
+				}
+				s.setCurrent(rApp)
+				curHandle = ""
+				app = rApp
+				continue
+			}
+			// Successful swap: swap the reference, mark succeeded, persist (F5).
+			prevCfg, curCfg, curHandle = curCfg, req.cfg, req.handle
+			s.setCurrent(nApp)
+			s.setStatus(req.handle, StateSucceeded)
+			s.persistConfig(req.cfg)
+			s.finishReload()
+			app = nApp
 		}
-		s.setCurrent(newApp)
-		s.setStatus(req.handle, StateSucceeded)
-		app = newApp
 	}
 }
 
 // serve runs one app under a child context the supervisor alone cancels, and blocks
-// until a reload request, an external signal, or the parent context ends. The child
-// context is the "cutover cancel" half of F6/N2: cancelling it is how the supervisor
-// (and only the supervisor) stops the app for a cutover, distinct from the external
-// signal that arrives on its own channel.
-func (s *Supervisor) serve(ctx context.Context, app App) (stopReason, reloadReq) {
+// until the app fails, a reload request, an external signal, or the parent context
+// ends. The child context is the "cutover cancel" half of F6/N2: cancelling it is how
+// the supervisor (and only the supervisor) stops the app for a cutover, distinct from
+// the external signal that arrives on its own channel; an app that returns on its own
+// (without our cancel) is reasonAppFailed.
+func (s *Supervisor) serve(ctx context.Context, app App) (stopReason, reloadReq, error) {
 	childCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	runErr := make(chan error, 1)
 	go func() { runErr <- app.Run(childCtx) }()
 
 	select {
+	case err := <-runErr:
+		return reasonAppFailed, reloadReq{}, err
 	case <-ctx.Done():
 		cancel()
 		<-runErr
-		return reasonShutdown, reloadReq{}
+		return reasonShutdown, reloadReq{}, nil
 	case <-s.signalCh:
 		cancel()
 		<-runErr
-		return reasonShutdown, reloadReq{}
+		return reasonShutdown, reloadReq{}, nil
 	case req := <-s.reloadCh:
 		cancel()
 		<-runErr
-		return reasonReload, req
+		return reasonReload, req, nil
 	}
 }
 
 // RequestReload hands a validated config to the Run loop and returns an opaque
-// handle to poll via Status. (Single-flight rejection is a later unit; this cut
-// enqueues the request.)
+// handle to poll via Status. It is single-flight (ADR-0027 §flow step 4): if a
+// reload is already running it returns ErrReloadInProgress and builds nothing.
 func (s *Supervisor) RequestReload(cfg *config.Config) (Handle, error) {
-	h := s.newHandle()
-	s.setStatus(h, StatePending)
+	s.mu.Lock()
+	if s.reloadInProgress {
+		s.mu.Unlock()
+		return "", ErrReloadInProgress
+	}
+	s.reloadInProgress = true
+	s.seq++
+	h := Handle(fmt.Sprintf("reload-%d", s.seq))
+	s.status[h] = StatePending
+	s.mu.Unlock()
+
 	s.reloadCh <- reloadReq{cfg: cfg, handle: h}
 	return h, nil
 }
@@ -227,6 +286,18 @@ func (s *Supervisor) setStatus(h Handle, st State) {
 	s.mu.Unlock()
 }
 
+func (s *Supervisor) finishReload() {
+	s.mu.Lock()
+	s.reloadInProgress = false
+	s.mu.Unlock()
+}
+
+func (s *Supervisor) persistConfig(cfg *config.Config) {
+	if s.persist != nil {
+		_ = s.persist(cfg)
+	}
+}
+
 // shutdownApp tears an app down within the supervisor's shutdown budget.
 func (s *Supervisor) shutdownApp(app App) error {
 	ctx, cancel := context.WithTimeout(context.Background(), s.shutdownTimeout)
@@ -234,10 +305,32 @@ func (s *Supervisor) shutdownApp(app App) error {
 	return app.Shutdown(ctx)
 }
 
-func (s *Supervisor) newHandle() Handle {
-	s.mu.Lock()
-	s.seq++
-	n := s.seq
-	s.mu.Unlock()
-	return Handle(fmt.Sprintf("reload-%d", n))
+// WriteConfigAtomic writes cfg to path atomically: it marshals to JSON, writes a
+// temp file in the SAME directory, then renames it over path. A failure before the
+// rename leaves the existing -config untouched (ADR-0027 §Config persistence). This
+// is the real PersistFunc the supervisor calls after a successful cutover.
+func WriteConfigAtomic(path string, cfg *config.Config) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("supervisor: marshal config: %w", err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".korvun-config-*.tmp")
+	if err != nil {
+		return fmt.Errorf("supervisor: create temp config: %w", err)
+	}
+	tmpName := tmp.Name()
+	// Remove the temp on any failure; a no-op once the rename has consumed it.
+	defer func() { _ = os.Remove(tmpName) }()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("supervisor: write temp config: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("supervisor: close temp config: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("supervisor: rename config into place: %w", err)
+	}
+	return nil
 }

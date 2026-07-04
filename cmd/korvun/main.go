@@ -61,8 +61,16 @@ func main() {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 
+	// After a successful cutover the supervisor persists the new config atomically
+	// back to the -config file (ADR-0027 §F5), so a plain restart reloads exactly what
+	// the builder produced.
+	persist := func(c *config.Config) error {
+		return supervisor.WriteConfigAtomic(*configPath, c)
+	}
+
 	sup := supervisor.New(cfg,
 		supervisor.WithBuild(build),
+		supervisor.WithPersist(persist),
 		supervisor.WithSignalChan(sigCh),
 	)
 	if err := sup.Run(context.Background()); err != nil {
