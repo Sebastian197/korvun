@@ -252,6 +252,38 @@ func TestValidate_fieldErrors(t *testing.T) {
 	}
 }
 
+// TestValidate_adminBlock covers the optional admin block (ADR-0028 §1): absent is
+// valid (read-only default), a present block must name a non-empty token_env (the
+// env-var NAME, not the value), and an empty token_env is a named schema error.
+func TestValidate_adminBlock(t *testing.T) {
+	t.Parallel()
+	const base = `"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]`
+
+	t.Run("absent admin block is valid (read-only default)", func(t *testing.T) {
+		if _, err := config.Load(writeConfig(t, "{"+base+"}")); err != nil {
+			t.Errorf("absent admin block should be valid, got %v", err)
+		}
+	})
+	t.Run("admin token_env present is valid", func(t *testing.T) {
+		cfg, err := config.Load(writeConfig(t, "{"+base+`,"admin":{"token_env":"KORVUN_ADMIN_TOKEN"}}`))
+		if err != nil {
+			t.Fatalf("valid admin block rejected: %v", err)
+		}
+		if cfg.Admin == nil || cfg.Admin.TokenEnv != "KORVUN_ADMIN_TOKEN" {
+			t.Fatalf("admin block not parsed: %+v", cfg.Admin)
+		}
+	})
+	t.Run("admin token_env empty is rejected", func(t *testing.T) {
+		_, err := config.Load(writeConfig(t, "{"+base+`,"admin":{"token_env":""}}`))
+		if !errors.Is(err, config.ErrInvalidConfig) {
+			t.Fatalf("err = %v, want ErrInvalidConfig", err)
+		}
+		if !strings.Contains(err.Error(), "admin.token_env") {
+			t.Errorf("error %q does not name admin.token_env", err.Error())
+		}
+	})
+}
+
 // TestValidate_emptyDispatchAllowed confirms an omitted dispatch is valid
 // (it defaults to fan-out in internal/app), so a minimal config need not
 // spell it out.

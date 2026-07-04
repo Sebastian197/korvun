@@ -122,6 +122,9 @@ type builder struct {
 	// metrics is the observability backend injected into the domain. Defaults to
 	// metrics.Nop; set to the Prometheus impl when observability is enabled.
 	metrics metrics.Metrics
+	// reloader is the supervisor seam the mutation endpoint signals (ADR-0027).
+	// When nil (no supervisor above the app), no mutation surface is mounted.
+	reloader controlapi.Reloader
 }
 
 // Option configures Build.
@@ -135,6 +138,13 @@ func WithLogger(l *slog.Logger) Option {
 			b.logger = l
 		}
 	}
+}
+
+// WithReloader injects the supervisor seam the config-mutation endpoint signals
+// (ADR-0027). It is what enables the mutation surface: without it (or without a
+// configured admin token) Build mounts only the read-only control API.
+func WithReloader(r controlapi.Reloader) Option {
+	return func(b *builder) { b.reloader = r }
 }
 
 // withChannelFactory overrides how channels are constructed. Internal-only: it
@@ -266,6 +276,15 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	// conscious coupling documented in ADR-0022 §5.
 	if adminServer != nil {
 		controlapi.Register(adminServer, app)
+		// Mount the WRITE surface ONLY when a supervisor seam is injected AND the
+		// config names an admin token that resolves non-empty (ADR-0028 §1: no token
+		// => mutation not mounted, the read-only default). Build re-resolves this on
+		// every reload, so enabling/rotating the env-var name is itself a config edit.
+		if b.reloader != nil && cfg.Admin != nil {
+			if token := os.Getenv(cfg.Admin.TokenEnv); token != "" {
+				controlapi.RegisterMutation(adminServer, b.reloader, token)
+			}
+		}
 	}
 	// Mount the live-view (SSE + UI) on the same admin server, also before Start.
 	if liveView != nil {
