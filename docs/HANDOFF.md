@@ -849,9 +849,8 @@ Key entries currently:
   something; does NOT relax the Context7-first rule) and `find-skills` (surface
   applicable skills before doing a task by hand). Both are described in CLAUDE.md
   under "Claude Code skills — available tooling", framed as COMPLEMENTS to the
-  project method, never replacements. A third skill Chano mentioned ("open claude")
-  did NOT match any installed skill on verification — left undocumented pending his
-  confirmation of the exact name.
+  project method, never replacements. These two are the complete set (confirmed by
+  Chano 2026-07-04); no third skill exists to document.
 - CLAUDE.md is currently **modified in the working tree** with a
   "Design spec first" step the user introduced. That change is held
   separately from this integration on the user's call — it is

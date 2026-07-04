@@ -118,9 +118,8 @@ Installed and verified in this environment (2026-07-04):
   exists — then still apply the project method (Context7-first, TDD, ADRs) through
   whatever it finds.
 
-A third skill Chano mentioned informally ("open claude") did **not** match any
-installed skill on verification (2026-07-04); it is intentionally **not documented
-here** until Chano confirms the exact name.
+These two are the complete set Chano installed (confirmed 2026-07-04); there is no
+third skill to document.
 
 ## Go standards
 
