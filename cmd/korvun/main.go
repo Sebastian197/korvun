@@ -48,11 +48,24 @@ func main() {
 		fatal(logger, "config", err) // malformed/missing config: fatal, named
 	}
 
+	// sup is late-bound: the build seam closes over it so app.Build can mount the
+	// config-mutation endpoint pointing back at the supervisor (ADR-0027 §seam). The
+	// closure reads sup only when Run calls it, by which point sup is assigned.
+	var sup *supervisor.Supervisor
+
 	// The build seam the supervisor uses for the initial boot and every reload:
-	// wrap app.Build (which opens the store and wires channels/brains). *app.App
-	// satisfies supervisor.App.
+	// wrap app.Build (which opens the store and wires channels/brains, and mounts the
+	// mutation endpoint when an admin token is configured). *app.App satisfies
+	// supervisor.App.
 	build := func(c *config.Config) (supervisor.App, error) {
-		return app.Build(c, app.WithLogger(logger))
+		return app.Build(c, app.WithLogger(logger), app.WithReloader(sup))
+	}
+
+	// The effect-free pre-cutover validation seam (ADR-0027 §5): app.Preflight runs
+	// getMe/secret-resolution/the privacy selector without opening the store, while
+	// the old app keeps serving.
+	preflight := func(c *config.Config) error {
+		return app.Preflight(c, app.WithLogger(logger))
 	}
 
 	// The supervisor listens for shutdown on its OWN channel (F6/N2), not through
@@ -68,8 +81,9 @@ func main() {
 		return supervisor.WriteConfigAtomic(*configPath, c)
 	}
 
-	sup := supervisor.New(cfg,
+	sup = supervisor.New(cfg,
 		supervisor.WithBuild(build),
+		supervisor.WithPreflight(preflight),
 		supervisor.WithPersist(persist),
 		supervisor.WithLogger(logger),
 		supervisor.WithSignalChan(sigCh),

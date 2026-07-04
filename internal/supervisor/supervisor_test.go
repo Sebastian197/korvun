@@ -692,6 +692,106 @@ func TestSupervisor_statusHandle_transitionsAndSurvivesCutover(t *testing.T) {
 	<-runDone
 }
 
+// ---- C9 (LOAD-BEARING): Preflight runs while the OLD app still serves (F7) ----
+
+func waitStatus(t *testing.T, sup *supervisor.Supervisor, h supervisor.Handle, want supervisor.State) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if sup.Status(h) == want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("status of %q never reached %q (got %q)", h, want, sup.Status(h))
+}
+
+func TestSupervisor_preflightFailure_oldAppUntouched(t *testing.T) {
+	log := &eventLog{}
+	a := newFakeApp("A", log) // the only app ever built; must keep serving
+	preflightErr := errors.New("preflight: getMe 401")
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	preflight := func(*config.Config) error {
+		close(entered)
+		<-release
+		return preflightErr
+	}
+	sig := make(chan os.Signal, 1)
+	sup := supervisor.New(&config.Config{},
+		supervisor.WithBuild(staticBuild(a)),
+		supervisor.WithPreflight(preflight),
+		supervisor.WithSignalChan(sig),
+	)
+	runDone := make(chan error, 1)
+	go func() { runDone <- sup.Run(context.Background()) }()
+	<-a.started
+
+	h, _ := sup.RequestReload(&config.Config{})
+	<-entered // Preflight is running — and the OLD app must still be serving (F7)
+	if n := a.shutdowns.Load(); n != 0 {
+		t.Fatalf("old app Shutdown %d times DURING preflight; it must keep serving", n)
+	}
+
+	close(release) // preflight fails
+	waitStatus(t, sup, h, supervisor.StateFailed)
+	if n := a.shutdowns.Load(); n != 0 {
+		t.Errorf("old app Shutdown %d times after a preflight failure; it must stay serving (no rollback)", n)
+	}
+	if sup.Current() != supervisor.App(a) {
+		t.Error("current app changed on a preflight failure")
+	}
+
+	sig <- os.Interrupt
+	<-runDone
+}
+
+func TestSupervisor_preflightPasses_cutoverProceeds(t *testing.T) {
+	log := &eventLog{}
+	a := newFakeApp("A", log)
+	b := newFakeApp("B", log)
+	preflight := func(*config.Config) error { return nil } // passes
+	sig := make(chan os.Signal, 1)
+	sup := supervisor.New(&config.Config{},
+		supervisor.WithBuild(sequentialBuild(log, a, b)),
+		supervisor.WithPreflight(preflight),
+		supervisor.WithSignalChan(sig),
+	)
+	runDone := make(chan error, 1)
+	go func() { runDone <- sup.Run(context.Background()) }()
+	<-a.started
+
+	h, _ := sup.RequestReload(&config.Config{})
+	<-b.started // cutover happened
+	if got := sup.Status(h); got != supervisor.StateSucceeded {
+		t.Errorf("status = %q, want succeeded (preflight passed)", got)
+	}
+	log.assertOrder(t, "A.Shutdown", "build:B", "B.Start", "B.Serve")
+
+	sig <- os.Interrupt
+	<-runDone
+}
+
+// ---- C12 (P3): a reload requested after shutdown is refused, not left pending --
+
+func TestSupervisor_reloadAfterShutdown_refused(t *testing.T) {
+	log := &eventLog{}
+	a := newFakeApp("A", log)
+	sig := make(chan os.Signal, 1)
+	sup := supervisor.New(&config.Config{}, supervisor.WithBuild(staticBuild(a)), supervisor.WithSignalChan(sig))
+	runDone := make(chan error, 1)
+	go func() { runDone <- sup.Run(context.Background()) }()
+	<-a.started
+
+	sig <- os.Interrupt
+	<-runDone // supervisor has shut down
+
+	_, err := sup.RequestReload(&config.Config{})
+	if !errors.Is(err, supervisor.ErrShuttingDown) {
+		t.Errorf("reload after shutdown: err = %v, want ErrShuttingDown (no orphaned pending handle)", err)
+	}
+}
+
 // ---- B8: atomic config persist helper ---------------------------------------
 
 func TestWriteConfigAtomic_writesAndCleansUp(t *testing.T) {

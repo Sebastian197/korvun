@@ -40,6 +40,11 @@ const defaultShutdownTimeout = 15 * time.Second
 // reload_in_progress).
 var ErrReloadInProgress = errors.New("supervisor: a reload is already in progress")
 
+// ErrShuttingDown is returned by RequestReload once the supervisor has begun
+// shutting down, so a late reload is refused rather than left as an orphaned
+// pending handle no one can complete (the handler maps it to a 503).
+var ErrShuttingDown = errors.New("supervisor: shutting down")
+
 // App is the lifecycle seam the supervisor drives. *app.App satisfies it. Start
 // brings the app up without blocking (the fallible bind/channel-start steps); Serve
 // blocks until its context is cancelled; Shutdown tears the app down in ADR-0008
@@ -100,6 +105,7 @@ type reloadReq struct {
 type Supervisor struct {
 	initialCfg *config.Config
 	build      BuildFunc
+	preflight  PreflightFunc
 	persist    PersistFunc
 	signalCh   <-chan os.Signal
 	logger     *slog.Logger
@@ -113,6 +119,7 @@ type Supervisor struct {
 	current          App
 	status           map[Handle]State
 	reloadInProgress bool
+	shuttingDown     bool
 	seq              uint64
 
 	shutdownTimeout time.Duration
@@ -123,6 +130,11 @@ type Option func(*Supervisor)
 
 // WithBuild sets the App factory (required for Run; the real seam wraps app.Build).
 func WithBuild(f BuildFunc) Option { return func(s *Supervisor) { s.build = f } }
+
+// WithPreflight sets the effect-free pre-cutover validation seam (ADR-0027 §5). The
+// supervisor runs it while the old app is still serving; a failure fails the reload
+// cheaply without touching the running app. The real seam is app.Preflight.
+func WithPreflight(f PreflightFunc) Option { return func(s *Supervisor) { s.preflight = f } }
 
 // WithPersist sets the config-persist seam, called only after a confirmed cutover
 // (ADR-0027 §F5). The real seam is WriteConfigAtomic; a nil persist is a no-op.
@@ -179,6 +191,9 @@ func (s *Supervisor) Run(ctx context.Context) error {
 
 		switch reason {
 		case reasonShutdown:
+			s.mu.Lock()
+			s.shuttingDown = true
+			s.mu.Unlock()
 			return nil
 
 		case reasonAppFailed:
@@ -242,21 +257,34 @@ func (s *Supervisor) serve(ctx context.Context, app App) (stopReason, reloadReq,
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- app.Serve(childCtx) }()
 
-	select {
-	case err := <-serveErr:
-		return reasonAppFailed, reloadReq{}, err
-	case <-ctx.Done():
-		cancel()
-		<-serveErr
-		return reasonShutdown, reloadReq{}, nil
-	case <-s.signalCh:
-		cancel()
-		<-serveErr
-		return reasonShutdown, reloadReq{}, nil
-	case req := <-s.reloadCh:
-		cancel()
-		<-serveErr
-		return reasonReload, req, nil
+	for {
+		select {
+		case err := <-serveErr:
+			return reasonAppFailed, reloadReq{}, err
+		case <-ctx.Done():
+			cancel()
+			<-serveErr
+			return reasonShutdown, reloadReq{}, nil
+		case <-s.signalCh:
+			cancel()
+			<-serveErr
+			return reasonShutdown, reloadReq{}, nil
+		case req := <-s.reloadCh:
+			// The old app is STILL serving here. Run Preflight (effect-free) BEFORE
+			// tearing it down (ADR-0027 §5 / F7): a bad config fails cheaply while the
+			// old app keeps serving. Only a passing Preflight returns reasonReload; a
+			// failing one keeps the same app serving (its Serve goroutine is intact).
+			if s.preflight != nil {
+				if err := s.preflight(req.cfg); err != nil {
+					s.setStatus(req.handle, StateFailed)
+					s.finishReload()
+					continue
+				}
+			}
+			cancel()
+			<-serveErr
+			return reasonReload, req, nil
+		}
 	}
 }
 
@@ -265,6 +293,10 @@ func (s *Supervisor) serve(ctx context.Context, app App) (stopReason, reloadReq,
 // reload is already running it returns ErrReloadInProgress and builds nothing.
 func (s *Supervisor) RequestReload(cfg *config.Config) (Handle, error) {
 	s.mu.Lock()
+	if s.shuttingDown {
+		s.mu.Unlock()
+		return "", ErrShuttingDown
+	}
 	if s.reloadInProgress {
 		s.mu.Unlock()
 		return "", ErrReloadInProgress
