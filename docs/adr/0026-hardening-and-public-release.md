@@ -1,6 +1,6 @@
 # ADR-0026: Stage 16 — Hardening + public release
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-06-28
 > **Deciders:** Sebastián Moreno Saavedra (+ copilot review)
 
