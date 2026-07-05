@@ -11,6 +11,14 @@ export default defineConfig({
   base: '/builder/',
   plugins: [react(), tailwindcss()],
   build: { outDir: 'dist', emptyOutDir: true },
+  // Dev-only (option b: `npm run dev` with HMR): proxy the control API to a real
+  // Korvun admin server on loopback :2112, so the UI talks to a live backend while
+  // you tinker. Does NOT affect the production build (which is same-origin, zero CDN).
+  server: {
+    proxy: {
+      '/api': 'http://127.0.0.1:2112',
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
