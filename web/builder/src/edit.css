@@ -3,6 +3,10 @@
   flex-direction: column;
   gap: var(--space-lg);
   margin-top: var(--space-lg);
+  /* Scroll slack below the opaque sticky save-bar so the last content (model
+     rows / + add model / the ROUTE panel) can always clear above it instead of
+     hiding behind it — including for a config shorter than the viewport. */
+  padding-bottom: 5rem;
 }
 .field {
   display: block;
