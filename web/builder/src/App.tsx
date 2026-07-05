@@ -61,7 +61,7 @@ export function App() {
           <span className="glyph" aria-hidden="true" />
           korvun
         </span>
-        <span className="crumb">builder · read-only</span>
+        <span className="crumb">builder</span>
         <span className="spacer" />
         <span className="token-state">{token ? 'bearer ✓' : 'no token'}</span>
       </header>
