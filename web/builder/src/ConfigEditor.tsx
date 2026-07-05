@@ -11,8 +11,17 @@ import {
   CLOUD_PROVIDERS,
 } from './config/schema'
 import { clone, isDirty, configReducer, type ConfigAction } from './config/edit'
-import { postConfig, HttpError } from './api'
+import { postConfig, getConfig, getReloadStatus, HttpError } from './api'
+import { pollReload, type ReloadStatus, type PollDeps } from './config/reload'
 import './edit.css'
+
+// Real poll deps (overridable in tests): status from the control API, a timer-based
+// sleep, and the wall clock.
+const realReloadDeps: PollDeps = {
+  getStatus: getReloadStatus,
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  now: () => Date.now(),
+}
 
 // Phase 2b.2a — the edit surface. Reads the working copy (cloned from the GET
 // /api/config baseline), edits it through the pure reducer, builds the FULL config,
@@ -189,58 +198,108 @@ function RouteForm({ r, index, dispatch }: { r: Config['routes'][number]; index:
   )
 }
 
+function ReloadView({ status, onRetry }: { status: ReloadStatus; onRetry: () => void }) {
+  switch (status.phase) {
+    case 'idle':
+      return null
+    case 'polling':
+      // In-flight: pending / cutover-in-progress. The form is locked (see fieldset).
+      return (
+        <div className="reload-banner" role="status" data-testid="reload-inflight">
+          <span className="dot" style={{ background: 'var(--accent)' }} /> reloading —{' '}
+          <code>{status.server}</code>
+          <span className="handle">
+            {' '}
+            handle <code>{status.handle}</code>
+          </span>
+        </div>
+      )
+    case 'succeeded':
+      return (
+        <span className="reload-chip ok" role="status" data-testid="reload-succeeded">
+          <span className="dot" style={{ background: 'var(--sent)' }} /> reload succeeded
+        </span>
+      )
+    case 'rolledBack':
+    case 'failed':
+      return (
+        <div className="reload-panel err" role="alert" data-testid="reload-terminal">
+          <span className="dot" style={{ background: 'var(--failed)' }} /> reload{' '}
+          {status.phase === 'failed' ? 'failed' : 'rolled back'} — the running config is unchanged.
+          <button className="btn" type="button" onClick={onRetry}>
+            Retry
+          </button>
+        </div>
+      )
+    case 'unknown':
+      return (
+        <div className="reload-panel warn" role="alert" data-testid="reload-unknown">
+          <span className="dot" style={{ background: 'var(--dropped)' }} /> reload status unknown —
+          refresh to re-check.
+        </div>
+      )
+  }
+}
+
 export function ConfigEditor({
   baseline,
   token,
   onSaved,
+  reloadDeps = realReloadDeps,
 }: {
   baseline: Config
   token: string
   onSaved?: (handle: string) => void
+  reloadDeps?: PollDeps
 }) {
+  const [base, setBase] = useState<Config>(baseline)
   const [wc, dispatch] = useReducer(configReducer, baseline, clone)
-  const [handle, setHandle] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [reload, setReload] = useState<ReloadStatus>({ phase: 'idle' })
   const [err, setErr] = useState<string | null>(null)
-  const dirty = isDirty(wc, baseline)
+
+  const locked = reload.phase === 'polling' // full form lock during the swap (§5)
+  const dirty = isDirty(wc, base)
 
   async function save() {
-    setSaving(true)
     setErr(null)
     try {
       const r = await postConfig(token, wc)
-      setHandle(r.handle)
       onSaved?.(r.handle)
+      const final = await pollReload(r.handle, token, reloadDeps, setReload)
+      if (final.phase === 'succeeded') {
+        // Re-baseline from the applied config so the working copy reflects reality
+        // and dirty clears exactly (§5).
+        const applied = await getConfig(token)
+        setBase(applied)
+        dispatch({ kind: 'reset', config: applied })
+      }
     } catch (e) {
       // Full 400/401/409 UI is 2b.2c; here we surface the status honestly.
       setErr(e instanceof HttpError ? `save failed: HTTP ${e.status}` : 'save failed')
-    } finally {
-      setSaving(false)
+      setReload({ phase: 'idle' })
     }
   }
 
   return (
     <div className="editor">
-      {wc.channels.map((c, i) => (
-        <ChannelForm key={i} c={c} index={i} dispatch={dispatch} />
-      ))}
-      {wc.brains.map((b, i) => (
-        <BrainForm key={i} b={b} index={i} dispatch={dispatch} />
-      ))}
-      {wc.routes.map((r, i) => (
-        <RouteForm key={i} r={r} index={i} dispatch={dispatch} />
-      ))}
+      <fieldset className="forms" disabled={locked}>
+        {wc.channels.map((c, i) => (
+          <ChannelForm key={i} c={c} index={i} dispatch={dispatch} />
+        ))}
+        {wc.brains.map((b, i) => (
+          <BrainForm key={i} b={b} index={i} dispatch={dispatch} />
+        ))}
+        {wc.routes.map((r, i) => (
+          <RouteForm key={i} r={r} index={i} dispatch={dispatch} />
+        ))}
+      </fieldset>
 
       <div className="save-bar">
-        <button className="btn primary" type="button" disabled={!dirty || saving} onClick={save}>
-          {saving ? 'Saving…' : 'Save and reload'}
+        <button className="btn primary" type="button" disabled={!dirty || locked} onClick={save}>
+          {locked ? 'Reloading…' : 'Save and reload'}
         </button>
         <span className="muted">{dirty ? 'unsaved changes' : 'no changes'}</span>
-        {handle && (
-          <span className="handle" data-testid="reload-handle">
-            reload handle: <code>{handle}</code>
-          </span>
-        )}
+        <ReloadView status={reload} onRetry={save} />
         {err && <span className="err">{err}</span>}
       </div>
     </div>

@@ -31,6 +31,7 @@ export type ConfigAction =
   | { kind: 'moveModel'; brain: number; from: number; to: number }
   | { kind: 'setChannelField'; channel: number; field: 'type' | 'mode' | 'token_env'; value: string }
   | { kind: 'setRouteField'; route: number; field: 'channel' | 'brain'; value: string }
+  | { kind: 'reset'; config: Config }
 
 // Immutable helpers: replace one element of an array without touching the rest.
 function replaceAt<T>(arr: T[], i: number, next: T): T[] {
@@ -45,6 +46,10 @@ function editBrain(c: Config, i: number, next: (b: Config['brains'][number]) => 
  *  and preserves every field it does not touch (the round-trip guarantee). */
 export function configReducer(state: Config, action: ConfigAction): Config {
   switch (action.kind) {
+    case 'reset':
+      // Re-baseline the working copy to a freshly fetched config (after a succeeded
+      // reload) so dirty clears exactly.
+      return clone(action.config)
     case 'setBrainField':
       return editBrain(state, action.brain, (b) => ({ ...b, [action.field]: action.value }))
     case 'setPolicyKind':

@@ -59,8 +59,7 @@ export const getChannels = async (): Promise<ChannelSummary[]> =>
 export const getConfig = async (token: string): Promise<Config> =>
   (await req('/api/config', { headers: auth(token) })).json()
 
-/** POST the full working-copy config. Returns the reload handle (202). The reload
- *  state machine that polls this handle is 2b.2b. */
+/** POST the full working-copy config. Returns the reload handle (202). */
 export const postConfig = async (token: string, config: Config): Promise<ReloadHandle> =>
   (
     await req('/api/config', {
@@ -69,3 +68,12 @@ export const postConfig = async (token: string, config: Config): Promise<ReloadH
       body: JSON.stringify(config),
     })
   ).json()
+
+/** Poll a reload handle's state (ADR-0030 §5). Returns the raw `state` string, or
+ *  REJECTS on a transient network error — which the reload poll treats as a retry
+ *  (the admin server is restarting mid-cutover; the handle survives, F4). */
+export const getReloadStatus = async (handle: string, token: string): Promise<string> => {
+  const r = await req(`/api/reload/${encodeURIComponent(handle)}`, { headers: auth(token) })
+  const body = (await r.json()) as { state: string }
+  return body.state
+}

@@ -69,3 +69,47 @@ select.txt {
 .handle code {
   color: var(--text-1);
 }
+
+/* fieldset as a layout container (form-lock via [disabled]) */
+.forms {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.reload-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.reload-chip.ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--sent);
+}
+.reload-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+}
+.reload-panel.err {
+  color: var(--failed);
+  border: 1px solid var(--failed);
+}
+.reload-panel.warn {
+  color: var(--dropped);
+  border: 1px solid var(--dropped);
+}
