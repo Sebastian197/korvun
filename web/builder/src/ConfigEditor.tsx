@@ -1,4 +1,5 @@
 import { useReducer, useState, type Dispatch } from 'react'
+import { flushSync } from 'react-dom'
 import type { Config } from './config/schema'
 import {
   PROVIDERS,
@@ -362,12 +363,26 @@ export function ConfigEditor({
   const errorFor = (prefix: string): string | undefined =>
     saveError?.kind === 'validation' && saveError.field?.startsWith(prefix) ? saveError.message : undefined
 
+  // View Transitions for the reload state swap (pending → cutover → succeeded /
+  // failed): a scoped cross-fade of the reload region only. Checks startViewTransition
+  // FIRST so jsdom (no such API, no matchMedia) always takes the plain branch — and
+  // reduced-motion falls back too. Wraps the RENDER; the reload state machine
+  // (pollReload/reloadReducer) is untouched. (2b.3b)
+  const applyReload = (next: ReloadStatus) => {
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => void }
+    if (doc.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      doc.startViewTransition(() => flushSync(() => setReload(next)))
+    } else {
+      setReload(next)
+    }
+  }
+
   async function save() {
     setSaveError(null)
     try {
       const r = await postConfig(token, wc)
       onSaved?.(r.handle)
-      const final = await pollReload(r.handle, token, reloadDeps, setReload)
+      const final = await pollReload(r.handle, token, reloadDeps, applyReload)
       if (final.phase === 'succeeded') {
         // Re-baseline from the applied config so the working copy reflects reality
         // and dirty clears exactly (§5).

@@ -166,3 +166,57 @@ select.txt {
 .panel-head h2 {
   margin: 0;
 }
+
+/* ── 2b.3b microinteractions — CSS (View Transitions handled in TS for the reload
+   state swap). Durations use the theme motion tokens, so the prefers-reduced-motion
+   guard in theme.css (which zeroes animation/transition durations) covers them all.
+   ADDITIVE: animates render only — never the form-lock or the reload state machine. ── */
+@keyframes enter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reload state + action-driven surfaces rise+fade in on mount, so pending → cutover
+   → succeeded / failed feels fluid instead of snapping in. */
+.reload-banner,
+.reload-chip,
+.reload-panel,
+.save-error,
+.first-run,
+.confirm,
+.model-row {
+  animation: enter-rise var(--dur-base) var(--ease-enter) both;
+}
+
+/* Controls respond to hover/press instead of snapping. The focus outline stays
+   instant (never transitioned) so keyboard focus is never laggy. */
+.btn,
+.txt {
+  transition:
+    border-color var(--dur-micro) var(--ease-enter),
+    background-color var(--dur-micro) var(--ease-enter),
+    color var(--dur-micro) var(--ease-enter),
+    transform var(--dur-micro) var(--ease-enter);
+}
+.btn:not(:disabled):hover,
+.txt:hover:not(:focus-visible) {
+  border-color: var(--text-3);
+}
+.btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* Scope the reload state cross-fade to just this region — only one of these is
+   mounted at a time, so the shared name morphs banner → chip → panel and the rest
+   of the page is untouched (2b.3b View Transitions). */
+.reload-banner,
+.reload-chip,
+.reload-panel {
+  view-transition-name: korvun-reload;
+}

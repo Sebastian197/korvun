@@ -77,6 +77,27 @@ test('reload survives ECONNREFUSED during cutover, reaches succeeded, makes no e
   expect(external, `unexpected external requests: ${external.join(', ')}`).toEqual([])
 })
 
+test('prefers-reduced-motion: the reload flow still succeeds and the enter animation is zeroed', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await readOnly(page)
+  await page.route('**/api/config', (r) =>
+    r.request().method() === 'POST' ? json(r, 202, { handle: 'r1' }) : json(r, 200, BASE_CONFIG),
+  )
+  await page.route('**/api/reload/r1', (r) => json(r, 200, { state: 'succeeded' }))
+
+  await loadWithToken(page)
+  await page.getByLabel('name', { exact: true }).fill('assistant-v2')
+  await page.getByRole('button', { name: 'Save and reload' }).click()
+
+  const ok = page.getByTestId('reload-succeeded')
+  await ok.waitFor({ state: 'visible', timeout: 15000 }) // flow works without View Transitions
+  // the theme.css reduced-motion guard zeroes the enter animation (0.01ms, not 180ms)
+  const dur = await ok.evaluate((el) => getComputedStyle(el).animationDuration)
+  expect(parseFloat(dur)).toBeLessThan(0.02)
+})
+
 test('axe-core: the editor forms have no accessibility violations', async ({ page }) => {
   await readOnly(page)
   await page.route('**/api/config', (r) => json(r, 200, BASE_CONFIG))
