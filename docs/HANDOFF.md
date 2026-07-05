@@ -957,10 +957,20 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
      branch stays LOCAL until then). Phase 2a is CLOSED; nothing else gates it. The C12
      `/review` verdict above (gating complete, race inocuous, contract corrected) is the
      record.
-  2. **Phase 2b:** the React/Vite builder UI — its own framing + ADR (frontend
-     toolchain, mounting at `/builder` alongside the vanilla read-only `/ui`, how the
-     UI stores the bearer token it sends as `Authorization: Bearer`, the
-     animations/transitions Chano wants).
+  2. **Phase 2b (the React/Vite builder UI) — FRAMED + ADRs ACCEPTED, implementation
+     STARTED.** `/design-shotgun` (3 identity directions) + `/plan-design-review` +
+     `/plan-eng-review` all done (cross-model). Visual direction: synthesis of the
+     corvid/iridescent concept + ⌘K (variant C) on variant A's IA, **violet functional
+     accent** anchored outside the fixed event palette (teal rejected — collides with
+     `sent` green). **ADR-0029** (frontend toolchain: React 19 + TS + Vite v8 + Tailwind
+     v4, pnpm, `web/builder/`, `go:embed` the dist at `/builder`, ZERO CDN via CSP +
+     Playwright, `go.mod` stays 3) and **ADR-0030** (own visual identity + tokens/light-
+     mode/AA + the 5 hard decisions incl. a new gated `GET /api/config` for round-trip +
+     reload state machine verbatim from `supervisor.State` + bearer default in-memory +
+     model-row contract) are **accepted**. Eng-review closed 3 P1s in the ADR text (go:embed
+     placeholder+build-ordering, no-CDN by network layer, `GET /api/config`). Phases by
+     blast radius: **2b.0 Go hardening (in progress)** → 2b.1 scaffold + design system →
+     2b.2 edit forms → 2b.3 polish/animations.
 - **HARDENING deferred to Phase 2b (reported by Unit C's `/review`, one P3 at a time,
   each with its own micro-decision — deliberately NOT folded into the 2a contract fix):**
   1. **Empty-token guard in `bearerAuth` (LATENT FOOTGUN — close FIRST in 2b).**
@@ -972,9 +982,18 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
      caller of `RegisterMutation` without that check would reopen the bypass. Fix: reject
      an empty token at the top of `bearerAuth` (or `RegisterMutation`) so the guarantee
      is by-construction, not by-invariant. Cheap; kills the footgun at the root.
-  2. **Request-body size limit on `POST /api/config`.** `mutation.go:78` decodes `r.Body`
+  2. **Request-body size limit on `POST /api/config`.** `mutation.go` decodes `r.Body`
      with no `http.MaxBytesReader`; an authenticated admin could send an unbounded body.
-     Low severity (behind bearer auth), but wrap the body with a chosen limit N.
+     Low severity (behind bearer auth); wrap the body with `N = 1 MiB`.
+  3. **Server-side cleartext gate for `POST /api/config` (candidate hardening of
+     ADR-0028, surfaced by the 2b eng-review).** Optionally refuse mutation when bound
+     non-loopback without TLS / `X-Forwarded-Proto: https`, so a bearer in the clear is
+     rejected server-side, not just warned about. NOT blocking: ADR-0028 §2 F10 already
+     delegates cleartext to the operator and ADR-0030's advisory banner covers the UX. If
+     taken, it gets its own mini-decision + a test-that-bites in 2b, and lands in
+     ADR-0028, not 0030.
+  > **NOTE (1 + 2 are 2b.0, done red-first before any frontend line):** items 1 and 2
+  > are the Go-only hardening of phase 2b.0; item 3 is a later candidate.
 - **Deferred follow-up (own fix, NOT Phase 2a) — duplicate channel dedupe.**
   `config.Validate` (`config.go:217`, `validateChannels`) dedupes channels by NAME but
   not by TYPE, and `router.RegisterChannel`/`RegisterBrain` (`router.go:146,189`)
