@@ -202,6 +202,237 @@ run + message the bot).
 
 ---
 
+## Linux — walkthrough
+
+> ⚠️ **Not verified on our own hardware.** This section is written **by analogy** to
+> the macOS walkthrough above (which *was* validated on real hardware) using standard
+> POSIX tooling and the real `v0.1.0` asset names. Please report any issue you hit.
+
+The install-a-release path on Linux. The config file and the run/message steps are
+identical to macOS — they live in [`../QUICKSTART.md`](../QUICKSTART.md).
+
+### 1. Pick your architecture — do this FIRST
+
+```bash
+uname -m
+```
+
+| `uname -m` prints | Use the asset | Arch token |
+|-------------------|---------------|------------|
+| `x86_64` | `korvun_0.1.0_linux_amd64.tar.gz` | **`amd64`** |
+| `aarch64` / `arm64` | `korvun_0.1.0_linux_arm64.tar.gz` | **`arm64`** |
+
+A 64-bit Raspberry Pi (4/5) reports `aarch64` → use `arm64`. Substitute your arch
+token for `<ARCH>` below (`amd64` or `arm64`).
+
+### 2. Download the binary + verification material
+
+**With the GitHub CLI (`gh`):**
+
+```bash
+mkdir -p ~/korvun-install && cd ~/korvun-install
+gh release download v0.1.0 --repo Sebastian197/korvun \
+  --pattern 'korvun_0.1.0_linux_<ARCH>.tar.gz' \
+  --pattern 'checksums.txt' \
+  --pattern 'checksums.txt.sig' \
+  --pattern 'checksums.txt.pem'
+```
+
+**Or with `curl`:**
+
+```bash
+BASE=https://github.com/Sebastian197/korvun/releases/download/v0.1.0
+curl -fLO "$BASE/korvun_0.1.0_linux_<ARCH>.tar.gz"
+curl -fLO "$BASE/checksums.txt"
+curl -fLO "$BASE/checksums.txt.sig"
+curl -fLO "$BASE/checksums.txt.pem"
+```
+
+### 3. Verify the checksum — sufficient for most users
+
+Most Linux distros ship `sha256sum` (GNU coreutils):
+
+```bash
+sha256sum -c checksums.txt --ignore-missing
+# -> korvun_0.1.0_linux_amd64.tar.gz: OK
+```
+
+`OK` on your archive line means the download is intact. **Do not proceed on
+`FAILED`.** For most users this is enough; cosign (§4) is an optional extra.
+
+### 4. (Optional, advanced) Verify the signature with cosign
+
+Identical to the macOS step —
+[see §4 above](#4-optional-advanced-verify-the-signature-with-cosign). The
+`cosign verify-blob` command and the certificate identity are the same on every OS;
+only the way you install cosign differs (on Linux, your package manager or the
+[cosign release binaries](https://github.com/sigstore/cosign/releases)). Optional;
+the checksum in §3 is sufficient to install and run.
+
+### 5. Extract
+
+```bash
+tar -xzf korvun_0.1.0_linux_<ARCH>.tar.gz
+chmod +x korvun
+```
+
+The archive contains the `korvun` binary plus `LICENSE` and `README.md`.
+
+> **No Gatekeeper on Linux.** The macOS quarantine/Gatekeeper step does **not** apply
+> — there is nothing equivalent to clear.
+
+### 6. Confirm it runs
+
+```bash
+./korvun --version
+# -> korvun v0.1.0 (<short-revision>)
+sudo install -m755 ./korvun /usr/local/bin/korvun   # optional: put it on PATH
+```
+
+### 7. Run as a service (systemd)
+
+To run Korvun as a hardened background service, use the ready **systemd unit** in
+this directory — do not hand-roll one: [`korvun.service`](./korvun.service) ships a
+dedicated `korvun` user, a `StateDirectory` for the SQLite database, and a strict
+sandbox. See [§5 "Run as a service"](#5-run-as-a-service-linux--raspberry-pi) below
+for the setup steps.
+
+### 8. Next: zero to a message answered
+
+Follow [`../QUICKSTART.md`](../QUICKSTART.md) — the config file, the `export` of the
+token by name, and the run/message steps are the same across OSes.
+
+---
+
+## Windows — walkthrough
+
+> ⚠️ **Not verified on our own hardware.** This section is written **by analogy** to
+> the validated macOS walkthrough, using the real `v0.1.0` asset names and standard
+> PowerShell tooling. Several Windows-specific steps are marked **TODO-VERIFY** —
+> confirm them on a real Windows machine before treating them as certain. Please
+> report any issue you hit.
+
+Run all commands in **PowerShell**. The config file and the run/message steps are the
+same as every OS — see [`../QUICKSTART.md`](../QUICKSTART.md).
+
+### 1. Pick your architecture — do this FIRST
+
+```powershell
+$env:PROCESSOR_ARCHITECTURE
+```
+
+| It prints | Use the asset | Arch token |
+|-----------|---------------|------------|
+| `AMD64` | `korvun_0.1.0_windows_amd64.zip` | **`amd64`** |
+| `ARM64` | `korvun_0.1.0_windows_arm64.zip` | **`arm64`** |
+
+Substitute your arch token for `<ARCH>` below. Windows archives are `.zip` (Unix
+ones are `.tar.gz`), and the binary inside is **`korvun.exe`**.
+
+### 2. Download the binary + verification material
+
+**With the GitHub CLI (`gh`):**
+
+```powershell
+mkdir korvun-install; cd korvun-install
+gh release download v0.1.0 --repo Sebastian197/korvun `
+  --pattern 'korvun_0.1.0_windows_<ARCH>.zip' `
+  --pattern 'checksums.txt' `
+  --pattern 'checksums.txt.sig' `
+  --pattern 'checksums.txt.pem'
+```
+
+**Or with `curl.exe`** (bundled with Windows 10/11):
+
+```powershell
+$BASE = "https://github.com/Sebastian197/korvun/releases/download/v0.1.0"
+curl.exe -fLO "$BASE/korvun_0.1.0_windows_<ARCH>.zip"
+curl.exe -fLO "$BASE/checksums.txt"
+```
+
+<!-- TODO-VERIFY: confirm `curl.exe` is present + this exact invocation works on a
+     clean Windows 10/11; some setups alias `curl` to Invoke-WebRequest. -->
+
+### 3. Verify the checksum — sufficient for most users
+
+PowerShell computes the hash with `Get-FileHash`; there is no built-in `-c`
+auto-compare, so compare the printed hash against the matching line in
+`checksums.txt` yourself:
+
+```powershell
+Get-FileHash .\korvun_0.1.0_windows_<ARCH>.zip -Algorithm SHA256
+# Compare the Hash column against the line for this file in checksums.txt.
+Get-Content .\checksums.txt | Select-String 'windows_<ARCH>.zip'
+```
+
+The two hashes must match exactly (case-insensitive). **Do not proceed if they
+differ.** For most users this checksum check is enough; cosign (§4) is optional.
+
+<!-- TODO-VERIFY: confirm `Get-FileHash` output format + that a case-insensitive
+     visual compare against checksums.txt is the intended Windows flow (no native
+     equivalent of `sha256sum -c`). -->
+
+### 4. (Optional, advanced) Verify the signature with cosign
+
+The `cosign verify-blob` command and certificate identity are identical to
+[macOS §4](#4-optional-advanced-verify-the-signature-with-cosign) (cross-platform);
+only installing cosign differs on Windows.
+
+<!-- TODO-VERIFY: the exact Windows install method for cosign (e.g. `winget install
+     sigstore.cosign` or `scoop install cosign`) and that `cosign verify-blob` runs
+     the same in PowerShell. Until confirmed, treat cosign on Windows as unproven. -->
+
+### 5. Extract
+
+```powershell
+Expand-Archive -Path .\korvun_0.1.0_windows_<ARCH>.zip -DestinationPath .
+```
+
+The archive contains `korvun.exe` plus `LICENSE` and `README.md`.
+
+### 6. SmartScreen — unsigned binary from an unknown publisher
+
+`korvun.exe` is **not code-signed**, so Windows SmartScreen / Defender may block it
+the first time with *"Windows protected your PC"* (the Windows analogue of macOS
+Gatekeeper). To run it anyway, the typical flow is: click **More info** →
+**Run anyway** (or in the file's **Properties**, tick **Unblock**, then **Apply**).
+
+<!-- TODO-VERIFY: the exact SmartScreen wording and click path on current Windows 11,
+     AND whether a terminal (gh/curl) download avoids the "Mark of the Web" that
+     triggers SmartScreen (as the terminal download avoided quarantine on macOS). -->
+
+### 7. Confirm it runs
+
+```powershell
+.\korvun.exe --version
+# -> korvun v0.1.0 (<short-revision>)
+```
+
+### 8. Configure, and note the token export in PowerShell
+
+The config file (`korvun.local.json`) is **identical** to every OS — create it as in
+[`../QUICKSTART.md`](../QUICKSTART.md). Only the token export differs: where the
+quickstart shows `export TELEGRAM_TOKEN=...` (bash/zsh), PowerShell uses:
+
+```powershell
+$env:TELEGRAM_TOKEN = "<your-bot-token>"
+.\korvun.exe -config korvun.local.json
+```
+
+This sets the variable for the **current PowerShell session** only. The secret goes
+in the environment, never in the JSON — and the same "do not expose the token"
+warning in the quickstart applies.
+
+<!-- TODO-VERIFY: `$env:TELEGRAM_TOKEN = "..."` session-scope syntax and that Korvun
+     reads it identically to the Unix export (it uses os.Getenv, so this should be
+     equivalent, but confirm on a real run). -->
+
+### 9. Next: zero to a message answered
+
+Follow [`../QUICKSTART.md`](../QUICKSTART.md) for the config, run, and message steps.
+
+---
+
 ## 1. Download
 
 Pick the archive for your OS/arch from the release page (or with the `gh` CLI):
