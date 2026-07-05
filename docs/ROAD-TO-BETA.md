@@ -31,14 +31,18 @@ Korvun cumple **4 de los 6** criterios de "esto ya es V1" del
   (Stage 14 Fase 2: mutación de config en caliente vía **PR #6** + la UI React/TS/
   Vite vía **PR #7**, merge `442f7ea`). Este es el criterio que se acaba de tachar.
 
-Faltan **2** criterios, y son exactamente lo que ordenan las Piezas 1 y 2 de este
-plan:
+Faltan **2** criterios:
 
-- **[ ] Lo instala alguien que no soy yo, siguiendo la documentación** → **Pieza 1**.
-- **[ ] Aguanta un proveedor caído sin caerse** → **Pieza 2**.
+- **[x] Lo instala alguien que no soy yo, siguiendo la documentación** → **Pieza 1
+  COMPLETADA/MERGEADA (PR #8)**, validada en hardware. *(Queda tacharlo formalmente en
+  ROADMAP-V1 §5 cuando se cierre el ciclo; la doc existe y fue probada por un tercero.)*
+- **[ ] Aguanta un proveedor caído sin caerse** → **Pieza 2** (próximo trabajo).
 
-Las Piezas 3 y 4 (tercer canal; app de escritorio Wails) son **deseables, NO
-beta-críticas** — más alcance, no requisitos de la checklist V1.
+**Orden del plan (2026-07-05):** Pieza 1 ✅ hecha → **Pieza 2** (errores producción,
+cierra el criterio de arriba) → **Pieza 3** (CLI subcomandos, DX/pulido) → **Pieza 4**
+(tercer canal, opcional) → **Pieza 5** (app Wails). La Pieza 3 (CLI) **no cierra ningún
+criterio V1** pero tiene prioridad de *timing* sobre las 4-5 porque reescribe la doc de
+la Pieza 1; las Piezas 4 y 5 son **deseables, NO beta-críticas** (más alcance).
 
 ---
 
@@ -61,6 +65,17 @@ camino de varias sesiones, no un sprint.** No se abren dos piezas a la vez.
 ---
 
 ## PIEZA 1 — Documentación de usuario + validación de instalación
+
+> ✅ **COMPLETADA / MERGEADA a master vía PR #8** (merge commit `60e79df`, 2026-07-05).
+> Entregó las guías de usuario (`INSTALL.md` por SO, `QUICKSTART.md` cero-a-mensaje,
+> `BUILDER.md`, "Updating Korvun", bloque `admin` en `CONFIGURATION.md`). **Validada en
+> hardware real** (iMac Intel, macOS 13, Ollama `llama3.2:1b`): la ruta macOS **y** el
+> quickstart completo end-to-end — un mensaje de Telegram recibió la respuesta del
+> **modelo local, cero nube**. Linux/Windows escritas por analogía y **marcadas
+> no-verificadas** (7 TODO-VERIFY abiertos). **Diferido de esta pieza** (no bloqueante):
+> Raspberry Pi (sin hardware), guía de extensión y referencia completa de la Control API
+> (docs de contribuidor/integrador, no de instalar-y-usar). **Follow-up de empaquetado:**
+> `korvun.example.json` en el paquete de release (el release no trae config de ejemplo).
 
 **PRIORIDAD 1.** Es la pieza que **desbloquea que exista un usuario**: sin ella,
 nadie que no sea el autor puede instalar, configurar ni operar Korvun. Es el resto
@@ -115,6 +130,12 @@ por fichero" y "lo instala alguien que no soy yo".
 ---
 
 ## PIEZA 2 — Manejo de errores de producción
+
+> ▶️ **PRÓXIMO TRABAJO — ESTADO: ENCUADRE-PENDIENTE** (2026-07-05). Es lo siguiente
+> que se hace, **antes** de la Pieza 3 (CLI). Chano paró antes de arrancar el encuadre;
+> el próximo paso literal es su `/office-hours` + `/plan-eng-review` + ADR. **Motivación
+> YA DEMOSTRADA en hardware** — ver el bloque "Motivación DEMOSTRADA" más abajo (el
+> timeout Korvun→Ollama en frío, reproducido durante la validación de la Pieza 1).
 
 **PRIORIDAD 2.** Cierra el criterio V1 **☐ "aguanta un proveedor caído sin
 caerse"**. Hoy los adapters **mapean** los errores (la gramática de sentinelas
@@ -186,9 +207,75 @@ y ver que Korvun **no se cae**.
 
 ---
 
-## PIEZA 3 — Un tercer canal (WhatsApp u otro)
+## PIEZA 3 — CLI con subcomandos (estilo git/docker)
 
-**PRIORIDAD 3 — DESEABLE, NO beta-crítico.** Ya hay **2 canales** (Telegram +
+> 📐 **ENCUADRADA y APROBADA por el copiloto (2026-07-05); PENDIENTE de implementar
+> DESPUÉS de la Pieza 2.** Reemplaza `./korvun -config x.json` (un binario con flags)
+> por una CLI que se siente como herramienta instalada: `korvun serve` / `config check`
+> / `status` / `version` / `help`, con logo ASCII de arranque.
+
+**PRIORIDAD 3 — DX / pulido, NO cierra ningún criterio V1.** No cierra ninguno de los
+6 criterios de beta; es ergonomía de cara al usuario. **Dos ejes de prioridad:** la
+**Pieza 2 mantiene mayor prioridad de _criterio_** (cierra "aguanta proveedor caído"),
+por eso va antes; pero la CLI tiene **mayor prioridad de _timing_ que las piezas 4-5**
+porque **reescribe la doc de la Pieza 1** recién mergeada (INSTALL/QUICKSTART/BUILDER/
+`korvun.service` usan `./korvun -config`). El shim de retrocompat evita que esa doc se
+**rompa** (solo deja de ser canónica), así que no fuerza urgencia — pero conviene hacerla
+pronto tras la Pieza 2 para minimizar el drift.
+
+**Naturaleza:** **código** Go + **ADR corto de CONTRATO de interfaz** (no de dependencia)
++ TDD + **una sub-fase de actualización de la doc de la Pieza 1**.
+
+### Resumen del encuadre aprobado
+
+- **stdlib, NO Cobra.** Subcomandos con `flag.NewFlagSet` en un paquete `internal/cli`
+  (`Run(args, stdout, stderr) int`, testable; `main.go` queda de 3 líneas). Decisión
+  razonada: set pequeño y estable (4-5 comandos, un nivel de anidamiento), disciplina
+  zero-deps de Korvun (3 deps hoy), mandato del maestro "stdlib si es razonable"; Cobra
+  no cruza el listón (completions / árboles grandes = YAGNI). Se reevaluaría con su ADR
+  si la CLI creciera a docenas de comandos.
+- **Retrocompat:** shim de ~5 líneas → `korvun -config x.json` sigue funcionando
+  (= `serve` implícito), para **no invalidar la doc/systemd validados en hardware**.
+  Forma canónica nueva `korvun serve --config` (stdlib `flag` acepta `-`/`--` igual).
+- **`config check`:** split **offline `config.Validate()` por defecto** + **`--preflight`
+  online** (reusa `app.Preflight`; getMe + secretos + selector de privacidad).
+- **`status`:** **cliente HTTP fino de la read-only control API YA existente**
+  (`GET /api/brains` + `/api/channels` + `/healthz` en `127.0.0.1:2112`; flag `--addr`;
+  **sin token**; **cero código de servidor nuevo**; fallo honesto si el admin está off).
+- **`version`:** porta el `--version` actual (`buildinfo.Format`) a subcomando.
+- **Logo ASCII** `[placeholder]` a **STDERR nunca stdout** (no contaminar salida
+  machine-readable); el arte concreto se decide aparte (se genera, no es logo de marca).
+- **Exit codes:** `0` ok / `1` fallo runtime/validación / `2` error de uso.
+
+### Checklist (5 sub-fases TDD, una a una)
+
+- [ ] **1 — scaffold + dispatch** — `internal/cli`, `version`, `help`/no-args, logo.
+- [ ] **2 — `serve` + shim de retrocompat** — mueve el arranque actual a `serve`;
+      `main.go` pasa a llamar `cli.Run`; `korvun -config` sigue funcionando.
+- [ ] **3 — `config check`** — offline `Validate()` + `--preflight` online.
+- [ ] **4 — `status`** — cliente HTTP de la control API; tests con `httptest`.
+- [ ] **5 — docs-update + re-validación macOS** — actualizar
+      `INSTALL.md`/`QUICKSTART.md`/`BUILDER.md`/`korvun.service` de `./korvun -config` a
+      `korvun serve …`, y **re-validar en el Mac de Chano** que el nuevo comando arranca
+      end-to-end. *(Coordinar con el follow-up `korvun.example.json` de empaquetado.)*
+
+### ADR previsto
+
+**1 ADR corto de contrato** (set de subcomandos + retrocompat + exit codes + la decisión
+stdlib-vs-Cobra y su porqué). **Sin Context7** (stdlib). Sin nueva dependencia.
+
+### Cómo se valida que está hecho
+
+Los subcomandos parsean y despachan bien (tests table-driven de `cli.Run`: exit codes,
+`version`, `config check` válida/inválida, `status` contra un admin server `httptest`),
+`make quality` verde `-race`, y en vivo `korvun serve --config …` arranca el mismo
+sistema que hoy en el Mac de Chano (la re-validación de la sub-fase 5).
+
+---
+
+## PIEZA 4 — Un tercer canal (WhatsApp u otro)
+
+**PRIORIDAD 4 — DESEABLE, NO beta-crítico.** Ya hay **2 canales** (Telegram +
 Webhook genérico); un tercero es **MÁS ALCANCE, no un requisito de beta**.
 
 > ⚠️ **Aviso del documento maestro ([`MASTER.md`](../MASTER.md) §9):** *"Integración
@@ -226,9 +313,9 @@ decide dejarlo como Telegram + Webhook.
 
 ---
 
-## PIEZA 4 — App de escritorio Wails
+## PIEZA 5 — App de escritorio Wails
 
-**PRIORIDAD 4 — la más pesada y la menos crítica.** La **maquinaria de empaquetado
+**PRIORIDAD 5 — la más pesada y la menos crítica.** La **maquinaria de empaquetado
 ya está** (Stage 15 cerrado: GoReleaser, ×6 binarios, checksums, SBOM, systemd).
 Lo que falta es la **app nativa Wails en sí**: empaquetar el frontend + el binario
 en una aplicación de escritorio para los 3 SO. Deseable para una presentación

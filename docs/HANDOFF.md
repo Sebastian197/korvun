@@ -31,17 +31,21 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ## Current state (as of session close, 2026-07-05)
 
-> **CURRENT (2026-07-05): master is at `442f7ea`** — Phase 2a (config mutation + auth)
-> merged via **PR #6** AND **Phase 2b (the no-code builder UI) merged via PR #7**
-> (merge commit `442f7ea`, merged by Chano on GitHub, the public repo). **Phase 2b is
-> CLOSED and on master** — the builder feature is COMPLETE, no feature work pending —
-> see the **PHASE 2b — COMPLETE / MERGED** block under "Notes for the next session".
-> `make quality` green `-race` on the merged master (total 92.6%), `go.mod` still 3
-> direct deps (the frontend toolchain is build-time only, never in the Go module graph).
-> Only two OPTIONAL, non-urgent structural follow-ups remain (see that block): (1) a
-> nested `go.mod` under `web/builder` to exclude `node_modules` by construction; (2)
-> move the 3 `internal/app` e2e tests to an ephemeral port `127.0.0.1:0` so they cannot
-> collide with a demo on `:2112`. The Stage-15 pointer below is retained as history.
+> **CURRENT (2026-07-05): master is at `60e79df`** — the public master now includes
+> **Phase 2a** (config mutation + auth, **PR #6**) + **Phase 2b** (the no-code builder
+> UI, **PR #7**, `442f7ea`) + **Piece 1** (user documentation + installation validation,
+> **PR #8**, merge commit `60e79df`, merged by Chano on GitHub). **Piece 1 is CLOSED and
+> MERGED** — the macOS install path AND the full quickstart were **validated on real
+> hardware** (iMac Intel, macOS 13, Ollama `llama3.2:1b`): a Telegram message received
+> the **local model's** reply, **zero cloud**. **Next decided work: Piece 2 (production
+> error handling), BEFORE the new CLI piece** — see the ROAD TO BETA block under "Notes
+> for the next session". Piece 2 is **framing-pending** (Chano stopped before starting
+> its framing); its motivation is already demonstrated (the cold-start Ollama timeout,
+> recorded in `ROAD-TO-BETA.md`). `make quality` green `-race` on the merged master
+> (total 92.6%), `go.mod` still 3 direct deps (the frontend toolchain is build-time only,
+> never in the Go module graph). The two OPTIONAL structural follow-ups remain (nested
+> `go.mod` under `web/builder`; the 3 `internal/app` e2e tests → ephemeral port). The
+> Stage-15 pointer below is retained as history.
 >
 > **master is at `a8075f9`** (Stage 15 packaging machinery, direct to master),
 > `make quality` green with `-race` + cross-compile ×6 `CGO_ENABLED=0`. Stages
@@ -899,31 +903,80 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
 
 ## Notes for the next session
 
-- **ROAD TO BETA:** el plan de las 4 piezas que faltan para la beta técnica completa
-  vive en [`docs/ROAD-TO-BETA.md`](./ROAD-TO-BETA.md), en orden de prioridad
-  (1 docs+instalación, 2 manejo de errores producción, 3 tercer canal opcional,
-  4 app Wails). Cada una es fase de peso con su ADR; se hacen de una en una.
+- **ROAD TO BETA:** el plan de las piezas que faltan para la beta técnica completa
+  vive en [`docs/ROAD-TO-BETA.md`](./ROAD-TO-BETA.md), en orden de prioridad. Estado a
+  2026-07-05: **Pieza 1 (docs+instalación) CERRADA/MERGEADA**; el orden de lo que queda
+  es **2 (manejo de errores producción) → 3 (CLI subcomandos) → 4 (tercer canal opcional)
+  → 5 (app Wails)**. Cada una es fase de peso con su ADR; se hacen de una en una.
 
-- **PIEZA 1 (documentación de usuario + validación de instalación) — trabajo en la
-  rama LOCAL `feat/user-docs` (docs only, sin pushear; PR a master pendiente).** Lo
-  hecho: guía macOS de instalación **validada en hardware real** (iMac Intel, macOS 13
-  — `korvun v0.1.0 (1676b5371ca7)` end-to-end); QUICKSTART cero-a-mensaje **validado**
-  (Telegram + Ollama local, cero nube); secciones Linux/Windows por analogía **marcadas
-  no-verificadas**; sección "Updating Korvun"; `BUILDER.md` (guía del builder no-code);
-  bloque `admin` documentado en `CONFIGURATION.md`. Con el `v0.1.0` ya publicado, la
-  guía apunta a un release real (no hizo falta que Chano publicara nada).
-  - **FOLLOW-UP de EMPAQUETADO (NO docs — su propio trabajo con verificación):** incluir
-    un `korvun.example.json` en el **paquete de release** `v0.x`. Hoy el release NO trae
-    config de ejemplo → el usuario adivina el formato y falla (Chano lo vivió; su primer
-    error fue `policy` como string). Es cambio de empaquetado/release (GoReleaser
-    `archives.files`), **no** de docs. Candidato para cuando se toque empaquetado o junto
-    a la Pieza 2.
-  - **7 TODO-VERIFY abiertos a propósito** (marcados con honestidad en los propios docs;
-    se cierran cuando haya acceso al SO/navegador): **5 en la sección Windows de
-    `docs/packaging/INSTALL.md`** (`curl.exe`; `Get-FileHash` + compare; instalar cosign
-    en Windows; flujo/wording de SmartScreen; sintaxis `$env:` de PowerShell) + **2 en
-    `docs/BUILDER.md`** (`/builder` sin barra final: ¿redirige a `/builder/`?; el
-    cleartext gate: ¿avisa o bloquea fuera de loopback/https?).
+- **PIEZA 1 (documentación de usuario + validación de instalación) — CERRADA / MERGEADA
+  a master vía PR #8** (merge commit `60e79df`, merged by Chano on GitHub 2026-07-05).
+  Entregó: guía de instalación por SO (`INSTALL.md`), quickstart cero-a-mensaje
+  (`QUICKSTART.md`), `BUILDER.md`, sección "Updating Korvun", y el bloque `admin`
+  documentado en `CONFIGURATION.md`. **Validado en hardware real** (iMac Intel, macOS 13,
+  Ollama `llama3.2:1b`): la ruta macOS + el quickstart completo end-to-end — un mensaje
+  de Telegram recibió la respuesta del **modelo local, cero nube**. Solo docs, sin código.
+  Linux/Windows escritas por analogía y **marcadas no-verificadas**.
+
+- **PIEZA 2 (manejo de errores de producción) — PRÓXIMO TRABAJO, va ANTES que la CLI.
+  ESTADO: ENCUADRE-PENDIENTE** (Chano paró antes de arrancar el encuadre; el próximo
+  paso literal es su `/office-hours` + `/plan-eng-review` + ADR). Cierra el criterio V1
+  **"aguanta un proveedor caído sin caerse"** (retry con backoff + circuit breaker +
+  degradación elegante; hoy los adapters mapean errores pero la política de reintentos
+  vive en un consumidor que no existe). **Motivación YA DEMOSTRADA en hardware:** el
+  timeout Korvun→Ollama en frío (~5s < la carga del modelo) hace que el **primer mensaje
+  siempre falle** (`context deadline exceeded`); documentado en
+  [`ROAD-TO-BETA.md`](./ROAD-TO-BETA.md) §Pieza 2 con logs reales.
+
+- **PIEZA CLI (subcomandos estilo git/docker) — ENCUADRADA y APROBADA por el copiloto;
+  PENDIENTE de implementar DESPUÉS de la Pieza 2.** Resumen del encuadre aprobado (para
+  no perderlo):
+  - **Subcomandos** `korvun serve` / `config check` / `status` / `version` / `help`, en
+    **stdlib (`flag.NewFlagSet`), NO Cobra** — set pequeño y estable, disciplina zero-deps
+    (3 deps hoy), mandato del maestro "stdlib si es razonable"; Cobra no cruza el listón
+    (YAGNI). Estructura en un paquete `internal/cli` con `Run(args, stdout, stderr) int`
+    (testable; `main.go` queda de 3 líneas).
+  - **ADR corto de CONTRATO de interfaz** (no de dependencia): fija el set de subcomandos,
+    la retrocompat, y las convenciones de exit code (0 ok / 1 fallo / 2 uso).
+  - **Shim de retrocompat (~5 líneas):** `korvun -config x.json` sigue funcionando
+    (= `serve` implícito) para **no invalidar la doc/systemd recién validados en
+    hardware**; forma canónica nueva `korvun serve --config` (stdlib `flag` acepta `-` y
+    `--` igual, gratis).
+  - **`config check`:** split **offline `config.Validate()` por defecto** + **`--preflight`
+    online** (reusa `app.Preflight`: getMe + secretos + selector de privacidad).
+  - **`status` = cliente HTTP fino de la read-only control API YA existente**
+    (`GET /api/brains` + `/api/channels` + `/healthz` en `127.0.0.1:2112`; flag `--addr`;
+    **sin token**; **cero código de servidor nuevo**; fallo honesto si el admin está off).
+  - **Logo ASCII** `[placeholder]` a **STDERR nunca stdout** (no contaminar salida
+    machine-readable); el arte concreto se decide aparte.
+  - **5 sub-fases TDD** (una a una, cada una con su `/review` + `make quality -race`):
+    (1) scaffold+dispatch+`version`+logo · (2) `serve`+shim · (3) `config check` ·
+    (4) `status` · (5) **docs-update + re-validación macOS**. **La sub-fase 5 DEBE
+    actualizar `INSTALL.md`/`QUICKSTART.md`/`BUILDER.md`/`korvun.service` de
+    `./korvun -config` a `korvun serve …` y re-validar en el Mac de Chano.**
+  - **Prioridad:** la CLI **NO cierra ningún criterio V1** (es DX/pulido). La Pieza 2
+    mantiene mayor prioridad de *criterio* (cierra "aguanta proveedor caído"); la CLI
+    tiene mayor prioridad de *timing* que las piezas 4-5 porque **reescribe la doc de la
+    Pieza 1** (el shim evita que se rompa, solo deja de ser canónica).
+
+- **FOLLOW-UPS abiertos (recordar):**
+  - **(a)** `korvun.example.json` en el **paquete de release** (GoReleaser `archives.files`)
+    — el release no trae config de ejemplo → el usuario adivina el formato y falla (Chano
+    lo vivió). Cambio de empaquetado, **no docs**; candidato junto a la Pieza 2 o cuando se
+    toque empaquetado. *(La sub-fase 5 de la CLI también añade un `korvun.example.json` al
+    repo como referencia — coordinar.)*
+  - **(b)** **7 TODO-VERIFY** en la doc: **5 en la sección Windows de `INSTALL.md`**
+    (`curl.exe`; `Get-FileHash` + compare; cosign en Windows; wording de SmartScreen;
+    sintaxis `$env:` de PowerShell) + **2 en `BUILDER.md`** (`/builder` sin barra final
+    ¿redirige?; el cleartext gate ¿avisa o bloquea?). Se cierran con acceso a esos
+    SO/navegador.
+  - **(c)** ✓ **HECHO esta sesión:** Mac al día (`master` en `60e79df`) + rama local
+    `feat/user-docs` borrada (fully-merged). La rama **remota** `origin/feat/user-docs`
+    sigue en GitHub (prune = decisión de Chano).
+  - **(d)** Los 2 follow-ups estructurales viejos: `go.mod` anidado en `web/builder`
+    (excluir `node_modules` por construcción); los 3 tests e2e de `internal/app`
+    (`TestControlAPI_endToEnd`, `TestLiveView_endToEnd`, `TestRunShutdown_lifecycle`) a
+    puerto efímero `127.0.0.1:0`.
 
 - **PHASE 2b (the no-code builder UI — React/TS/Vite) — COMPLETE / MERGED to master
   via PR #7** (merge commit `442f7ea`, merged by Chano on GitHub 2026-07-05; master
