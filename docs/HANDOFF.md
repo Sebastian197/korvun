@@ -903,7 +903,27 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
   vive en [`docs/ROAD-TO-BETA.md`](./ROAD-TO-BETA.md), en orden de prioridad
   (1 docs+instalación, 2 manejo de errores producción, 3 tercer canal opcional,
   4 app Wails). Cada una es fase de peso con su ADR; se hacen de una en una.
-  Próximo: encuadrar la Pieza 1.
+
+- **PIEZA 1 (documentación de usuario + validación de instalación) — trabajo en la
+  rama LOCAL `feat/user-docs` (docs only, sin pushear; PR a master pendiente).** Lo
+  hecho: guía macOS de instalación **validada en hardware real** (iMac Intel, macOS 13
+  — `korvun v0.1.0 (1676b5371ca7)` end-to-end); QUICKSTART cero-a-mensaje **validado**
+  (Telegram + Ollama local, cero nube); secciones Linux/Windows por analogía **marcadas
+  no-verificadas**; sección "Updating Korvun"; `BUILDER.md` (guía del builder no-code);
+  bloque `admin` documentado en `CONFIGURATION.md`. Con el `v0.1.0` ya publicado, la
+  guía apunta a un release real (no hizo falta que Chano publicara nada).
+  - **FOLLOW-UP de EMPAQUETADO (NO docs — su propio trabajo con verificación):** incluir
+    un `korvun.example.json` en el **paquete de release** `v0.x`. Hoy el release NO trae
+    config de ejemplo → el usuario adivina el formato y falla (Chano lo vivió; su primer
+    error fue `policy` como string). Es cambio de empaquetado/release (GoReleaser
+    `archives.files`), **no** de docs. Candidato para cuando se toque empaquetado o junto
+    a la Pieza 2.
+  - **7 TODO-VERIFY abiertos a propósito** (marcados con honestidad en los propios docs;
+    se cierran cuando haya acceso al SO/navegador): **5 en la sección Windows de
+    `docs/packaging/INSTALL.md`** (`curl.exe`; `Get-FileHash` + compare; instalar cosign
+    en Windows; flujo/wording de SmartScreen; sintaxis `$env:` de PowerShell) + **2 en
+    `docs/BUILDER.md`** (`/builder` sin barra final: ¿redirige a `/builder/`?; el
+    cleartext gate: ¿avisa o bloquea fuera de loopback/https?).
 
 - **PHASE 2b (the no-code builder UI — React/TS/Vite) — COMPLETE / MERGED to master
   via PR #7** (merge commit `442f7ea`, merged by Chano on GitHub 2026-07-05; master
