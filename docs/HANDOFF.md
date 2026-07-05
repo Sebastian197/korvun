@@ -31,12 +31,17 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ## Current state (as of session close, 2026-07-05)
 
-> **CURRENT (2026-07-05): master is at `3f9d34a`** — Phase 2a (config mutation + auth)
-> merged via **PR #6**. **Phase 2b (the no-code builder UI) is COMPLETE on the LOCAL,
-> unpushed branch `feat/builder-ui` (13 commits)** — see the **PHASE 2b — COMPLETE** block
-> under "Notes for the next session". Next step: the PR of `feat/builder-ui` (Chano's act).
-> `make quality` green `-race`, total 94.0%, `go.mod` still 3 direct deps. The Stage-15
-> pointer below is retained as history.
+> **CURRENT (2026-07-05): master is at `442f7ea`** — Phase 2a (config mutation + auth)
+> merged via **PR #6** AND **Phase 2b (the no-code builder UI) merged via PR #7**
+> (merge commit `442f7ea`, merged by Chano on GitHub, the public repo). **Phase 2b is
+> CLOSED and on master** — the builder feature is COMPLETE, no feature work pending —
+> see the **PHASE 2b — COMPLETE / MERGED** block under "Notes for the next session".
+> `make quality` green `-race` on the merged master (total 92.6%), `go.mod` still 3
+> direct deps (the frontend toolchain is build-time only, never in the Go module graph).
+> Only two OPTIONAL, non-urgent structural follow-ups remain (see that block): (1) a
+> nested `go.mod` under `web/builder` to exclude `node_modules` by construction; (2)
+> move the 3 `internal/app` e2e tests to an ephemeral port `127.0.0.1:0` so they cannot
+> collide with a demo on `:2112`. The Stage-15 pointer below is retained as history.
 >
 > **master is at `a8075f9`** (Stage 15 packaging machinery, direct to master),
 > `make quality` green with `-race` + cross-compile ×6 `CGO_ENABLED=0`. Stages
@@ -894,9 +899,11 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
 
 ## Notes for the next session
 
-- **PHASE 2b (the no-code builder UI — React/TS/Vite) — COMPLETE on the LOCAL branch
-  `feat/builder-ui` (NOT pushed; master at `3f9d34a` with Phase 2a already merged via
-  PR #6).** The visual builder that Phase 2a's mutation surface was built for. Chano
+- **PHASE 2b (the no-code builder UI — React/TS/Vite) — COMPLETE / MERGED to master
+  via PR #7** (merge commit `442f7ea`, merged by Chano on GitHub 2026-07-05; master
+  now includes Phase 2a via PR #6 + Phase 2b via PR #7). **The builder feature is CLOSED
+  — no feature work pending; only the two OPTIONAL structural follow-ups below remain.**
+  The visual builder that Phase 2a's mutation surface was built for. Chano
   approved the violet look and the edit flow after seeing it live, so 2b.3 was
   CONSERVATIVE polish, not a redesign.
   - **ADRs (accepted directly on master):** `ADR-0029` (frontend toolchain) + `ADR-0030`
@@ -950,23 +957,28 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
     `configs/dev.local.json` on disk (`dispatch: sequential`) — Phase 2a's hot config mutation,
     TRIGGERED FROM THE PHASE 2b UI, with zero external requests. The two halves of the builder
     working together.
-  - **Branch `feat/builder-ui` — 13 commits, local, unpushed, master intact at `3f9d34a`:**
+  - **Branch `feat/builder-ui` — MERGED to master via PR #7** (merge commit `442f7ea`).
+    The branch carried **16 commits** = 2 docs (ADR-0029+0030 accepted `84ec176` + HANDOFF
+    `c1c3d7f`, the Phase 2b prerequisite, self-contained in the PR) + 14 builder commits:
     `f0366f7` 2b.0 · `32dc879` 2b.1 · `32b8857` reconciliations · `bd439da` 2b.2a ·
     `f6569a6` 2b.2b · `421045c` 2b.2c · `ff1a566` dev proxy · `02f4b30` trim token ·
     `f01c5ab` remove-brain · `02698c3` header · `c24bc4e` save-bar · `4d6fd3f` chevron ·
-    `24866da` microinteractions.
-  - **IMMEDIATE NEXT STEP (next session): PR of `feat/builder-ui` to master.** This is
-    Chano's act — he consciously paused to do it with a fresh head (same as the flip /
-    v0.1.0 / PR #6). Claude Code pushes the branch (`git push -u origin feat/builder-ui`)
-    and opens the PR "Phase 2b: no-code builder UI"; Chano reviews and merges it on GitHub
-    (merge commit recommended, preserves the 13 commits). **Do NOT merge autonomously.**
-  - **Structural FOLLOW-UPS (AFTER the PR, each its own change + verification, NOT feature,
-    already recorded):** (1) nested `go.mod` in `web/builder` (move `embed.go` →
-    `internal/builderui`) to exclude `node_modules` from Go tooling BY CONSTRUCTION,
-    dropping the manual Makefile filter (Principle 3); (2) the 3 `internal/app` e2e tests
-    (`TestControlAPI_endToEnd`, `TestLiveView_endToEnd`, `TestRunShutdown_lifecycle`) to
-    `observability.addr="127.0.0.1:0"` (ephemeral) — today they bind the fixed 2112 and
-    collide with a local Korvun (it hit Chano this session).
+    `24866da` microinteractions · `bdc9f7f` HANDOFF. The local branch was deleted after
+    the merge (fully-merged); `origin/feat/builder-ui` still exists on GitHub (the merge
+    did not auto-delete it — Chano's call to prune the remote).
+  - **DONE (this session): PR of `feat/builder-ui` to master.** Claude Code ran
+    `make quality` (green `-race`), pushed the branch, and opened PR #7 "Phase 2b: no-code
+    builder UI"; Chano reviewed and **merged it on GitHub** (merge commit `442f7ea`,
+    preserving all 16 commits). The Mac was then synced to `442f7ea` and `make quality`
+    re-run green on the merged master (total 92.6%) as a merge sanity check.
+  - **OPTIONAL structural FOLLOW-UPS (NOT urgent, NOT feature — the only work left after
+    2b, each its own change + verification):** (1) nested `go.mod` in `web/builder` (move
+    `embed.go` → `internal/builderui`) to exclude `node_modules` from Go tooling BY
+    CONSTRUCTION, dropping the manual Makefile filter (Principle 3); (2) the 3
+    `internal/app` e2e tests (`TestControlAPI_endToEnd`, `TestLiveView_endToEnd`,
+    `TestRunShutdown_lifecycle`) to `observability.addr="127.0.0.1:0"` (ephemeral) — today
+    they bind the fixed 2112 and collide with a local Korvun on that port (it hit Chano a
+    prior session; port was free this session so no collision).
 
 - **PHASE 2a (the builder — config mutation + auth) — CLOSED, MERGED to master via PR #6.**
   (Historical record below; branch was `feat/config-mutation`, since merged. Master is now
@@ -1033,9 +1045,11 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
     that **asserted more than it proved** (Unit A P2, B2 precision, Unit B P1). Every
     test of a load-bearing property MUST BITE when the property is violated — prove
     it by injecting the regression, seeing red, and reverting.
-- **NEXT STEP — SUPERSEDED (both items DONE).** Phase 2a was merged to master via PR #6;
-  Phase 2b is COMPLETE on `feat/builder-ui`. The authoritative next step is the **PR of
-  `feat/builder-ui`** — see the **PHASE 2b — COMPLETE** block at the top of this section.
+- **NEXT STEP — SUPERSEDED (all items DONE).** Phase 2a was merged to master via PR #6;
+  Phase 2b was merged to master via **PR #7** (merge commit `442f7ea`). Both the builder's
+  mutation surface and the builder UI are now on the public master — see the **PHASE 2b —
+  COMPLETE / MERGED** block at the top of this section. No feature work is pending; only
+  the two OPTIONAL structural follow-ups (nested `go.mod`; ephemeral e2e port) remain.
   (Historical: item 1 was "decide the push of `feat/config-mutation`" → done via PR #6;
   item 2 was "Phase 2b framed, implementation started" → now complete, all four sub-phases
   green.)
