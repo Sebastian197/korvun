@@ -26,10 +26,12 @@ a profile in [`configs/`](../configs/) and adjust.
 | `routes` | array | **yes** (≥1) | Bindings of a channel to a brain. |
 | `storage` | object | no | Durable conversation store. **Absent ⇒ stateless.** |
 | `observability` | object | no | Admin HTTP server. **Absent ⇒ ON (loopback).** |
+| `admin` | object | no | Enables the write/mutation surface (the no-code builder). **Absent ⇒ read-only.** |
 
 Note the deliberate asymmetry: an absent `storage` block means *off* (run
 stateless), while an absent `observability` block means *on* with safe loopback
-defaults (observability is safe on loopback and always useful).
+defaults (observability is safe on loopback and always useful). An absent `admin`
+block means *read-only* (no mutation, the safe default).
 
 ## `channels[]`
 
@@ -135,6 +137,34 @@ ADR-0022), and the live-view SSE + UI (`/api/events`, `/ui`, ADR-0024). It binds
 **loopback** by default so a fresh boot exposes nothing to the network. Binding
 `0.0.0.0:PORT` is a conscious choice that puts auth/TLS/firewall on the operator
 (ADR-0020 §4).
+
+## `admin` (optional, ADR-0028)
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `token_env` | string | **yes** (when the block is present) | **Name** of the env var holding the admin bearer token. |
+
+The `admin` block turns on Korvun's **write/mutation surface** — the endpoint that
+edits the running config (`POST /api/config`) and the **no-code builder** UI at
+`/builder`. Like every other secret, the token is referenced by env-var **name**, and
+the value is resolved from the environment at boot (never stored in the file):
+
+```json
+{ "admin": { "token_env": "KORVUN_ADMIN_TOKEN" } }
+```
+
+Behavior is deliberately safe-by-default (ADR-0028 §1):
+
+- **No `admin` block, or the named variable is unset/empty ⇒ read-only.** The mutation
+  endpoints and the builder are **not mounted** — `/builder` returns `404`, and only
+  the read-only `/ui` and control API are served.
+- **`admin.token_env` present and the variable resolves non-empty ⇒ editing enabled.**
+  The builder is served at `/builder` and requests must carry the token as
+  `Authorization: Bearer <token>` (constant-time checked, never a cookie).
+
+The bearer token is only safe over the default **loopback** bind (or behind TLS); do
+not expose the admin server to the network without it (ADR-0028 §3 / ADR-0020 §4). For
+the full walkthrough of enabling and using the builder, see [`BUILDER.md`](BUILDER.md).
 
 ## Full example
 

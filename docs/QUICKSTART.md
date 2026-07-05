@@ -1,68 +1,199 @@
 # Korvun quickstart
 
-Zero to a running bot. Two paths: install a **release** (no toolchain) or **build
-from source**. Then configure and run.
+Zero to a Telegram bot answering from a **local** model, end to end. This is the
+**install-a-release** path (no Go toolchain); building from source is a short note
+at the end.
 
-## A. Install a release (recommended)
+> **Validated end to end on real hardware** (iMac, Intel `x86_64`, macOS 13, Ollama
+> with `llama3.2:1b`): installed the `v0.1.0` binary, wrote the config below, wired
+> a real Telegram bot to the local model, and `hola` → `Hola. ¿En qué puedo
+> ayudarte?` came back from the bot — answered by the local model, **zero cloud**.
 
-Korvun is a single static binary — no runtime dependencies, no Go toolchain.
+## What you need first
+
+- **The `korvun` binary installed.** Follow the macOS walkthrough in
+  [`packaging/INSTALL.md`](packaging/INSTALL.md#macos--full-walkthrough-validated-on-intel-hardware)
+  (download → verify checksum → run). Confirm with `korvun --version`.
+- **Ollama running, with the model pulled** (see step 2).
+- **A Telegram bot token** from [@BotFather](https://t.me/BotFather) (`/newbot`).
+
+## Step 1 — Install the binary
+
+Covered in [`packaging/INSTALL.md`](packaging/INSTALL.md). At the end you have a
+working `korvun` (`./korvun --version` prints `korvun v0.1.0 (…)`).
+
+## Step 2 — Start Ollama and pull the model
+
+Korvun talks to a local [Ollama](https://ollama.com) at `http://127.0.0.1:11434`
+(the default). In a **separate terminal window**, keep Ollama running:
 
 ```sh
-# 1. Download the archive for your OS/arch + the checksums (VERSION e.g. v0.1.0).
-gh release download VERSION --pattern 'korvun_*_linux_arm64.tar.gz'
-gh release download VERSION --pattern 'checksums.txt*'
-
-# 2. Verify (checksum + signature — see packaging/INSTALL.md for cosign details).
-sha256sum -c checksums.txt --ignore-missing
-
-# 3. Extract and place on PATH.
-tar -xzf korvun_*_linux_arm64.tar.gz
-sudo install -m755 korvun /usr/local/bin/korvun
-korvun --version
+ollama serve
 ```
 
-Targets: `linux` / `darwin` / `windows`, each `amd64` + `arm64` (a 64-bit
-Raspberry Pi is `linux/arm64`). Full detail — signature verification, service
-install — in [`packaging/INSTALL.md`](packaging/INSTALL.md).
+Then pull the model this quickstart uses:
 
-## B. Build from source
+```sh
+ollama pull llama3.2:1b
+```
 
-Requires **Go 1.26.4+** (see [`go.mod`](../go.mod)).
+> **Warm the model once** (strongly recommended — see [Troubleshooting](#troubleshooting)):
+> a cold model can be too slow to load on the first request and time out. Warm it
+> with one interactive run, then quit it:
+>
+> ```sh
+> ollama run llama3.2:1b   # type a word, get a reply, then /bye
+> ```
+
+## Step 3 — Create `korvun.local.json`
+
+> The `v0.1.0` release archive does **not** ship an example config, so create this
+> file yourself. Every field name below is exact — verified against the config
+> parser (`internal/config`). It is the canonical minimal config: one Telegram
+> channel, one brain, one local model.
+
+```json
+{
+  "channels": [
+    { "type": "telegram", "mode": "polling", "token_env": "TELEGRAM_TOKEN" }
+  ],
+  "brains": [
+    {
+      "name": "assistant",
+      "sensitivity": "public",
+      "policy": { "kind": "priority" },
+      "models": [
+        { "provider": "ollama", "model_id": "llama3.2:1b", "locality": "local" }
+      ]
+    }
+  ],
+  "routes": [
+    { "channel": "telegram", "brain": "assistant" }
+  ]
+}
+```
+
+What each field is:
+
+- **`channels[].type`** = `"telegram"` — the channel adapter (the only one this build
+  wires). A telegram channel registers under this **type name**.
+- **`channels[].mode`** = `"polling"` — the transport (the only one supported here).
+- **`channels[].token_env`** = `"TELEGRAM_TOKEN"` — the **NAME** of the environment
+  variable holding the bot token, never the token itself (step 4).
+- **`brains[].name`** = `"assistant"` — a unique brain name the route points to.
+- **`brains[].sensitivity`** = `"public"` — **required.** Privacy constraint:
+  `public` = no filter; `private` = drop cloud models before dispatch. With only a
+  local model both boot the same; use `private` to guarantee nothing ever leaves the
+  box.
+- **`brains[].policy`** = `{ "kind": "priority" }` — **required, and it is an OBJECT,
+  not a string.** `priority` picks the reply from the highest-priority provider that
+  answered (here, the only one). *(Passing `"policy": "priority"` is rejected —
+  `policy` is a `PolicyConfig` object.)*
+- **`brains[].models[].provider`** = `"ollama"` — the provider (`ollama` | `groq`).
+- **`brains[].models[].model_id`** = `"llama3.2:1b"` — the model name at the provider.
+  *(The field is `model_id`, not `model`.)*
+- **`brains[].models[].locality`** = `"local"` — declared, not derived; the privacy
+  selector routes on it (`local` | `cloud`).
+- **`routes[].channel`** = `"telegram"` — **the channel's type name**, not an invented
+  name (a telegram channel registers as `"telegram"`).
+- **`routes[].brain`** = `"assistant"` — the brain name above.
+
+Omitted on purpose (all optional): `dispatch` (defaults to `fanout`),
+`models[].base_url` (defaults to `http://127.0.0.1:11434`), `storage` (absent ⇒
+stateless), `observability` (absent ⇒ on, loopback `127.0.0.1:2112`), `admin`.
+Every field is documented in [`CONFIGURATION.md`](CONFIGURATION.md).
+
+## Step 4 — Export the token by environment variable
+
+The config names the env var (`token_env`); the **value** goes in the environment,
+**never in the JSON**:
+
+```sh
+export TELEGRAM_TOKEN=<your-bot-token>
+```
+
+> ### ⚠️ The bot token is a secret — do not expose it
+>
+> Anyone with your token can control your bot. When you export it, make sure no one
+> can see your screen or shell history, and **never paste it into a file, a chat, a
+> screenshot, or a log.** If it is ever exposed, **revoke it immediately**: in
+> [@BotFather](https://t.me/BotFather) → `/mybots` → select your bot → **API Token**
+> → **Revoke current token**, then export the new one.
+
+## Step 5 — Run Korvun
+
+```sh
+./korvun -config korvun.local.json
+```
+
+Korvun loads the config, resolves the env-only token, runs a boot health-check, and
+serves until `SIGINT`/`SIGTERM` (`Ctrl-C`), shutting down cleanly.
+
+## Step 6 — Message the bot
+
+Open your bot in Telegram and send `hola`. The local model's reply comes back in the
+chat — no cloud involved.
+
+---
+
+## Troubleshooting
+
+### The first message fails / "Sorry, no answer is available" / `context deadline exceeded`
+
+If the bot replies **"Sorry, no answer is available right now. Please try again."**
+or the log shows something like:
+
+```
+brain: no usable answer ... "model: provider unavailable:
+Post http://127.0.0.1:11434/api/chat: context deadline exceeded"
+```
+
+…the model was **too slow to load on a cold start**. Korvun's timeout to the
+provider (~5s) is shorter than the time a first-time model load can take on some
+hardware — Ollama logs `client connection closed before llama-server finished
+loading` and cancels the `POST /api/chat` at ~5s.
+
+**Fix for the quickstart:** warm the model once and retry:
+
+```sh
+ollama run llama3.2:1b   # type a word, get a reply, then /bye
+```
+
+With the model already warm, the bot answers immediately. *(This cold-start timeout
+is a known product limitation, tracked as motivation for configurable/retrying
+provider timeouts — see `ROAD-TO-BETA.md`, Pieza 2. It is not a config error on your
+side.)*
+
+### A `DeleteWebhook` WARN at startup
+
+On startup in polling mode you may see a warning mentioning
+`telegram: DeleteWebhook safety-net call failed`. It is **expected and harmless** —
+Korvun proactively clears any leftover webhook before polling; on a bot that never
+had one, the safety-net call can warn without affecting polling. You can ignore it.
+
+### Verification / Gatekeeper issues on install
+
+Checksum, cosign, and macOS Gatekeeper are covered in
+[`packaging/INSTALL.md`](packaging/INSTALL.md).
+
+---
+
+## Alternative: build from source
+
+Requires **Go 1.26.4+** (see [`go.mod`](../go.mod)):
 
 ```sh
 make build          # or: go build ./cmd/korvun
 ```
 
-## Configure
-
-Korvun reads one JSON file. Start from a profile in [`configs/`](../configs/):
-
-- [`configs/edge.json`](../configs/edge.json) — Raspberry Pi / small box: one
-  local Ollama model, `sensitivity: private` (dispatch stays local-only), memory on.
-- [`configs/cloud.json`](../configs/cloud.json) — server / VM: local Ollama + a
-  cloud Groq model in fan-out, memory on, observability on loopback.
-
-Every field is documented in [`CONFIGURATION.md`](CONFIGURATION.md).
-
-## Run
-
-Secrets are environment variables, **by name** — export them, never inline:
-
-```sh
-export TELEGRAM_BOT_TOKEN=...   # the value the config's "token_env" points to
-export GROQ_API_KEY=...         # only if a Groq model is configured
-korvun -config configs/cloud.json
-```
-
-Korvun loads the config, resolves env-only secrets, runs a boot health-check, and
-serves until `SIGINT`/`SIGTERM`, then shuts down cleanly (draining durable memory).
-Send a message to your Telegram bot and the model's reply comes back in the chat.
-
-To run it as a hardened service on Linux, see the systemd unit in
-[`packaging/INSTALL.md`](packaging/INSTALL.md) §5.
+From a source checkout you can also start from the profiles in
+[`configs/`](../configs/) (e.g. [`configs/edge.json`](../configs/edge.json),
+[`configs/cloud.json`](../configs/cloud.json)) instead of writing the config by hand.
 
 ## Next
 
+- **Configure it visually, no JSON** → once Korvun is running, edit brains, models,
+  and routes from the browser with the no-code builder → [`BUILDER.md`](BUILDER.md)
 - **What every config field does** → [`CONFIGURATION.md`](CONFIGURATION.md)
 - **Install / verify / run as a service** → [`packaging/INSTALL.md`](packaging/INSTALL.md)
 - **Why it is built this way** → the ADRs in [`adr/`](adr/)

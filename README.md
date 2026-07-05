@@ -133,6 +133,7 @@ falling back to cloud Groq, choosing the reply by provider priority:
 | Guide | What it covers |
 |-------|----------------|
 | [Quickstart](docs/QUICKSTART.md) | Zero to a running bot — install a release or build from source, configure, run. |
+| [No-code builder](docs/BUILDER.md) | Configure Korvun visually in the browser (`/builder`) — no JSON by hand. |
 | [Configuration reference](docs/CONFIGURATION.md) | Every config field, distilled from the schema and ADRs. |
 | [Install & run as a service](docs/packaging/INSTALL.md) | Download, checksum + signature verification, hardened systemd unit. |
 | [Architecture Decision Records](docs/adr/) | Why each piece is built the way it is. |
