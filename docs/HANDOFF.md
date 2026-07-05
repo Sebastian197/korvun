@@ -994,6 +994,18 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
      ADR-0028, not 0030.
   > **NOTE (1 + 2 are 2b.0, done red-first before any frontend line):** items 1 and 2
   > are the Go-only hardening of phase 2b.0; item 3 is a later candidate.
+- **Deferred follow-up (own change, NOT 2b.1/2b.2) — node_modules Go-tooling hygiene
+  BY CONSTRUCTION.** `web/builder/node_modules` vendors a stray Go package (`flatted`)
+  that `./...` picks up, so 2b.1 filters it out of `go test`/`go vet` in the Makefile
+  (`GO_PKGS := go list ./... | grep -v /web/builder/node_modules/`). That filter is
+  functional but fragile (Principle 3: a manual filter, not a guarantee). The
+  by-construction fix: give `web/builder` its own **nested `go.mod`** (moving
+  `web/builder/embed.go` → `internal/builderui/` with the dist output relocated to
+  `internal/builderui/dist`), so root `./...` skips `web/builder` automatically and
+  the Makefile filter can be removed. It is a STRUCTURAL refactor (move the package +
+  nested module + re-verify `//go:embed`/build on the 3 OSes + cross-compile ×6), so it
+  ships as its own change with its own verification, NOT folded into scaffolding. The
+  Makefile filter holds in the meantime.
 - **Deferred follow-up (own fix, NOT Phase 2a) — duplicate channel dedupe.**
   `config.Validate` (`config.go:217`, `validateChannels`) dedupes channels by NAME but
   not by TYPE, and `router.RegisterChannel`/`RegisterBrain` (`router.go:146,189`)

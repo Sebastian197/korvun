@@ -50,9 +50,12 @@ reversible, build-time-only change.
 
 - **React 19** + **TypeScript** (`strict`, no implicit `any`, explicit prop
   types) + **Vite v8**, matching the frontend standards already written in
-  CLAUDE.md ("React + TypeScript + Vite + Tailwind"). Package manager: **pnpm**.
+  CLAUDE.md ("React + TypeScript + Vite + Tailwind"). Package manager: **npm**
+  (reconciled to reality: corepack could not activate pnpm in the build environment,
+  and the package manager is a convenience, not an architectural, choice — npm works
+  and is committed with its lockfile).
 - The frontend lives in its own subproject at **`web/builder/`**, isolated from
-  the Go module. It has its own `package.json`, `pnpm-lock.yaml`, `tsconfig.json`,
+  the Go module. It has its own `package.json`, `package-lock.json`, `tsconfig.json`,
   and `vite.config.ts`.
 
 ### 2. Styling: Tailwind v4, CSS-first, tokens as CSS variables
@@ -100,7 +103,7 @@ safe:
   artifact tracked in git; the real `dist/` is gitignored.
 - **The frontend build is an ordered dependency** of every Go build path: the
   `Makefile` `build` (and `quality`) targets, and each Go CI job, run
-  `pnpm --dir web/builder install --frozen-lockfile && pnpm --dir web/builder build`
+  `cd web/builder && npm ci && npm run build`
   **before** `go build`. In CI the real `dist/` is **always rebuilt fresh** and a
   committed `dist/` is never trusted (this dissolves the "staleness" question —
   see §6). The stub exists only so a bare local `go build` / clean clone compiles.
@@ -119,7 +122,7 @@ Coherent with self-hosted + the privacy promise + the single binary:
 - **No external resources in the bundle:** no `<script src="https://…">`, no
   `<link href="https://…">` to styles or fonts, no `@import` of a CDN in CSS.
   Tailwind compiles locally; React/Vite compile to `dist/`.
-- **npm/pnpm is build-time only:** the final binary serves pre-compiled statics,
+- **npm is build-time only:** the final binary serves pre-compiled statics,
   depending on no registry at runtime.
 
 **Enforced at the NETWORK layer, not by text-matching (guarantee by
@@ -143,7 +146,7 @@ The `https?://` grep is kept only as an **advisory** pre-scan, never the gate
 
 ### 6. CI: a frontend job, guards that bite, isolated from the Go pipeline
 
-- A frontend CI job runs `pnpm install --frozen-lockfile`, typecheck, lint,
+- A frontend CI job runs `npm ci`, typecheck, lint,
   `vitest`, and `vite build`. **CI always rebuilds `dist/` fresh and never trusts
   a committed one** — so there is no "staleness" to detect: the artifact that
   ships is the one CI just built from source. (The committed stub of §4 exists
@@ -180,7 +183,7 @@ The `https?://` grep is kept only as an **advisory** pre-scan, never the gate
 
 ## Consequences
 
-- **Cost paid:** a second toolchain (Node + pnpm + `node_modules`), a CI build
+- **Cost paid:** a second toolchain (Node + npm + `node_modules`), a CI build
   job, and a `go:embed` wiring step. Accepted: the builder is a real app and the
   cost buys quality the vanilla path cannot reach.
 - **Preserved:** single binary, `go.mod` at 3 deps, zero CDN, cross-platform, the
