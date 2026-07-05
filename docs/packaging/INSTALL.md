@@ -17,26 +17,43 @@ portable.
 
 ---
 
-## macOS — full walkthrough (tested)
+## macOS — full walkthrough (validated on Intel hardware)
 
 A complete, copy-paste path from download to `korvun --version` on macOS, using the
 real `v0.1.0` release. This is the **install-a-release** path (no Go toolchain, no
 building from source). The generic per-step reference for all platforms follows in
 [§1–§5](#1-download); Linux and Windows walkthroughs come later.
 
+> **Validated end to end on real hardware** (iMac, Intel `x86_64`, macOS 13):
+> `uname -m` → `gh release download` (amd64) → `shasum -c` (`OK`) → *(cosign
+> optional, see §4)* → `tar -xzf` + `chmod +x` → *(Gatekeeper step not needed for
+> the terminal-download path, see §6)* → `./korvun --version` →
+> `korvun v0.1.0 (1676b5371ca7)`.
+
 > The commands below target **`v0.1.0`**. For a newer release, replace the version
 > and asset names accordingly.
 
-### 1. Pick your architecture
+> **Copy-paste tip:** when you copy a command, do **not** include the shell prompt
+> (anything up to and including the `$`). Pasting the prompt makes the shell try to
+> run it and fail with `command not found`. Copy only what comes after the `$`.
+
+### 1. Pick your architecture — do this FIRST
+
+Your Mac's CPU decides which binary you download. Getting this wrong downloads a
+binary that will not run, so it is step one and there is no skipping it:
 
 ```bash
 uname -m
-# arm64  -> Apple Silicon (M1/M2/M3/M4): use  darwin_arm64
-# x86_64 -> Intel Mac:                    use  darwin_amd64
 ```
 
-The rest of this walkthrough uses **`darwin_arm64`** (Apple Silicon). On an Intel
-Mac, replace every `darwin_arm64` with `darwin_amd64`.
+| `uname -m` prints | Your Mac | Use the asset | Arch token |
+|-------------------|----------|---------------|------------|
+| `x86_64` | **Intel** | `korvun_0.1.0_darwin_amd64.tar.gz` | **`amd64`** |
+| `arm64` | **Apple Silicon** (M1/M2/M3/M4) | `korvun_0.1.0_darwin_arm64.tar.gz` | **`arm64`** |
+
+Throughout the rest of this walkthrough, **substitute your arch token** wherever you
+see `<ARCH>`: use `amd64` on Intel, `arm64` on Apple Silicon. (The validated run
+above was an Intel Mac, i.e. `amd64`.)
 
 ### 2. Download the binary + verification material
 
@@ -46,45 +63,60 @@ Work in a scratch directory so the downloads stay together:
 mkdir -p ~/korvun-install && cd ~/korvun-install
 ```
 
-**With the GitHub CLI (`gh`):**
+**With the GitHub CLI (`gh`)** — replace `<ARCH>` with `amd64` (Intel) or `arm64`
+(Apple Silicon):
 
 ```bash
 gh release download v0.1.0 --repo Sebastian197/korvun \
-  --pattern 'korvun_0.1.0_darwin_arm64.tar.gz' \
+  --pattern 'korvun_0.1.0_darwin_<ARCH>.tar.gz' \
   --pattern 'checksums.txt' \
   --pattern 'checksums.txt.sig' \
   --pattern 'checksums.txt.pem'
 ```
 
 **Or without `gh`, with `curl`** (from the real release,
-<https://github.com/Sebastian197/korvun/releases/tag/v0.1.0>):
+<https://github.com/Sebastian197/korvun/releases/tag/v0.1.0>) — again substituting
+`<ARCH>`:
 
 ```bash
 BASE=https://github.com/Sebastian197/korvun/releases/download/v0.1.0
-curl -fLO "$BASE/korvun_0.1.0_darwin_arm64.tar.gz"
+curl -fLO "$BASE/korvun_0.1.0_darwin_<ARCH>.tar.gz"
 curl -fLO "$BASE/checksums.txt"
 curl -fLO "$BASE/checksums.txt.sig"
 curl -fLO "$BASE/checksums.txt.pem"
 ```
 
-### 3. Verify the checksum
+### 3. Verify the checksum — sufficient for most users
 
-macOS ships `shasum` (no `sha256sum` unless you installed coreutils):
+This is the verification that matters for integrity, it needs no extra tools, and it
+is the one you should always run. macOS ships `shasum` (there is no `sha256sum`
+unless you installed coreutils):
 
 ```bash
 shasum -a 256 -c checksums.txt --ignore-missing
-# -> korvun_0.1.0_darwin_arm64.tar.gz: OK
+# -> korvun_0.1.0_darwin_amd64.tar.gz: OK
 ```
 
-`OK` on your archive line means the download is intact. Do not proceed if it prints
-`FAILED`.
+`OK` on your archive line means the download is intact and matches the published
+release. **Do not proceed if it prints `FAILED`.** For most users this checksum
+check is enough; the cosign step in §4 is an optional extra.
 
-### 4. Verify the signature (recommended)
+### 4. (Optional, advanced) Verify the signature with cosign
 
-`checksums.txt` is signed with keyless [cosign](https://docs.sigstore.dev/)
-(Sigstore OIDC); verifying it transitively vouches for every artifact it lists.
+This step proves not just integrity but **origin** — that `checksums.txt` was signed
+by Korvun's release workflow. It is **optional** and aimed at users who already have,
+or want, [cosign](https://docs.sigstore.dev/). If you just want to install and run,
+the checksum in §3 is sufficient; skip to §5.
 
-Install cosign if you do not have it:
+> **Heads-up (from the real validation run):** cosign is **not** preinstalled, and
+> `brew install cosign` is heavy — it pulls a large `homebrew-core` clone (~1.3 GB).
+> On the macOS 13 (Tier 3) test machine the `brew install` **failed twice** with a
+> `.gitconfig` permissions error (`Operation not permitted`) and cosign never
+> installed. So the cosign path below is **not yet validated on our hardware** — the
+> command is written from the verified certificate identity and the cosign docs, but
+> treat it as unproven until someone completes it on a working cosign install.
+
+Install cosign if you want this layer (and if brew cooperates):
 
 ```bash
 brew install cosign
@@ -109,49 +141,52 @@ built and signed by the trusted GitHub Actions release workflow.
 > new tag, or match any tag with a regexp:
 > `--certificate-identity-regexp 'https://github.com/Sebastian197/korvun/\.github/workflows/release\.yml@.*'`.
 
-> **TODO — Chano to confirm on the real run:** the `checksums.txt.pem` asset is
-> base64-wrapped PEM. If `cosign verify-blob` errors on the certificate rather than
-> printing `Verified OK`, decode it first and point `--certificate` at the result:
-> `base64 -d checksums.txt.pem > checksums.pem` (then use `--certificate checksums.pem`).
-> Delete this note once the base64 behavior is confirmed one way or the other.
+> **If cosign errors on the certificate** (rather than printing `Verified OK`): the
+> `checksums.txt.pem` asset is base64-wrapped PEM, so some cosign versions may need
+> it decoded first. Try:
+> `base64 -d checksums.txt.pem > checksums.pem`, then re-run with
+> `--certificate checksums.pem`. (Whether this is necessary is **unconfirmed** — the
+> test machine never got cosign installed, so the base64 behavior was not observed.)
 
 ### 5. Extract
 
+Replace `<ARCH>` as in §1 (`amd64` on Intel, `arm64` on Apple Silicon):
+
 ```bash
-tar -xzf korvun_0.1.0_darwin_arm64.tar.gz
+tar -xzf korvun_0.1.0_darwin_<ARCH>.tar.gz
 chmod +x korvun
 ```
 
 The archive contains the `korvun` binary plus `LICENSE` and `README.md`.
 
-### 6. Clear Gatekeeper quarantine
+### 6. Gatekeeper — only if you downloaded via a browser
 
-The binary is **not notarized**, so macOS Gatekeeper may refuse to run it with
-*"cannot be opened because the developer cannot be verified."* Clear the quarantine
-attribute (only needed once):
+If you downloaded with `gh` or `curl` in the terminal (as in §2), macOS does **not**
+quarantine the binary and it runs directly — **this was confirmed on the validation
+run: `./korvun --version` ran with no Gatekeeper prompt.** In that case, **skip this
+step.**
+
+You only need this if you downloaded the archive with a **web browser** (Safari,
+Chrome, …), which tags it with `com.apple.quarantine`; macOS then refuses to run the
+unsigned binary with *"cannot be opened because the developer cannot be verified."*
+Clear the attribute (once):
 
 ```bash
-xattr -d com.apple.quarantine ./korvun 2>/dev/null || true
+xattr -d com.apple.quarantine ./korvun
 ```
 
 Alternatively, the first time only, reveal it in Finder, **right-click → Open**, and
 confirm — after which macOS remembers your choice.
 
-> **TODO — Chano to confirm on the real run:** downloads made with `gh`/`curl` often
-> do **not** get the `com.apple.quarantine` attribute (it is mainly set by
-> browsers), so this step may be a no-op. If `korvun --version` in §7 runs without a
-> Gatekeeper prompt, note that the quarantine step was unnecessary for the CLI
-> download path; if it *is* blocked, confirm the `xattr` command clears it. Record
-> which case actually happened.
-
 ### 7. Confirm it runs
 
 ```bash
 ./korvun --version
-# -> korvun v0.1.0 (<short-revision>)
+# -> korvun v0.1.0 (1676b5371ca7)
 ```
 
-Optionally put it on your `PATH`:
+That exact output is what the validation run produced. Optionally put it on your
+`PATH`:
 
 ```bash
 sudo install -m755 ./korvun /usr/local/bin/korvun
