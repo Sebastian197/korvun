@@ -234,6 +234,10 @@ func TestMutation_malformedJSON_400(t *testing.T) {
 	}
 }
 
+// The handler special-cases ONLY ErrReloadInProgress (409). Every other reload
+// error — including supervisor.ErrShuttingDown, which is an in-process guard the
+// HTTP path does not translate and in practice never even receives — falls to a
+// generic 500. The fake's "shutting down" text stands in for that whole class.
 func TestMutation_genericReloadError_500(t *testing.T) {
 	t.Setenv(adminEnv, "adminval")
 	rl := &fakeReloader{err: errors.New("supervisor is shutting down")}

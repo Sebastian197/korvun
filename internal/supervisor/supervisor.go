@@ -40,9 +40,18 @@ const defaultShutdownTimeout = 15 * time.Second
 // reload_in_progress).
 var ErrReloadInProgress = errors.New("supervisor: a reload is already in progress")
 
-// ErrShuttingDown is returned by RequestReload once the supervisor has begun
-// shutting down, so a late reload is refused rather than left as an orphaned
-// pending handle no one can complete (the handler maps it to a 503).
+// ErrShuttingDown is returned by RequestReload after the supervisor has stopped
+// serving (shuttingDown set). It is an IN-PROCESS guard for direct callers of
+// RequestReload (e.g. tests), NOT an HTTP-facing contract: the config handler does
+// not special-case it, and in practice never even receives it. shuttingDown flips to
+// true only AFTER shutdownApp has already torn the admin server down (the
+// reasonShutdown case in Run), so the HTTP surface that would translate this error is
+// gone before the error can be returned; a direct in-process reload requested at that
+// point is refused here rather than left as an orphaned pending handle a caller could
+// observe. The one narrow HTTP path — a request in flight during the drain, before
+// shuttingDown is set — does NOT reach this error; it is the accepted shutdown-race
+// known-behavior documented at the reasonShutdown case (a benign, silently-dropped
+// 202). If it ever did reach the handler, it would map to a generic 500, not a 503.
 var ErrShuttingDown = errors.New("supervisor: shutting down")
 
 // App is the lifecycle seam the supervisor drives. *app.App satisfies it. Start
@@ -191,6 +200,20 @@ func (s *Supervisor) Run(ctx context.Context) error {
 
 		switch reason {
 		case reasonShutdown:
+			// Shutdown-race known-behavior (accepted caveat, ADR-style). shuttingDown is
+			// set HERE, after shutdownApp above has already drained the admin server. A
+			// POST /api/config whose handler is still in flight when adminServer.Shutdown
+			// began (Go lets already-accepted requests finish) can therefore pass the
+			// RequestReload guard while shuttingDown is still false, receive a 202 + handle,
+			// and enqueue onto reloadCh (cap 1) with no receiver — this loop has already
+			// left serve() and is returning. That reload is silently dropped, which is SAFE
+			// by construction: persist never runs (the on-disk -config is untouched), no new
+			// app is built or Started (zero leak), and the handle is NOT observable
+			// (statusHandler died in the same shutdownApp, so the client cannot poll it and
+			// the process exits immediately). Closing this window would mean setting
+			// shuttingDown BEFORE the drain and adding an ErrShuttingDown->503 handler branch,
+			// i.e. reordering the race-verified cutover concurrency for a benign,
+			// near-unreachable case — deliberately NOT done.
 			s.mu.Lock()
 			s.shuttingDown = true
 			s.mu.Unlock()
