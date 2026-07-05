@@ -543,3 +543,56 @@ See [`korvun.service`](./korvun.service) for a **hardened** systemd unit (dedica
 and step-by-step setup. Point the config's `storage.path` at
 `/var/lib/korvun/korvun.db` so the database lives in the state directory systemd
 creates and owns. Audit the sandbox with `systemd-analyze security korvun`.
+
+---
+
+## Updating Korvun
+
+Korvun is a **single, fixed binary**. It does **not** update itself and does **not**
+check for new versions in the background — the copy you downloaded stays exactly that
+version until you replace it yourself.
+
+### Check which version you have
+
+```bash
+korvun --version
+# -> korvun v0.1.0 (<short-revision>)
+```
+
+### Update to a newer release
+
+Updating is just **installing the newer binary the same way you installed this one**,
+then swapping it in:
+
+1. Go to the [releases page](https://github.com/Sebastian197/korvun/releases) and pick
+   the new version.
+2. **Download, verify the checksum, and extract** the archive for your OS/arch —
+   exactly the steps in your platform's walkthrough above (checksum verification still
+   matters on every download).
+3. **Replace the old binary** with the new one. If you put it on your `PATH`, overwrite
+   it in place (stop Korvun first if it is running):
+
+   ```bash
+   # macOS / Linux example
+   sudo install -m755 ./korvun /usr/local/bin/korvun
+   korvun --version   # confirm it now reports the new version
+   ```
+
+   On Windows, replace `korvun.exe` in the folder you keep it in. Under systemd, stop
+   the service, replace the binary, then start it again.
+
+### Your configuration and data are safe
+
+Updating the binary **only replaces the executable**. It does **not** touch:
+
+- **Your config file** (`korvun.local.json`, or whatever you pass with `-config`) — it
+  is a separate file you point Korvun at, never bundled with the binary.
+- **Your data** (the SQLite database at `storage.path`, if you enabled durable memory)
+  — also a separate file.
+
+So you can update Korvun and start it again with the same `-config` and the same data,
+unchanged.
+
+> **More convenient update methods** — a "new version available" notice, or package
+> managers like Homebrew (`brew`) or Scoop — are planned improvements, not available
+> today. For now, updating is the manual download-and-replace above.
