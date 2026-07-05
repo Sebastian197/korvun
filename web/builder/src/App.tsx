@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react'
-import {
-  getBrains,
-  getChannels,
-  getConfig,
-  type BrainSummary,
-  type ChannelSummary,
-  type RawConfig,
-} from './api.ts'
+import { getBrains, getChannels, getConfig, type BrainSummary, type ChannelSummary } from './api.ts'
+import type { Config } from './config/schema.ts'
+import { ConfigEditor } from './ConfigEditor.tsx'
 import './App.css'
 
 // Phase 2b.1 minimal builder: reads the live wiring (/api/brains + /api/channels,
@@ -33,7 +28,7 @@ const EVENTS = [
 export function App() {
   const [brains, setBrains] = useState<BrainSummary[] | null>(null)
   const [channels, setChannels] = useState<ChannelSummary[] | null>(null)
-  const [config, setConfig] = useState<RawConfig | null>(null)
+  const [config, setConfig] = useState<Config | null>(null)
   const [token, setToken] = useState('') // in-memory only (ADR-0030 §6)
   const [draft, setDraft] = useState('')
   const [err, setErr] = useState<string | null>(null)
@@ -161,7 +156,7 @@ export function App() {
         ) : config === null ? (
           <p className="muted">loading…</p>
         ) : (
-          <pre className="config">{JSON.stringify(config, null, 2)}</pre>
+          <ConfigEditor baseline={config} token={token} />
         )}
       </section>
 

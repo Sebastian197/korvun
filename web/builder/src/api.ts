@@ -2,6 +2,8 @@
 // React state by the caller and passed in per request as `Authorization: Bearer`
 // — never a cookie (ADR-0028 CSRF-by-construction), never persisted by default.
 
+import type { Config } from './config/schema'
+
 export interface ModelSummary {
   provider: string
   model_id: string
@@ -20,20 +22,50 @@ export interface ChannelSummary {
   dropped?: number
 }
 
-/** The raw config document is operator-shaped JSON; the read-only cut renders it
- *  verbatim, so an opaque record is the honest type here. */
-export type RawConfig = Record<string, unknown>
-
-async function getJSON<T>(path: string, token?: string): Promise<T> {
-  const headers: HeadersInit = {}
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  const res = await fetch(path, { headers })
-  if (!res.ok) {
-    throw new Error(`${path}: ${res.status}`)
-  }
-  return (await res.json()) as T
+/** The reload handle returned by a successful POST /api/config (202). */
+export interface ReloadHandle {
+  handle: string
 }
 
-export const getBrains = () => getJSON<BrainSummary[]>('/api/brains')
-export const getChannels = () => getJSON<ChannelSummary[]>('/api/channels')
-export const getConfig = (token: string) => getJSON<RawConfig>('/api/config', token)
+/** An HTTP error carrying the status so callers can branch (401 re-auth, the two
+ *  409 codes, 400 validation — the full mapping is 2b.2c). */
+export class HttpError extends Error {
+  readonly status: number
+  readonly body: string
+  constructor(status: number, body: string) {
+    super(`HTTP ${status}`)
+    this.name = 'HttpError'
+    this.status = status
+    this.body = body
+  }
+}
+
+async function req(path: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(path, init)
+  if (!res.ok) {
+    throw new HttpError(res.status, await res.text().catch(() => ''))
+  }
+  return res
+}
+
+function auth(token: string): HeadersInit {
+  return { Authorization: `Bearer ${token}` }
+}
+
+export const getBrains = async (): Promise<BrainSummary[]> =>
+  (await req('/api/brains')).json()
+export const getChannels = async (): Promise<ChannelSummary[]> =>
+  (await req('/api/channels')).json()
+export const getConfig = async (token: string): Promise<Config> =>
+  (await req('/api/config', { headers: auth(token) })).json()
+
+/** POST the full working-copy config. Returns the reload handle (202). The reload
+ *  state machine that polls this handle is 2b.2b. */
+export const postConfig = async (token: string, config: Config): Promise<ReloadHandle> =>
+  (
+    await req('/api/config', {
+      method: 'POST',
+      headers: { ...auth(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    })
+  ).json()

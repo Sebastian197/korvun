@@ -1,0 +1,71 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+}
+.field {
+  display: block;
+  margin-bottom: var(--space-md);
+}
+.field .lbl {
+  display: block;
+  margin-bottom: var(--space-xs);
+}
+select.txt {
+  appearance: none;
+}
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+.model-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 110px auto;
+  gap: var(--space-sm);
+  align-items: end;
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  margin-bottom: var(--space-sm);
+}
+.model-row .field {
+  margin-bottom: 0;
+}
+.row-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+.btn.ghost {
+  background: transparent;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+}
+.btn.ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.save-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  background: var(--base);
+}
+.save-bar .btn.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.handle {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-text);
+}
+.handle code {
+  color: var(--text-1);
+}
