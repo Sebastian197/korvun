@@ -122,6 +122,9 @@ type builder struct {
 	// metrics is the observability backend injected into the domain. Defaults to
 	// metrics.Nop; set to the Prometheus impl when observability is enabled.
 	metrics metrics.Metrics
+	// reloader is the supervisor seam the mutation endpoint signals (ADR-0027).
+	// When nil (no supervisor above the app), no mutation surface is mounted.
+	reloader controlapi.Reloader
 }
 
 // Option configures Build.
@@ -135,6 +138,13 @@ func WithLogger(l *slog.Logger) Option {
 			b.logger = l
 		}
 	}
+}
+
+// WithReloader injects the supervisor seam the config-mutation endpoint signals
+// (ADR-0027). It is what enables the mutation surface: without it (or without a
+// configured admin token) Build mounts only the read-only control API.
+func WithReloader(r controlapi.Reloader) Option {
+	return func(b *builder) { b.reloader = r }
 }
 
 // withChannelFactory overrides how channels are constructed. Internal-only: it
@@ -266,6 +276,15 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	// conscious coupling documented in ADR-0022 §5.
 	if adminServer != nil {
 		controlapi.Register(adminServer, app)
+		// Mount the WRITE surface ONLY when a supervisor seam is injected AND the
+		// config names an admin token that resolves non-empty (ADR-0028 §1: no token
+		// => mutation not mounted, the read-only default). Build re-resolves this on
+		// every reload, so enabling/rotating the env-var name is itself a config edit.
+		if b.reloader != nil && cfg.Admin != nil {
+			if token := os.Getenv(cfg.Admin.TokenEnv); token != "" {
+				controlapi.RegisterMutation(adminServer, b.reloader, token)
+			}
+		}
 	}
 	// Mount the live-view (SSE + UI) on the same admin server, also before Start.
 	if liveView != nil {
@@ -657,10 +676,26 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 	}
 }
 
-// Run starts every channel (ADR-0008) and blocks until ctx is cancelled. If a
-// channel fails to start, channels already started are stopped before the error
-// is returned, so Run never leaves a half-started system behind.
+// Run starts the app (Start) and then serves until ctx is cancelled (Serve). It is
+// the composition the plain boot path uses; the supervisor (ADR-0027) instead calls
+// Start and Serve separately so it can confirm a cutover succeeded (Start returned
+// nil) before persisting the new config.
 func (a *App) Run(ctx context.Context) error {
+	if err := a.Start(ctx); err != nil {
+		return err
+	}
+	return a.Serve(ctx)
+}
+
+// Start brings the app up without blocking: it starts the admin server FIRST
+// (ADR-0020 §4) so /healthz is live before any channel connects, then starts every
+// channel (ADR-0008). If a channel fails to start, channels already started (and the
+// admin server) are stopped before the error is returned, so a failed Start never
+// leaves a half-started system behind. A successful Start is the supervisor's
+// cutover-confirmation signal (ADR-0027): the fallible bind/channel-start steps — the
+// ADR §c "admin re-bind" failure — have all completed, so the config is safe to
+// persist.
+func (a *App) Start(ctx context.Context) error {
 	// Start the admin server FIRST (ADR-0020 §4): /healthz is up before any
 	// channel connects, so an operator sees the process is alive during boot. A
 	// bind failure is a loud boot error (the golden rule).
@@ -684,6 +719,12 @@ func (a *App) Run(ctx context.Context) error {
 		a.logger.Info("channel started", "channel", ch.Name())
 	}
 	a.logger.Info("korvun is serving; send your bot a message")
+	return nil
+}
+
+// Serve blocks until ctx is cancelled, then returns nil. All fallible startup
+// happened in Start; Serve is the steady-state block.
+func (a *App) Serve(ctx context.Context) error {
 	<-ctx.Done()
 	return nil
 }

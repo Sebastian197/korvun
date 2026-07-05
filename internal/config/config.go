@@ -43,6 +43,19 @@ type Config struct {
 	// server explicitly with observability.enabled = false. Resolve via
 	// ObservabilitySettings.
 	Observability *ObservabilityConfig `json:"observability,omitempty"`
+	// Admin is the optional admin-mutation auth block (ADR-0028 §1). It is a
+	// pointer for parse-time presence detection: ABSENT means no mutation surface
+	// (the read-only default, exactly today's behavior); PRESENT names the env-var
+	// holding the bearer token. The token VALUE is never in the file — only the
+	// env-var name — resolved via os.Getenv in internal/app, so a config that names
+	// an unset var mounts nothing (no token => mutation not mounted, ADR-0028 §1).
+	Admin *AdminConfig `json:"admin,omitempty"`
+}
+
+// AdminConfig names the env-var holding the admin bearer token (ADR-0028 §1). The
+// value lives only in the environment (ADR-0010 discipline), never in the file.
+type AdminConfig struct {
+	TokenEnv string `json:"token_env"`
 }
 
 // StorageConfig declares the durable conversation store. Path is the SQLite
@@ -187,7 +200,20 @@ func (c *Config) Validate() error {
 	if err != nil {
 		return err
 	}
+	if err := c.validateAdmin(); err != nil {
+		return err
+	}
 	return c.validateRoutes(channelNames, brainNames)
+}
+
+// validateAdmin checks the optional admin block: if present, it must name a
+// non-empty token_env (the env-var NAME). The value's presence in the environment
+// is resolved at boot (internal/app), not here (ADR-0028 §1).
+func (c *Config) validateAdmin() error {
+	if c.Admin != nil && c.Admin.TokenEnv == "" {
+		return fmt.Errorf("%w: admin.token_env: required when an admin block is present (name of the env var holding the bearer token)", ErrInvalidConfig)
+	}
+	return nil
 }
 
 func (c *Config) validateChannels() (map[string]bool, error) {

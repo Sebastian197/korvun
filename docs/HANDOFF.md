@@ -842,20 +842,148 @@ Key entries currently:
 
 ---
 
+## Load-bearing principles (learned in Phase 2a — do not repeat)
+
+> **Read this like the non-negotiable rules.** These three principles were paid
+> for by `/review` findings during Phase 2a. They persist across sessions so the
+> same class of mistake is not made twice. They are about ENGINEERING DISCIPLINE,
+> not any one file.
+
+**PRINCIPLE 1 — TRUTHFULNESS: the code, its tests, and its documentation must tell
+the SAME story.** When they diverge, that divergence is a FINDING, not a detail. Two
+faces of the one rule, both caught by `/review` this phase:
+
+- **(a) A test of a load-bearing property MUST BITE when the property is violated.**
+  Prove it by injecting the regression, seeing red, and reverting. A green test that
+  does not bite is proof of nothing. (Caught 3 times in Phase 2a: Unit A's "no
+  workers" guard asserted a property it did not actually guard; B2 asserted more than
+  it proved; Unit B's crash-loop P1 passed green because `B3b` did not wire the
+  persist recorder, so the test never saw the bad on-disk config.)
+- **(b) A comment/godoc must NOT claim a behavior the code does NOT have.** (Caught in
+  Unit C: `ErrShuttingDown`'s godoc claimed a "503 on shutdown" that did not exist —
+  the real path returns a generic 500 and is never even reached. The real behavior was
+  safe; the documentation lied.)
+
+**PRINCIPLE 2 — WHEN A `/review` FINDS A DIVERGENCE, THE ORDER IS FIXED:** (1) FIRST
+determine, WITH EVIDENCE (never for convenience), whether the REAL behavior is
+correct/safe; (2) ONLY THEN choose the fix. If the behavior is correct but the doc or
+the test lies, correct the doc/test so it tells the truth — and "correct" means leave
+it honest AND COMPLETE (name the edge case as known-behavior / caveat, the way the ADRs
+name their caveats), never quietly delete the inconvenient part. If the behavior is
+INcorrect, fix the code. NEVER use "fix the comment" as a shortcut to avoid fixing a
+behavior that is genuinely wrong. C12 was documentation-only PRECISELY BECAUSE the
+review first PROVED the reload-in-shutdown rejection is safe (nothing is persisted,
+nothing leaks, the handle is not observable) — that proof is what unlocked the
+document-it option.
+
+**PRINCIPLE 3 — DO NOT TOUCH DELICATE CODE WITHOUT A REAL BENEFIT:** guarantees by
+construction beat fragile defenses layered over sensitive code. When a fix would
+perturb stabilized concurrency (e.g. the supervisor's shutdown ordering / cutover swap,
+whose `-race` we verified 20/20 twice) for a marginal benefit over an already-inocuous
+case, prefer NOT touching the code and documenting the limit instead. (Applied in C12:
+the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
+
+---
+
 ## Notes for the next session
 
-- **NEXT STEP (session close 2026-07-04): formal `/plan-eng-review` over the two
-  written Phase 2a ADRs** — ADR-0027 (config mutation, reload-and-rebuild) +
-  ADR-0028 (admin auth, bearer token), both `proposed`, committed `bbd1bfd`.
-  **Review focus:** (1) concurrent-reload race + the `202` status-handle
-  specification; (2) the admin-port re-bind race during cutover and whether the
-  mandatory rollback covers it; (3) mutation paths that could bypass the auth gate
-  + the token contract carried to 2b; (4) reversibility / out-of-scope.
-  **Decision tree:** P1/P2 → REPORT, do NOT fix (the copilot decides); only-P3 →
-  apply, flip both ADRs to `accepted`, commit "docs: ADR-0027 + ADR-0028 accepted
-  — Phase 2a mutation + auth". **Only after a clean review + explicit copilot OK →**
-  implement 2a on branch `feat/config-mutation`, TDD red-first, with `-race` on the
-  quiesce→rebuild→swap path as the load-bearing test. Do NOT start code before that.
+- **PHASE 2a (the builder — config mutation + auth) — CLOSED on branch
+  `feat/config-mutation` (NOT pushed; master public at `22b65fd`). All 3 TDD units
+  GREEN and Unit C `/review` (with outside voice) is DONE — Phase 2a is COMPLETE.**
+  Built in 3 TDD red-first units, each with its own `/review`. `ADR-0027`
+  (reload-and-rebuild) + `ADR-0028` (bearer auth) are **accepted** (3 rounds of
+  cross-model `/plan-eng-review`) and were **NOT touched** during implementation —
+  the code was aligned to the text, never the reverse.
+  - **Unit A — effect-free `Preflight` in `internal/app` (`8398a2c`). CLOSED.**
+    Validates a config (throwaway `getMe`, secret resolution, privacy selector)
+    WITHOUT opening the store or starting workers. Regression guard
+    `TestPreflight_neverRegistersOnRouter` **proven to bite** if `wire()`/
+    `RegisterChannel` is reintroduced. Duplicate-channel dedupe flagged as a
+    follow-up (`c9e3328`, see the deferred-follow-up bullet below).
+  - **Unit B — supervisor in `internal/supervisor` (`ae7bf42`+`3661ac7`, redesign
+    `c11d118`+`2fc0f88`). CLOSED.** The most dangerous concurrency of the phase. Its
+    `/review` caught a **P1 crash-loop** (the self-heal reintroduced a bad config on
+    disk on the rollback-fatal path; the test did not see it). **Resolved via
+    Option A:** `app.Run` split into `Start(ctx)` (admin bind + channel starts,
+    fallible) + `Serve(ctx)` (block until ctx.Done) + `Run = Start+Serve`; the
+    supervisor **persists ONLY after a confirmed `Start`**. The invariant "no
+    crash-loop; `-config` is never overwritten with a config that cannot come up" is
+    now guaranteed **by construction**, no self-heal — guarded by `B3b`
+    (`persistCount==0` on the fatal path, **proven to bite**). Load-bearing `B1`:
+    `-race` quiesce→rebuild→swap, swap under mutex + concurrent reader,
+    `-count=20` → 20/20.
+  - **Unit C — endpoint + auth in `internal/controlapi` (`3d9f43f` C-auth +
+    `ab08424` C-supervisor). CLOSED (`/review` DONE; contract fix `dc264d7`).** C-auth: `RegisterMutation`
+    mounts `POST /api/config` (gated) + `GET /api/reload/{handle}` (status); the gate
+    compares a **fixed-length SHA-256** with `subtle.ConstantTimeCompare` (F12, never
+    raw tokens); **"no token ⇒ mutation NOT mounted"** (conditional mount in
+    `app.Build` on `os.Getenv(cfg.Admin.TokenEnv)`); read-only (`/api/brains`,
+    `/api/channels`, `/api/events`, `/ui`) intact without a token; CSRF defended by
+    Authorization-header-never-cookie. C-supervisor: late-binding of the supervisor
+    in `cmd/korvun`, `WithPreflight(app.Preflight)` wired (Unit B's dead seam, ADR
+    step 5: Preflight while the old app STILL serves, failure → status `failed`
+    without touching the old app, F7); `B1 -race -count=20` → 20/20 **confirmed after
+    restructuring `serve()`** (the `reasonReload` case is byte-identical, the swap
+    stays under mutex).
+  - **The two Unit-B P3s closed in C:** `PreflightFunc` wired; reload-during-shutdown
+    resolved as an `ErrShuttingDown` rejection.
+  - **Unit C `/review` VERDICT (cross-model; Codex not installed → Claude adversarial
+    subagent as the documented fallback, converged independently):** GATING is COMPLETE
+    and hole-free — only `POST /api/config` mutates and it is ALWAYS bearer-wrapped
+    (`RegisterMutation`), no CORS anywhere, token read from `Authorization` never a
+    cookie. The C12 shutdown race is INOCUOUS: a reload that wins the race against the
+    drain gets a 202 but is silently dropped, leaving NO observable handle (persist
+    never runs → `-config` intact, no app built → zero leak, `statusHandler` dies in the
+    same `shutdownApp` → client cannot poll it). The two P2s were CONTRACT-HONESTY, not
+    security: the godoc claimed `ErrShuttingDown` maps to HTTP 503, but it maps to a
+    generic 500 AND the HTTP path never even reaches it (admin server is already down
+    when `shuttingDown` flips true). **Copilot chose option (a):** correct the
+    contract/comment so it stops lying and name the shutdown race as accepted
+    known-behavior; do NOT touch the race-verified shutdown ordering (moving the flag +
+    adding a 503 branch would perturb the concurrency stabilized after the Unit-B P1,
+    `-race` 20/20 twice, for a benign near-unreachable case). Applied doc-only in
+    `dc264d7`; `make quality` green (`-race`), coverage 93.2%.
+  - `make quality` green, `-race`, **93.3% total**; `internal/controlapi` 96.9%,
+    `internal/supervisor` 93.8%; **3 direct deps, none new** (all stdlib + internal).
+  - Full trail on `feat/config-mutation`: `8398a2c` (A) · `c9e3328` (dedupe note) ·
+    `ae7bf42`+`3661ac7` (B B0-B8) · `c11d118`+`2fc0f88` (B Option-A redesign / P1) ·
+    `3d9f43f`+`ab08424` (C).
+  - **RECURRING RULE OF THE PHASE (banked):** three times a `/review` caught a test
+    that **asserted more than it proved** (Unit A P2, B2 precision, Unit B P1). Every
+    test of a load-bearing property MUST BITE when the property is violated — prove
+    it by injecting the regression, seeing red, and reverting.
+- **NEXT STEP (next session):**
+  1. **Decide with Chano the push of `feat/config-mutation`** + PR/merge to master (the
+     branch stays LOCAL until then). Phase 2a is CLOSED; nothing else gates it. The C12
+     `/review` verdict above (gating complete, race inocuous, contract corrected) is the
+     record.
+  2. **Phase 2b:** the React/Vite builder UI — its own framing + ADR (frontend
+     toolchain, mounting at `/builder` alongside the vanilla read-only `/ui`, how the
+     UI stores the bearer token it sends as `Authorization: Bearer`, the
+     animations/transitions Chano wants).
+- **HARDENING deferred to Phase 2b (reported by Unit C's `/review`, one P3 at a time,
+  each with its own micro-decision — deliberately NOT folded into the 2a contract fix):**
+  1. **Empty-token guard in `bearerAuth` (LATENT FOOTGUN — close FIRST in 2b).**
+     `bearerAuth` has no internal guard against `token==""`: if it were ever called with
+     an empty token, `want=sha256("")` and an `Authorization: Bearer ` (empty presented
+     token) would hash-match → full bypass. Safe TODAY only by invariant
+     (`RegisterMutation` is called only when `token != ""`, `app.go:284`, plus F11
+     `wouldSelfLock` refusing a config that resolves the token empty). A future SECOND
+     caller of `RegisterMutation` without that check would reopen the bypass. Fix: reject
+     an empty token at the top of `bearerAuth` (or `RegisterMutation`) so the guarantee
+     is by-construction, not by-invariant. Cheap; kills the footgun at the root.
+  2. **Request-body size limit on `POST /api/config`.** `mutation.go:78` decodes `r.Body`
+     with no `http.MaxBytesReader`; an authenticated admin could send an unbounded body.
+     Low severity (behind bearer auth), but wrap the body with a chosen limit N.
+- **Deferred follow-up (own fix, NOT Phase 2a) — duplicate channel dedupe.**
+  `config.Validate` (`config.go:217`, `validateChannels`) dedupes channels by NAME but
+  not by TYPE, and `router.RegisterChannel`/`RegisterBrain` (`router.go:146,189`)
+  **silently overwrite** on a duplicate registry key rather than erroring. So a config
+  with two channels of the same type/name could pass `Validate` and leak the first
+  adapter's worker goroutines inside `wire`. Pre-existing, unrelated to the Phase 2a
+  Preflight (surfaced by the Unit A `/review`, 2026-07-04). Fix it in its own change
+  (a `Validate` dedupe + a `Register*` duplicate-name error), never folded into the
+  builder units.
 - **Claude Code skills installed + documented (2026-07-04):** `agent-browser`
   (browser automation — live source/doc verification when Context7 doesn't cover
   something; does NOT relax the Context7-first rule) and `find-skills` (surface
