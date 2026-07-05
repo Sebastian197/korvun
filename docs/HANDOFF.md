@@ -899,6 +899,12 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
 
 ## Notes for the next session
 
+- **ROAD TO BETA:** el plan de las 4 piezas que faltan para la beta técnica completa
+  vive en [`docs/ROAD-TO-BETA.md`](./ROAD-TO-BETA.md), en orden de prioridad
+  (1 docs+instalación, 2 manejo de errores producción, 3 tercer canal opcional,
+  4 app Wails). Cada una es fase de peso con su ADR; se hacen de una en una.
+  Próximo: encuadrar la Pieza 1.
+
 - **PHASE 2b (the no-code builder UI — React/TS/Vite) — COMPLETE / MERGED to master
   via PR #7** (merge commit `442f7ea`, merged by Chano on GitHub 2026-07-05; master
   now includes Phase 2a via PR #6 + Phase 2b via PR #7). **The builder feature is CLOSED

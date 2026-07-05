@@ -291,7 +291,16 @@ más las piezas de robustez que un producto de verdad necesita.
 - [ ] Lo configura alguien por fichero, sin recompilar.
 - [ ] Lo instala alguien que no soy yo, en su máquina, siguiendo la documentación.
 - [ ] Aguanta un proveedor caído sin caerse.
-- [ ] Las políticas se expresan sin tocar Go (builder no-code).
+- [x] Las políticas se expresan sin tocar Go (builder no-code). **COMPLETO
+      (Stage 14 Fase 2 — PR #6 mutación de config en caliente + PR #7 la UI
+      React/TS/Vite, merge `442f7ea`).** El builder monta en `/builder`, edita
+      brains/canales/rutas/políticas/modelos con round-trip vía `GET`/`POST
+      /api/config` gateados, y dispara el reload en caliente.
+
+> **Plan operativo de lo que queda:** ver [`ROAD-TO-BETA.md`](./ROAD-TO-BETA.md) —
+> las 4 piezas pendientes para la beta técnica completa, en orden de prioridad
+> (1 docs + instalación, 2 manejo de errores de producción, 3 tercer canal opcional,
+> 4 app Wails), cada una una fase de peso con su ADR; se hacen de una en una.
 
 ---
 
