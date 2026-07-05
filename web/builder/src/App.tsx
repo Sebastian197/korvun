@@ -126,7 +126,7 @@ export function App() {
             className="auth"
             onSubmit={(e) => {
               e.preventDefault()
-              setToken(draft)
+              setToken(draft.trim()) // paste-safe: strip stray whitespace/newlines
             }}
           >
             <label className="lbl" htmlFor="tok">
