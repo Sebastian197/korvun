@@ -127,8 +127,32 @@ errores de producción".
 concurrencia/tiempo real desde el supervisor de la Fase 2a — tratarla con el mismo
 cuidado (`-race`, tests que muerden).
 
+### Motivación DEMOSTRADA en hardware — timeout de Ollama en frío
+
+> **No es hipotético: reproducido durante la validación del quickstart** (iMac
+> Intel, macOS 13, Ollama `llama3.2:1b`, 2026-07-05). Con el modelo **sin cargar**,
+> el **primer mensaje SIEMPRE falla**. Log real de Korvun:
+> `brain: no usable answer ... "model: provider unavailable: Post
+> http://127.0.0.1:11434/api/chat: context deadline exceeded"`; del lado de Ollama,
+> `client connection closed before llama-server finished loading` con el
+> `POST /api/chat` cancelado a **~5.2s**. Con el modelo **ya caliente**
+> (`ollama run llama3.2:1b` previo), el bot respondió al instante.
+>
+> **Diagnóstico:** el timeout de Korvun hacia el proveedor (~5s) es demasiado corto
+> para hardware que carga el modelo en frío. Es distinto del timeout de boot `getMe`
+> (Pieza 1 / ROADMAP-V1 §5 (a)): aquí es el timeout **Korvun→proveedor de modelo** en
+> el camino caliente.
+>
+> **Qué debe resolver la Pieza 2 (NO ahora — es código con su ADR):** el timeout
+> Korvun→proveedor **configurable y/o más generoso**, y/o que Korvun **reintente
+> mientras el proveedor está cargando** (model warmup). Mientras tanto, el quickstart
+> documenta el workaround (calentar el modelo) en su sección de troubleshooting.
+
 ### Checklist
 
+- [ ] **Timeout Korvun→proveedor configurable / warmup** — el caso demostrado arriba:
+      timeout de modelo configurable y/o más generoso, y/o reintento durante la carga
+      en frío del proveedor. El workaround (calentar el modelo) queda en el quickstart.
 - [ ] **Retry con backoff** — reintento sobre errores recuperables
       (`ErrProviderUnavailable`, `ErrRateLimited` respetando `RetryAfter`), backoff
       exponencial con jitter, tope de intentos; **nunca** reintentar `ErrAuthInvalid`.
