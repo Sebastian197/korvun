@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  PLACEHOLDER — committed so `//go:embed dist` matches on a clean clone and a bare
+  `go build` compiles (ADR-0029 §4). The real builder is produced by
+  `make build` (which runs the Vite build first) and is regenerated fresh in CI;
+  a committed dist/ is never trusted for a release (ADR-0029 §6).
+-->
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Korvun · builder (not built)</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: #0a0a0c; color: #9a9aa6;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      code { color: #a78bfa; }
+    </style>
+  </head>
+  <body>
+    <p>Korvun builder not built. Run <code>make build</code>.</p>
+  </body>
+</html>

@@ -1,0 +1,222 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin-top: var(--space-lg);
+  /* Scroll slack below the opaque sticky save-bar so the last content (model
+     rows / + add model / the ROUTE panel) can always clear above it instead of
+     hiding behind it — including for a config shorter than the viewport. */
+  padding-bottom: 5rem;
+}
+.field {
+  display: block;
+  margin-bottom: var(--space-md);
+}
+.field .lbl {
+  display: block;
+  margin-bottom: var(--space-xs);
+}
+select.txt {
+  /* appearance:none strips the native dropdown arrow, so add one back as an inline
+     data-URI chevron (no network request — the no-CDN gate excludes data: URIs). */
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' stroke='%239aa0b4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+.model-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 110px auto;
+  gap: var(--space-sm);
+  align-items: end;
+  padding: var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  margin-bottom: var(--space-sm);
+}
+.model-row .field {
+  margin-bottom: 0;
+}
+.row-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+.btn.ghost {
+  background: transparent;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+}
+.btn.ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.save-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  background: var(--base);
+}
+.save-bar .btn.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.handle {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent-text);
+}
+.handle code {
+  color: var(--text-1);
+}
+
+/* fieldset as a layout container (form-lock via [disabled]) */
+.forms {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+.reload-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.reload-chip.ok {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--sent);
+}
+.reload-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+}
+.reload-panel.err {
+  color: var(--failed);
+  border: 1px solid var(--failed);
+}
+.reload-panel.warn {
+  color: var(--dropped);
+  border: 1px solid var(--dropped);
+}
+
+.field-err {
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--failed);
+}
+.save-error {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+}
+.save-error.err {
+  color: var(--failed);
+  border: 1px solid var(--failed);
+}
+.save-error.warn {
+  color: var(--dropped);
+  border: 1px solid var(--dropped);
+}
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.first-run {
+  text-align: center;
+  border-style: dashed;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.panel-head h2 {
+  margin: 0;
+}
+
+/* ── 2b.3b microinteractions — CSS (View Transitions handled in TS for the reload
+   state swap). Durations use the theme motion tokens, so the prefers-reduced-motion
+   guard in theme.css (which zeroes animation/transition durations) covers them all.
+   ADDITIVE: animates render only — never the form-lock or the reload state machine. ── */
+@keyframes enter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reload state + action-driven surfaces rise+fade in on mount, so pending → cutover
+   → succeeded / failed feels fluid instead of snapping in. */
+.reload-banner,
+.reload-chip,
+.reload-panel,
+.save-error,
+.first-run,
+.confirm,
+.model-row {
+  animation: enter-rise var(--dur-base) var(--ease-enter) both;
+}
+
+/* Controls respond to hover/press instead of snapping. The focus outline stays
+   instant (never transitioned) so keyboard focus is never laggy. */
+.btn,
+.txt {
+  transition:
+    border-color var(--dur-micro) var(--ease-enter),
+    background-color var(--dur-micro) var(--ease-enter),
+    color var(--dur-micro) var(--ease-enter),
+    transform var(--dur-micro) var(--ease-enter);
+}
+.btn:not(:disabled):hover,
+.txt:hover:not(:focus-visible) {
+  border-color: var(--text-3);
+}
+.btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+/* Scope the reload state cross-fade to just this region — only one of these is
+   mounted at a time, so the shared name morphs banner → chip → panel and the rest
+   of the page is untouched (2b.3b View Transitions). */
+.reload-banner,
+.reload-chip,
+.reload-panel {
+  view-transition-name: korvun-reload;
+}

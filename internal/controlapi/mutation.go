@@ -28,6 +28,10 @@ import (
 type Reloader interface {
 	RequestReload(*config.Config) (supervisor.Handle, error)
 	Status(supervisor.Handle) supervisor.State
+	// CurrentConfig returns the config the running app was built from, so the
+	// builder can load it as an editing baseline (ADR-0030 §4). nil before the
+	// first app has started.
+	CurrentConfig() *config.Config
 }
 
 // RegisterMutation mounts the write + status endpoints on m. Call it ONLY when a
@@ -38,7 +42,23 @@ type Reloader interface {
 // serving).
 func RegisterMutation(m Mounter, rl Reloader, token string) {
 	m.Handle("POST /api/config", bearerAuth(token)(configHandler(rl)))
+	m.Handle("GET /api/config", bearerAuth(token)(configGetHandler(rl)))
 	m.Handle("GET /api/reload/{handle}", statusHandler(rl))
+}
+
+// configGetHandler serves the raw current config as the builder's editing baseline
+// (ADR-0030 §4). It marshals the config STRUCT, which carries only env-var NAMES
+// (token_env, api_key_env), never secret VALUES: os.Getenv is never called on this
+// path, so no secret can leave the process. Gated by the same bearer as the write.
+func configGetHandler(rl Reloader) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		cfg := rl.CurrentConfig()
+		if cfg == nil {
+			writeError(w, http.StatusServiceUnavailable, "no current config")
+			return
+		}
+		writeJSON(w, cfg)
+	})
 }
 
 // bearerAuth wraps a handler with a constant-time bearer-token check. It compares
@@ -50,6 +70,15 @@ func bearerAuth(token string) func(http.Handler) http.Handler {
 	want := sha256.Sum256([]byte(token))
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// A configured EMPTY token must authenticate NO ONE. Without this,
+			// sha256("") on both sides lets an empty presented token match and bypass
+			// the gate. app.Build only mounts with a non-empty token, but the guard
+			// makes that safe BY CONSTRUCTION rather than by the caller's invariant, so
+			// a future second caller of RegisterMutation cannot reopen the bypass.
+			if token == "" {
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
 			got := sha256.Sum256([]byte(bearerToken(r.Header.Get("Authorization"))))
 			if subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
 				writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -70,12 +99,25 @@ func bearerToken(h string) string {
 	return ""
 }
 
+// maxConfigBodyBytes caps the POST /api/config request body. A full Korvun config
+// is well under 64 KiB, so 1 MiB is generous headroom while bounding the memory an
+// authenticated admin can force the process to buffer (Phase 2b.0 hardening).
+const maxConfigBodyBytes = 1 << 20 // 1 MiB
+
 // configHandler accepts a full config document, validates it, refuses a self-locking
 // config (F11), then hands it to the supervisor and returns 202 + an opaque handle.
 func configHandler(rl Reloader) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Cap the body BEFORE decoding so an oversized document is cut at the reader,
+		// never fully buffered (a MaxBytesError surfaces from Decode as a 413).
+		r.Body = http.MaxBytesReader(w, r.Body, maxConfigBodyBytes)
 		var cfg config.Config
 		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				writeError(w, http.StatusRequestEntityTooLarge, "config document exceeds the 1 MiB limit")
+				return
+			}
 			writeError(w, http.StatusBadRequest, "malformed config JSON")
 			return
 		}
