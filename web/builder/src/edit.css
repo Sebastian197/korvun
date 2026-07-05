@@ -113,3 +113,36 @@ select.txt {
   color: var(--dropped);
   border: 1px solid var(--dropped);
 }
+
+.field-err {
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--failed);
+}
+.save-error {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+}
+.save-error.err {
+  color: var(--failed);
+  border: 1px solid var(--failed);
+}
+.save-error.warn {
+  color: var(--dropped);
+  border: 1px solid var(--dropped);
+}
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.first-run {
+  text-align: center;
+  border-style: dashed;
+}

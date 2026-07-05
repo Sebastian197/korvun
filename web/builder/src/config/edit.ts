@@ -3,7 +3,7 @@
 // POSTed. Everything here is a pure function so the guarantees (round-trip preserves
 // untouched fields, dirty detection) are Vitest-testable without a DOM.
 
-import type { Config, ModelConfig } from './schema'
+import type { Config, ModelConfig, BrainConfig } from './schema'
 
 /** Deep clone of a config baseline. */
 export function clone(c: Config): Config {
@@ -22,6 +22,11 @@ export function newModel(): ModelConfig {
   return { provider: 'ollama', model_id: '', locality: 'local' }
 }
 
+/** A fresh brain (the empty/first-run "create your first brain" default). */
+export function newBrain(): BrainConfig {
+  return { name: '', sensitivity: 'public', policy: { kind: 'priority' }, dispatch: 'fanout', models: [] }
+}
+
 export type ConfigAction =
   | { kind: 'setBrainField'; brain: number; field: 'name' | 'sensitivity' | 'dispatch'; value: string }
   | { kind: 'setPolicyKind'; brain: number; value: string }
@@ -31,6 +36,7 @@ export type ConfigAction =
   | { kind: 'moveModel'; brain: number; from: number; to: number }
   | { kind: 'setChannelField'; channel: number; field: 'type' | 'mode' | 'token_env'; value: string }
   | { kind: 'setRouteField'; route: number; field: 'channel' | 'brain'; value: string }
+  | { kind: 'addBrain' }
   | { kind: 'reset'; config: Config }
 
 // Immutable helpers: replace one element of an array without touching the rest.
@@ -50,6 +56,8 @@ export function configReducer(state: Config, action: ConfigAction): Config {
       // Re-baseline the working copy to a freshly fetched config (after a succeeded
       // reload) so dirty clears exactly.
       return clone(action.config)
+    case 'addBrain':
+      return { ...state, brains: [...state.brains, newBrain()] }
     case 'setBrainField':
       return editBrain(state, action.brain, (b) => ({ ...b, [action.field]: action.value }))
     case 'setPolicyKind':

@@ -13,6 +13,7 @@ import {
 import { clone, isDirty, configReducer, type ConfigAction } from './config/edit'
 import { postConfig, getConfig, getReloadStatus, HttpError } from './api'
 import { pollReload, type ReloadStatus, type PollDeps } from './config/reload'
+import { parseSaveError, type SaveError } from './config/errors'
 import './edit.css'
 
 // Real poll deps (overridable in tests): status from the control API, a timer-based
@@ -141,12 +142,27 @@ function ModelRow({
   )
 }
 
-function BrainForm({ b, index, dispatch }: { b: Config['brains'][number]; index: number; dispatch: D }) {
+function BrainForm({
+  b,
+  index,
+  dispatch,
+  error,
+}: {
+  b: Config['brains'][number]
+  index: number
+  dispatch: D
+  error?: string | undefined
+}) {
   const set = (field: 'name' | 'sensitivity' | 'dispatch') => (value: string) =>
     dispatch({ kind: 'setBrainField', brain: index, field, value })
   return (
     <section className="panel">
       <h2>brain · {b.name || '(unnamed)'}</h2>
+      {error && (
+        <p className="field-err" role="alert" data-testid={`brain-error-${index}`}>
+          {error}
+        </p>
+      )}
       <TextField label="name" value={b.name} onChange={set('name')} />
       <div className="row2">
         <Select label="sensitivity" value={b.sensitivity} options={SENSITIVITIES} onChange={set('sensitivity')} />
@@ -169,12 +185,27 @@ function BrainForm({ b, index, dispatch }: { b: Config['brains'][number]; index:
   )
 }
 
-function ChannelForm({ c, index, dispatch }: { c: Config['channels'][number]; index: number; dispatch: D }) {
+function ChannelForm({
+  c,
+  index,
+  dispatch,
+  error,
+}: {
+  c: Config['channels'][number]
+  index: number
+  dispatch: D
+  error?: string | undefined
+}) {
   const set = (field: 'type' | 'mode' | 'token_env') => (value: string) =>
     dispatch({ kind: 'setChannelField', channel: index, field, value })
   return (
     <section className="panel">
       <h2>channel · {c.type}</h2>
+      {error && (
+        <p className="field-err" role="alert" data-testid={`channel-error-${index}`}>
+          {error}
+        </p>
+      )}
       <div className="row2">
         <Select label="type" value={c.type} options={CHANNEL_TYPES} onChange={set('type')} />
         <Select label="mode" value={c.mode} options={CHANNEL_MODES} onChange={set('mode')} />
@@ -241,27 +272,66 @@ function ReloadView({ status, onRetry }: { status: ReloadStatus; onRetry: () => 
   }
 }
 
+function SaveErrorView({ error }: { error: SaveError }) {
+  switch (error.kind) {
+    case 'validation':
+      return (
+        <div className="save-error err" role="alert" data-testid="save-validation">
+          validation error{error.field ? ` at ${error.field}` : ''}: {error.message}
+        </div>
+      )
+    case 'selfLock':
+      return (
+        <div className="save-error err" role="alert" data-testid="save-selflock">
+          This config removes the admin token — you would lock yourself out of the builder. Recover by
+          editing the -config file and restarting.
+        </div>
+      )
+    case 'reloadInProgress':
+      return (
+        <div className="save-error warn" role="alert" data-testid="save-reload-in-progress">
+          A reload is already in progress — wait for it to finish, then try again.
+        </div>
+      )
+    case 'unauthorized':
+      return null // handled by onAuthError (token cleared, paste screen returns)
+    case 'other':
+      return (
+        <div className="save-error err" role="alert" data-testid="save-other">
+          save failed (HTTP {error.status}): {error.message}
+        </div>
+      )
+  }
+}
+
 export function ConfigEditor({
   baseline,
   token,
   onSaved,
+  onAuthError,
   reloadDeps = realReloadDeps,
 }: {
   baseline: Config
   token: string
   onSaved?: (handle: string) => void
+  onAuthError?: () => void
   reloadDeps?: PollDeps
 }) {
   const [base, setBase] = useState<Config>(baseline)
   const [wc, dispatch] = useReducer(configReducer, baseline, clone)
   const [reload, setReload] = useState<ReloadStatus>({ phase: 'idle' })
-  const [err, setErr] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<SaveError | null>(null)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
 
   const locked = reload.phase === 'polling' // full form lock during the swap (§5)
   const dirty = isDirty(wc, base)
 
+  // Map a 400's field path to the section that can act on it (§400 validation inline).
+  const errorFor = (prefix: string): string | undefined =>
+    saveError?.kind === 'validation' && saveError.field?.startsWith(prefix) ? saveError.message : undefined
+
   async function save() {
-    setErr(null)
+    setSaveError(null)
     try {
       const r = await postConfig(token, wc)
       onSaved?.(r.handle)
@@ -274,21 +344,56 @@ export function ConfigEditor({
         dispatch({ kind: 'reset', config: applied })
       }
     } catch (e) {
-      // Full 400/401/409 UI is 2b.2c; here we surface the status honestly.
-      setErr(e instanceof HttpError ? `save failed: HTTP ${e.status}` : 'save failed')
       setReload({ phase: 'idle' })
+      if (e instanceof HttpError) {
+        const se = parseSaveError(e.status, e.body)
+        if (se.kind === 'unauthorized') {
+          onAuthError?.() // clear the in-memory token, return to the paste screen
+          return
+        }
+        setSaveError(se)
+      } else {
+        setSaveError({ kind: 'other', status: 0, message: 'save failed' })
+      }
     }
   }
+
+  function discard() {
+    if (!confirmDiscard) {
+      setConfirmDiscard(true)
+      return
+    }
+    dispatch({ kind: 'reset', config: base })
+    setConfirmDiscard(false)
+    setSaveError(null)
+  }
+
+  const noBrains = wc.brains.length === 0
 
   return (
     <div className="editor">
       <fieldset className="forms" disabled={locked}>
         {wc.channels.map((c, i) => (
-          <ChannelForm key={i} c={c} index={i} dispatch={dispatch} />
+          <ChannelForm key={i} c={c} index={i} dispatch={dispatch} error={errorFor(`channels[${i}]`)} />
         ))}
-        {wc.brains.map((b, i) => (
-          <BrainForm key={i} b={b} index={i} dispatch={dispatch} />
-        ))}
+        {noBrains ? (
+          <section className="panel first-run" data-testid="empty-brains">
+            <h2>brains</h2>
+            <p className="muted">No brains yet. Create your first brain to route messages to a model.</p>
+            <button className="btn primary" type="button" onClick={() => dispatch({ kind: 'addBrain' })}>
+              + Create your first brain
+            </button>
+          </section>
+        ) : (
+          <>
+            {wc.brains.map((b, i) => (
+              <BrainForm key={i} b={b} index={i} dispatch={dispatch} error={errorFor(`brains[${i}]`)} />
+            ))}
+            <button className="btn" type="button" onClick={() => dispatch({ kind: 'addBrain' })}>
+              + add brain
+            </button>
+          </>
+        )}
         {wc.routes.map((r, i) => (
           <RouteForm key={i} r={r} index={i} dispatch={dispatch} />
         ))}
@@ -298,9 +403,24 @@ export function ConfigEditor({
         <button className="btn primary" type="button" disabled={!dirty || locked} onClick={save}>
           {locked ? 'Reloading…' : 'Save and reload'}
         </button>
+        {confirmDiscard ? (
+          <span className="confirm" data-testid="discard-confirm">
+            Discard changes?
+            <button className="btn ghost" type="button" onClick={discard}>
+              Yes, discard
+            </button>
+            <button className="btn ghost" type="button" onClick={() => setConfirmDiscard(false)}>
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button className="btn" type="button" disabled={!dirty || locked} onClick={discard}>
+            Discard
+          </button>
+        )}
         <span className="muted">{dirty ? 'unsaved changes' : 'no changes'}</span>
         <ReloadView status={reload} onRetry={save} />
-        {err && <span className="err">{err}</span>}
+        {saveError && <SaveErrorView error={saveError} />}
       </div>
     </div>
   )

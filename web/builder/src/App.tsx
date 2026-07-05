@@ -156,7 +156,7 @@ export function App() {
         ) : config === null ? (
           <p className="muted">loading…</p>
         ) : (
-          <ConfigEditor baseline={config} token={token} />
+          <ConfigEditor baseline={config} token={token} onAuthError={() => setToken('')} />
         )}
       </section>
 

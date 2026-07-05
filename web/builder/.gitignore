@@ -11,3 +11,8 @@ dist/*
 # Vite / test caches
 .vite/
 coverage/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
