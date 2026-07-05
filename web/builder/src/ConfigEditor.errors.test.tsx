@@ -73,6 +73,17 @@ describe('ConfigEditor — error/edge states (2b.2c)', () => {
     expect(screen.queryByTestId('brain-error-0')).toBeNull()
   })
 
+  it('remove brain: confirm removes it; removing the LAST brain falls into the empty/first-run state', () => {
+    render(<ConfigEditor baseline={baseline()} token="t" reloadDeps={deps} />)
+    // baseline() has one brain, "support". Click its remove control.
+    fireEvent.click(screen.getByRole('button', { name: /remove brain support/i }))
+    // it asks to confirm — not an accidental destructive click
+    expect(screen.getByTestId('brain-remove-confirm-0')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /yes, remove/i }))
+    // last brain gone → the empty/first-run state, not a broken empty list
+    expect(screen.getByTestId('empty-brains').textContent).toMatch(/create your first brain/i)
+  })
+
   it('dirty + Discard asks for confirmation and reverts to the baseline', () => {
     render(<ConfigEditor baseline={baseline()} token="t" reloadDeps={deps} />)
     const save = screen.getByRole('button', { name: /save and reload/i }) as HTMLButtonElement

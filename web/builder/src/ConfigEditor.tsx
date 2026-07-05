@@ -147,17 +147,49 @@ function BrainForm({
   index,
   dispatch,
   error,
+  onRemove,
 }: {
   b: Config['brains'][number]
   index: number
   dispatch: D
   error?: string | undefined
+  onRemove: () => void
 }) {
+  const [confirm, setConfirm] = useState(false)
   const set = (field: 'name' | 'sensitivity' | 'dispatch') => (value: string) =>
     dispatch({ kind: 'setBrainField', brain: index, field, value })
   return (
     <section className="panel">
-      <h2>brain · {b.name || '(unnamed)'}</h2>
+      <div className="panel-head">
+        <h2>brain · {b.name || '(unnamed)'}</h2>
+        {confirm ? (
+          <span className="confirm" data-testid={`brain-remove-confirm-${index}`}>
+            Remove brain?
+            <button
+              className="btn ghost"
+              type="button"
+              onClick={() => {
+                onRemove()
+                setConfirm(false)
+              }}
+            >
+              Yes, remove
+            </button>
+            <button className="btn ghost" type="button" onClick={() => setConfirm(false)}>
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            className="btn ghost"
+            type="button"
+            aria-label={`remove brain ${b.name || index}`}
+            onClick={() => setConfirm(true)}
+          >
+            ✕ remove
+          </button>
+        )}
+      </div>
       {error && (
         <p className="field-err" role="alert" data-testid={`brain-error-${index}`}>
           {error}
@@ -387,7 +419,14 @@ export function ConfigEditor({
         ) : (
           <>
             {wc.brains.map((b, i) => (
-              <BrainForm key={i} b={b} index={i} dispatch={dispatch} error={errorFor(`brains[${i}]`)} />
+              <BrainForm
+                key={i}
+                b={b}
+                index={i}
+                dispatch={dispatch}
+                error={errorFor(`brains[${i}]`)}
+                onRemove={() => dispatch({ kind: 'removeBrain', brain: i })}
+              />
             ))}
             <button className="btn" type="button" onClick={() => dispatch({ kind: 'addBrain' })}>
               + add brain

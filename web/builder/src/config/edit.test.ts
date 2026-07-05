@@ -119,3 +119,31 @@ describe('configReducer — model rows (ADR-0030 §7)', () => {
     expect(noop.brains[0].models).toEqual(base.brains[0].models)
   })
 })
+
+describe('configReducer — removeBrain (functional symmetry with removeModel)', () => {
+  it('removes the named brain and preserves EVERYTHING else', () => {
+    const base = baseline() // two brains: support, other
+    const wc = configReducer(clone(base), { kind: 'removeBrain', brain: 0 })
+    expect(wc.brains).toHaveLength(1)
+    expect(wc.brains[0]).toEqual(base.brains[1]) // the surviving brain is intact
+    // the round-trip guarantee: nothing else dropped
+    expect(wc.channels).toEqual(base.channels)
+    expect(wc.routes).toEqual(base.routes)
+    expect(wc.storage).toEqual(base.storage)
+    expect(wc.observability).toEqual(base.observability)
+    expect(wc.admin).toEqual(base.admin)
+  })
+
+  it('marks the config dirty after a remove', () => {
+    const base = baseline()
+    const wc = configReducer(clone(base), { kind: 'removeBrain', brain: 1 })
+    expect(isDirty(wc, base)).toBe(true)
+  })
+
+  it('removing the last brain yields an empty list (→ the UI empty/first-run state)', () => {
+    const one: Config = { ...baseline(), brains: [baseline().brains[0]] }
+    const wc = configReducer(clone(one), { kind: 'removeBrain', brain: 0 })
+    expect(wc.brains).toEqual([])
+    expect(wc.channels).toEqual(one.channels) // rest still intact
+  })
+})

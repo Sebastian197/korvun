@@ -146,3 +146,13 @@ select.txt {
   text-align: center;
   border-style: dashed;
 }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.panel-head h2 {
+  margin: 0;
+}

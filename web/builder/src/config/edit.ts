@@ -37,6 +37,7 @@ export type ConfigAction =
   | { kind: 'setChannelField'; channel: number; field: 'type' | 'mode' | 'token_env'; value: string }
   | { kind: 'setRouteField'; route: number; field: 'channel' | 'brain'; value: string }
   | { kind: 'addBrain' }
+  | { kind: 'removeBrain'; brain: number }
   | { kind: 'reset'; config: Config }
 
 // Immutable helpers: replace one element of an array without touching the rest.
@@ -58,6 +59,11 @@ export function configReducer(state: Config, action: ConfigAction): Config {
       return clone(action.config)
     case 'addBrain':
       return { ...state, brains: [...state.brains, newBrain()] }
+    case 'removeBrain':
+      // Symmetric with removeModel: drop one brain, preserve everything else
+      // (channels, routes, storage, admin, the other brains). Removing the last
+      // brain leaves an empty list → the UI shows the empty/first-run state.
+      return { ...state, brains: state.brains.filter((_, j) => j !== action.brain) }
     case 'setBrainField':
       return editBrain(state, action.brain, (b) => ({ ...b, [action.field]: action.value }))
     case 'setPolicyKind':

@@ -1006,6 +1006,17 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
   nested module + re-verify `//go:embed`/build on the 3 OSes + cross-compile ×6), so it
   ships as its own change with its own verification, NOT folded into scaffolding. The
   Makefile filter holds in the meantime.
+- **Deferred follow-up (own change, NOT the builder work) — app end-to-end tests bind
+  the FIXED default admin port (2112), not an ephemeral one.** `TestControlAPI_endToEnd`,
+  `TestLiveView_endToEnd`, and `TestRunShutdown_lifecycle` in `internal/app` build an app
+  WITHOUT setting `observability.addr`, so it defaults to `127.0.0.1:2112`
+  (`DefaultObservabilityAddr`). If a real Korvun (e.g. a local demo) is already listening
+  on 2112, the test's admin bind fails and the tests fail ("admin server never became
+  healthy" / "did not start the channel") — surfaced 2026-07-05 while dogfooding the
+  builder against a live binary. Not a regression, a pre-existing fragility. By-construction
+  fix: set `cfg.Observability = &config.ObservabilityConfig{Addr: "127.0.0.1:0"}` in those
+  three tests (ephemeral, as `mutation_mount_test` already does) → immune to a local Korvun.
+  Its own change with its own verification, NOT folded into feature work.
 - **Deferred follow-up (own fix, NOT Phase 2a) — duplicate channel dedupe.**
   `config.Validate` (`config.go:217`, `validateChannels`) dedupes channels by NAME but
   not by TYPE, and `router.RegisterChannel`/`RegisterBrain` (`router.go:146,189`)
