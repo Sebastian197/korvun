@@ -1,0 +1,36 @@
+# Builder frontend CI (Stage 14 Phase 2b). SEPARATE from the Go pipeline so Node
+# flakiness never gates the quality matrix, the cross-compile x6, or the release
+# (ADR-0029 §6). Path-filtered to web/builder so a Go-only change does not run it.
+name: Frontend
+
+on:
+  push:
+    branches: [master]
+    paths: ["web/builder/**", ".github/workflows/frontend.yml"]
+  pull_request:
+    paths: ["web/builder/**", ".github/workflows/frontend.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: builder (lint · typecheck · test · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/builder
+    steps:
+      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v4 # GitHub-owned, repo major-tag convention
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/builder/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      # The build regenerates dist/ fresh (never trusts a committed one, ADR-0029 §6)
+      # and is the artifact the Go binary embeds via go:embed.
+      - run: npm run build

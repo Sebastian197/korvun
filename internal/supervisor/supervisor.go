@@ -126,6 +126,7 @@ type Supervisor struct {
 	// RequestReload) read concurrently.
 	mu               sync.Mutex
 	current          App
+	currentCfg       *config.Config // the config the current app was built from (ADR-0030 §4)
 	status           map[Handle]State
 	reloadInProgress bool
 	shuttingDown     bool
@@ -170,6 +171,7 @@ func WithSignalChan(ch <-chan os.Signal) Option { return func(s *Supervisor) { s
 func New(initial *config.Config, opts ...Option) *Supervisor {
 	s := &Supervisor{
 		initialCfg:      initial,
+		currentCfg:      initial,
 		logger:          slog.Default(),
 		reloadCh:        make(chan reloadReq, 1),
 		status:          make(map[Handle]State),
@@ -248,6 +250,7 @@ func (s *Supervisor) Run(ctx context.Context) error {
 			s.setCurrent(nApp)
 			s.setStatus(req.handle, StateSucceeded)
 			s.persistConfig(req.cfg)
+			s.setCurrentCfg(req.cfg)
 			curCfg = req.cfg
 			s.finishReload()
 			app = nApp
@@ -351,6 +354,21 @@ func (s *Supervisor) Current() App {
 func (s *Supervisor) setCurrent(a App) {
 	s.mu.Lock()
 	s.current = a
+	s.mu.Unlock()
+}
+
+// CurrentConfig returns the config the running app was built from (ADR-0030 §4).
+// The supervisor never mutates a config in place — it swaps pointers at the cutover
+// — so the returned pointer is safe for a read-only marshal by the control API.
+func (s *Supervisor) CurrentConfig() *config.Config {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.currentCfg
+}
+
+func (s *Supervisor) setCurrentCfg(c *config.Config) {
+	s.mu.Lock()
+	s.currentCfg = c
 	s.mu.Unlock()
 }
 

@@ -1,0 +1,73 @@
+/*
+  Korvun builder tokens as CSS variables (ADR-0030). These mirror src/design/tokens.ts
+  (the WCAG-guarded source of truth). Light + dark defined from day one; the theme is
+  a variable swap on [data-theme], which feeds the View Transitions theme change.
+*/
+:root,
+[data-theme='dark'] {
+  --base: #0a0a0c;
+  --surface: #131316;
+  --surface-2: #191920;
+  --border: #262633;
+  --text-1: #e8e8ec;
+  --text-2: #c2c2ce;
+  --text-3: #9ea0ac;
+  --accent: #8b7cf6;
+  --accent-text: #a78bfa;
+  --on-accent: #0a0a0c;
+  --received: #3b82f6;
+  --sent: #22c55e;
+  --dropped: #f59e0b;
+  --failed: #ef4444;
+  /* Identity-only iridescent sheen — glyph / hairline / hero, NEVER states/focus. */
+  --iridescent: linear-gradient(135deg, #2dd4bf, #8b7cf6);
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --base: #f7f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f1f4;
+  --border: #e3e3e9;
+  --text-1: #16161b;
+  --text-2: #3c3c46;
+  --text-3: #5a5a66;
+  --accent: #6d5de0;
+  --accent-text: #6d5de0;
+  --on-accent: #ffffff;
+  --received: #2563eb;
+  --sent: #15803d;
+  --dropped: #b45309;
+  --failed: #b91c1c;
+  color-scheme: light;
+}
+
+:root {
+  /* spacing (base-4), radii, motion — one place (ADR-0030 §2). */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 13px;
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: ease-in;
+  --dur-micro: 120ms;
+  --dur-base: 180ms;
+  --dur-panel: 220ms;
+
+  --font-display: 'Archivo', system-ui, sans-serif;
+  --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -34,6 +34,13 @@ type fakeReloader struct {
 	states map[supervisor.Handle]supervisor.State
 	calls  int
 	gotCfg *config.Config
+	cfg    *config.Config // returned by CurrentConfig (the editing baseline)
+}
+
+func (f *fakeReloader) CurrentConfig() *config.Config {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cfg
 }
 
 func (f *fakeReloader) RequestReload(cfg *config.Config) (supervisor.Handle, error) {
@@ -285,6 +292,40 @@ func TestMutation_statusEndpoint(t *testing.T) {
 
 	if rec := do(mux, "GET", "/api/reload/does-not-exist", "", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("status of an unknown handle: got %d, want 404", rec.Code)
+	}
+}
+
+// ---- 2b.1: GET /api/config (gated round-trip baseline) ----------------------
+
+// GET /api/config returns the raw current config as the builder's editing baseline
+// (ADR-0030 §4), gated by the same bearer as the write. It exposes env-var NAMES
+// (the baseline needs them) but NEVER secret VALUES: the handler marshals the config
+// struct, so os.Getenv is never called and no secret can leave the process. This
+// test BITES if the handler ever resolves and embeds a secret value.
+func TestConfig_get_gated_exposesNamesNeverValues(t *testing.T) {
+	const secretVal = "SUPER-SECRET-TOKEN-VALUE-MUST-NOT-LEAK"
+	t.Setenv(adminEnv, secretVal) // the admin token VALUE lives only in the env
+	var cfg config.Config
+	if err := json.Unmarshal([]byte(validCfgBody), &cfg); err != nil {
+		t.Fatalf("seed cfg: %v", err)
+	}
+	rl := &fakeReloader{cfg: &cfg}
+	mux := mutationMux("secret", rl)
+
+	if rec := do(mux, "GET", "/api/config", "", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("GET /api/config without token: got %d, want 401", rec.Code)
+	}
+
+	rec := do(mux, "GET", "/api/config", "Bearer secret", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/config with token: got %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, adminEnv) {
+		t.Errorf("response missing the token_env NAME %q (needed as the editing baseline)", adminEnv)
+	}
+	if strings.Contains(body, secretVal) {
+		t.Error("SECRET VALUE leaked in GET /api/config — the handler must not resolve os.Getenv")
 	}
 }
 

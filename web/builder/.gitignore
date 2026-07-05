@@ -1,0 +1,13 @@
+# Frontend build-time only. node_modules is never committed.
+node_modules/
+
+# The built dist/ is regenerated in CI and never trusted from git (ADR-0029 §6),
+# EXCEPT the committed placeholder so `//go:embed dist` matches on a clean clone
+# and a bare `go build` compiles (ADR-0029 §4).
+dist/*
+!dist/.gitkeep
+!dist/index.html
+
+# Vite / test caches
+.vite/
+coverage/

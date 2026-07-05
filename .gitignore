@@ -64,3 +64,13 @@ frontend/dist/
 
 # GoReleaser build output (ADR-0025, Stage 15)
 dist/
+
+# Builder frontend (ADR-0029, Stage 14 Phase 2b). The real Vite build is
+# regenerated fresh (CI never trusts a committed one, §6), but the committed
+# placeholder must survive the global dist/ ignore above so //go:embed dist matches
+# on a clean clone and a bare `go build` compiles (§4). Re-include the dir, ignore
+# its contents, keep only the placeholder.
+!web/builder/dist/
+web/builder/dist/*
+!web/builder/dist/.gitkeep
+!web/builder/dist/index.html

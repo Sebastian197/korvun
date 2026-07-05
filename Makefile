@@ -3,16 +3,33 @@ GOLANGCI_LINT := $(GOBIN)/golangci-lint
 GOIMPORTS := $(GOBIN)/goimports
 COVERAGE_THRESHOLD := 85
 
-.PHONY: build test lint cover quality fmt vet
+.PHONY: build test lint cover quality fmt vet frontend-install frontend-build
 
-build:
+# The builder frontend's node_modules vendors a stray Go package (flatted), which
+# `./...` would otherwise pick up. Exclude it from Go tooling. FOLLOW-UP (by
+# construction): a nested go.mod in web/builder would make root ./... skip it
+# without this filter — see the 2b.1 report.
+GO_PKGS := $(shell go list ./... 2>/dev/null | grep -v '/web/builder/node_modules/')
+
+# The builder frontend (web/builder) is built to web/builder/dist and embedded via
+# go:embed (ADR-0029 §4). `build` (the shipped binary) rebuilds it FIRST so the
+# binary carries the real UI. `quality` and `test` do NOT depend on it: they use the
+# committed dist placeholder, so the Go pipeline never needs Node (ADR-0029 §4/§6 —
+# Node never gates the Go build/cross-compile/release).
+frontend-install:
+	cd web/builder && npm ci
+
+frontend-build:
+	cd web/builder && npm run build
+
+build: frontend-build
 	go build ./cmd/korvun
 
 test:
-	go test -race ./...
+	go test -race $(GO_PKGS)
 
 vet:
-	go vet ./...
+	go vet $(GO_PKGS)
 
 fmt:
 	@echo "Checking gofmt..."

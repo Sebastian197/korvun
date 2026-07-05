@@ -21,6 +21,7 @@ func (stubReloader) RequestReload(*config.Config) (supervisor.Handle, error) {
 	return "h", nil
 }
 func (stubReloader) Status(supervisor.Handle) supervisor.State { return supervisor.StateSucceeded }
+func (stubReloader) CurrentConfig() *config.Config             { return nil }
 
 // TestBuild_mutationMountedOnlyWithToken is the C4 load-bearing test of the ADR-0028
 // default: with no admin token the mutation endpoint is NOT mounted (404) and the

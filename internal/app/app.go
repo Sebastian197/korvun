@@ -21,9 +21,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	builderui "github.com/Sebastian197/korvun/web/builder"
 
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/bus"
@@ -283,6 +286,10 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		if b.reloader != nil && cfg.Admin != nil {
 			if token := os.Getenv(cfg.Admin.TokenEnv); token != "" {
 				controlapi.RegisterMutation(adminServer, b.reloader, token)
+				// Mount the builder UI on the SAME token gate (ADR-0030 §4): a builder
+				// whose Save would 404 is a trap, so with no token only the read-only
+				// /ui is served. StripPrefix("/builder") maps GET /builder/ -> "/".
+				adminServer.Handle("GET /builder/", http.StripPrefix("/builder", builderui.Handler()))
 			}
 		}
 	}

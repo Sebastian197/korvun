@@ -28,6 +28,10 @@ import (
 type Reloader interface {
 	RequestReload(*config.Config) (supervisor.Handle, error)
 	Status(supervisor.Handle) supervisor.State
+	// CurrentConfig returns the config the running app was built from, so the
+	// builder can load it as an editing baseline (ADR-0030 §4). nil before the
+	// first app has started.
+	CurrentConfig() *config.Config
 }
 
 // RegisterMutation mounts the write + status endpoints on m. Call it ONLY when a
@@ -38,7 +42,23 @@ type Reloader interface {
 // serving).
 func RegisterMutation(m Mounter, rl Reloader, token string) {
 	m.Handle("POST /api/config", bearerAuth(token)(configHandler(rl)))
+	m.Handle("GET /api/config", bearerAuth(token)(configGetHandler(rl)))
 	m.Handle("GET /api/reload/{handle}", statusHandler(rl))
+}
+
+// configGetHandler serves the raw current config as the builder's editing baseline
+// (ADR-0030 §4). It marshals the config STRUCT, which carries only env-var NAMES
+// (token_env, api_key_env), never secret VALUES: os.Getenv is never called on this
+// path, so no secret can leave the process. Gated by the same bearer as the write.
+func configGetHandler(rl Reloader) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		cfg := rl.CurrentConfig()
+		if cfg == nil {
+			writeError(w, http.StatusServiceUnavailable, "no current config")
+			return
+		}
+		writeJSON(w, cfg)
+	})
 }
 
 // bearerAuth wraps a handler with a constant-time bearer-token check. It compares
