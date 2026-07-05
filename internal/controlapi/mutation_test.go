@@ -287,3 +287,48 @@ func TestMutation_statusEndpoint(t *testing.T) {
 		t.Errorf("status of an unknown handle: got %d, want 404", rec.Code)
 	}
 }
+
+// ---- 2b.0 hardening: empty-token guard + request-body cap --------------------
+
+// A configured EMPTY token must authenticate no one. Without a guard, bearerAuth
+// hashes sha256("") on both sides, so an empty presented token matches and bypasses
+// the gate (a full config-takeover). This is safe today only by the app.Build
+// invariant (mount only when the token is non-empty); the guard makes it safe by
+// construction so a future second caller of RegisterMutation cannot reopen it.
+func TestMutation_emptyConfiguredToken_neverAuthenticates(t *testing.T) {
+	t.Setenv(adminEnv, "adminval") // wouldSelfLock is false, so a bypass would reach 202
+	rl := &fakeReloader{handle: "r1"}
+	mux := http.NewServeMux()
+	RegisterMutation(mux, rl, "") // deliberately mount with an empty token (the footgun)
+
+	if rec := do(mux, "POST", "/api/config", "Bearer ", validCfgBody); rec.Code != http.StatusUnauthorized {
+		t.Errorf("empty configured token + empty presented bearer: got %d, want 401 (no sha256(\"\") bypass)", rec.Code)
+	}
+	if rec := do(mux, "POST", "/api/config", "", validCfgBody); rec.Code != http.StatusUnauthorized {
+		t.Errorf("empty configured token + no auth header: got %d, want 401", rec.Code)
+	}
+	if rl.callCount() != 0 {
+		t.Error("an empty-token bypass reached the supervisor")
+	}
+}
+
+// A config document past the 1 MiB cap is cut before Decode (413), bounding an
+// authenticated admin's memory footprint. The body below is schema-valid but padded
+// past the cap: without the cap it would be accepted (202); with it, it is refused.
+func TestMutation_bodyTooLarge_413(t *testing.T) {
+	t.Setenv(adminEnv, "adminval")
+	rl := &fakeReloader{handle: "r1"}
+	mux := mutationMux("secret", rl)
+	huge := `{"channels":[{"type":"telegram","mode":"polling","token_env":"T"}],` +
+		`"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},` +
+		`"models":[{"provider":"ollama","model_id":"` + strings.Repeat("m", 2<<20) + `","locality":"local"}]}],` +
+		`"routes":[{"channel":"telegram","brain":"d"}],"admin":{"token_env":"` + adminEnv + `"}}`
+
+	rec := do(mux, "POST", "/api/config", "Bearer secret", huge)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("body > 1 MiB: got %d, want 413 (cut before Decode)", rec.Code)
+	}
+	if rl.callCount() != 0 {
+		t.Error("an oversized body reached the supervisor")
+	}
+}

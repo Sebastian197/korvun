@@ -50,6 +50,15 @@ func bearerAuth(token string) func(http.Handler) http.Handler {
 	want := sha256.Sum256([]byte(token))
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// A configured EMPTY token must authenticate NO ONE. Without this,
+			// sha256("") on both sides lets an empty presented token match and bypass
+			// the gate. app.Build only mounts with a non-empty token, but the guard
+			// makes that safe BY CONSTRUCTION rather than by the caller's invariant, so
+			// a future second caller of RegisterMutation cannot reopen the bypass.
+			if token == "" {
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
 			got := sha256.Sum256([]byte(bearerToken(r.Header.Get("Authorization"))))
 			if subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
 				writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -70,12 +79,25 @@ func bearerToken(h string) string {
 	return ""
 }
 
+// maxConfigBodyBytes caps the POST /api/config request body. A full Korvun config
+// is well under 64 KiB, so 1 MiB is generous headroom while bounding the memory an
+// authenticated admin can force the process to buffer (Phase 2b.0 hardening).
+const maxConfigBodyBytes = 1 << 20 // 1 MiB
+
 // configHandler accepts a full config document, validates it, refuses a self-locking
 // config (F11), then hands it to the supervisor and returns 202 + an opaque handle.
 func configHandler(rl Reloader) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Cap the body BEFORE decoding so an oversized document is cut at the reader,
+		// never fully buffered (a MaxBytesError surfaces from Decode as a 413).
+		r.Body = http.MaxBytesReader(w, r.Body, maxConfigBodyBytes)
 		var cfg config.Config
 		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				writeError(w, http.StatusRequestEntityTooLarge, "config document exceeds the 1 MiB limit")
+				return
+			}
 			writeError(w, http.StatusBadRequest, "malformed config JSON")
 			return
 		}
