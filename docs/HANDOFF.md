@@ -29,8 +29,15 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of session close, 2026-06-28)
+## Current state (as of session close, 2026-07-05)
 
+> **CURRENT (2026-07-05): master is at `3f9d34a`** — Phase 2a (config mutation + auth)
+> merged via **PR #6**. **Phase 2b (the no-code builder UI) is COMPLETE on the LOCAL,
+> unpushed branch `feat/builder-ui` (13 commits)** — see the **PHASE 2b — COMPLETE** block
+> under "Notes for the next session". Next step: the PR of `feat/builder-ui` (Chano's act).
+> `make quality` green `-race`, total 94.0%, `go.mod` still 3 direct deps. The Stage-15
+> pointer below is retained as history.
+>
 > **master is at `a8075f9`** (Stage 15 packaging machinery, direct to master),
 > `make quality` green with `-race` + cross-compile ×6 `CGO_ENABLED=0`. Stages
 > closed: **0–9, 11, 12, 13, 14 Phase 1 (foundation), and 15 (packaging
@@ -887,9 +894,83 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
 
 ## Notes for the next session
 
-- **PHASE 2a (the builder — config mutation + auth) — CLOSED on branch
-  `feat/config-mutation` (NOT pushed; master public at `22b65fd`). All 3 TDD units
-  GREEN and Unit C `/review` (with outside voice) is DONE — Phase 2a is COMPLETE.**
+- **PHASE 2b (the no-code builder UI — React/TS/Vite) — COMPLETE on the LOCAL branch
+  `feat/builder-ui` (NOT pushed; master at `3f9d34a` with Phase 2a already merged via
+  PR #6).** The visual builder that Phase 2a's mutation surface was built for. Chano
+  approved the violet look and the edit flow after seeing it live, so 2b.3 was
+  CONSERVATIVE polish, not a redesign.
+  - **ADRs (accepted directly on master):** `ADR-0029` (frontend toolchain) + `ADR-0030`
+    (visual identity + UI architecture) went to **accepted** after a `/plan-eng-review`
+    that caught **3 spec-level P1s** (all resolved in the ADR text BEFORE accepted):
+    **(a)** `go:embed` build-ordering + a placeholder `dist/.gitkeep`+stub so
+    `go build` / `make quality` / cross-compile ×6 / release never break in a clean
+    clone; **(b)** no-CDN enforced by the NETWORK LAYER (CSP `default-src 'self'` from the
+    Go `/builder` handler + a Playwright no-same-origin assertion), the grep left
+    advisory; **(c)** `GET /api/config` gated (same bearer) for the edit round-trip —
+    exposes env-var NAMES, never values (`os.Getenv` is not called).
+  - **2b.0 Go hardening (`f0366f7`):** empty-token guard in `bearerAuth` (closes the
+    `sha256("")` bypass footgun) + `http.MaxBytesReader` 1 MiB on `POST /api/config`.
+    Both TDD red-first, **proven to bite** (red with 202, fix, green 401/413;
+    `callCount==0` after the fix).
+  - **2b.1 scaffold + design system (`32dc879`) + reconciliations (`32b8857`, ADR-0029
+    to npm):** React 19.2.7 / Vite 8.1.3 / Tailwind 4.3.2 / TS 5.9.3 — all versions
+    pinned EXACT via Context7 (patch, not `^`; Tailwind v4 the single innovation token
+    with a pre-agreed fallback). Design system in `src/design/tokens.ts` (functional
+    violet accent OUTSIDE the event palette; `received/sent/dropped/failed` semantics
+    verbatim from `/ui`; iridescent teal→violet identity-only). OFL fonts
+    (Archivo / IBM Plex Sans / IBM Plex Mono) EMBEDDED, no CDN, licenses in-repo.
+    `go:embed` of the dist with placeholder + build-ordering; CSP `default-src 'self'`
+    (the real no-CDN gate); `/builder` conditional on the bearer; `GET /api/config`
+    gated (seam `Reloader.CurrentConfig()`); WCAG AA by Vitest over the token table
+    (proven to bite). Light + dark from day one.
+  - **2b.2 edit surface (`bd439da` 2b.2a · `f6569a6` 2b.2b · `421045c` 2b.2c + `f01c5ab`
+    remove-brain):** read → edit → POST round-trip; the reload state machine verbatim
+    from `supervisor.State` (pending → cutover-in-progress → succeeded/rolled-back/failed,
+    ECONNREFUSED-during-cutover = RETRY not failed, form-lock total during cutover);
+    error/edge states (400 field-mapped inline, the two 409 distinguished, empty/first-run,
+    dirty+Discard confirm, 401→re-auth clears the in-memory token); Playwright e2e with a
+    mock control API (happy flow + rejections + ECONNREFUSED-in-cutover + axe-core +
+    no-same-origin assertion that BITES). remove-brain closed the add/edit/remove symmetry
+    gap Chano hit live (empty-state on removing the last brain).
+  - **2b.3 polish (`02698c3` header · `c24bc4e` save-bar · `4d6fd3f` chevron · `24866da`
+    microinteractions):** Chano tested the UI and APPROVED the violet look + the flow →
+    CONSERVATIVE polish, NOT a redesign. **3 functional fixes** (header reads "builder"
+    not "read-only" — the UI does not lie; sticky save-bar no longer occludes the last
+    content; ▾ chevron on selects via data-URI, no external request). **4 microinteractions**
+    CSS + View Transitions API, **NO Motion** (the reload state transition the highest
+    value; enter/exit; hover; focus stays instant). **reduced-motion test that BITES**;
+    the global `prefers-reduced-motion` guard covers the new transitions.
+  - **Final verification:** **60/60 vitest + 6/6 e2e + `make quality` green `-race`, total
+    94.0%, `controlapi` ≥90%.** `go.mod` STAYS at **3 direct deps** (the frontend is
+    build-time; `builderui` is stdlib-only). The polish is ADDITIVE: it does NOT touch the
+    `fieldset disabled` form-lock or the reload logic. The 2b.2 tests stay intact.
+  - **MILESTONE:** Chano SAW the builder working end-to-end locally (`make build` + the real
+    binary, not a mock): edited a brain's dispatch fanout→sequential, Save and reload, watched
+    the banner go pending→cutover (form locked)→succeeded, and the binary rewrote
+    `configs/dev.local.json` on disk (`dispatch: sequential`) — Phase 2a's hot config mutation,
+    TRIGGERED FROM THE PHASE 2b UI, with zero external requests. The two halves of the builder
+    working together.
+  - **Branch `feat/builder-ui` — 13 commits, local, unpushed, master intact at `3f9d34a`:**
+    `f0366f7` 2b.0 · `32dc879` 2b.1 · `32b8857` reconciliations · `bd439da` 2b.2a ·
+    `f6569a6` 2b.2b · `421045c` 2b.2c · `ff1a566` dev proxy · `02f4b30` trim token ·
+    `f01c5ab` remove-brain · `02698c3` header · `c24bc4e` save-bar · `4d6fd3f` chevron ·
+    `24866da` microinteractions.
+  - **IMMEDIATE NEXT STEP (next session): PR of `feat/builder-ui` to master.** This is
+    Chano's act — he consciously paused to do it with a fresh head (same as the flip /
+    v0.1.0 / PR #6). Claude Code pushes the branch (`git push -u origin feat/builder-ui`)
+    and opens the PR "Phase 2b: no-code builder UI"; Chano reviews and merges it on GitHub
+    (merge commit recommended, preserves the 13 commits). **Do NOT merge autonomously.**
+  - **Structural FOLLOW-UPS (AFTER the PR, each its own change + verification, NOT feature,
+    already recorded):** (1) nested `go.mod` in `web/builder` (move `embed.go` →
+    `internal/builderui`) to exclude `node_modules` from Go tooling BY CONSTRUCTION,
+    dropping the manual Makefile filter (Principle 3); (2) the 3 `internal/app` e2e tests
+    (`TestControlAPI_endToEnd`, `TestLiveView_endToEnd`, `TestRunShutdown_lifecycle`) to
+    `observability.addr="127.0.0.1:0"` (ephemeral) — today they bind the fixed 2112 and
+    collide with a local Korvun (it hit Chano this session).
+
+- **PHASE 2a (the builder — config mutation + auth) — CLOSED, MERGED to master via PR #6.**
+  (Historical record below; branch was `feat/config-mutation`, since merged. Master is now
+  at `3f9d34a`.) All 3 TDD units GREEN and Unit C `/review` (with outside voice) DONE.
   Built in 3 TDD red-first units, each with its own `/review`. `ADR-0027`
   (reload-and-rebuild) + `ADR-0028` (bearer auth) are **accepted** (3 rounds of
   cross-model `/plan-eng-review`) and were **NOT touched** during implementation —
@@ -952,25 +1033,12 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
     that **asserted more than it proved** (Unit A P2, B2 precision, Unit B P1). Every
     test of a load-bearing property MUST BITE when the property is violated — prove
     it by injecting the regression, seeing red, and reverting.
-- **NEXT STEP (next session):**
-  1. **Decide with Chano the push of `feat/config-mutation`** + PR/merge to master (the
-     branch stays LOCAL until then). Phase 2a is CLOSED; nothing else gates it. The C12
-     `/review` verdict above (gating complete, race inocuous, contract corrected) is the
-     record.
-  2. **Phase 2b (the React/Vite builder UI) — FRAMED + ADRs ACCEPTED, implementation
-     STARTED.** `/design-shotgun` (3 identity directions) + `/plan-design-review` +
-     `/plan-eng-review` all done (cross-model). Visual direction: synthesis of the
-     corvid/iridescent concept + ⌘K (variant C) on variant A's IA, **violet functional
-     accent** anchored outside the fixed event palette (teal rejected — collides with
-     `sent` green). **ADR-0029** (frontend toolchain: React 19 + TS + Vite v8 + Tailwind
-     v4, pnpm, `web/builder/`, `go:embed` the dist at `/builder`, ZERO CDN via CSP +
-     Playwright, `go.mod` stays 3) and **ADR-0030** (own visual identity + tokens/light-
-     mode/AA + the 5 hard decisions incl. a new gated `GET /api/config` for round-trip +
-     reload state machine verbatim from `supervisor.State` + bearer default in-memory +
-     model-row contract) are **accepted**. Eng-review closed 3 P1s in the ADR text (go:embed
-     placeholder+build-ordering, no-CDN by network layer, `GET /api/config`). Phases by
-     blast radius: **2b.0 Go hardening (in progress)** → 2b.1 scaffold + design system →
-     2b.2 edit forms → 2b.3 polish/animations.
+- **NEXT STEP — SUPERSEDED (both items DONE).** Phase 2a was merged to master via PR #6;
+  Phase 2b is COMPLETE on `feat/builder-ui`. The authoritative next step is the **PR of
+  `feat/builder-ui`** — see the **PHASE 2b — COMPLETE** block at the top of this section.
+  (Historical: item 1 was "decide the push of `feat/config-mutation`" → done via PR #6;
+  item 2 was "Phase 2b framed, implementation started" → now complete, all four sub-phases
+  green.)
 - **HARDENING deferred to Phase 2b (reported by Unit C's `/review`, one P3 at a time,
   each with its own micro-decision — deliberately NOT folded into the 2a contract fix):**
   1. **Empty-token guard in `bearerAuth` (LATENT FOOTGUN — close FIRST in 2b).**
