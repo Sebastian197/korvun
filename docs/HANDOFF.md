@@ -842,6 +842,49 @@ Key entries currently:
 
 ---
 
+## Load-bearing principles (learned in Phase 2a — do not repeat)
+
+> **Read this like the non-negotiable rules.** These three principles were paid
+> for by `/review` findings during Phase 2a. They persist across sessions so the
+> same class of mistake is not made twice. They are about ENGINEERING DISCIPLINE,
+> not any one file.
+
+**PRINCIPLE 1 — TRUTHFULNESS: the code, its tests, and its documentation must tell
+the SAME story.** When they diverge, that divergence is a FINDING, not a detail. Two
+faces of the one rule, both caught by `/review` this phase:
+
+- **(a) A test of a load-bearing property MUST BITE when the property is violated.**
+  Prove it by injecting the regression, seeing red, and reverting. A green test that
+  does not bite is proof of nothing. (Caught 3 times in Phase 2a: Unit A's "no
+  workers" guard asserted a property it did not actually guard; B2 asserted more than
+  it proved; Unit B's crash-loop P1 passed green because `B3b` did not wire the
+  persist recorder, so the test never saw the bad on-disk config.)
+- **(b) A comment/godoc must NOT claim a behavior the code does NOT have.** (Caught in
+  Unit C: `ErrShuttingDown`'s godoc claimed a "503 on shutdown" that did not exist —
+  the real path returns a generic 500 and is never even reached. The real behavior was
+  safe; the documentation lied.)
+
+**PRINCIPLE 2 — WHEN A `/review` FINDS A DIVERGENCE, THE ORDER IS FIXED:** (1) FIRST
+determine, WITH EVIDENCE (never for convenience), whether the REAL behavior is
+correct/safe; (2) ONLY THEN choose the fix. If the behavior is correct but the doc or
+the test lies, correct the doc/test so it tells the truth — and "correct" means leave
+it honest AND COMPLETE (name the edge case as known-behavior / caveat, the way the ADRs
+name their caveats), never quietly delete the inconvenient part. If the behavior is
+INcorrect, fix the code. NEVER use "fix the comment" as a shortcut to avoid fixing a
+behavior that is genuinely wrong. C12 was documentation-only PRECISELY BECAUSE the
+review first PROVED the reload-in-shutdown rejection is safe (nothing is persisted,
+nothing leaks, the handle is not observable) — that proof is what unlocked the
+document-it option.
+
+**PRINCIPLE 3 — DO NOT TOUCH DELICATE CODE WITHOUT A REAL BENEFIT:** guarantees by
+construction beat fragile defenses layered over sensitive code. When a fix would
+perturb stabilized concurrency (e.g. the supervisor's shutdown ordering / cutover swap,
+whose `-race` we verified 20/20 twice) for a marginal benefit over an already-inocuous
+case, prefer NOT touching the code and documenting the limit instead. (Applied in C12:
+the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
+
+---
+
 ## Notes for the next session
 
 - **PHASE 2a (the builder — config mutation + auth) — CLOSED on branch
