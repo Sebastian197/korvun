@@ -192,6 +192,8 @@ From a source checkout you can also start from the profiles in
 
 ## Next
 
+- **Configure it visually, no JSON** → once Korvun is running, edit brains, models,
+  and routes from the browser with the no-code builder → [`BUILDER.md`](BUILDER.md)
 - **What every config field does** → [`CONFIGURATION.md`](CONFIGURATION.md)
 - **Install / verify / run as a service** → [`packaging/INSTALL.md`](packaging/INSTALL.md)
 - **Why it is built this way** → the ADRs in [`adr/`](adr/)
