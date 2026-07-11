@@ -967,15 +967,34 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
   Linux/Windows escritas por analogía y **marcadas no-verificadas**.
 
 - **PIEZA 2 (manejo de errores de producción) — EN CURSO. ADR-0031 ACEPTADO
-  (`status: accepted`), 2ª voz ABSORBIDA y comiteada.** Cierra el 6º y
+  (`status: accepted`); sub-fases TDD 1 y 2 HECHAS y comiteadas en local.** Cierra el 6º y
   último criterio V1 **"aguanta un proveedor caído sin caerse"**.
-  - **ACTUALIZACIÓN 2026-07-11 (última):** los **3 hallazgos de la 2ª voz (SV1–SV3)
+  - **ACTUALIZACIÓN 2026-07-11 (última):** **sub-fases 1 y 2 en verde y comiteadas en
+    local (SIN push — es de Chano):**
+    - **Sub-fase 1 (`b00926d`) — jerarquía de timeouts + config per-modelo + ceiling
+      derivado (Decisiones 2 y 3).** `ModelConfig.RequestTimeout`/`MaxRetries`,
+      `BrainConfig.Retry`, top-level `request_timeout`/`brain_handler_timeout`; el app
+      DERIVA el ceiling por brain (fan-out `max_i` / sequential `Σ` / agent
+      `maxIterations`, `defaultCeilingMargin = 500ms`) e instala
+      `WithBrainHandlerTimeout(max)`, override `≥ derived` o falla ruidoso; retirada la
+      doble aplicación del timeout (coordinator + adapter) — **SV3 verificado: ningún
+      path sin deadline** (el AgentBrain conserva `WithAgentPerModelTimeout`; el resto
+      hereda el ceiling del router).
+    - **Sub-fase 2 (`03901a6`) — cancelación fan-out al primer éxito usable + carve-out
+      de consenso (SV1, Opción A).** `fanout.WithCancelOnFirstUsableSuccess()` (opt-in;
+      default wait-all); `buildCoordinator(dispatch, policyKind)` cablea priority→cancela,
+      consensus→wait-all; el coordinator NO importa `policy`. Bite-test del carve-out
+      DEMOSTRADO que muerde; `-race -count=20` limpio.
+    - Registro en ADR-0031 (margin + nota SV3 del estado intermedio) va en este mismo
+      commit de docs. `make quality` verde `-race` tras cada sub-fase.
+  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **TDD sub-fase 3 — refinamiento del
+    mapeo de errores de Ollama (`5xx→ErrProviderUnavailable`, `429→RateLimited`, como
+    Groq), rojo primero. Es COMPLETITUD (F9), no el fix de Chano.**
+  - **ACTUALIZACIÓN previa 2026-07-11:** los **3 hallazgos de la 2ª voz (SV1–SV3)
     están ABSORBIDOS en el ADR-0031 y comiteados** (commit `docs: absorb second-voice
     findings SV1-SV3 into ADR-0031`); tras la **revisión final del copiloto**, el
     **ADR-0031 pasó a `accepted`**. El encuadre y los 3 hallazgos de abajo se conservan
     como HISTORIAL (ya no son trabajo pendiente).
-  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **TDD desde la sub-fase 1 (timeout
-    hierarchy + per-model config + derived ceiling), rojo primero.**
   - **Motivación DEMOSTRADA en hardware + F6 RESUELTO:** el timeout Korvun→Ollama en frío
     (~5s < carga del modelo) hace fallar el primer mensaje; y la incógnita F6 quedó
     resuelta en el Mac de Chano — **al desconectar durante la carga, Ollama ABORTA la

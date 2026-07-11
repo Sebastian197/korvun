@@ -148,6 +148,13 @@ Fix the incoherence at the root by **collapsing**, not reconciling:
   override is allowed **only if it passes validation `≥ derived`** (fail loud at config
   load otherwise — never silently guillotine a model).
 
+  **Chosen `margin` (sub-phase 1, implemented):** `defaultCeilingMargin = 500ms`.
+  It is the slack ABOVE the worst-case model time that absorbs the non-model
+  parts of `Handle` (translation, policy reduction, store append) so the ceiling
+  never guillotines a model that finishes right at its per-attempt window. It is
+  deliberately modest — the per-attempt/backoff terms dominate — and applies to
+  every shape's formula uniformly.
+
 **No path without a deadline (SV3, verified):** removing `WithPerModelTimeout`
 from the coordinator and the wired `WithRequestTimeout` from the adapters leaves
 NO `Generate` call without a deadline, because the retry decorator is wired
@@ -158,6 +165,20 @@ present (retry forced to 0 — SV2): it remains the sole owner of the per-attemp
 deadline. The AgentBrain path is covered by the same construction: it calls
 `fanout.CallOne` directly, but against the DECORATED model, so each loop call
 carries the deadline.
+
+**Intermediate state (sub-phases 1–2, before the decorator — implemented &
+verified):** the decorator does not exist yet, so the per-attempt deadline owner
+differs by shape without ever leaving a `Generate` deadline-less. Fan-out and
+sequential inherit the **router ceiling** alone (the coordinator
+`WithPerModelTimeout` and the adapter `WithRequestTimeout` were removed in
+sub-phase 1; every `Generate` still runs under the ceiling ctx via `Handle`).
+The **AgentBrain keeps `WithAgentPerModelTimeout`** as its per-attempt deadline
+owner (a finer bound than the whole-`Handle` ceiling, matching its
+`maxIterations` loop). Both real callers of `Generate` (`fanout.CallOne` and the
+`WithModelID` decorator) run under `Handle`'s ceiling ctx, and Preflight never
+calls `Generate` — so SV3 holds in this intermediate state. When the retry
+decorator lands (sub-phase 4) it becomes the single per-attempt owner for all
+shapes, as the paragraph above describes.
 
 **Test (concrete, F5):** a model that always times out, N retries → `Handle` returns
 **by the ceiling**, not in N×perAttempt with no bound; and the ceiling ≥ derived
