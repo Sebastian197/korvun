@@ -40,4 +40,10 @@ var (
 	// number of (post-selection) models other than exactly one: the Stage 8 cut
 	// is a SINGLE-model tool-use loop (ADR-0021 §1).
 	ErrAgentModelCount = errors.New("app: agent brain requires exactly one model")
+
+	// ErrCeilingOverrideTooLow is returned when config sets an explicit
+	// brain_handler_timeout below the ceiling the app derives from the brains'
+	// per-model timeouts and dispatch shapes. Honoring it would silently
+	// guillotine a slow model, so Build fails loud instead (ADR-0031 Decision 2).
+	ErrCeilingOverrideTooLow = errors.New("app: brain_handler_timeout override is below the derived ceiling")
 )

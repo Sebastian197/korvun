@@ -21,10 +21,11 @@ import (
 // Compile-time assertion that *AgentBrain satisfies the Brain seam (ADR-0021 §1).
 var _ Brain = (*AgentBrain)(nil)
 
-// defaultMaxIterations is the hard loop cap when the operator does not set one
+// DefaultAgentMaxIterations is the hard loop cap when the operator does not set one
 // (ADR-0021 §2): an unbounded model→tool→model loop is an infinite loop burning
-// cloud quota, so SOME cap is mandatory.
-const defaultMaxIterations = 5
+// cloud quota, so SOME cap is mandatory. Exported so the app's router-ceiling
+// derivation can size the agent shape from the same source of truth (ADR-0031).
+const DefaultAgentMaxIterations = 5
 
 // observationPrefix marks a tool result fed back to the model (ADR-0021 §3.3).
 // The parser never treats a line starting with it as a tool call; it rides as a
@@ -167,7 +168,7 @@ func NewAgentBrain(m model.Model, tools tool.Registry, opts ...AgentOption) *Age
 	a := &AgentBrain{
 		model:    m,
 		tools:    tools,
-		maxIters: defaultMaxIterations,
+		maxIters: DefaultAgentMaxIterations,
 		fallback: defaultFallback,
 		logger:   slog.Default(),
 		metrics:  metrics.Nop{},

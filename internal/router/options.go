@@ -54,6 +54,12 @@ func WithBrainHandlerTimeout(d time.Duration) Option {
 	return func(r *Router) { r.brainHandlerTimeout = d }
 }
 
+// BrainHandlerTimeout returns the effective per-Handle ceiling the router
+// enforces (WithBrainHandlerTimeout, or DefaultBrainHandlerTimeout when unset).
+// It is exposed read-only so the wiring layer can confirm the DERIVED ceiling
+// was installed instead of the default (ADR-0031 Decision 2).
+func (r *Router) BrainHandlerTimeout() time.Duration { return r.brainHandlerTimeout }
+
 // WithOutboundQueueCapacity overrides the per-channel outbound queue
 // capacity. Values less than 1 are clamped to 1.
 func WithOutboundQueueCapacity(n int) Option {

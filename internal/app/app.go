@@ -172,6 +172,15 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		o(b)
 	}
 
+	// Derive the router's per-Handle ceiling from the brains' per-model timeouts
+	// and dispatch shapes, or honor an explicit override that clears it (ADR-0031
+	// Decision 2). Done before any resource is created so a too-low override fails
+	// loud with nothing to unwind.
+	ceiling, err := deriveRouterCeiling(cfg, b.perModelTimeout)
+	if err != nil {
+		return nil, err
+	}
+
 	// Resolve observability BEFORE the router, so the Prometheus backend exists
 	// when the domain is wired (ADR-0020 §4). Absent block = on with loopback
 	// defaults (the asymmetry with Storage, documented in config). When enabled,
@@ -217,6 +226,11 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		router.WithErrorHandler(func(re router.RouterError) {
 			onRouterError(b.logger, b.metrics, eventBus, re)
 		}),
+		// The DERIVED ceiling replaces router.DefaultBrainHandlerTimeout as the sole
+		// per-Handle deadline (ADR-0031 Decision 2); it governs every Generate via
+		// the Handle ctx, so removing the coordinator/adapter timeouts below leaves
+		// no path without a deadline.
+		router.WithBrainHandlerTimeout(ceiling),
 	}
 	if eventBus != nil {
 		ropts = append(ropts, router.WithEventPublisher(eventBus))
@@ -556,7 +570,7 @@ func (b *builder) buildBrain(bc config.BrainConfig) (brain.Brain, error) {
 	if err != nil {
 		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 	}
-	coord := buildCoordinator(bc.Dispatch, b.perModelTimeout)
+	coord := buildCoordinator(bc.Dispatch)
 	orchOpts := []brain.Option{brain.WithLogger(b.logger), brain.WithMetrics(b.metrics)}
 	if b.store != nil {
 		// Shared durable memory; recentTurns 0 => the Orchestrator default
@@ -633,7 +647,11 @@ func (b *builder) buildCatalog(bc config.BrainConfig) ([]policy.CatalogEntry, er
 func (b *builder) buildModel(m config.ModelConfig) (model.Model, error) {
 	switch m.Provider {
 	case "ollama":
-		opts := []ollama.Option{ollama.WithRequestTimeout(b.perModelTimeout)}
+		// No WithRequestTimeout: the per-attempt deadline has a single owner (the
+		// router ceiling today; the retry decorator once it lands), so the adapter
+		// is bounded by the ctx it receives, never by a second wired timeout
+		// (ADR-0031 Decision 2 — one owner of the deadline).
+		var opts []ollama.Option
 		if m.BaseURL != "" {
 			opts = append(opts, ollama.WithBaseURL(m.BaseURL))
 		}
@@ -643,7 +661,8 @@ func (b *builder) buildModel(m config.ModelConfig) (model.Model, error) {
 		if key == "" {
 			return nil, fmt.Errorf("%w: %q (groq API key for model %q)", ErrMissingSecret, m.APIKeyEnv, m.ModelID)
 		}
-		opts := []groq.Option{groq.WithAPIKey(key), groq.WithRequestTimeout(b.perModelTimeout)}
+		// No WithRequestTimeout, for the same single-owner reason as Ollama above.
+		opts := []groq.Option{groq.WithAPIKey(key)}
 		if m.BaseURL != "" {
 			opts = append(opts, groq.WithBaseURL(m.BaseURL))
 		}
@@ -845,12 +864,15 @@ func buildPolicy(pc config.PolicyConfig) (policy.Policy, error) {
 }
 
 // buildCoordinator selects the dispatch shape (ADR-0017 §3). An empty dispatch
-// defaults to fan-out, the common case.
-func buildCoordinator(dispatch string, perModelTimeout time.Duration) brain.Coordinator {
+// defaults to fan-out, the common case. No WithPerModelTimeout is applied: the
+// per-attempt deadline has a single owner (the router ceiling today; the retry
+// decorator once it lands), so each Generate is bounded by the Handle ctx alone
+// (ADR-0031 Decision 2 — one owner of the deadline).
+func buildCoordinator(dispatch string) brain.Coordinator {
 	switch dispatch {
 	case "sequential":
-		return sequential.New(sequential.WithPerModelTimeout(perModelTimeout))
+		return sequential.New()
 	default: // "" or "fanout"
-		return fanout.New(fanout.WithPerModelTimeout(perModelTimeout))
+		return fanout.New()
 	}
 }

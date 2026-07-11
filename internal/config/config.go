@@ -21,14 +21,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 )
+
+// DefaultRequestTimeout is the per-attempt provider timeout used when neither a
+// per-model nor a top-level request_timeout is set (ADR-0031 Decision 3). It
+// errs generous — the safe floor for a cold local model load — because a slow
+// success beats a fast false-failure; cloud models are tightened per-model.
+const DefaultRequestTimeout = 120 * time.Second
 
 // Config is the root deployment descriptor: the channels to run, the brains to
 // orchestrate, the routes binding the two, and optional durable storage.
 type Config struct {
-	Channels []ChannelConfig `json:"channels"`
-	Brains   []BrainConfig   `json:"brains"`
-	Routes   []RouteConfig   `json:"routes"`
+	// RequestTimeout is the top-level default per-attempt provider timeout, a
+	// duration string (e.g. "120s"). A per-model ModelConfig.RequestTimeout
+	// overrides it; when both are empty, DefaultRequestTimeout applies
+	// (ADR-0031 Decision 3). Resolve the effective value via
+	// EffectiveRequestTimeout.
+	RequestTimeout string `json:"request_timeout,omitempty"`
+	// BrainHandlerTimeout is the OPTIONAL explicit override of the router's
+	// derived per-Handle ceiling, a duration string. It is honored only if it is
+	// >= the ceiling the app derives from the brains' per-model timeouts and
+	// dispatch shapes; a lower value fails loud at boot (ADR-0031 Decision 2 —
+	// never silently guillotine a slow model). Empty means "derive it".
+	BrainHandlerTimeout string          `json:"brain_handler_timeout,omitempty"`
+	Channels            []ChannelConfig `json:"channels"`
+	Brains              []BrainConfig   `json:"brains"`
+	Routes              []RouteConfig   `json:"routes"`
 	// Storage is the optional durable conversation store (ADR-0019). It is a
 	// pointer so absence is distinguishable from presence: nil (block omitted)
 	// means run stateless (Stage 11 / ADR-0018 behavior, unchanged); a present
@@ -99,6 +118,34 @@ func (c *Config) ObservabilitySettings() (enabled bool, addr string) {
 	return enabled, addr
 }
 
+// EffectiveRequestTimeout resolves the per-attempt timeout that applies to m:
+// the per-model RequestTimeout if set, else the top-level Config.RequestTimeout,
+// else DefaultRequestTimeout (ADR-0031 Decision 3). It assumes the strings have
+// passed Validate (parseable, positive); a malformed or non-positive value is
+// treated as unset so the next tier applies, never as a zero deadline.
+func (c *Config) EffectiveRequestTimeout(m ModelConfig) time.Duration {
+	if d := parsePositiveDuration(m.RequestTimeout); d > 0 {
+		return d
+	}
+	if d := parsePositiveDuration(c.RequestTimeout); d > 0 {
+		return d
+	}
+	return DefaultRequestTimeout
+}
+
+// parsePositiveDuration returns the parsed duration if s is a valid, strictly
+// positive duration string, and 0 otherwise (empty, malformed, or non-positive).
+func parsePositiveDuration(s string) time.Duration {
+	if s == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return 0
+	}
+	return d
+}
+
 // ChannelConfig declares one messaging channel. Type selects the adapter
 // (currently "telegram"); Mode selects its transport ("polling"). TokenEnv is
 // the NAME of the environment variable holding the bot token — never the token
@@ -119,6 +166,12 @@ type BrainConfig struct {
 	Policy      PolicyConfig  `json:"policy"`
 	Dispatch    string        `json:"dispatch"`
 	Models      []ModelConfig `json:"models"`
+	// Retry toggles per-model retry for this brain (ADR-0031 Decision 3). It is a
+	// *bool so an absent value (default: on) is distinguishable from an explicit
+	// false. It MUST NOT be true on a sequential brain: the serial fail-over IS
+	// the retry story, so enabling retry there would multiply the serial worst
+	// case (SV2) — Validate rejects that combination.
+	Retry *bool `json:"retry,omitempty"`
 	// Agent, when present, mounts a tool-use AgentBrain instead of the default
 	// fan-out Orchestrator (ADR-0021). Both satisfy brain.Brain, so the router and
 	// cmd/korvun are agnostic to which one a brain wires. nil = the Orchestrator.
@@ -153,6 +206,16 @@ type ModelConfig struct {
 	Locality  string `json:"locality"`
 	BaseURL   string `json:"base_url"`
 	APIKeyEnv string `json:"api_key_env"`
+	// RequestTimeout is this model's per-attempt timeout, a duration string (e.g.
+	// "15s"). It overrides the top-level Config.RequestTimeout; empty inherits it
+	// (ADR-0031 Decision 3). Timeout is a property of the provider/model — a cold
+	// local model wants a generous window while a cloud endpoint wants a tight
+	// one. Resolve via Config.EffectiveRequestTimeout.
+	RequestTimeout string `json:"request_timeout,omitempty"`
+	// MaxRetries is the per-model retry count for transient post-load errors
+	// (ADR-0031 Decision 3). 0 disables retry for this model; the retry mechanism
+	// itself lands with the decorator (a later sub-phase). Must be >= 0.
+	MaxRetries int `json:"max_retries,omitempty"`
 }
 
 // RouteConfig binds an inbound channel (by its registered name) to a brain (by
@@ -192,6 +255,9 @@ func (c *Config) Validate() error {
 	// and checked at boot (internal/app openStore, which returns a named fatal
 	// error) because resolving the default path and verifying writability depend
 	// on the OS, not on the static schema (ADR-0019 §5).
+	if err := c.validateTimeouts(); err != nil {
+		return err
+	}
 	channelNames, err := c.validateChannels()
 	if err != nil {
 		return err
@@ -204,6 +270,29 @@ func (c *Config) Validate() error {
 		return err
 	}
 	return c.validateRoutes(channelNames, brainNames)
+}
+
+// validateTimeouts checks the top-level resilience durations (ADR-0031). A
+// request_timeout that is present must parse AND be strictly positive (a zero or
+// negative default is a guillotine, ADR-0031 Decision 2); a brain_handler_timeout
+// that is present must parse (its >= derived check is a boot concern in
+// internal/app, not a static-schema one).
+func (c *Config) validateTimeouts() error {
+	if c.RequestTimeout != "" {
+		d, err := time.ParseDuration(c.RequestTimeout)
+		if err != nil {
+			return fmt.Errorf("%w: request_timeout: invalid duration %q: %w", ErrInvalidConfig, c.RequestTimeout, err)
+		}
+		if d <= 0 {
+			return fmt.Errorf("%w: request_timeout: must be a positive duration, got %q", ErrInvalidConfig, c.RequestTimeout)
+		}
+	}
+	if c.BrainHandlerTimeout != "" {
+		if _, err := time.ParseDuration(c.BrainHandlerTimeout); err != nil {
+			return fmt.Errorf("%w: brain_handler_timeout: invalid duration %q: %w", ErrInvalidConfig, c.BrainHandlerTimeout, err)
+		}
+	}
+	return nil
 }
 
 // validateAdmin checks the optional admin block: if present, it must name a
@@ -271,6 +360,12 @@ func (c *Config) validateBrains() (map[string]bool, error) {
 		default:
 			return nil, fmt.Errorf("%w: brains[%d].dispatch: unknown dispatch %q (fanout|sequential)", ErrInvalidConfig, i, b.Dispatch)
 		}
+		// SV2 (ADR-0031 Decision 3): retry is off by construction for sequential —
+		// the fail-over IS the retry story, so an explicit retry:true would multiply
+		// the serial worst case. Reject it loudly rather than silently ignore it.
+		if b.Dispatch == "sequential" && b.Retry != nil && *b.Retry {
+			return nil, fmt.Errorf("%w: brains[%d].retry: retry:true is not allowed on a sequential brain (the serial fail-over is the retry story; enabling it multiplies the serial worst case)", ErrInvalidConfig, i)
+		}
 		switch b.Policy.Kind {
 		case "priority", "consensus":
 		case "":
@@ -335,6 +430,22 @@ func validateModels(brainIdx int, models []ModelConfig) error {
 		// value is resolved from the environment at boot, never stored here.
 		if m.Provider == "groq" && m.APIKeyEnv == "" {
 			return fmt.Errorf("%w: brains[%d].models[%d].api_key_env: required for cloud provider %q (name of the env var holding the API key)", ErrInvalidConfig, brainIdx, j, m.Provider)
+		}
+		// Per-model resilience fields (ADR-0031 Decision 3): a present
+		// request_timeout must parse and be strictly positive; max_retries must be
+		// >= 0 (0 disables). A zero/negative timeout is a guillotine, rejected like
+		// an unparseable one.
+		if m.RequestTimeout != "" {
+			d, err := time.ParseDuration(m.RequestTimeout)
+			if err != nil {
+				return fmt.Errorf("%w: brains[%d].models[%d].request_timeout: invalid duration %q: %w", ErrInvalidConfig, brainIdx, j, m.RequestTimeout, err)
+			}
+			if d <= 0 {
+				return fmt.Errorf("%w: brains[%d].models[%d].request_timeout: must be a positive duration, got %q", ErrInvalidConfig, brainIdx, j, m.RequestTimeout)
+			}
+		}
+		if m.MaxRetries < 0 {
+			return fmt.Errorf("%w: brains[%d].models[%d].max_retries: must be >= 0 (0 disables), got %d", ErrInvalidConfig, brainIdx, j, m.MaxRetries)
 		}
 	}
 	return nil
