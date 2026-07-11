@@ -1,6 +1,6 @@
 # ADR-0031: Production resilience — timeouts, retry, and graceful degradation
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-11
 > **Revision:** 2026-07-11 — absorbed the 3 second-voice adversarial-review
 > findings (SV1 fan-out cancellation + per-shape ceiling, SV2 no retry in

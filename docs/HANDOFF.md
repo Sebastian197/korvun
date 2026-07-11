@@ -966,12 +966,16 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
   de Telegram recibió la respuesta del **modelo local, cero nube**. Solo docs, sin código.
   Linux/Windows escritas por analogía y **marcadas no-verificadas**.
 
-- **PIEZA 2 (manejo de errores de producción) — EN CURSO. ADR-0031 en borrador
-  (`status: proposed`), validado por el copiloto, con la 2ª voz hecha.** Cierra el 6º y
+- **PIEZA 2 (manejo de errores de producción) — EN CURSO. ADR-0031 ACEPTADO
+  (`status: accepted`), 2ª voz ABSORBIDA y comiteada.** Cierra el 6º y
   último criterio V1 **"aguanta un proveedor caído sin caerse"**.
-  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **ABSORBER los 3 hallazgos de la 2ª voz
-    en el ADR-0031** (abajo), luego **revisión final del copiloto → pasar ADR a
-    `accepted` → TDD desde la sub-fase 1.**
+  - **ACTUALIZACIÓN 2026-07-11 (última):** los **3 hallazgos de la 2ª voz (SV1–SV3)
+    están ABSORBIDOS en el ADR-0031 y comiteados** (commit `docs: absorb second-voice
+    findings SV1-SV3 into ADR-0031`); tras la **revisión final del copiloto**, el
+    **ADR-0031 pasó a `accepted`**. El encuadre y los 3 hallazgos de abajo se conservan
+    como HISTORIAL (ya no son trabajo pendiente).
+  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **TDD desde la sub-fase 1 (timeout
+    hierarchy + per-model config + derived ceiling), rojo primero.**
   - **Motivación DEMOSTRADA en hardware + F6 RESUELTO:** el timeout Korvun→Ollama en frío
     (~5s < carga del modelo) hace fallar el primer mensaje; y la incógnita F6 quedó
     resuelta en el Mac de Chano — **al desconectar durante la carga, Ollama ABORTA la
