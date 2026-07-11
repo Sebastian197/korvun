@@ -570,7 +570,7 @@ func (b *builder) buildBrain(bc config.BrainConfig) (brain.Brain, error) {
 	if err != nil {
 		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 	}
-	coord := buildCoordinator(bc.Dispatch)
+	coord := buildCoordinator(bc.Dispatch, bc.Policy.Kind)
 	orchOpts := []brain.Option{brain.WithLogger(b.logger), brain.WithMetrics(b.metrics)}
 	if b.store != nil {
 		// Shared durable memory; recentTurns 0 => the Orchestrator default
@@ -868,11 +868,21 @@ func buildPolicy(pc config.PolicyConfig) (policy.Policy, error) {
 // per-attempt deadline has a single owner (the router ceiling today; the retry
 // decorator once it lands), so each Generate is bounded by the Handle ctx alone
 // (ADR-0031 Decision 2 — one owner of the deadline).
-func buildCoordinator(dispatch string) brain.Coordinator {
+//
+// For fan-out, the cancel-on-first-usable-success mode (ADR-0031 SV1) is wired
+// from the brain's policy kind: a "priority" brain cancels its siblings at the
+// first usable success (any success is usable), while a "consensus" brain (or
+// any non-priority kind) keeps wait-all — a consensus needs every vote, so no
+// single success is "usable" (the Decision 4 carve-out). This maps policy shape
+// to a MECHANICAL flag here; the fanout coordinator never imports internal/policy.
+func buildCoordinator(dispatch, policyKind string) brain.Coordinator {
 	switch dispatch {
 	case "sequential":
 		return sequential.New()
 	default: // "" or "fanout"
+		if policyKind == "priority" {
+			return fanout.New(fanout.WithCancelOnFirstUsableSuccess())
+		}
 		return fanout.New()
 	}
 }

@@ -57,6 +57,11 @@ type Result struct {
 // now) are read-only after construction.
 type Coordinator struct {
 	perModelTimeout time.Duration
+	// cancelOnFirstUsableSuccess opts the coordinator into cancelling the
+	// remaining in-flight calls at the first usable success (ADR-0031 SV1). The
+	// zero value is false — wait-all, the historical behavior. Set via
+	// WithCancelOnFirstUsableSuccess.
+	cancelOnFirstUsableSuccess bool
 	// now is the package-private clock seam. New sets it to time.Now;
 	// tests in the same package may assign a fake. Run defends against
 	// a nil value (zero-value Coordinator).
@@ -79,6 +84,21 @@ func WithPerModelTimeout(d time.Duration) Option {
 			c.perModelTimeout = d
 		}
 	}
+}
+
+// WithCancelOnFirstUsableSuccess opts the fan-out into cancelling the remaining
+// in-flight model calls as soon as the FIRST usable success arrives, where
+// "usable success" means an Outcome with Err == nil (ADR-0031 SV1). A survivor
+// then never waits out a dying model's full budget; the cancelled siblings
+// surface as ctx-cancelled Outcomes (Err set, no Response), never as a Response.
+//
+// It is OPT-IN: the default (this option absent) is wait-all — every model call
+// runs to completion even after an early success, which is the historical
+// behavior and the mode a consensus brain requires (no single success is
+// "usable" for consensus, ADR-0031 Decision 4 carve-out). A per-model FAILURE
+// (Err != nil) never triggers cancellation; only the first Err == nil does.
+func WithCancelOnFirstUsableSuccess() Option {
+	return func(c *Coordinator) { c.cancelOnFirstUsableSuccess = true }
 }
 
 // New constructs a Coordinator with the given options. The clock is
@@ -177,12 +197,24 @@ func (c *Coordinator) Run(
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// onUsableSuccess cancels the remaining in-flight calls at the FIRST usable
+	// success (ADR-0031 SV1), or is nil in the default wait-all mode. sync.Once
+	// makes "first" well-defined and the cancel idempotent under a
+	// near-simultaneous double success — the only shared state the detection
+	// touches, so the per-slot outcomes[i] writes and wg.Wait stay unchanged and
+	// race-free.
+	var once sync.Once
+	var onUsableSuccess func()
+	if c.cancelOnFirstUsableSuccess {
+		onUsableSuccess = func() { once.Do(cancel) }
+	}
+
 	outcomes := make([]Outcome, len(models))
 	var wg sync.WaitGroup
 	wg.Add(len(models))
 
 	for i, m := range models {
-		go c.callOne(runCtx, req, m, &outcomes[i], &wg)
+		go c.callOne(runCtx, req, m, &outcomes[i], &wg, onUsableSuccess)
 	}
 	wg.Wait()
 
@@ -198,12 +230,21 @@ func (c *Coordinator) Run(
 // outcomes[i] for a unique i; no two goroutines touch the same memory
 // location. WaitGroup.Done → Wait is the synchronisation fence the
 // post-Wait read of outcomes relies on.
+//
+// onUsableSuccess, when non-nil, is invoked AFTER this goroutine writes its slot
+// iff the Outcome is a usable success (Err == nil), so the first such call
+// cancels the siblings (ADR-0031 SV1). A failed Outcome never invokes it. It is
+// called after the slot write so the successful Outcome is fully published
+// before any sibling is cancelled.
 func (c *Coordinator) callOne(
 	runCtx context.Context, req *model.Request, m model.Model,
-	out *Outcome, wg *sync.WaitGroup,
+	out *Outcome, wg *sync.WaitGroup, onUsableSuccess func(),
 ) {
 	defer wg.Done()
 	*out = CallOne(runCtx, req, m, c.perModelTimeout, c.now)
+	if onUsableSuccess != nil && out.Err == nil {
+		onUsableSuccess()
+	}
 }
 
 // CallOne runs Model.Generate for a single model and returns its Outcome.
