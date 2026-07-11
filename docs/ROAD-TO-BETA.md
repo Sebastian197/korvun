@@ -8,6 +8,20 @@
 
 ---
 
+> **Objetivo de beta declarado por Chano (2026-07-11): las CUATRO piezas (2 → 3 →
+> 4 → 5).** Chano quiere las cuatro completadas para dar la beta por cerrada, en
+> **orden secuencial estricto — una a una, cerrando cada una antes de empezar la
+> siguiente**. Esto NO cambia los *criterios* V1: solo la **Pieza 2** cierra el 6º
+> criterio pendiente; las Piezas **4 y 5 siguen siendo *más alcance*, no requisitos**
+> (ver §criterios abajo y el aviso del doc maestro §9 sobre WhatsApp en la Pieza 4).
+> Es un compromiso de **ejecución**: hacerlas todas de todos modos.
+>
+> **Nota honesta:** completar las cuatro es un compromiso de **VARIAS SESIONES**, no un
+> sprint. Cada pieza es una **fase de peso** con su ciclo completo — encuadre
+> (`/office-hours`) + `/plan-eng-review` + ADR(s) aceptado(s) + TDD (`make quality`
+> `-race`) + docs de cierre — hechas **de una en una**. **No hay prisa:** la disciplina
+> por-fase manda sobre la velocidad.
+
 ## Qué es esto
 
 El plan de las **piezas que faltan** para pasar de "la arquitectura funciona y es
@@ -38,11 +52,18 @@ Faltan **2** criterios:
   ROADMAP-V1 §5 cuando se cierre el ciclo; la doc existe y fue probada por un tercero.)*
 - **[ ] Aguanta un proveedor caído sin caerse** → **Pieza 2** (próximo trabajo).
 
-**Orden del plan (2026-07-05):** Pieza 1 ✅ hecha → **Pieza 2** (errores producción,
-cierra el criterio de arriba) → **Pieza 3** (CLI subcomandos, DX/pulido) → **Pieza 4**
-(tercer canal, opcional) → **Pieza 5** (app Wails). La Pieza 3 (CLI) **no cierra ningún
-criterio V1** pero tiene prioridad de *timing* sobre las 4-5 porque reescribe la doc de
-la Pieza 1; las Piezas 4 y 5 son **deseables, NO beta-críticas** (más alcance).
+**Orden del plan (actualizado 2026-07-11 — las 4 piezas son el objetivo de beta de
+Chano):** Pieza 1 ✅ hecha → **Pieza 2** (errores producción, **EN CURSO** — la única que
+cierra el 6º criterio V1; ADR-0031 en borrador) → **Pieza 3** (CLI subcomandos,
+encuadrada) → **Pieza 4** (tercer canal, **opcional** por el doc maestro §9) → **Pieza 5**
+(app Wails, la más pesada). **Secuencial, una a una**, cerrando cada una antes de la
+siguiente. La Pieza 3 **no cierra ningún criterio V1** pero va **antes que 4-5** porque
+**reescribe la doc de la Pieza 1** (INSTALL/QUICKSTART/BUILDER/`korvun.service` usan
+`./korvun -config`), minimizando el drift. Las Piezas 4 y 5 **no cierran criterio** (más
+alcance) pero Chano las quiere hechas igualmente — objetivo de *ejecución*, no de
+*criterio*. **Pieza 4:** mantener el aviso del doc maestro §9 — WhatsApp es "la más
+traicionera, opcional en beta"; al llegar, valorar WhatsApp concreto vs un canal más
+amable (Discord/Slack) si aporta más con menos riesgo.
 
 ---
 
@@ -131,11 +152,14 @@ por fichero" y "lo instala alguien que no soy yo".
 
 ## PIEZA 2 — Manejo de errores de producción
 
-> ▶️ **PRÓXIMO TRABAJO — ESTADO: ENCUADRE-PENDIENTE** (2026-07-05). Es lo siguiente
-> que se hace, **antes** de la Pieza 3 (CLI). Chano paró antes de arrancar el encuadre;
-> el próximo paso literal es su `/office-hours` + `/plan-eng-review` + ADR. **Motivación
-> YA DEMOSTRADA en hardware** — ver el bloque "Motivación DEMOSTRADA" más abajo (el
-> timeout Korvun→Ollama en frío, reproducido durante la validación de la Pieza 1).
+> ▶️ **EN CURSO — ESTADO: ADR EN BORRADOR** (2026-07-11). Encuadre (`/office-hours`) +
+> `/plan-eng-review` hechos. **F6 verificado en hardware** (el Mac de Chano): al
+> desconectar durante la carga, **Ollama ABORTA la carga** (`aborting load`, 499) — ver
+> `docs/notes/piece-2-framing.md`. Esto **tumbó la suposición** de que el retry salvaba
+> el arranque en frío (el fix es timeout generoso y/o warmup, no retry). **ADR-0031**
+> (`status: proposed`) redactado, pendiente de revisión del copiloto → segunda voz de
+> Codex → TDD. **Motivación DEMOSTRADA en hardware** — ver el bloque "Motivación
+> DEMOSTRADA" más abajo (el timeout Korvun→Ollama en frío).
 
 **PRIORIDAD 2.** Cierra el criterio V1 **☐ "aguanta un proveedor caído sin
 caerse"**. Hoy los adapters **mapean** los errores (la gramática de sentinelas
@@ -366,8 +390,10 @@ y el binario headless intacto (la app es una carcasa, no un fork de la lógica).
       documentación.** → **PIEZA 1**.
 - [ ] **Aguanta un proveedor caído sin caerse.** → **PIEZA 2**.
 
-**Próximo paso:** encuadrar la **Pieza 1** (`/office-hours` + `/plan-eng-review` →
-ADR si hace falta → escribir + validar en máquinas reales).
+**Próximo paso:** **Pieza 2 EN CURSO** — encuadre + `/plan-eng-review` hechos, F6
+verificado en hardware, **ADR-0031 en borrador** (`status: proposed`); sigue la revisión
+del copiloto → segunda voz de Codex → TDD. Luego Piezas 3 → 4 → 5, una a una (objetivo
+de beta de Chano, 2026-07-11).
 
 ---
 
