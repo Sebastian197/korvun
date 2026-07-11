@@ -2,6 +2,9 @@
 
 > **Status:** proposed
 > **Date:** 2026-07-11
+> **Revision:** 2026-07-11 — absorbed the 3 second-voice adversarial-review
+> findings (SV1 fan-out cancellation + per-shape ceiling, SV2 no retry in
+> sequential, SV3 no-path-without-deadline), recorded in HANDOFF.
 > **Deciders:** Sebastián Moreno Saavedra (+ copilot review)
 
 ## Context
@@ -126,11 +129,35 @@ Fix the incoherence at the root by **collapsing**, not reconciling:
 - **The router ceiling is DERIVED automatically by the app**, not a separate knob a
   user can misconfigure into a guillotine. Given the brain's per-model timeouts, retry
   counts, and dispatch shape:
-  - **fan-out** (parallel): `ceiling = max_i( perAttempt_i × (maxRetries_i + 1) + backoffBudget_i ) + margin`
-  - **sequential** (serial): `ceiling = Σ_i( perAttempt_i × (maxRetries_i + 1) + backoffBudget_i ) + margin`
+  - **fan-out** (parallel, cancel-on-first-usable-success — SV1):
+    `ceiling = max_i( perAttempt_i + backoffBudget_i ) + margin`.
+    Because deadline-expiry is non-retryable (Decision 5), at most ONE attempt
+    per model can consume a full per-attempt window; retries stack only on FAST
+    transient errors, bounded by backoffBudget. The ceiling is the WORST
+    INDIVIDUAL model, never a sum — with the 120s default this is a ~2 min
+    order ceiling, not the ~20 min the previous derivation allowed (SV1).
+  - **sequential** (serial, retry off by construction — SV2):
+    `ceiling = Σ_i( perAttempt_i ) + margin` — exactly one attempt per model;
+    the fail-over IS the retry story, so no retry multiplication enters the sum.
+  - **agent** (bounded single-model loop, the third dispatch shape the previous
+    draft did not model — SV1): `ceiling = maxIterations × ( perAttempt_model +
+    perToolTimeout ) + margin`. The AgentBrain makes up to N model calls plus
+    tool calls per `Handle` (Stage 8 invariants), each covered by the
+    decorator's per-attempt deadline (SV3 below).
   The app sets `router.WithBrainHandlerTimeout(ceiling)`. An optional explicit
   override is allowed **only if it passes validation `≥ derived`** (fail loud at config
   load otherwise — never silently guillotine a model).
+
+**No path without a deadline (SV3, verified):** removing `WithPerModelTimeout`
+from the coordinator and the wired `WithRequestTimeout` from the adapters leaves
+NO `Generate` call without a deadline, because the retry decorator is wired
+per-instance for EVERY dispatch shape (single, fan-out, sequential, agent) and
+applies its per-attempt `context.WithTimeout` on EVERY attempt including the
+0th, with retry enabled or disabled. In sequential the decorator is still
+present (retry forced to 0 — SV2): it remains the sole owner of the per-attempt
+deadline. The AgentBrain path is covered by the same construction: it calls
+`fanout.CallOne` directly, but against the DECORATED model, so each loop call
+carries the deadline.
 
 **Test (concrete, F5):** a model that always times out, N retries → `Handle` returns
 **by the ceiling**, not in N×perAttempt with no bound; and the ceiling ≥ derived
@@ -152,8 +179,12 @@ a property of the provider/model.
   success beats a fast false-failure.
 - Retry **count** is **per-model** (`ModelConfig.MaxRetries`, JSON `max_retries`, default
   small e.g. 2, 0 disables — the transient nature is per-provider). The retry **on/off**
-  is a **per-brain toggle** (`BrainConfig.Retry`, JSON `retry`, default on) — the F2
-  amplification lever (Decision 4). See Decision 4/6.
+  is a **per-brain toggle** (`BrainConfig.Retry`, JSON `retry`, default on),
+  EXCEPT for sequential dispatch, where retry is OFF BY CONSTRUCTION (SV2): the
+  wiring never enables it, and an explicit `retry: true` on a sequential brain
+  FAILS LOUD at config load (consistent with the override-≥-derived rule — never
+  silently ignore a config that multiplies the serial worst case). See
+  Decision 4/6.
 - The router ceiling is derived from these per-model values (Decision 2); the config
   field never feeds the router directly.
 
@@ -162,9 +193,10 @@ a property of the provider/model.
 - **Location:** a new `internal/model/retry` decorator implementing `model.Model`,
   wrapping each adapter **per-instance** (one decorator per model, never shared — assert
   with `-race` under concurrent `Generate`). Same pattern as `brain.WithModelID`. Built
-  in the app wiring; **fan-out and sequential are NOT touched** (they call `Generate`
-  through the decorated model and inherit retry for free — respects the
-  mechanism/policy boundary of ADR-0011).
+  in the app wiring; the DECORATOR does not touch fan-out or sequential (they
+  call `Generate` through the decorated model — the mechanism/policy boundary of
+  ADR-0011 holds for retry); `fanout.Run` itself DOES change under SV1
+  (cancellation below), as its own TDD sub-phase.
 - **Scope:** transient **post-load** errors ONLY (Decision 1). NOT the cold start.
 - **Mandatory `ctx.Err()` guard (F3):** before each retry, check `ctx.Err() != nil`;
   if the parent/ceiling context is cancelled, **stop — do not retry against a dead
@@ -174,15 +206,21 @@ a property of the provider/model.
   the `ctx.Err()` inspection is what distinguishes "give up" from "retry".
 - **Backoff:** exponential + jitter, **stdlib only** (`time` + `math/rand` behind an
   injectable clock/rand seam for deterministic tests). Low attempt cap.
-- **Fan-out amplification bound (F2):** because fan-out `wg.Wait()`s on every model
-  (`fanout.go:187`), a retrying dead model makes the whole request as slow as that
-  model's full retry budget even when a survivor answered instantly. Bounded by (i) the
-  small default `max_retries`, (ii) the derived ceiling (Decision 2), and (iii) a
-  first-class **per-brain `retry` toggle** (`BrainConfig.Retry`, default on): an operator
-  disables retry on a fan-out/consensus brain that already has survivors, so the survivor
-  never waits on a dying model's retries. The retry COUNT stays per-model
-  (`max_retries`, transient nature); the on/off for amplification is per-brain — F2's
-  exact lever.
+- **F2 closed BY CONSTRUCTION (SV1), not merely bounded:** `fanout.Run` CANCELS
+  the remaining in-flight calls at the first usable success (context
+  cancellation), so a survivor never waits out a dying model's retry budget.
+  The cancelled siblings surface as ctx-cancelled outcomes; the decorator's
+  `ctx.Err()` guard (F3) guarantees no retry fires against a cancelled sibling
+  context — the two mechanisms compose.
+  **Consensus carve-out (named):** cancellation applies to priority-shaped
+  fan-out, where ANY success is usable. A consensus brain keeps wait-all —
+  ADR-0013 requires a strict majority of ≥2 successful outcomes, so no single
+  success is "usable" and cancelling would make `ErrNoConsensus` unconditional.
+  The cancel mode is wired per-brain from its policy shape; consensus's ceiling
+  remains the parallel `max_i`. Waiting for all is inherent to consensus
+  (opt-in, deliberately costly per the master doc), not a residual bug.
+  The per-brain `retry` toggle (Decision 3) stays as a secondary operator knob
+  for consensus/wait-all brains.
 
 ### 5. Retryable classification — hardware-grounded (BETA-CRITICAL)
 
@@ -228,11 +266,14 @@ Retry + generous timeout + existing degradation already close "does not fall ove
 the breaker is not needed to *not crash*. It is deferred. **Honest cost, not YAGNI
 hand-waving:**
 
-- **F2** (fan-out amplification: a survivor waits for the dying model's full retry
-  budget) and **F7** (`DefaultBrainWorkers = 1`, `router/doc.go`: a slow retrying
-  `Handle` blocks the single worker → inbound queue fills → `ErrBrainSaturated`) are
-  **exactly what a breaker would mitigate**. We accept them for beta because the retry
-  budget is modest and the ceiling is bounded (Decision 2), but the cost is real.
+- What a breaker would mitigate after SV1/SV2 is the RESIDUAL: consensus brains'
+  wait-all latency on a dying voter (SV1's cancellation applies to priority
+  fan-out only) and **F7** (`DefaultBrainWorkers = 1`, `router/doc.go`: a slow
+  retrying `Handle` blocks the single worker → inbound queue fills →
+  `ErrBrainSaturated`). We accept both for beta because the retry budget is
+  modest and the per-shape ceilings are bounded (Decision 2, ~2 min order), but
+  the cost is real. (Pre-SV1, F2's survivor-waits amplification was also on this
+  list; it is now closed by construction — Decision 4.)
 - Re-classify the breaker as **post-beta** in `ROAD-TO-BETA.md` (currently listed as a
   Piece 2 item). Revisit if telemetry (Decision below) shows wasted retries against a
   sustained-down provider.
@@ -261,8 +302,9 @@ Behind the existing `metrics.Metrics` seam (Stage 12, ADR-0020), additive:
 - Per-provider retry/latency visibility for the operator.
 
 **Harder / accepted costs:**
-- Fan-out latency for a brain with a dying model rises to that model's retry budget
-  (F2) — bounded, not eliminated (breaker deferred).
+- Consensus brains keep wait-all latency (the slowest voter governs) — inherent
+  to consensus, not fixed by SV1's cancellation, which applies to priority
+  fan-out only.
 - A slow retrying `Handle` can stall a single-worker brain's queue (F7) — bounded by
   the modest budget and derived ceiling.
 - The `ObserveProviderDuration` metric changes meaning (total incl. retries) — a
@@ -305,9 +347,11 @@ env-only key contract untouched.
 - **C2 — `keep_alive` eviction.** Boot warmup only helps until Ollama evicts the idle
   model (default 5 min). Decision 1(a) (generous per-attempt timeout) is the durable
   fix; warmup is polish.
-- **C3 — Fan-out amplification (F2) and single-worker stall (F7)** are accepted beta
-  costs of deferring the breaker, not solved. Bounded by the modest retry budget and
-  the derived ceiling.
+- **C3 — Residual amplification after SV1/SV2.** F2 is closed by construction
+  for priority fan-out (cancellation) and sequential (no retry). What remains,
+  accepted: consensus brains keep wait-all (inherent to consensus, opt-in), and
+  F7 (single-worker stall) persists — though its magnitude shrinks with the
+  ~2 min per-shape ceilings (was ~20 min in the pre-SV1 derivation).
 - **C4 — Latency metric meaning changes (F8)** to total-incl-retries; a one-time,
   test-pinned semantic shift.
 - **C5 — Retry never rescues a genuine per-attempt-deadline expiry** (Decision 5); that
@@ -326,20 +370,31 @@ whole suite before closing. No provider needed — `httptest` simulates timeout 
    config parse (per-model override + default), ceiling derivation per dispatch shape,
    and the integration test — an always-expiring model, N retries, `Handle` returns
    **by the ceiling**, not N×perAttempt; explicit-override < derived fails loud.
-2. **Ollama mapping refinement** (Decision 5): 5xx→`Unavailable`, 429→`RateLimited`
+   A sequential model that fails consumes exactly ONE attempt before fail-over
+   (SV2); an explicit `retry:true` on a sequential brain fails loud at config
+   load; the agent-shape ceiling is derived from `maxIterations` (SV1).
+2. **Fan-out cancellation on first usable success (SV1).** The one change to
+   stabilized concurrency (Principle 3: its own sub-phase, `-race -count=20`).
+   Tests: fast-OK + slow-retrying model → `Handle` returns with the fast one and
+   the slow sibling is cancelled (the SV1 test, verbatim); consensus wait-all
+   PRESERVED (a consensus brain still collects all outcomes — proven to bite by
+   flipping the mode); cancelled siblings produce no retry (F3 guard composes).
+3. **Ollama mapping refinement** (Decision 5): 5xx→`Unavailable`, 429→`RateLimited`
    via `httptest`; `errors.Is` asserted. (Red: today all non-2xx → `ErrProviderResponse`.)
-3. **Retry decorator** (Decisions 4, 5): transient-only classification, the
+4. **Retry decorator** (Decisions 4, 5): transient-only classification, the
    before-deadline vs deadline-expiry distinction, the `ctx.Err()` parent-cancel guard,
    `RetryAfter` honor + cap, backoff+jitter with injectable clock/rand, `max_retries`.
    Table-driven + `-race` under concurrent `Generate` (per-instance, not shared).
-4. **THE cold-start test (Chano)** (Decisions 1, 5): an `httptest` server that responds
+   With retry disabled, the per-attempt deadline still applies — a hanging model
+   expires at perAttempt, never hangs (SV3).
+5. **THE cold-start test (Chano)** (Decisions 1, 5): an `httptest` server that responds
    after a delay > short-timeout but < generous-timeout. With the generous per-attempt
    timeout the **single** attempt succeeds; with a short timeout it fails and retry does
    **NOT** rescue it (deadline-expiry is non-retryable) — encoding F6 in a test.
-5. **Boot warmup for local models** (Decision 1b, optional/fast-follow): a trivial
+6. **Boot warmup for local models** (Decision 1b, optional/fast-follow): a trivial
    `Generate` at startup for `Locality == local` models; best-effort — a warmup failure
    logs and does NOT fail boot (test the non-fatal path).
-6. **Differentiated fallback + retry metrics** (Decisions 6, observability): "starting"
+7. **Differentiated fallback + retry metrics** (Decisions 6, observability): "starting"
    vs "down" fallback text; `korvun_provider_retries_total` /
    `retry_budget_exhausted_total` via a fake `Metrics`; pin the latency-is-total meaning.
 
