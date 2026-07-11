@@ -157,9 +157,12 @@ por fichero" y "lo instala alguien que no soy yo".
 > desconectar durante la carga, **Ollama ABORTA la carga** (`aborting load`, 499) — ver
 > `docs/notes/piece-2-framing.md`. Esto **tumbó la suposición** de que el retry salvaba
 > el arranque en frío (el fix es timeout generoso y/o warmup, no retry). **ADR-0031**
-> (`status: proposed`) redactado, pendiente de revisión del copiloto → segunda voz de
-> Codex → TDD. **Motivación DEMOSTRADA en hardware** — ver el bloque "Motivación
-> DEMOSTRADA" más abajo (el timeout Korvun→Ollama en frío).
+> (`status: proposed`) redactado y **validado por el copiloto**; **2ª voz** (subagente
+> adversarial, fallback documentado — Codex no instalado) **hecha → 3 hallazgos
+> pendientes de absorber** (ver `docs/HANDOFF.md` §Pieza 2 y `docs/notes/piece-2-framing.md`).
+> **Próximo paso literal:** absorber los 3 hallazgos → revisión final del copiloto →
+> ADR a `accepted` → TDD. **Motivación DEMOSTRADA en hardware** — ver el bloque
+> "Motivación DEMOSTRADA" más abajo (el timeout Korvun→Ollama en frío).
 
 **PRIORIDAD 2.** Cierra el criterio V1 **☐ "aguanta un proveedor caído sin
 caerse"**. Hoy los adapters **mapean** los errores (la gramática de sentinelas

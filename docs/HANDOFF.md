@@ -7,6 +7,33 @@
 
 ---
 
+## Tooling — project knowledge graph (graphify) — consult FIRST
+
+> **Set up 2026-07-11.** Korvun is indexed as a queryable knowledge graph with
+> **graphify** (installed globally; `graphifyy` on PyPI, CLI `graphify`; skill at
+> `~/.claude/skills/graphify/`). Outputs live in `graphify-out/`:
+> `graph.json`, `GRAPH_REPORT.md`, interactive `graph.html`.
+>
+> **RULE (in CLAUDE.md): consult the project THROUGH the graph first** —
+> `graphify query "<question>"`, `graphify path "A" "B"`, `graphify explain "X"` —
+> before grep/read. Grep/Read is the fallback for what the graph does not cover.
+>
+> **First build:** 2.390 nodes · 5.895 edges · 150 communities (191 Go files via
+> AST + 81 docs/ADRs/STAGE via semantic extraction). God nodes: `OutboundParams()`
+> (70), `New()` (59), `InboundFromUpdate()` (57), `shutdown()`, `Key`, `Build()`.
+> Health note: ~812 semantic edges have a dangling endpoint (LLM-guessed target
+> IDs that didn't match an AST node id) — those edges don't connect; the graph is
+> still usable.
+>
+> **Auto-update:** a branch-guarded `post-commit` hook (`.git/hooks/post-commit`,
+> `graphify hook install` + a `master`-only guard) rebuilds the graph on every
+> commit **to master** (code-only AST re-extract, detached, no LLM). The default
+> `post-checkout` hook was removed on purpose (it would rebuild off non-master
+> branches, contradicting the master-tracks-the-graph rule). After large **doc**
+> changes, refresh manually: `/graphify --update`.
+
+---
+
 ## Objectives
 
 ### Project (one line)
@@ -29,9 +56,27 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of session close, 2026-07-05)
+## Current state (as of session close, 2026-07-11)
 
-> **CURRENT (2026-07-05): master is at `60e79df`** — the public master now includes
+> **CURRENT (2026-07-11): master at `1f7c18f`** — this session advanced **Piece 2
+> (production error handling)**, the last open V1 criterion ("survives a down provider").
+> Done today, **docs + one ADR draft only, NO code**: (1) `/plan-eng-review` on the
+> framing → 10 findings (4 P1), in `docs/notes/piece-2-framing.md`; (2) **F6 RESOLVED on
+> hardware** (Chano's Mac, Ollama 0.30.8, llama3.2:1b): a client disconnect DURING the
+> model load makes Ollama **ABORT the load** (`aborting load`, 499) — so retry does NOT
+> fix cold start; the fix is a generous per-attempt timeout + optional boot warmup;
+> (3) **ADR-0031** (resilience: timeouts + retry + degradation) written as a **draft
+> (`status: proposed`)**, copilot-validated; (4) **second voice** (Claude adversarial
+> subagent — the project's documented fallback, Codex not installed) run on ADR-0031 →
+> **3 findings copilot-approved, PENDING ABSORPTION** into the ADR; (5) the **4 pieces
+> (2→3→4→5) recorded as Chano's declared beta goal** (commit `1f7c18f`). **Next session's
+> LITERAL next step: ABSORB the 3 second-voice findings into ADR-0031** (spelled out in
+> "Notes for the next session"), then final copilot review → ADR to `accepted` → TDD from
+> sub-phase 1. `make quality` still green on the last merged master (nothing compiled this
+> session). The `ollama serve` started for the F6 test was killed; nothing left running.
+> The block below is retained as history.
+>
+> **PREVIOUS (2026-07-05): master was at `60e79df`** — the public master now includes
 > **Phase 2a** (config mutation + auth, **PR #6**) + **Phase 2b** (the no-code builder
 > UI, **PR #7**, `442f7ea`) + **Piece 1** (user documentation + installation validation,
 > **PR #8**, merge commit `60e79df`, merged by Chano on GitHub). **Piece 1 is CLOSED and
@@ -903,11 +948,14 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
 
 ## Notes for the next session
 
-- **ROAD TO BETA:** el plan de las piezas que faltan para la beta técnica completa
-  vive en [`docs/ROAD-TO-BETA.md`](./ROAD-TO-BETA.md), en orden de prioridad. Estado a
-  2026-07-05: **Pieza 1 (docs+instalación) CERRADA/MERGEADA**; el orden de lo que queda
-  es **2 (manejo de errores producción) → 3 (CLI subcomandos) → 4 (tercer canal opcional)
-  → 5 (app Wails)**. Cada una es fase de peso con su ADR; se hacen de una en una.
+- **ROAD TO BETA:** el plan de las piezas que faltan vive en
+  [`docs/ROAD-TO-BETA.md`](./ROAD-TO-BETA.md). Estado a **2026-07-11**: **Pieza 1
+  (docs+instalación) CERRADA/MERGEADA**. **Chano declaró las CUATRO piezas (2→3→4→5) como
+  objetivo de beta** (commit `1f7c18f`), en **orden secuencial estricto, una a una**. No
+  cambia los *criterios* V1 (solo la Pieza 2 cierra el 6º; 4 y 5 siguen siendo *más
+  alcance*, con el aviso del doc maestro §9 de que WhatsApp es opcional/traicionera) — es
+  compromiso de *ejecución*. Completar las 4 es un compromiso de **varias sesiones**; cada
+  una es fase de peso (encuadre + `/plan-eng-review` + ADR + TDD). **Sin prisa.**
 
 - **PIEZA 1 (documentación de usuario + validación de instalación) — CERRADA / MERGEADA
   a master vía PR #8** (merge commit `60e79df`, merged by Chano on GitHub 2026-07-05).
@@ -918,15 +966,52 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
   de Telegram recibió la respuesta del **modelo local, cero nube**. Solo docs, sin código.
   Linux/Windows escritas por analogía y **marcadas no-verificadas**.
 
-- **PIEZA 2 (manejo de errores de producción) — PRÓXIMO TRABAJO, va ANTES que la CLI.
-  ESTADO: ENCUADRE-PENDIENTE** (Chano paró antes de arrancar el encuadre; el próximo
-  paso literal es su `/office-hours` + `/plan-eng-review` + ADR). Cierra el criterio V1
-  **"aguanta un proveedor caído sin caerse"** (retry con backoff + circuit breaker +
-  degradación elegante; hoy los adapters mapean errores pero la política de reintentos
-  vive en un consumidor que no existe). **Motivación YA DEMOSTRADA en hardware:** el
-  timeout Korvun→Ollama en frío (~5s < la carga del modelo) hace que el **primer mensaje
-  siempre falle** (`context deadline exceeded`); documentado en
-  [`ROAD-TO-BETA.md`](./ROAD-TO-BETA.md) §Pieza 2 con logs reales.
+- **PIEZA 2 (manejo de errores de producción) — EN CURSO. ADR-0031 en borrador
+  (`status: proposed`), validado por el copiloto, con la 2ª voz hecha.** Cierra el 6º y
+  último criterio V1 **"aguanta un proveedor caído sin caerse"**.
+  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **ABSORBER los 3 hallazgos de la 2ª voz
+    en el ADR-0031** (abajo), luego **revisión final del copiloto → pasar ADR a
+    `accepted` → TDD desde la sub-fase 1.**
+  - **Motivación DEMOSTRADA en hardware + F6 RESUELTO:** el timeout Korvun→Ollama en frío
+    (~5s < carga del modelo) hace fallar el primer mensaje; y la incógnita F6 quedó
+    resuelta en el Mac de Chano — **al desconectar durante la carga, Ollama ABORTA la
+    carga** (`aborting load`, 499). Consecuencia: **el retry NO salva el arranque en
+    frío** (re-dispara y re-aborta la carga, desperdicia CPU); lo arreglan el **timeout
+    generoso + precalentado**. Detalle en `docs/notes/piece-2-framing.md` (F6, 10/10).
+  - **LOS 3 HALLAZGOS DE LA 2ª VOZ A ABSORBER (para no perderlos):**
+    1. **[P1] Amplificación del ceiling en fan-out + contradicción interna del ADR:** el
+       fan-out corta al primer éxito, pero el ceiling se derivaba asumiendo que *todos*
+       agotan sus reintentos → ceiling de hasta **~20 min**. Además el AgentBrain (3er
+       shape) hace N llamadas por `Handle` y el ADR no lo modela. **RESOLUCIÓN:** el
+       fan-out **CANCELA a los restantes al primer éxito usable** (`context`), y el ceiling
+       se deriva del **PEOR MODELO INDIVIDUAL, no de la suma** (baja a ~2 min) — cierra F2
+       **por construcción**. *Test:* fan-out rápido-OK + lento-que-reintenta → `Handle`
+       vuelve con el rápido y el lento se cancela.
+    2. **[P2] Doble reintento en sequential:** retry-por-modelo × avance-al-siguiente se
+       multiplican. **RESOLUCIÓN:** retry-por-modelo **DESACTIVADO en sequential** (el
+       sequential YA es el fail-over). *Test.*
+    3. **[P3] Verificado:** quitar `WithPerModelTimeout` + `WithRequestTimeout` **no deja
+       ningún path sin deadline** (el per-intento del decorador lo cubre — aplicado en
+       TODO intento, incluido el 0º, con retry on/off). **Dejar constancia explícita en el
+       ADR** (y cubrir el path del AgentBrain, que llama `fanout.CallOne` directo).
+  - **DECISIONES DEL ADR-0031 YA VALIDADAS (NO cambian al absorber):** arranque en frío =
+    **timeout generoso obligatorio + precalentado opcional** (`keep_alive` desaloja el
+    modelo a los 5 min → precalentar solo no basta); **ceiling del router DERIVADO**
+    (dispatch + per-modelo + reintentos), **NO expuesto como knob** (evita reproducir el
+    bug de hoy — garantía por construcción), override manual solo si **≥ derivado**, falla
+    ruidoso si no; **timeout de config PER-MODELO** (`ModelConfig`, candidato
+    `request_timeout`) con default top-level; **jerarquía colapsada a 2 capas** (per-intento
+    en el decorador + ceiling en el router), eliminando el `WithPerModelTimeout` del
+    coordinator y el `WithRequestTimeout` doble del adapter; **retry SOLO transitorios
+    post-carga** con **guardia de `ctx.Err()`** (F3) y la distinción **"error antes del
+    deadline" (reintenta) vs "deadline expiró" (no** — mantiene F6 fuera del retry);
+    **circuit breaker DIFERIDO post-beta** (reconociendo que **F2/F7 son su coste real**,
+    no YAGNI puro); **métricas de retry por proveedor**; **cero dependencias** (stdlib).
+  - **Nota de alcance:** la **re-clasificación del breaker en el checklist de la Pieza 2**
+    de `ROAD-TO-BETA.md` se hará **al CERRAR la Pieza 2** (no un commit suelto ahora).
+  - Artefactos de la pieza: **ADR-0031** (`docs/adr/0031-resilience-timeouts-retry-and-degradation.md`,
+    proposed) + **notas** (`docs/notes/piece-2-framing.md`: encuadre + F1–F10 + F6
+    verificado + los 3 hallazgos de la 2ª voz).
 
 - **PIEZA CLI (subcomandos estilo git/docker) — ENCUADRADA y APROBADA por el copiloto;
   PENDIENTE de implementar DESPUÉS de la Pieza 2.** Resumen del encuadre aprobado (para
