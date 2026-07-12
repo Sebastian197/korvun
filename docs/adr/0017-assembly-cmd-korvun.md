@@ -533,3 +533,28 @@ router.
   its own future design (ADR-0016 out-of-scope); this cut degrades to the Brain
   fallback.
 - **WhatsApp and other channels** — ADR-0002 deferral stands.
+
+## Addendum — 2026-07-12 (Piece 3 / CLI SP1): `serveMain` relocated, still glue
+
+This ADR pinned `cmd/korvun/main` as the deliberately un-unit-tested glue: the
+impure boot wiring (config load, supervisor construction, signal handling,
+`context.Background`) that a unit test cannot exercise without a live process and
+a real signal. Piece 3 (the CLI) shrinks `main` to a 3-line forwarder into
+`internal/cli`, and **relocates that same boot body** to
+`internal/cli/serve.go` as `serveMain` — the default seam behind the `serve`
+subcommand and the retrocompat `-config` shim.
+
+**Classification (unchanged): `serveMain` is still entry-point glue, exempt from
+unit-test coverage.** Its happy path serves until a real `SIGINT`/`SIGTERM` via a
+non-injectable `signal.Notify`, so it is covered by `internal/app`'s lifecycle
+e2e (`TestRunShutdown_lifecycle` et al.), not by `internal/cli` unit tests. The
+CLI unit suite covers the parts that ARE testable — argv dispatch, `version`,
+`help`, TTY gating, and `serveMain`'s pre-boot error returns (bad flag → 2,
+unreadable config → 1).
+
+Consequence for the coverage bar: the master document's **≥85% applies to the
+core packages** (`policy`, `router`, `envelope`, `brain`), not to this
+entry-point layer. `internal/cli` measures ~70% in SP1 solely because the
+relocated glue dominates the small package; the enforced total gate stays green.
+**SP2** gives `serve` its own flag surface with injectable writers, which makes
+the serve path unit-testable and clears `internal/cli` ≥85 on its own merits.
