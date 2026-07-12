@@ -56,9 +56,51 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of session close, 2026-07-11)
+## Current state (as of session close, 2026-07-12)
 
-> **CURRENT (2026-07-11): master at `1f7c18f`** — this session advanced **Piece 2
+> **CURRENT (2026-07-12): Piece 3 (CLI) sub-phase 1 DONE and committed
+> (`feat(cli): add subcommand dispatch with serve seam and -config shim`,
+> `7c3742c`).** A new `internal/cli` package owns argv parsing + subcommand
+> dispatch behind a single `Run(args, stdout, stderr) int`, so `cmd/korvun/main`
+> is now a 3-line forwarder (ADR-0017). Landed: `serve` / `version` / `help`
+> dispatch; the **retrocompat `-config` shim** (`korvun -config x.json` boots the
+> SAME path as `korvun serve --config x.json`, **byte-identical** to before);
+> a TTY-gated placeholder logo banner to stderr. `config`/`status` are announced
+> in help but land in later sub-phases; ANSI styling (violet identity, ADR-0030)
+> is integrated per command as its output is born. Serve seam: the pre-CLI main
+> boot body moved verbatim to `internal/cli/serve.go` as `serveMain` (parses
+> `-config` with a local FlagSet, returns an exit code, slog untouched).
+> `make quality` green `-race`, total 93.0%.
+>
+> **Coverage decision (closed, do not reopen):** `internal/cli` ~70% is ACCEPTED
+> for SP1 — the shortfall is entirely the relocated boot glue `serveMain` (still
+> exempt as un-unit-tested entry-point glue, covered by `internal/app` e2e). The
+> master doc's ≥85% bar is for the **core** packages (policy/router/envelope/
+> brain); the dispatch/version/help surface is ~100%. Classified in an **ADR-0017
+> addendum (2026-07-12)** + the design spec's Success Criteria. **SP2** makes
+> `serve` unit-testable and clears `internal/cli` ≥85.
+>
+> **ldflags: PARKED (its own sub-phase).** `.goreleaser.yaml` still targets
+> `-X main.version`; now that `version` lives in `internal/cli`, that must move to
+> `-X …/internal/cli.version` — **not touched** here. Impact today: nil (no real
+> release tag pushed; a local build reports `korvun dev (rev)` correctly). Noted
+> in the `version` godoc.
+>
+> **NEXT STEP: Piece 3 sub-phase 2 (SP2) — `serve` gets its own flag surface**
+> with injectable writers (so the serve path becomes unit-testable and
+> `internal/cli` clears ≥85), plus its styling. See the design spec
+> (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), the 5 sub-phases.
+>
+> **Brand assets added this session** (`chore(brand)`): see the "Brand assets"
+> section below (`assets/brand/`).
+>
+> **LOCAL uncommitted changes pending Chano's decision (NOT the CLI piece, left
+> OUT of both commits on purpose — reported, not reverted):** `.gitignore` (adds
+> `graphify-out/`, `.ua/`, `.obsidian/` ignores) and `CLAUDE.md` (adds the
+> graphify "consult FIRST" rule section). These are graphify / understand-anything
+> tooling setup, unrelated to the CLI. Chano decides whether to commit them.
+>
+> **PREVIOUS (2026-07-11): master was at `1f7c18f`** — this session advanced **Piece 2
 > (production error handling)**, the last open V1 criterion ("survives a down provider").
 > Done today, **docs + one ADR draft only, NO code**: (1) `/plan-eng-review` on the
 > framing → 10 findings (4 P1), in `docs/notes/piece-2-framing.md`; (2) **F6 RESOLVED on
@@ -539,6 +581,25 @@ docs/
 seam) — each added after a four-axis test + dependency gate.)
 
 ---
+
+## Brand assets (2026-07-12)
+
+Korvun's logo was decided on **2026-07-12**: a single **"K terminal"** mark — the
+letter **K** knocked out of the rounded tile, a nod to a shell's `|<`. Sources live
+in **`assets/brand/`**:
+
+- `korvun-logo-hero.svg` — teal `#2BC8B7` → violet `#7A5AF5` gradient (hero
+  signature only; ADR-0030 reserves the gradient for identity moments).
+- `korvun-logo-mono-violeta.svg` — monochrome (delivered by Chano).
+- `korvun-avatar-512.png` — 512×512 avatar.
+- `README.md` — the full brand note.
+
+**Open question (Chano's call, NOT to be resolved):** the mono was delivered with
+`fill="#6E56CF"`, different from the identity violet `#7A5AF5` — intentional flat-
+ink violet, or correct it? Kept as delivered.
+
+**Pending:** derive the CLI header ASCII art (`internal/cli`, today a placeholder)
+from this logo; GitHub social preview; upload the avatar (Chano, via web).
 
 ## Repo-hygiene — adelantado desde Stage 16 (MERGEADO en master)
 
