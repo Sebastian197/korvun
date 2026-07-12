@@ -969,7 +969,27 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
 - **PIEZA 2 (manejo de errores de producción) — EN CURSO. ADR-0031 ACEPTADO
   (`status: accepted`); sub-fases TDD 1 y 2 HECHAS y comiteadas en local.** Cierra el 6º y
   último criterio V1 **"aguanta un proveedor caído sin caerse"**.
-  - **ACTUALIZACIÓN 2026-07-11 (última):** **sub-fases 1 y 2 en verde y comiteadas en
+  - **RESOLVED (was a blocker):** govulncheck GO-2026-5856 (crypto/tls ECH advisory,
+    stdlib) failed the Quality Gate on ubuntu+macos after the 0a9cee4 push. Fixed
+    by bumping the go directive in go.mod 1.26.4→1.26.5 (commit 63d60f1); CI green
+    on all 3 OSes. Not a code defect — stdlib advisory under our normal HTTPS
+    calls. Local toolchain auto-upgraded to 1.26.5; Chano's Homebrew base still
+    1.26.4 (optional `brew upgrade go` to align, non-blocking).
+  - **ACTUALIZACIÓN 2026-07-12 (última) — sub-fase 3 HECHA y comiteada (`e1925a6`, SIN
+    push — es de Chano):** refinamiento del mapeo de errores de Ollama (COMPLETITUD F9).
+    - **`ollama.mapHTTPError` (aislada, table-tested):** `5xx→ErrProviderUnavailable`,
+      `429→*RateLimitError{Provider:"ollama", RetryAfter=ParseRetryAfter(Retry-After)}`,
+      `401/403→ErrAuthInvalid` (Ollama es sin auth; vendrían de un proxy delante, retry
+      no ayuda), resto `4xx→ErrProviderResponse`; `Generate` sustituye su rama inline
+      no-2xx por `mapHTTPError(resp)`; snippet del body capado a `maxErrorBodyBytes`.
+    - **`model.ParseRetryAfter` compartida (D2):** extraída a `internal/model` (godoc
+      honesto: solo segundos, NO HTTP-date, ni Ollama ni Groq lo usan hoy); **Groq
+      migrado** a usarla (move MECÁNICO, sin cambios de comportamiento — ningún test de
+      groq distinto del `TestParseRetryAfter` movido necesitó tocarse).
+    - Cobertura `ollama` 96.5% / `groq` 94.1% / `model` 100%; `make quality` verde
+      `-race` sobre todo el árbol. Spec de diseño versionado en
+      `docs/superpowers/specs/2026-07-12-adr-0031-subphase3-ollama-error-mapping-design.md`.
+  - **ACTUALIZACIÓN 2026-07-11:** **sub-fases 1 y 2 en verde y comiteadas en
     local (SIN push — es de Chano):**
     - **Sub-fase 1 (`b00926d`) — jerarquía de timeouts + config per-modelo + ceiling
       derivado (Decisiones 2 y 3).** `ModelConfig.RequestTimeout`/`MaxRetries`,
@@ -987,9 +1007,11 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
       DEMOSTRADO que muerde; `-race -count=20` limpio.
     - Registro en ADR-0031 (margin + nota SV3 del estado intermedio) va en este mismo
       commit de docs. `make quality` verde `-race` tras cada sub-fase.
-  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **TDD sub-fase 3 — refinamiento del
-    mapeo de errores de Ollama (`5xx→ErrProviderUnavailable`, `429→RateLimited`, como
-    Groq), rojo primero. Es COMPLETITUD (F9), no el fix de Chano.**
+  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **TDD sub-fase 4 — el decorador de
+    retry (la gorda), rojo primero.** Clasificación transitorio-vs-deadline con F6;
+    guard de `ctx.Err()`; backoff + jitter con reloj inyectable; `RetryAfter` respetado
+    con cap; y probar que el guard **SV2 de sequential MUERDE**. Cierra el 6º criterio V1
+    "aguanta un proveedor caído sin caerse".
   - **ACTUALIZACIÓN previa 2026-07-11:** los **3 hallazgos de la 2ª voz (SV1–SV3)
     están ABSORBIDOS en el ADR-0031 y comiteados** (commit `docs: absorb second-voice
     findings SV1-SV3 into ADR-0031`); tras la **revisión final del copiloto**, el
