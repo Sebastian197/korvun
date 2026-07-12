@@ -79,12 +79,22 @@ func (a *Adapter) Name() string { return ProviderName }
 // /api/chat with stream:false, decodes the single-shot response,
 // and wraps it into a *model.Response.
 //
-// Errors:
+// Errors map to internal/model sentinels (ADR-0010 §4, refined in
+// ADR-0031 sub-phase 3 — the non-2xx classification lives in
+// mapHTTPError):
+//
 //   - validation: the model.Err* sentinels from ValidateRequest.
 //   - transport failure (network down, server unreachable, ctx
 //     cancelled mid-flight): wraps model.ErrProviderUnavailable.
-//   - non-2xx, malformed JSON, or response with empty assistant
-//     content: wraps model.ErrProviderResponse.
+//   - 401 / 403: wraps model.ErrAuthInvalid. Native Ollama is
+//     auth-less; these come from a fronting proxy / gateway and a
+//     retry will not help until the operator fixes the credentials.
+//   - 429: wraps *model.RateLimitError (Provider: "ollama",
+//     RetryAfter from the Retry-After header or 0).
+//   - 5xx: wraps model.ErrProviderUnavailable.
+//   - other 4xx: wraps model.ErrProviderResponse.
+//   - 2xx with malformed JSON or empty assistant content: wraps
+//     model.ErrProviderResponse.
 func (a *Adapter) Generate(ctx context.Context, req *model.Request) (*model.Response, error) {
 	if err := model.ValidateRequest(req); err != nil {
 		return nil, err
@@ -119,11 +129,7 @@ func (a *Adapter) Generate(ctx context.Context, req *model.Request) (*model.Resp
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-		return nil, fmt.Errorf("%w: status %d: %s",
-			model.ErrProviderResponse,
-			resp.StatusCode,
-			strings.TrimSpace(string(snippet)))
+		return nil, mapHTTPError(resp)
 	}
 
 	var apiResp chatResponse
@@ -144,6 +150,43 @@ func (a *Adapter) Generate(ctx context.Context, req *model.Request) (*model.Resp
 		Provider:  ProviderName,
 		ModelName: apiResp.Model,
 	}, nil
+}
+
+// mapHTTPError translates a non-2xx response into the right
+// internal/model sentinel (ADR-0031 sub-phase 3, FR-1..FR-4). Body
+// reading is capped at maxErrorBodyBytes to defuse a misbehaving
+// server; only the response-side status and a bounded snippet appear
+// in the returned error. Ollama is auth-less, so 401/403 can only come
+// from a fronting proxy — they still map to ErrAuthInvalid because a
+// retry will not help until the operator fixes the auth.
+//
+//   - 401 / 403 -> model.ErrAuthInvalid
+//   - 429       -> *model.RateLimitError{Provider, RetryAfter}
+//   - 5xx       -> model.ErrProviderUnavailable
+//   - other 4xx -> model.ErrProviderResponse
+func mapHTTPError(resp *http.Response) error {
+	rawBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+	snippet := strings.TrimSpace(string(rawBody))
+
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized,
+		resp.StatusCode == http.StatusForbidden:
+		return fmt.Errorf("%w: status %d: %s",
+			model.ErrAuthInvalid, resp.StatusCode, snippet)
+	case resp.StatusCode == http.StatusTooManyRequests:
+		rle := &model.RateLimitError{
+			Provider:   ProviderName,
+			RetryAfter: model.ParseRetryAfter(resp.Header.Get("Retry-After")),
+		}
+		return fmt.Errorf("ollama: status %d: %s: %w",
+			resp.StatusCode, snippet, rle)
+	case resp.StatusCode >= 500:
+		return fmt.Errorf("%w: status %d: %s",
+			model.ErrProviderUnavailable, resp.StatusCode, snippet)
+	default:
+		return fmt.Errorf("%w: status %d: %s",
+			model.ErrProviderResponse, resp.StatusCode, snippet)
+	}
 }
 
 // chatRequest is the minimal subset of the Ollama /api/chat

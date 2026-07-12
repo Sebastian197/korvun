@@ -489,28 +489,9 @@ func TestGenerate_errorsDoNotLeakKeyOnTransportError(t *testing.T) {
 	}
 }
 
-// --- parseRetryAfter unit cases ---
-
-func TestParseRetryAfter(t *testing.T) {
-	cases := []struct {
-		raw  string
-		want time.Duration
-	}{
-		{"", 0},
-		{"   ", 0},
-		{"30", 30 * time.Second},
-		{" 7 ", 7 * time.Second},
-		{"0", 0},
-		{"-3", 0},
-		{"nonsense", 0},
-		{"Mon, 14 Jun 2026 18:00:00 GMT", 0}, // HTTP-date form, not supported in 4.2
-	}
-	for _, tc := range cases {
-		if got := parseRetryAfter(tc.raw); got != tc.want {
-			t.Errorf("parseRetryAfter(%q) = %v, want %v", tc.raw, got, tc.want)
-		}
-	}
-}
+// parseRetryAfter unit cases moved to internal/model (ParseRetryAfter,
+// ADR-0031 sub-phase 3 decision D2). The seconds-form contract is now
+// pinned once in internal/model/parseretryafter_test.go.
 
 // --- Helpers ---
 

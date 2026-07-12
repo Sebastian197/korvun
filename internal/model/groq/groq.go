@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -217,7 +216,7 @@ func mapHTTPError(resp *http.Response) error {
 	case resp.StatusCode == http.StatusTooManyRequests:
 		rle := &model.RateLimitError{
 			Provider:   ProviderName,
-			RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
+			RetryAfter: model.ParseRetryAfter(resp.Header.Get("Retry-After")),
 		}
 		return fmt.Errorf("groq: status 429: %s: %w", snippet, rle)
 	case resp.StatusCode >= 500:
@@ -244,28 +243,6 @@ func decodeErrorSnippet(raw []byte) string {
 			env.Error.Type, env.Error.Code, env.Error.Message)
 	}
 	return strings.TrimSpace(string(raw))
-}
-
-// parseRetryAfter reads the Retry-After header value as an integer
-// number of seconds and returns it as a time.Duration. Empty or
-// unparseable values return zero — the consumer interprets zero as
-// "no hint given".
-//
-// Groq's documented behaviour is to set Retry-After to a seconds
-// integer on 429. The HTTP spec also allows an HTTP-date form,
-// which Groq does not use today; if a future Groq behaviour
-// introduces it, parseRetryAfter would need extending. For 4.2 the
-// seconds-only path is sufficient and explicit.
-func parseRetryAfter(raw string) time.Duration {
-	s := strings.TrimSpace(raw)
-	if s == "" {
-		return 0
-	}
-	n, err := strconv.Atoi(s)
-	if err != nil || n <= 0 {
-		return 0
-	}
-	return time.Duration(n) * time.Second
 }
 
 // chatRequest is the minimal subset of the Groq /chat/completions

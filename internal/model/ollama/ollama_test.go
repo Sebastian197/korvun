@@ -197,8 +197,10 @@ func TestGenerate_wrapsNon2xxStatus(t *testing.T) {
 		Messages: []model.Message{{Role: model.RoleUser, Content: "hola"}},
 	}
 	_, err := a.Generate(context.Background(), req)
-	if !errors.Is(err, model.ErrProviderResponse) {
-		t.Errorf("err = %v, want wrap of ErrProviderResponse", err)
+	// 5xx now maps to ErrProviderUnavailable (retryable) — the non-2xx
+	// classification was refined in ADR-0031 sub-phase 3 (mapHTTPError).
+	if !errors.Is(err, model.ErrProviderUnavailable) {
+		t.Errorf("err = %v, want wrap of ErrProviderUnavailable", err)
 	}
 	if !strings.Contains(err.Error(), "500") {
 		t.Errorf("err string should mention status 500: %v", err)
