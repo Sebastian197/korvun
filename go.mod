@@ -1,6 +1,6 @@
 module github.com/Sebastian197/korvun
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/go-telegram/bot v1.21.0
