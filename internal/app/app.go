@@ -102,6 +102,12 @@ type App struct {
 	// LIVE drop-count reader, so ChannelSummaries() reflects the current count at
 	// request time (the count is the one non-static field).
 	channelInfos []channelInfo
+	// warmupTargets are the deduplicated local models to warm at Start (ADR-0031
+	// sub-phase 6). Empty when no model is marked warmup. warmupCancel/warmupDone
+	// let Shutdown cancel an in-flight warmup and await its unwind.
+	warmupTargets []warmupTarget
+	warmupCancel  context.CancelFunc
+	warmupDone    chan struct{}
 }
 
 // channelInfo is App's per-channel record for the control API: the static
@@ -134,6 +140,11 @@ type builder struct {
 	// reloader is the supervisor seam the mutation endpoint signals (ADR-0027).
 	// When nil (no supervisor above the app), no mutation surface is mounted.
 	reloader controlapi.Reloader
+	// warmupTargets accumulates the deduplicated local models marked warmup as the
+	// catalog is built (ADR-0031 sub-phase 6); warmupSeen is its dedup set keyed by
+	// provider|baseURL|modelID.
+	warmupTargets []warmupTarget
+	warmupSeen    map[string]bool
 }
 
 // Option configures Build.
@@ -290,6 +301,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		liveView:       liveView,
 		brainSummaries: brainSummaries,
 		channelInfos:   channelInfos,
+		warmupTargets:  b.warmupTargets,
 	}
 	if store != nil {
 		app.store = store // owned closer, set only from a non-nil concrete store
@@ -651,12 +663,37 @@ func (b *builder) buildCatalog(bc config.BrainConfig) ([]policy.CatalogEntry, er
 			PerAttempt: b.effectiveConfig().EffectiveRequestTimeout(m),
 			MaxRetries: effectiveMaxRetries(bc, m),
 		})
+		withID := brain.WithModelID(decorated, m.ModelID)
 		entries = append(entries, policy.CatalogEntry{
-			Model:    brain.WithModelID(decorated, m.ModelID),
+			Model:    withID,
 			Locality: loc,
 		})
+		if m.Warmup {
+			b.collectWarmup(m, withID)
+		}
 	}
 	return entries, nil
+}
+
+// collectWarmup records a warmup target for a local model marked warmup,
+// deduplicated by (provider, baseURL, modelID) so the same backend model used in
+// several brains is warmed once (ADR-0031 sub-phase 6, FR-M4). The DECORATED
+// model is stored so the warmup inherits the per-attempt window + F6 no-retry.
+func (b *builder) collectWarmup(m config.ModelConfig, decorated model.Model) {
+	key := m.Provider + "|" + m.BaseURL + "|" + m.ModelID
+	if b.warmupSeen == nil {
+		b.warmupSeen = make(map[string]bool)
+	}
+	if b.warmupSeen[key] {
+		b.logger.Info("warmup deduplicated", "provider", m.Provider, "model", m.ModelID)
+		return
+	}
+	b.warmupSeen[key] = true
+	b.warmupTargets = append(b.warmupTargets, warmupTarget{
+		model:    decorated,
+		provider: m.Provider,
+		modelID:  m.ModelID,
+	})
 }
 
 // effectiveConfig returns the config being wired, or an empty Config for direct
@@ -788,6 +825,12 @@ func (a *App) Start(ctx context.Context) error {
 		started = append(started, ch)
 		a.logger.Info("channel started", "channel", ch.Name())
 	}
+	// Best-effort boot warmup of local models (ADR-0031 sub-phase 6). Launched
+	// here in Start — NOT Run — so a supervisor-driven boot (Start/Serve called
+	// separately, ADR-0027) warms up too. It runs in the background: a slow or
+	// hung model never delays the service coming up, and a first message arriving
+	// mid-warmup is already covered by the generous per-attempt timeout.
+	a.startWarmup(ctx)
 	a.logger.Info("korvun is serving; send your bot a message")
 	return nil
 }
@@ -806,6 +849,9 @@ func (a *App) Serve(ctx context.Context) error {
 // rest.
 func (a *App) Shutdown(ctx context.Context) error {
 	var errs []error
+	// Cancel any in-flight boot warmup and await its unwind first (ADR-0031
+	// sub-phase 6, AS-6), bounded by ctx, so no warmup goroutine outlives Shutdown.
+	a.awaitWarmup(ctx)
 	errs = append(errs, a.stopChannels(ctx, a.channels)...)
 	routerErr := a.router.Shutdown(ctx)
 	if routerErr != nil {

@@ -216,6 +216,12 @@ type ModelConfig struct {
 	// (ADR-0031 Decision 3). 0 disables retry for this model; the retry mechanism
 	// itself lands with the decorator (a later sub-phase). Must be >= 0.
 	MaxRetries int `json:"max_retries,omitempty"`
+	// Warmup marks this model for a best-effort boot warmup (ADR-0031 sub-phase 6,
+	// Decision 1b): a trivial Generate at Start so the first real message does not
+	// pay the cold-load latency. Only valid for local models — a warmup to a cloud
+	// model bills the user for no cold-load benefit, so warmup:true on a cloud
+	// model is rejected at config load. Default false.
+	Warmup bool `json:"warmup,omitempty"`
 }
 
 // RouteConfig binds an inbound channel (by its registered name) to a brain (by
@@ -446,6 +452,13 @@ func validateModels(brainIdx int, models []ModelConfig) error {
 		}
 		if m.MaxRetries < 0 {
 			return fmt.Errorf("%w: brains[%d].models[%d].max_retries: must be >= 0 (0 disables), got %d", ErrInvalidConfig, brainIdx, j, m.MaxRetries)
+		}
+		// Boot warmup (ADR-0031 sub-phase 6) is only meaningful for local models:
+		// a cloud model has no cold load to hide and a warmup call bills the user
+		// real money, so warmup:true on a non-local model is a fail-loud config
+		// error (never silently spend).
+		if m.Warmup && m.Locality != "local" {
+			return fmt.Errorf("%w: brains[%d].models[%d].warmup: only valid for local models, got locality %q", ErrInvalidConfig, brainIdx, j, m.Locality)
 		}
 	}
 	return nil
