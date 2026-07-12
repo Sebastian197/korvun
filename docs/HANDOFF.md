@@ -952,6 +952,12 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
 > parte de ROAD-TO-BETA; son semillas para proponer más adelante, cada una con su
 > propio encuadre + `/plan-eng-review` + ADR si se activa.
 
+- **Texto propio para el desacuerdo de consenso (fallback) — semilla, ADR-0031
+  sub-fase 7.** Hoy un `ErrNoConsensus` (los proveedores respondieron pero sin mayoría)
+  cae al `defaultFallback` genérico, porque "provider unavailable" sería falso. Un texto
+  dedicado ("los modelos no llegaron a acuerdo…") sería más preciso, pero es **decisión de
+  voz de Chano** y no cierra ningún criterio: se propone post-beta cuando toque.
+
 - **Capa de voz / STT-TTS (candidato) — herramienta: Voicebox
   (`jamiepine/voicebox`, MIT, local-first, expone REST local `127.0.0.1:17493`
   + servidor MCP).** Evaluado 2026-07-12 a petición de Chano.
@@ -993,9 +999,32 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
   de Telegram recibió la respuesta del **modelo local, cero nube**. Solo docs, sin código.
   Linux/Windows escritas por analogía y **marcadas no-verificadas**.
 
-- **PIEZA 2 (manejo de errores de producción) — EN CURSO. ADR-0031 ACEPTADO
-  (`status: accepted`); sub-fases TDD 1 y 2 HECHAS y comiteadas en local.** Cierra el 6º y
-  último criterio V1 **"aguanta un proveedor caído sin caerse"**.
+- **PIEZA 2 (manejo de errores de producción) — ✅ CERRADA. ADR-0031 ACEPTADO +
+  Closure (2026-07-12); las 7 sub-fases TDD HECHAS y comiteadas.** Cierra el 6º y
+  último criterio V1 **"aguanta un proveedor caído sin caerse"** → **Korvun cumple los
+  6 criterios V1.**
+  - **CIERRE 2026-07-12 (última) — sub-fases 5, 6 y 7 HECHAS y comiteadas:**
+    - **Sub-fase 5 (`db8d79b`) — invariantes cold-start de Chano (F6) como guards
+      permanentes** (`internal/app/coldstart_test.go`): timeout generoso deja completar la
+      carga fría (1 hit, sin retry); timeout corto NO se rescata con retry (deadline no
+      reintentable, 1 hit — el "aborting load" de Ollama en test); rechazo rápido 503 SÍ se
+      reintenta. El hallazgo de hardware convertido en contrato. Nacieron verdes (el
+      decorador ya existía) — guards de invariante.
+    - **Sub-fase 6 (`7ea1614`) — warmup opcional best-effort de modelos locales** vía el
+      modelo DECORADO (`ModelConfig.Warmup`; cloud+warmup falla en Validate). Lanzado desde
+      **Start** (no Run) para que el arranque vía supervisor (ADR-0027) también caliente;
+      goroutines en paralelo, dedup por (provider,baseURL,modelID), `warmupDone` para que
+      Shutdown espere el unwind. F6 gratis (el decorador no reintenta el deadline). Fallo de
+      warmup jamás fatal (WARN, boot sigue).
+    - **Sub-fase 7 (`cd32fb8`) — fallback diferenciado + métricas de retry + F8.** Fallback
+      de **3 salidas** (retry-soon / unavailable / genérico-en-no-consenso): `ErrNoConsensus`
+      usa el genérico porque "unavailable" sería falso (los proveedores respondieron) — la
+      3ª salida la forzó `TestOrchestrator_optionGuards`. Clasificación en el Orchestrator
+      con sentinels de `model` + `context` (SIN importar `retry` — frontera intacta).
+      Métricas `korvun_provider_retries_total` / `_retry_budget_exhausted_total` (label
+      provider) emitidas desde el decorador (`retry.WithMetrics`). F8: `ObserveProviderDuration`
+      documentada como TOTAL incl. reintentos+backoff (por construcción, pinneado en `fanout`).
+    - `make quality` verde `-race` tras cada sub-fase; cobertura core ≥90.
   - **RESOLVED (was a blocker):** govulncheck GO-2026-5856 (crypto/tls ECH advisory,
     stdlib) failed the Quality Gate on ubuntu+macos after the 0a9cee4 push. Fixed
     by bumping the go directive in go.mod 1.26.4→1.26.5 (commit 63d60f1); CI green
@@ -1056,13 +1085,8 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
       DEMOSTRADO que muerde; `-race -count=20` limpio.
     - Registro en ADR-0031 (margin + nota SV3 del estado intermedio) va en este mismo
       commit de docs. `make quality` verde `-race` tras cada sub-fase.
-  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **TDD sub-fase 5 — EL test cold-start
-    de Chano (Decisiones 1 y 5), rojo primero.** Un `httptest` que responde tras un delay
-    `> short-timeout` pero `< generous-timeout`: con el per-attempt generoso el ÚNICO
-    intento completa la carga fría y tiene éxito; con un timeout corto falla y el retry NO
-    lo rescata (la expiración del deadline es no-reintentable — F6 convertido en test
-    contra el decorador REAL de la sub-fase 4). Cierra el 6º criterio V1 "aguanta un
-    proveedor caído sin caerse".
+  - **PIEZA 2 CERRADA — no queda trabajo aquí.** El PRÓXIMO PASO del proyecto es la
+    **PIEZA 3 (CLI)**; ver su bloque abajo.
   - **ACTUALIZACIÓN previa 2026-07-11:** los **3 hallazgos de la 2ª voz (SV1–SV3)
     están ABSORBIDOS en el ADR-0031 y comiteados** (commit `docs: absorb second-voice
     findings SV1-SV3 into ADR-0031`); tras la **revisión final del copiloto**, el
@@ -1109,9 +1133,17 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
     proposed) + **notas** (`docs/notes/piece-2-framing.md`: encuadre + F1–F10 + F6
     verificado + los 3 hallazgos de la 2ª voz).
 
-- **PIEZA CLI (subcomandos estilo git/docker) — ENCUADRADA y APROBADA por el copiloto;
-  PENDIENTE de implementar DESPUÉS de la Pieza 2.** Resumen del encuadre aprobado (para
-  no perderlo):
+- **PIEZA 3 = CLI (subcomandos estilo git/docker) — ENCUADRADA y APROBADA por el copiloto;
+  ES EL PRÓXIMO PASO ahora que la Pieza 2 está cerrada.**
+  - **PRÓXIMO PASO LITERAL de la próxima sesión:** arrancar la Pieza 3 por su **design
+    spec** (el encuadre ya está aprobado; el resumen de abajo lo conserva).
+  - **REQUISITO DE CHANO (2026-07-12) — acabado profesional y elegante:** la CLI debe tener
+    un pulido visual de primera; **referencia visual = la CLI de OpenClaw** (verificar su
+    look REAL **en la fuente** al arrancar la pieza, no de memoria — regla External-docs de
+    CLAUDE.md). La tensión **color/estilo vs disciplina zero-deps** (¿stdlib ANSI a mano vs
+    una lib de estilo?) **se decide en el design spec** — posible **ADR de dependencia** si
+    una lib cruza el listón; por defecto zero-deps salvo justificación.
+  - Resumen del encuadre aprobado (para no perderlo):
   - **Subcomandos** `korvun serve` / `config check` / `status` / `version` / `help`, en
     **stdlib (`flag.NewFlagSet`), NO Cobra** — set pequeño y estable, disciplina zero-deps
     (3 deps hoy), mandato del maestro "stdlib si es razonable"; Cobra no cruza el listón

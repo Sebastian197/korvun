@@ -428,3 +428,17 @@ whole suite before closing. No provider needed — `httptest` simulates timeout 
 - `docs/notes/piece-2-framing.md` — framing + `/plan-eng-review` findings F1–F10, F6 verified.
 - ADR-0010 (env-only keys), ADR-0011 (mechanism/policy boundary), ADR-0014 (fallback
   contract), ADR-0017 §3 (dispatch shape), ADR-0020 (Metrics seam).
+
+## Closure (2026-07-12)
+
+All 7 sub-phases landed. 5 = F6 cold-start invariants pinned as permanent guards
+(`coldstart_test.go`, the hardware finding as contract). 6 = optional best-effort
+boot warmup via the decorated path (warmup on the model the decorator wraps → F6
+for free; launched from Start so supervisor-driven boots warm too). 7 =
+differentiated fallback (retry-soon / unavailable / generic-on-no-consensus — the
+third output forced by `TestOrchestrator_optionGuards`: "unavailable" would be
+false when providers answered but disagreed), retry metrics
+(`korvun_provider_retries_total` / `_retry_budget_exhausted_total`, label
+provider), F8 total-latency semantics documented. A dedicated
+consensus-disagreement text is a post-beta seed. Piece 2 closes the last V1
+criterion: "survives a downed provider."
