@@ -9,6 +9,7 @@ import (
 
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/model/retry"
 )
 
 // The router-ceiling derivation (ADR-0031 Decision 2). The app derives the
@@ -99,13 +100,11 @@ func backoffAt(budget []time.Duration, i int) time.Duration {
 
 // deriveRouterCeiling computes the router-wide brain-handler timeout: the MAX of
 // each brain's derived ceiling, or an explicit config override that clears that
-// max (ErrCeilingOverrideTooLow otherwise). agentPerModelTimeout is the app's
-// current per-model bound for the agent loop (its per-attempt window until the
-// retry decorator lands).
-func deriveRouterCeiling(cfg *config.Config, agentPerModelTimeout time.Duration) (time.Duration, error) {
+// max (ErrCeilingOverrideTooLow otherwise).
+func deriveRouterCeiling(cfg *config.Config) (time.Duration, error) {
 	var maxCeiling time.Duration
 	for _, bc := range cfg.Brains {
-		if c := ceilingForBrain(cfg, bc, agentPerModelTimeout); c > maxCeiling {
+		if c := ceilingForBrain(cfg, bc); c > maxCeiling {
 			maxCeiling = c
 		}
 	}
@@ -124,21 +123,26 @@ func deriveRouterCeiling(cfg *config.Config, agentPerModelTimeout time.Duration)
 	return override, nil
 }
 
-// ceilingForBrain builds the spec for one brain and derives its ceiling. Fan-out
-// and sequential source their per-attempt windows from the resolved per-model
-// request_timeout; the agent sources its from agentPerModelTimeout (its wired
-// per-model bound). backoffBudget is 0 until the retry decorator (a later
-// sub-phase) defines the backoff schedule — no retries occur yet, so the ceiling
-// correctly reflects the no-retry reality.
-func ceilingForBrain(cfg *config.Config, bc config.BrainConfig, agentPerModelTimeout time.Duration) time.Duration {
+// ceilingForBrain builds the spec for one brain and derives its ceiling. Every
+// shape sources its per-attempt window from the resolved per-model
+// request_timeout (the value the retry decorator applies): fan-out/sequential
+// from each model, the agent from its single model (bc.Models[0]) — the retry
+// decorator owns the agent's per-attempt deadline since ADR-0031 sub-phase 4.
+// The fan-out backoffBudget is maxRetries × retry.MaxBackoffPerWait (FR-A3);
+// sequential and agent carry no backoff term (retry off / single loop).
+func ceilingForBrain(cfg *config.Config, bc config.BrainConfig) time.Duration {
 	if bc.Agent != nil {
 		maxIter := bc.Agent.MaxIterations
 		if maxIter <= 0 {
 			maxIter = brain.DefaultAgentMaxIterations
 		}
+		var m config.ModelConfig
+		if len(bc.Models) > 0 {
+			m = bc.Models[0]
+		}
 		return deriveBrainCeiling(brainCeilingSpec{
 			shape:        shapeAgent,
-			perAttempt:   []time.Duration{agentPerModelTimeout},
+			perAttempt:   []time.Duration{cfg.EffectiveRequestTimeout(m)},
 			agentMaxIter: maxIter,
 			// perToolTimeout is 0: the agent's per-tool bound is not wired today.
 			margin: defaultCeilingMargin,
@@ -148,6 +152,7 @@ func ceilingForBrain(cfg *config.Config, bc config.BrainConfig, agentPerModelTim
 	backoff := make([]time.Duration, len(bc.Models))
 	for i, m := range bc.Models {
 		perAttempt[i] = cfg.EffectiveRequestTimeout(m)
+		backoff[i] = time.Duration(effectiveMaxRetries(bc, m)) * retry.MaxBackoffPerWait
 	}
 	shape := shapeFanout
 	if bc.Dispatch == "sequential" {

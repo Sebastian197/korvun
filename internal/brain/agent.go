@@ -126,6 +126,12 @@ func WithAgentPerToolTimeout(d time.Duration) AgentOption {
 // WithAgentPerModelTimeout bounds each model call inside the loop (passed to
 // fanout.CallOne). A non-positive value leaves the model call sharing the Handle
 // ctx alone.
+//
+// NOT wired in production since ADR-0031 sub-phase 4: the retry decorator
+// (internal/model/retry) now owns the per-attempt deadline for the agent's model
+// calls too — a single owner (SV3). The app no longer passes this option; it is
+// retained for direct construction and tests (mirrors the adapters'
+// WithRequestTimeout, kept-but-unwired per Decision 2).
 func WithAgentPerModelTimeout(d time.Duration) AgentOption {
 	return func(a *AgentBrain) {
 		if d > 0 {

@@ -44,6 +44,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/model/fanout"
 	"github.com/Sebastian197/korvun/internal/model/groq"
 	"github.com/Sebastian197/korvun/internal/model/ollama"
+	"github.com/Sebastian197/korvun/internal/model/retry"
 	"github.com/Sebastian197/korvun/internal/model/sequential"
 	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/router"
@@ -118,7 +119,12 @@ type channelInfo struct {
 type builder struct {
 	logger          *slog.Logger
 	perModelTimeout time.Duration
-	newChannel      func(b *builder, cc config.ChannelConfig) (Channel, error)
+	// cfg is the config being wired, kept so buildCatalog can resolve each
+	// model's effective per-attempt timeout for the retry decorator (ADR-0031
+	// sub-phase 4). Nil in direct buildBrain unit tests — buildCatalog then
+	// falls back to the zero Config (DefaultRequestTimeout).
+	cfg        *config.Config
+	newChannel func(b *builder, cc config.ChannelConfig) (Channel, error)
 	// store is the shared conversation memory injected into every brain. A true
 	// nil interface (no storage configured) leaves each Orchestrator stateless.
 	store conversation.Store
@@ -171,12 +177,13 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	for _, o := range opts {
 		o(b)
 	}
+	b.cfg = cfg
 
 	// Derive the router's per-Handle ceiling from the brains' per-model timeouts
 	// and dispatch shapes, or honor an explicit override that clears it (ADR-0031
 	// Decision 2). Done before any resource is created so a too-low override fails
 	// loud with nothing to unwind.
-	ceiling, err := deriveRouterCeiling(cfg, b.perModelTimeout)
+	ceiling, err := deriveRouterCeiling(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -599,10 +606,14 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model)
 		}
 		reg[tl.Name()] = tl
 	}
+	// No WithAgentPerModelTimeout: since ADR-0031 sub-phase 4 the retry decorator
+	// (wired in buildCatalog) owns the per-attempt deadline for the agent's model
+	// calls too — a single owner (SV3 final state). The agent's per-model call
+	// therefore runs unbounded by the agent itself and inherits the decorated
+	// model's per-attempt window (EffectiveRequestTimeout).
 	opts := []brain.AgentOption{
 		brain.WithAgentLogger(b.logger),
 		brain.WithAgentMetrics(b.metrics),
-		brain.WithAgentPerModelTimeout(b.perModelTimeout),
 	}
 	if bc.Agent.MaxIterations > 0 {
 		opts = append(opts, brain.WithAgentMaxIterations(bc.Agent.MaxIterations))
@@ -619,6 +630,10 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model)
 
 // buildCatalog constructs one CatalogEntry per model, tagging each with its
 // DECLARED locality (ADR-0015 §3) and its per-provider model id (ADR-0014 §2).
+// Each adapter is wrapped in the per-instance retry decorator (ADR-0031
+// sub-phase 4) BEFORE WithModelID, so the decorated model owns the per-attempt
+// deadline for every dispatch shape (including the agent, which consumes
+// selected[0] from this catalog) and retries transient errors.
 func (b *builder) buildCatalog(bc config.BrainConfig) ([]policy.CatalogEntry, error) {
 	entries := make([]policy.CatalogEntry, 0, len(bc.Models))
 	for _, m := range bc.Models {
@@ -632,12 +647,41 @@ func (b *builder) buildCatalog(bc config.BrainConfig) ([]policy.CatalogEntry, er
 		}
 		b.logger.Info("model wired",
 			"brain", bc.Name, "provider", m.Provider, "model_id", m.ModelID, "locality", m.Locality)
+		decorated := retry.New(adapter, retry.Config{
+			PerAttempt: b.effectiveConfig().EffectiveRequestTimeout(m),
+			MaxRetries: effectiveMaxRetries(bc, m),
+		})
 		entries = append(entries, policy.CatalogEntry{
-			Model:    brain.WithModelID(adapter, m.ModelID),
+			Model:    brain.WithModelID(decorated, m.ModelID),
 			Locality: loc,
 		})
 	}
 	return entries, nil
+}
+
+// effectiveConfig returns the config being wired, or an empty Config for direct
+// buildBrain unit tests (b.cfg nil) so EffectiveRequestTimeout falls back to
+// DefaultRequestTimeout instead of dereferencing nil.
+func (b *builder) effectiveConfig() *config.Config {
+	if b.cfg != nil {
+		return b.cfg
+	}
+	return &config.Config{}
+}
+
+// effectiveMaxRetries resolves the retry budget for one model under one brain
+// (ADR-0031 Decisions 3/4): 0 for sequential (retry off by construction — SV2)
+// or when the per-brain retry toggle is explicitly false; otherwise the
+// per-model max_retries (the toggle nil means on). Zero still leaves the
+// decorator applying the per-attempt deadline (SV3).
+func effectiveMaxRetries(bc config.BrainConfig, m config.ModelConfig) int {
+	if bc.Dispatch == "sequential" {
+		return 0
+	}
+	if bc.Retry != nil && !*bc.Retry {
+		return 0
+	}
+	return m.MaxRetries
 }
 
 // buildModel constructs one provider adapter, resolving its secret from the
