@@ -946,6 +946,33 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
 
 ---
 
+## Ideas aparcadas (post-beta, SIN compromiso — proponer cuando toque)
+
+> Candidatos evaluados pero **fuera de scope hoy**. No son trabajo pendiente ni
+> parte de ROAD-TO-BETA; son semillas para proponer más adelante, cada una con su
+> propio encuadre + `/plan-eng-review` + ADR si se activa.
+
+- **Capa de voz / STT-TTS (candidato) — herramienta: Voicebox
+  (`jamiepine/voicebox`, MIT, local-first, expone REST local `127.0.0.1:17493`
+  + servidor MCP).** Evaluado 2026-07-12 a petición de Chano.
+  - **Encaje conceptual, NO integrar ahora.** Korvun es hoy gateway de
+    mensajería + router + orquestador; voz no está en la misión actual ni en
+    ninguna pieza abierta (vamos por Pieza 2 / ADR-0031 sub-fase 4).
+  - **Caso de uso más natural = transcripción de notas de voz entrantes.** Flujo
+    propuesto: **voz de Telegram → Voicebox STT (Whisper local) → router → brain
+    → (opcional) TTS con voz clonada → respuesta**. Encaja con la postura del
+    proyecto: 100% local, sin claves de API de terceros, expuesto por REST/MCP
+    (coherente con "secrets solo por env, nada a la nube", ADR-0010 §3).
+  - **Qué haría falta si se activa:** ADR propio (nueva dependencia externa →
+    justificación + verificación Context7/al-source por regla de CLAUDE.md);
+    decidir si es proceso externo (REST/MCP) o embebido; contrato de canal para
+    audio entrante/saliente en el Envelope (hoy solo texto); coste/latencia STT
+    en hardware objetivo (desde Raspberry Pi a la nube — Voicebox necesita
+    modelos y VRAM/CPU no triviales, verificar en el SO/HW más pobre del target).
+  - **Cuándo proponerlo:** después de la beta (las 4 piezas), o antes si aparece
+    demanda real de mensajes de voz. Recordatorio a Claude Code: **proponer este
+    flujo cuando se considere conveniente**, no antes.
+
 ## Notes for the next session
 
 - **ROAD TO BETA:** el plan de las piezas que faltan vive en
