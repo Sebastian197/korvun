@@ -15,6 +15,7 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/metrics"
 	"github.com/Sebastian197/korvun/internal/model"
 )
 
@@ -59,14 +60,26 @@ func WithClock(c Clock) Option { return func(d *decorator) { d.clock = c } }
 // [0,1) (default: math/rand/v2's concurrent-safe Float64).
 func WithRand(next func() float64) Option { return func(d *decorator) { d.rnd = next } }
 
+// WithMetrics injects the observability backend the decorator emits retry
+// counters through (ADR-0031 sub-phase 7). Default: metrics.Nop{} (no emission).
+// A nil argument is ignored, keeping the Nop default.
+func WithMetrics(m metrics.Metrics) Option {
+	return func(d *decorator) {
+		if m != nil {
+			d.metrics = m
+		}
+	}
+}
+
 // decorator wraps a model.Model with the per-attempt deadline + transient-only
 // retry loop. One decorator per model instance; safe under concurrent Generate
 // (no shared mutable state; the default rand source is concurrent-safe).
 type decorator struct {
-	inner model.Model
-	cfg   Config
-	clock Clock
-	rnd   func() float64
+	inner   model.Model
+	cfg     Config
+	clock   Clock
+	rnd     func() float64
+	metrics metrics.Metrics
 }
 
 // New builds a retry decorator over inner. Defaults: a real clock and
@@ -74,10 +87,11 @@ type decorator struct {
 // tests.
 func New(inner model.Model, cfg Config, opts ...Option) model.Model {
 	d := &decorator{
-		inner: inner,
-		cfg:   cfg,
-		clock: realClock{},
-		rnd:   rand.Float64,
+		inner:   inner,
+		cfg:     cfg,
+		clock:   realClock{},
+		rnd:     rand.Float64,
+		metrics: metrics.Nop{},
 	}
 	for _, o := range opts {
 		o(d)
@@ -123,19 +137,26 @@ func (d *decorator) Generate(ctx context.Context, req *model.Request) (*model.Re
 			return nil, err
 		}
 
-		// (3)/(4) classify and compute the wait; a non-retryable error stops.
+		// (3)/(4) classify and compute the wait; a non-retryable error stops
+		// without touching any retry counter.
 		wait, retryable := d.waitFor(err, attempt)
 		if !retryable {
 			return nil, err
 		}
-		// Attempt budget exhausted — return the last error.
+		// Attempt budget exhausted — a retryable error we cannot retry again.
 		if attempt >= d.cfg.MaxRetries {
+			d.metrics.IncProviderRetryBudgetExhausted(d.inner.Name())
 			return nil, err
 		}
-		// (FR-A2) never sleep past the remaining parent budget.
+		// (FR-A2) never sleep past the remaining parent budget — also a
+		// budget-exhausted give-up on a retryable error.
 		if dl, ok := ctx.Deadline(); ok && wait > time.Until(dl) {
+			d.metrics.IncProviderRetryBudgetExhausted(d.inner.Name())
 			return nil, err
 		}
+		// Committed to an effective retry (all checks passed) — count it just
+		// before the backoff sleep.
+		d.metrics.IncProviderRetry(d.inner.Name())
 		if serr := d.clock.Sleep(ctx, wait); serr != nil {
 			return nil, err
 		}

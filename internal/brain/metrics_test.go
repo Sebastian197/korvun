@@ -58,6 +58,11 @@ func (m *recordingMetrics) ObserveTurnsPersisted(n int) {
 	m.turns = append(m.turns, n)
 }
 
+// No-ops to satisfy the Metrics interface extended in ADR-0031 sub-phase 7
+// (retry counters are exercised in internal/model/retry, not here).
+func (m *recordingMetrics) IncProviderRetry(string)                {}
+func (m *recordingMetrics) IncProviderRetryBudgetExhausted(string) {}
+
 // fixedCoord returns a hand-built *fanout.Result so a test controls the exact
 // per-provider outcomes (provider, ok/err, latency) the Brain should instrument.
 type fixedCoord struct{ res *fanout.Result }

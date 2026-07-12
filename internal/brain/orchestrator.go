@@ -40,6 +40,20 @@ var _ Coordinator = (*fanout.Coordinator)(nil)
 // operator did not configure one (ADR-0014 §3).
 const defaultFallback = "Sorry, no answer is available right now. Please try again."
 
+// The differentiated fallback texts (ADR-0031 sub-phase 7, Decision 6). These
+// are Korvun's PRODUCT VOICE to the user when every model failed — a decision,
+// not an implementation detail. Changing the wording breaks tests on purpose.
+const (
+	// retrySoonFallback is sent when at least one model failed with a hopeful
+	// error — a cold load still in progress (context.DeadlineExceeded, F6) or a
+	// rate-limit (*model.RateLimitError): retrying in a moment may succeed.
+	retrySoonFallback = "The model is still starting up or busy. Please try again in a moment."
+	// unavailableFallback is sent when NO model gave a hopeful error (hard
+	// ErrProviderUnavailable, ErrAuthInvalid, ErrProviderResponse): retrying will
+	// not help; the operator must look.
+	unavailableFallback = "The model provider is currently unavailable. Please try again later."
+)
+
 // defaultHistoryTurns is how many prior turns the Orchestrator loads when a
 // conversation store is configured but the caller passes a non-positive count.
 const defaultHistoryTurns = 10
@@ -69,6 +83,7 @@ type Orchestrator struct {
 	models       []model.Model
 	policy       policy.Policy
 	fallback     string
+	fallbackSet  bool // an operator WithFallback override was applied
 	systemPrompt string
 	logger       *slog.Logger
 	// store is the optional, conversation-keyed memory (ADR-0018). It holds the
@@ -85,11 +100,14 @@ type Orchestrator struct {
 // Option configures an Orchestrator at construction.
 type Option func(*Orchestrator)
 
-// WithFallback overrides the reply sent when no usable answer exists.
+// WithFallback overrides the reply sent when no usable answer exists. A
+// non-empty override wins over the differentiated defaults (ADR-0031 sub-phase
+// 7): an operator who sets it gets that single text for every failure class.
 func WithFallback(text string) Option {
 	return func(o *Orchestrator) {
 		if text != "" {
 			o.fallback = text
+			o.fallbackSet = true
 		}
 	}
 }
@@ -205,7 +223,7 @@ func (o *Orchestrator) Handle(ctx context.Context, env *envelope.Envelope) ([]*e
 			// The user gets a fallback reply; the operator gets the provenance.
 			// The (canned) fallback is NOT persisted — only real answers are.
 			o.logNoAnswer(env, dec, err)
-			return decisionToEnvelopes(o.fallback, env), nil
+			return decisionToEnvelopes(o.fallbackText(res, err), env), nil
 		}
 		// Anything else (e.g. ErrNilResult) is mechanism misuse — a Brain bug.
 		return nil, fmt.Errorf("brain: policy: %w", err)
@@ -218,6 +236,57 @@ func (o *Orchestrator) Handle(ctx context.Context, env *envelope.Envelope) ([]*e
 	// conversation id is present, in which case persistTurns is a no-op.
 	o.persistTurns(ctx, key, latestText(env.Parts), content)
 	return decisionToEnvelopes(content, env), nil
+}
+
+// fallbackText picks the reply for a no-answer outcome. There are THREE outputs
+// (ADR-0031 sub-phase 7):
+//
+//   - an operator WithFallback override always wins (a single configured text);
+//   - ErrNoUsableOutcome (EVERY model failed) is classified from the failure
+//     set: retry-soon when at least one error is hopeful (a cold load in
+//     progress / rate-limit), else unavailable;
+//   - ErrNoConsensus (models DID answer but reached no majority) falls back to
+//     the generic defaultFallback: "unavailable" would be false — the providers
+//     responded — and a dedicated disagreement text is a post-beta seed, not now
+//     (this split was forced by TestOrchestrator_optionGuards, kept as a guard).
+func (o *Orchestrator) fallbackText(res *fanout.Result, policyErr error) string {
+	if o.fallbackSet {
+		return o.fallback
+	}
+	// Consensus failure is not an all-failed outcome: responses exist, they just
+	// did not agree. The differentiated texts describe FAILURES, so use the
+	// generic reply here.
+	if errors.Is(policyErr, policy.ErrNoConsensus) {
+		return defaultFallback
+	}
+	if hasHopefulFailure(res) {
+		return retrySoonFallback
+	}
+	return unavailableFallback
+}
+
+// hasHopefulFailure reports whether any outcome failed with an error for which
+// retrying later has real hope: a per-attempt deadline expiry (a cold load still
+// in progress, F6) or a rate-limit. It classifies against the SHARED model +
+// context vocabulary only — the brain never imports internal/model/retry
+// (ADR-0011 boundary; ADR-0031 sub-phase 7 FR-F3).
+func hasHopefulFailure(res *fanout.Result) bool {
+	if res == nil {
+		return false
+	}
+	for _, oc := range res.Outcomes {
+		if oc.Err == nil {
+			continue
+		}
+		if errors.Is(oc.Err, context.DeadlineExceeded) {
+			return true
+		}
+		var rle *model.RateLimitError
+		if errors.As(oc.Err, &rle) {
+			return true
+		}
+	}
+	return false
 }
 
 // observeOutcomes records each provider's latency and outcome from a fan-out

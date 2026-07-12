@@ -662,7 +662,7 @@ func (b *builder) buildCatalog(bc config.BrainConfig) ([]policy.CatalogEntry, er
 		decorated := retry.New(adapter, retry.Config{
 			PerAttempt: b.effectiveConfig().EffectiveRequestTimeout(m),
 			MaxRetries: effectiveMaxRetries(bc, m),
-		})
+		}, retry.WithMetrics(b.metrics))
 		withID := brain.WithModelID(decorated, m.ModelID)
 		entries = append(entries, policy.CatalogEntry{
 			Model:    withID,

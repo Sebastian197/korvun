@@ -41,6 +41,8 @@ type Metrics struct {
 	messages       *prometheus.CounterVec
 	providerDur    *prometheus.HistogramVec
 	providerFail   *prometheus.CounterVec
+	providerRetry  *prometheus.CounterVec
+	retryExhausted *prometheus.CounterVec
 	routerErrors   *prometheus.CounterVec
 	turnsPersisted prometheus.Counter
 }
@@ -72,6 +74,14 @@ func New() *Metrics {
 			Name: "korvun_provider_failures_total",
 			Help: "Failed provider calls, by provider.",
 		}, []string{"provider"}),
+		providerRetry: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "korvun_provider_retries_total",
+			Help: "Effective provider retries, by provider.",
+		}, []string{"provider"}),
+		retryExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "korvun_provider_retry_budget_exhausted_total",
+			Help: "Provider retry budgets exhausted without success, by provider.",
+		}, []string{"provider"}),
 		routerErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "korvun_router_errors_total",
 			Help: "Asynchronous router failures, by kind.",
@@ -81,7 +91,8 @@ func New() *Metrics {
 			Help: "Turns durably appended on a successful reply.",
 		}),
 	}
-	reg.MustRegister(m.messages, m.providerDur, m.providerFail, m.routerErrors, m.turnsPersisted)
+	reg.MustRegister(m.messages, m.providerDur, m.providerFail, m.providerRetry,
+		m.retryExhausted, m.routerErrors, m.turnsPersisted)
 	return m
 }
 
@@ -117,6 +128,11 @@ func (m *Metrics) IncMessages(channel string) {
 
 // ObserveProviderDuration records one provider call's latency under the
 // (provider, outcome) labels; outcome is "ok" or "error".
+//
+// F8 (ADR-0031 sub-phase 7): d is the TOTAL provider-call time — all retry
+// attempts plus their backoff waits — because the wired model is retry-decorated
+// and fanout.CallOne times that whole decorated call. The histogram therefore
+// measures end-to-end provider latency including retries, by design.
 func (m *Metrics) ObserveProviderDuration(provider string, ok bool, d time.Duration) {
 	outcome := "error"
 	if ok {
@@ -128,6 +144,18 @@ func (m *Metrics) ObserveProviderDuration(provider string, ok bool, d time.Durat
 // IncProviderFailure counts one failed provider call, by provider.
 func (m *Metrics) IncProviderFailure(provider string) {
 	m.providerFail.WithLabelValues(provider).Inc()
+}
+
+// IncProviderRetry counts one effective provider retry, by provider (ADR-0031
+// sub-phase 7).
+func (m *Metrics) IncProviderRetry(provider string) {
+	m.providerRetry.WithLabelValues(provider).Inc()
+}
+
+// IncProviderRetryBudgetExhausted counts one retry budget exhausted without
+// success, by provider (ADR-0031 sub-phase 7).
+func (m *Metrics) IncProviderRetryBudgetExhausted(provider string) {
+	m.retryExhausted.WithLabelValues(provider).Inc()
 }
 
 // IncRouterError counts one asynchronous router failure, by kind.

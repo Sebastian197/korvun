@@ -26,6 +26,13 @@ type Metrics interface {
 	// ObserveProviderDuration records one provider call's latency and whether
 	// it succeeded. Sourced from fanout.Outcome (Latency + Err) AFTER coord.Run,
 	// off the hot path, so it adds no contention.
+	//
+	// F8 (ADR-0031 sub-phase 7): because the wired model is the retry-decorated
+	// one, the observed duration is the TOTAL of the provider call — all retry
+	// attempts plus their backoff waits — not a single Generate. This is a
+	// deliberate, test-pinned semantic (the metric does not lie): a slow value
+	// here means "the provider took this long including retries", which is what
+	// an operator wants for latency SLOs.
 	ObserveProviderDuration(provider string, ok bool, d time.Duration)
 	// IncProviderFailure counts one failed provider call, by provider. Kept
 	// distinct from the duration histogram's outcome label so failure rate is a
@@ -37,6 +44,16 @@ type Metrics interface {
 	// ObserveTurnsPersisted counts turns durably appended (the AppendTurns
 	// group size) on a successful reply.
 	ObserveTurnsPersisted(n int)
+	// IncProviderRetry counts one EFFECTIVE retry the retry decorator committed
+	// to (after the parent/budget checks passed, before the backoff sleep), by
+	// provider (ADR-0031 sub-phase 7).
+	IncProviderRetry(provider string)
+	// IncProviderRetryBudgetExhausted counts one retry budget exhausted without
+	// success — the decorator gave up on a RETRYABLE error, either at
+	// max_retries or because the next wait would exceed the parent budget
+	// (FR-A2) — by provider. A non-retryable failure never bumps it (ADR-0031
+	// sub-phase 7).
+	IncProviderRetryBudgetExhausted(provider string)
 }
 
 // Nop is the no-op Metrics: every method does nothing. It is the default
@@ -59,3 +76,9 @@ func (Nop) IncRouterError(string) {}
 
 // ObserveTurnsPersisted does nothing.
 func (Nop) ObserveTurnsPersisted(int) {}
+
+// IncProviderRetry does nothing.
+func (Nop) IncProviderRetry(string) {}
+
+// IncProviderRetryBudgetExhausted does nothing.
+func (Nop) IncProviderRetryBudgetExhausted(string) {}
