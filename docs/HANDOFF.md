@@ -1002,7 +1002,29 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
     on all 3 OSes. Not a code defect — stdlib advisory under our normal HTTPS
     calls. Local toolchain auto-upgraded to 1.26.5; Chano's Homebrew base still
     1.26.4 (optional `brew upgrade go` to align, non-blocking).
-  - **ACTUALIZACIÓN 2026-07-12 (última) — sub-fase 3 HECHA y comiteada (`e1925a6`, SIN
+  - **ACTUALIZACIÓN 2026-07-12 (última) — sub-fase 4 HECHA y comiteada (`b6631d4`, SIN
+    push — es de Chano):** el decorador de retry (LA GORDA de la Pieza 2).
+    - **`internal/model/retry` (paquete nuevo):** `New(inner, Config{PerAttempt,
+      MaxRetries}, WithClock/WithRand)`; per-attempt `context.WithTimeout` en CADA intento
+      (incl. el 0º, retry on/off) → dueño ÚNICO del deadline para TODOS los shapes (SV3
+      final). Clasificación en orden load-bearing R1(parent ctx→stop, F3)→R2(DeadlineExceeded
+      →stop, F6)→R3(RateLimit, cap 30s + budget-guard sin dormir)→R4(Unavailable, full jitter
+      200ms×2 cap 2s)→resto no-retryable. Reloj+rand inyectables (cero sleeps en tests);
+      default `math/rand/v2` concurrent-safe. Cobertura 96.3%, `-race -count=20` limpio.
+    - **Wiring (`buildCatalog`):** `WithModelID(retry.New(adapter, {PerAttempt:
+      EffectiveRequestTimeout(m), MaxRetries: efectivo}), id)` para TODOS los shapes;
+      `effectiveMaxRetries` fuerza 0 en sequential (SV2) y con `retry:false`; nil→on.
+    - **Des-wire del agente (D-agent):** `buildAgentBrain` ya NO cablea
+      `WithAgentPerModelTimeout` (opción conservada en `brain` para uso directo/test, godoc
+      lo dice); el ceiling del agente deriva de `EffectiveRequestTimeout(bc.Models[0])`; el
+      fan-out puebla `backoffBudget = maxRetries × 2s` (FR-A3).
+    - **Bite-proofs demostrados (inyectar→rojo→revertir):** BP-orden (invertir R2/R4 → el
+      load-bearing cae, calls=3) y BP-a (quitar el guard sequential → el guard SV2 de wiring
+      cae, hits=3). Test de composición F3 (fan-out cancel + decorados) con fakes,
+      determinista. `make quality` verde `-race`. Spec en
+      `docs/superpowers/specs/2026-07-12-adr-0031-subphase4-retry-decorator-design.md`;
+      nota intermediate-state del ADR-0031 cerrada a estado final en este mismo commit de docs.
+  - **ACTUALIZACIÓN 2026-07-12 — sub-fase 3 HECHA y comiteada (`e1925a6`, SIN
     push — es de Chano):** refinamiento del mapeo de errores de Ollama (COMPLETITUD F9).
     - **`ollama.mapHTTPError` (aislada, table-tested):** `5xx→ErrProviderUnavailable`,
       `429→*RateLimitError{Provider:"ollama", RetryAfter=ParseRetryAfter(Retry-After)}`,
@@ -1034,11 +1056,13 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
       DEMOSTRADO que muerde; `-race -count=20` limpio.
     - Registro en ADR-0031 (margin + nota SV3 del estado intermedio) va en este mismo
       commit de docs. `make quality` verde `-race` tras cada sub-fase.
-  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **TDD sub-fase 4 — el decorador de
-    retry (la gorda), rojo primero.** Clasificación transitorio-vs-deadline con F6;
-    guard de `ctx.Err()`; backoff + jitter con reloj inyectable; `RetryAfter` respetado
-    con cap; y probar que el guard **SV2 de sequential MUERDE**. Cierra el 6º criterio V1
-    "aguanta un proveedor caído sin caerse".
+  - **PRÓXIMO PASO LITERAL de la próxima sesión:** **TDD sub-fase 5 — EL test cold-start
+    de Chano (Decisiones 1 y 5), rojo primero.** Un `httptest` que responde tras un delay
+    `> short-timeout` pero `< generous-timeout`: con el per-attempt generoso el ÚNICO
+    intento completa la carga fría y tiene éxito; con un timeout corto falla y el retry NO
+    lo rescata (la expiración del deadline es no-reintentable — F6 convertido en test
+    contra el decorador REAL de la sub-fase 4). Cierra el 6º criterio V1 "aguanta un
+    proveedor caído sin caerse".
   - **ACTUALIZACIÓN previa 2026-07-11:** los **3 hallazgos de la 2ª voz (SV1–SV3)
     están ABSORBIDOS en el ADR-0031 y comiteados** (commit `docs: absorb second-voice
     findings SV1-SV3 into ADR-0031`); tras la **revisión final del copiloto**, el

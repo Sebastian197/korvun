@@ -166,19 +166,22 @@ deadline. The AgentBrain path is covered by the same construction: it calls
 `fanout.CallOne` directly, but against the DECORATED model, so each loop call
 carries the deadline.
 
-**Intermediate state (sub-phases 1–2, before the decorator — implemented &
-verified):** the decorator does not exist yet, so the per-attempt deadline owner
-differs by shape without ever leaving a `Generate` deadline-less. Fan-out and
-sequential inherit the **router ceiling** alone (the coordinator
-`WithPerModelTimeout` and the adapter `WithRequestTimeout` were removed in
-sub-phase 1; every `Generate` still runs under the ceiling ctx via `Handle`).
-The **AgentBrain keeps `WithAgentPerModelTimeout`** as its per-attempt deadline
-owner (a finer bound than the whole-`Handle` ceiling, matching its
-`maxIterations` loop). Both real callers of `Generate` (`fanout.CallOne` and the
-`WithModelID` decorator) run under `Handle`'s ceiling ctx, and Preflight never
-calls `Generate` — so SV3 holds in this intermediate state. When the retry
-decorator lands (sub-phase 4) it becomes the single per-attempt owner for all
-shapes, as the paragraph above describes.
+**Final state (sub-phase 4, implemented & verified):** the retry decorator
+(`internal/model/retry`) is now the **single owner** of the per-attempt deadline
+for EVERY dispatch shape (single, fan-out, sequential, agent): it applies
+`context.WithTimeout(ctx, EffectiveRequestTimeout(m))` on EVERY attempt —
+including the 0th, with retry on or off. The **AgentBrain no longer wires
+`WithAgentPerModelTimeout` in production** (the option is retained in the `brain`
+package for direct/test construction, and its godoc says so); the agent calls
+`fanout.CallOne` against the DECORATED model, so its per-attempt deadline comes
+from the decorator like every other shape. **SV3 final:** no `Generate` path
+without a deadline, one owner. Classification runs in the load-bearing order
+R1 (parent ctx cancelled/expired → stop, F3) → R2 (`context.DeadlineExceeded` →
+stop, F6) → R3 (`*RateLimitError` → retry, Retry-After capped at 30s and bounded
+by the remaining parent budget) → R4 (`ErrProviderUnavailable` → retry with full
+jitter, 200ms×2 capped at 2s) → everything else non-retryable. **Sequential:**
+retry is off by construction in the wiring (`effectiveMaxRetries` returns 0 —
+SV2), with a wiring-level guard test proven to bite.
 
 **Test (concrete, F5):** a model that always times out, N retries → `Handle` returns
 **by the ceiling**, not in N×perAttempt with no bound; and the ceiling ≥ derived
