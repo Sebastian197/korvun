@@ -3,7 +3,7 @@ module github.com/Sebastian197/korvun
 go 1.26.5
 
 require (
-	github.com/go-telegram/bot v1.21.0
+	github.com/go-telegram/bot v1.22.0
 	github.com/prometheus/client_golang v1.23.2
 	modernc.org/sqlite v1.53.0
 )
