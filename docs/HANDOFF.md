@@ -58,59 +58,64 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ## Current state (as of session close, 2026-07-18)
 
-> **CURRENT (2026-07-18): Piece 3 (CLI) sub-phase 2 (SP2) DONE and committed
-> (`feat(cli): serve flag surface behind an injectable boot seam (Piece 3 SP2)`,
-> `9d35220`).** `serve` now has its OWN flag surface, split from the real boot:
-> - **`serveCmd(args) int`** — a pure, unit-testable parse/validate step over the
->   INJECTED writers (never `os.Stderr` directly). A bad serve flag → usage error
->   to stderr, **exit 2** (FR-CLI-4); `-h`/`--help` → a query (usage to **stdout,
->   exit 0**, matching top-level help); the pre-serve **banner** is gated to stderr,
->   TTY-only, off under `--plain`/`--no-color`/`NO_COLOR` (R1–R3) via a shared
->   `styleEnabled` helper (`internal/cli/style.go`).
-> - **`bootServe(configPath) int`** — the real supervisor boot behind the
->   injectable `c.boot` seam; tests assert routing + the resolved config path
->   WITHOUT booting the app or opening a port. `serve` is NOT restyled — its
->   structured slog JSON is untouched (FR-STY-8).
-> - **Retrocompat shim NARROWED** from "any leading dash" to the `-config`/
->   `--config` flag (incl. the `=value` form), so a bare display flag like
->   `korvun --plain` no longer silently boots a server. The hardware-validated
->   `korvun -config x.json` invocation still routes to serve byte-compatibly.
+> **CURRENT (2026-07-18): Piece 3 (CLI) sub-phase 3 (SP3) DONE and committed
+> (`feat(cli): add 'config check [--preflight]' with color roles (Piece 3 SP3)`,
+> `26164a5`).** The `config` noun's first verb landed:
+> - **`config check [--preflight] [path]`** (`internal/cli/config.go`). Offline by
+>   default (FR-CHK-1): `config.Load` (which validates) with no network/secrets →
+>   first field-path violation to stderr, **exit 2**; clean config → OK line to
+>   stdout, **exit 0**. `--preflight` (FR-CHK-2): runs `app.Preflight` behind the
+>   injectable `c.preflight` seam (tests force its outcome with no network/port);
+>   failure → named error to stderr, **exit 1**; success → OK line notes preflight.
+> - **`config` dispatch** routes to `configCmd`; missing/unknown sub-verb → usage
+>   error (exit 2) pointing at `config check`. `status` stays announced-only.
+> - **First color roles (ADR-0030)**: `success #22C55E` / `error #EF4444` on the OK
+>   line and errors, gated by `styleEnabled` on the TARGET stream, **always with a
+>   textual label** (color is never the only channel). `--plain`/`--no-color`
+>   honored; stdout escape-free under `--plain`/non-TTY (R1–R3, tested).
+> - **serve strictness (SP2's parked item)**: a stray positional (`serve mycfg.json`
+>   OR a trailing token on the shim) → usage error, **exit 2**, never a silent
+>   default-config boot. **DECISION for Chano's review:** the rejection fires
+>   UNIFORMLY, including the retrocompat shim (`korvun -config x.json extra` → exit
+>   2). No DOCUMENTED invocation (systemd `ExecStart`, all docs) carries a trailing
+>   token — every `korvun -config <path>` passes zero positionals, so none regress.
+>   Pinned by a test so the tightening is a decision, not an accident; veto here if
+>   you'd rather exempt the shim.
 >
 > `make quality` green `-race` over the WHOLE suite (total **93.0%**);
-> **`internal/cli` 93.0%** (was ~70% — SP2's ≥85 target CLEARED; `serveCmd`
-> 100%, `bootServe` 78.9% = only the clean-stop/reload-closure e2e glue,
-> covered by `internal/app`). Coverage clears via a hermetic `bootServe` boot-fatal
-> test (config loads but a referenced secret is absent → `app.Build`
-> `ErrMissingSecret` at a pure `os.Getenv`, before any dial/bind).
+> **`internal/cli` 93.5%** (≥85 maintained; `configCheck`/`serveCmd`/`parseStyled`
+> 100%; `runPreflight`/`defaultPreflight`/`bootServe` are injected/e2e glue). Every
+> case smoke-tested on the built binary (offline valid/invalid, `--preflight` with an
+> absent secret → hermetic exit 1, path-first flags, shim + stray token).
 >
-> **`/review` (high, workflow-backed) run on the SP2 diff → 3 CONFIRMED defects,
-> all FIXED before commit** (4 candidates refuted): (1) the new `--plain`/
-> `--no-color` serve flags widened the shim so `korvun --plain` booted a server →
-> fixed by narrowing the shim to the config flag; (2) `serve -h/--help` folded
-> `flag.ErrHelp` into the exit-2 usage path → fixed by routing `ErrHelp` to stdout
-> exit 0 (buffered flag output split by kind); (3) `help()` gated its banner on raw
-> `isTTY`, ignoring `NO_COLOR` → migrated to `styleEnabled`. Each fix is pinned by a
-> test and smoke-tested on the built binary.
->
-> **TOOLING committed this session** (`chore(tooling): ...`, `ce6970d`, separate
-> from the CLI): `.gitignore` (adds `graphify-out/`, `.ua/`, `.obsidian/`) and the
-> project operating-rules file (the graphify "consult FIRST" rule). These were the
-> parked local changes Chano had left pending — now landed.
+> **`/review` (high, workflow-backed) on the SP3 diff → 4 CONFIRMED findings, all
+> resolved before commit** (2 refuted): (1) **correctness** — a flag AFTER the path
+> (`config check korvun.json --preflight`) was swallowed as a 2nd positional (Go's
+> flag parser stops at the first non-flag) → fixed by permuting path vs flags
+> (config-check flags are all boolean, so any non-dash token is the path); (2)
+> **correctness** — serve's positional rejection also fires on the shim path → KEPT
+> uniformly (see the DECISION above), pinned + documented; (3) **cleanup** — the
+> buffered-FlagSet + display-flag + `-h`/bad-flag routing was copy-pasted from serve
+> → extracted the shared `parseStyled` helper (`style.go`); (4) **cleanup** — the
+> `app.Preflight` call was duplicated → extracted `runPreflight`, now the single call
+> site shared by config-check and the supervisor reload closure.
 >
 > **ldflags: STILL PARKED (its own sub-phase).** `.goreleaser.yaml` still targets
 > `-X main.version`; `version` lives in `internal/cli`, so that must move to
 > `-X …/internal/cli.version` — **not touched** here. Impact today: nil (no real
 > release tag pushed; a local build reports `korvun dev (rev)` correctly).
 >
-> **NEXT STEP: Piece 3 sub-phase 3 (SP3) — `config check [--preflight]`** (offline
-> `config.Load` + `config.Validate` default; injected online `app.Preflight` seam):
-> valid → exit 0, invalid → exit 2 with the field path, injected preflight failure →
-> exit 1, stdout clean under `--plain`. Style: OK line in `success`, errors in
-> `error` to stderr. See the design spec
-> (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), SP3.
+> **NEXT STEP: Piece 3 sub-phase 4 (SP4) — `status [--addr]`** (a thin HTTP client
+> over the existing admin endpoints `/healthz` + `/api/brains` + `/api/channels`,
+> ADR-0022, no token, no new server code): tabwriter table to stdout, health colored
+> on a TTY, plain off-TTY; unreachable admin → honest "not reachable" line to stderr,
+> exit 1, no panic; stdout parseable under `--plain`. See the design spec
+> (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), SP4. After SP4 comes
+> SP5 (docs rewrite `-config …` → `serve …` + macOS re-validation, closes the piece).
 >
-> **NOT pushed** — pushing master is Chano's act. Commits `ce6970d` + `9d35220`
-> are local on master, ready to push.
+> **NOT pushed** — pushing master is Chano's act. Commit `26164a5` (SP3) is local on
+> master atop the already-pushed `23b96f0`; it goes with the push Chano runs after
+> reviewing this diff.
 >
 > **Brand assets** (`chore(brand)`, prior session): see the "Brand assets" section
 > below (`assets/brand/`).
