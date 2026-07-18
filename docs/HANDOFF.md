@@ -58,86 +58,70 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ## Current state (as of session close, 2026-07-18)
 
-> **CURRENT (2026-07-18): Piece 3 (CLI) sub-phase 3 (SP3) DONE and committed
-> (`feat(cli): add 'config check [--preflight]' with color roles (Piece 3 SP3)`,
-> `26164a5`).** The `config` noun's first verb landed:
-> - **`config check [--preflight] [path]`** (`internal/cli/config.go`). Offline by
->   default (FR-CHK-1): `config.Load` (which validates) with no network/secrets →
->   first field-path violation to stderr, **exit 2**; clean config → OK line to
->   stdout, **exit 0**. `--preflight` (FR-CHK-2): runs `app.Preflight` behind the
->   injectable `c.preflight` seam (tests force its outcome with no network/port);
->   failure → named error to stderr, **exit 1**; success → OK line notes preflight.
-> - **`config` dispatch** routes to `configCmd`; missing/unknown sub-verb → usage
->   error (exit 2) pointing at `config check`. `status` stays announced-only.
-> - **First color roles (ADR-0030)**: `success #22C55E` / `error #EF4444` on the OK
->   line and errors, gated by `styleEnabled` on the TARGET stream, **always with a
->   textual label** (color is never the only channel). `--plain`/`--no-color`
->   honored; stdout escape-free under `--plain`/non-TTY (R1–R3, tested).
-> - **R4/FR-STY-9 CLOSED — Windows VT guard** (pre-push fix, `dc68aae`). Since the
->   CLI now emits ANSI, a legacy Windows conhost without VT would print the escapes
->   literally. A build-tagged `vtCapable()` guards it: `style_unix.go` (no-op true,
->   Unix is ANSI-native — host/tests byte-identical); `style_windows.go` turns VT on
->   via a raw kernel32 `GetConsoleMode`/`SetConsoleMode` syscall (stdlib, zero deps,
->   `sync.Once`), and on failure `styleEnabled` degrades to plain — never literal
->   escapes (R4). The Windows true branch needs a real console (not unit-testable,
->   like `isTerminal`'s TTY branch); covered by cross-compile ×6 + windows-latest,
->   documented in the godoc. Same silence closed in `config check`: a residual
->   positional after a `--` terminator is now a usage error (exit 2), symmetric with
->   serve.
->   **Follow-up fix (`0a6eba4`):** the VT probe is behind an injectable `c.vt` seam
->   (like `isTTY`/`boot`/`preflight`) — the real binary uses `vtCapable`, but the
->   windows-latest test process runs with redirected pipes where the live probe
->   reports false, which would have failed the `isTTY=true` styling tests THERE only.
->   `newTestCLI` injects `vt=true` so gating is deterministic on all 3 OSes, and a
->   new test bites the degradation branch (`isTTY=true` + `vt=false` → plain),
->   bringing `styleEnabled` to 100%.
-> - **serve strictness (SP2's parked item)**: a stray positional (`serve mycfg.json`
->   OR a trailing token on the shim) → usage error, **exit 2**, never a silent
->   default-config boot. **DECISION for Chano's review:** the rejection fires
->   UNIFORMLY, including the retrocompat shim (`korvun -config x.json extra` → exit
->   2). No DOCUMENTED invocation (systemd `ExecStart`, all docs) carries a trailing
->   token — every `korvun -config <path>` passes zero positionals, so none regress.
->   Pinned by a test so the tightening is a decision, not an accident; veto here if
->   you'd rather exempt the shim.
+> **CURRENT (2026-07-18): Piece 3 (CLI) sub-phase 4 (SP4) DONE and committed
+> (`feat(cli): add 'korvun status [--addr]' admin-API client (Piece 3 SP4)`,
+> `21ff261`).** The last read command landed — the CLI verb set (serve / config
+> check / status / version / help) is now complete; only SP5 (docs) remains.
+> - **`status [--addr host:port]`** (`internal/cli/status.go`) — a thin HTTP client
+>   of the already-serving admin API (ADR-0022), **no new server code, no token**.
+>   Gates on `/healthz`, then GETs `/api/brains` + `/api/channels` and renders the
+>   resolved wiring (brains + privacy-selector-surviving models + channels + drop
+>   counts) as aligned `text/tabwriter` tables to stdout (FR-STA-1/3). Decodes into
+>   **`internal/controlapi`'s own summary types** (single source of truth, no mirror).
+> - **Honest failure (FR-STA-2)**: dial error or non-200 `/healthz` → clear "admin
+>   API not reachable at <addr>" to stderr, **exit 1**, never a panic. Requests carry
+>   a signal-cancellable `context` (Ctrl-C/SIGTERM) bounded by a 5s client timeout —
+>   no path hangs.
+> - **Style (FR-STY-6, R1–R3)**: health line `success`-colored, plus a `warn`
+>   (#F59E0B, new role) line when a channel is dropping — both gated by `styleEnabled`
+>   with a textual label always present. Color is kept **OUT of the tabwriter tables**
+>   on purpose (ANSI has zero display width but tabwriter counts bytes → colored cells
+>   would misalign); columns are byte-identical on/off TTY, escape-free under
+>   `--plain`/`--no-color`/non-TTY.
+> - **Dispatch/help**: `status` leaves "not available yet" → joins Commands with a
+>   description + example; the now-empty "Coming in a later release" section removed.
+>   Flags via the shared `parseStyled`; `-h/--help` query (exit 0), bad flag / stray
+>   positional → usage error (exit 2), uniform with serve/config check.
 >
-> `make quality` green `-race` over the WHOLE suite (total **93.0%**);
-> **`internal/cli` 93.8%** (≥85 maintained; `configCheck`/`serveCmd`/`parseStyled`
-> 100%; `runPreflight`/`defaultPreflight`/`bootServe`/the Windows `vtCapable` true
-> branch are injected/e2e/platform glue). Cross-compile ×6 `CGO_ENABLED=0` green
-> (both Windows targets compile the VT file). Every case smoke-tested on the built
-> binary (offline valid/invalid, `--preflight` with an absent secret → hermetic exit
-> 1, path-first flags, shim + stray token, `config check -- -x` residual token).
+> `make quality` green `-race` over the WHOLE suite (total **93.2%**);
+> **`internal/cli` 94.2%** (≥85 maintained; `statusCmd`/`statusError`/`renderStatus`/
+> `joinModels` 100%; the residual `adminReachable`/`getJSON` gaps are defensive
+> transport-error branches unreachable after a healthy `/healthz`). Windows build +
+> vet clean. Smoke-tested on the built binary against a live admin stub: `host:port`
+> and `http://host:port` both render; unreachable → honest exit 1.
 >
-> **`/review` (high, workflow-backed) on the SP3 diff → 4 CONFIRMED findings, all
-> resolved before commit** (2 refuted): (1) **correctness** — a flag AFTER the path
-> (`config check korvun.json --preflight`) was swallowed as a 2nd positional (Go's
-> flag parser stops at the first non-flag) → fixed by permuting path vs flags
-> (config-check flags are all boolean, so any non-dash token is the path); (2)
-> **correctness** — serve's positional rejection also fires on the shim path → KEPT
-> uniformly (see the DECISION above), pinned + documented; (3) **cleanup** — the
-> buffered-FlagSet + display-flag + `-h`/bad-flag routing was copy-pasted from serve
-> → extracted the shared `parseStyled` helper (`style.go`); (4) **cleanup** — the
-> `app.Preflight` call was duplicated → extracted `runPreflight`, now the single call
-> site shared by config-check and the supervisor reload closure.
+> **`/review` (high, workflow-backed) on the SP4 diff → 7 findings (1 correctness),
+> resolved before commit** (1 refuted — gosec G107 does NOT fire): (1) **correctness**
+> — a scheme-qualified `--addr http://…` built `http://http://…` and misreported a
+> live server as unreachable → fixed by stripping the scheme; (2) default reused
+> `config.DefaultObservabilityAddr`; (3) wire structs replaced by `controlapi` types;
+> (4) requests now carry a context; (6) the error-to-stderr path is one `statusError`
+> helper; (7) dead test setup removed. **(5) the two independent data GETs stay
+> sequential ON PURPOSE** — the admin API is loopback by default (sub-ms), so
+> parallelizing adds concurrency machinery for a remote case this local-first tool
+> does not target; noted in the godoc (Chano: veto if you'd rather it parallelize).
 >
 > **ldflags: STILL PARKED (its own sub-phase).** `.goreleaser.yaml` still targets
 > `-X main.version`; `version` lives in `internal/cli`, so that must move to
 > `-X …/internal/cli.version` — **not touched** here. Impact today: nil (no real
 > release tag pushed; a local build reports `korvun dev (rev)` correctly).
 >
-> **NEXT STEP: Piece 3 sub-phase 4 (SP4) — `status [--addr]`** (a thin HTTP client
-> over the existing admin endpoints `/healthz` + `/api/brains` + `/api/channels`,
-> ADR-0022, no token, no new server code): tabwriter table to stdout, health colored
-> on a TTY, plain off-TTY; unreachable admin → honest "not reachable" line to stderr,
-> exit 1, no panic; stdout parseable under `--plain`. See the design spec
-> (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), SP4. After SP4 comes
-> SP5 (docs rewrite `-config …` → `serve …` + macOS re-validation, closes the piece).
+> **NEXT STEP: Piece 3 sub-phase 5 (SP5) — docs + macOS re-validation (CLOSES the
+> piece).** Rewrite `INSTALL.md`/`QUICKSTART.md`/`BUILDER.md`/`CONFIGURATION.md` +
+> `korvun.service` from `./korvun -config …` to `korvun serve …` (the shim keeps the
+> old form valid but non-canonical); add a repo `korvun.example.json`; **re-validate
+> the full quickstart on Chano's Mac** with the new commands. See the design spec
+> (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), SP5.
 >
-> **NOT pushed** — pushing master is Chano's act. Local on master atop the
-> already-pushed `23b96f0`: `26164a5` (SP3), `17adf6a` (this HANDOFF note), `dc68aae`
-> (the R4/FR-STY-9 Windows VT guard + config-check strictness pre-push fix), `0a6eba4`
-> (the VT-probe seam so windows-latest tests are deterministic), plus this HANDOFF
-> update. They go with the push Chano runs after reviewing this diff.
+> **SP3 (done, pushed):** `config check [--preflight]` + first color roles +
+> R4/FR-STY-9 Windows VT guard (+ its `c.vt` seam) + serve/config-check positional
+> strictness — commits `26164a5`/`17adf6a`/`dc68aae`/`8de1003`/`0a6eba4`/`6ef4e20`,
+> pushed (CI green ×3 OS incl. windows-latest). The serve-strictness uniform-shim
+> DECISION flagged there stands (no documented invocation regresses).
+>
+> **NOT pushed** — pushing master is Chano's act. `21ff261` (SP4) + this HANDOFF
+> update are local on master atop the already-pushed `6ef4e20`; they go with the push
+> Chano runs after reviewing this diff.
 >
 > **Brand assets** (`chore(brand)`, prior session): see the "Brand assets" section
 > below (`assets/brand/`).
