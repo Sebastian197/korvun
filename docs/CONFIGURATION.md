@@ -42,16 +42,32 @@ block means *read-only* (no mutation, the safe default).
 
 | Field | Type | Required | Values / meaning |
 |-------|------|----------|------------------|
-| `type` | string | **yes** | Adapter. Supported: `telegram`. |
-| `mode` | string | **yes** | Transport. Supported: `polling`. |
+| `type` | string | **yes** | Adapter. Supported: `telegram`, `discord`. |
+| `mode` | string | **yes** | Transport. `telegram` → `polling`; `discord` → `gateway`. |
 | `token_env` | string | **yes** | **Name** of the env var holding the bot token. |
 
-A `telegram` channel registers under the name `telegram` (the name `routes`
-reference).
+A channel registers under its `type` as its name (the value `routes` reference).
+
+### `telegram`
 
 ```json
 { "type": "telegram", "mode": "polling", "token_env": "TELEGRAM_BOT_TOKEN" }
 ```
+
+### `discord`
+
+Receives over the Discord Gateway (a WebSocket) and replies over REST. `mode` is
+always `"gateway"` (the single v1 transport). The bot token's env var holds a token
+of the form Discord issues in the Developer Portal → **Bot** tab.
+
+```json
+{ "type": "discord", "mode": "gateway", "token_env": "DISCORD_BOT_TOKEN" }
+```
+
+> **One manual operator step:** the bot needs the **Message Content** privileged
+> intent turned ON in the Discord Developer Portal, and must be invited to your
+> server. Full walkthrough: **[docs/DISCORD-SETUP.md](DISCORD-SETUP.md)** (the Discord
+> counterpart of Telegram's BotFather steps).
 
 ## `brains[]`
 
@@ -111,7 +127,7 @@ orchestrator. Both satisfy `brain.Brain`, so routing is unchanged.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `channel` | string | **yes** | Name of a configured channel (`telegram`). |
+| `channel` | string | **yes** | Name of a configured channel (`telegram`, `discord`). |
 | `brain` | string | **yes** | Name of a configured brain. |
 
 ```json
