@@ -164,8 +164,33 @@ third skill to document.
 - Observability: structured logging (`slog`), Prometheus metrics,
   OpenTelemetry traces.
 
+## Project knowledge graph (graphify) — consult FIRST — RULE
+
+Korvun is indexed as a queryable knowledge graph via **graphify** (installed
+globally; skill at `~/.claude/skills/graphify/`). The graph lives in
+`graphify-out/` (`graph.json`, `GRAPH_REPORT.md`, interactive `graph.html`).
+
+**Non-negotiable rule: whenever you need to understand or consult the project —
+"how does X work", "what calls Y", "where does Z live", tracing a data flow,
+mapping a subsystem, locating a symbol across files — query the graph FIRST,
+before grepping or reading files ad hoc.**
+
+- Ask the graph: `graphify query "<question>"` (BFS, broad context) — or
+  `--dfs` to trace one path, `--budget N` to cap the answer.
+- Shortest link between two concepts: `graphify path "A" "B"`.
+- Explain a node and its neighbours: `graphify explain "X"`.
+- Only fall back to Grep/Read when the graph does not cover the answer.
+- The graph auto-rebuilds on every commit to `master` (a branch-guarded
+  `post-commit` hook re-runs AST extraction on changed code and refreshes
+  `graph.json` + `GRAPH_REPORT.md`; no LLM, code-only). After large **doc**
+  changes, refresh manually with `/graphify --update` (docs are not in the
+  hook's scope).
+- graphify needs no API key of its own and never sends raw source upstream.
+
 ## How to behave
 
+- **Consult the project through the graphify graph first** (see the section
+  above) — it is the map; grep/read is the fallback.
 - Move one task at a time. Pause for confirmation before advancing phases.
 - Do not skip the red-test step "to save time".
 - If a code library is needed and Context7 docs are not verified, stop and say
