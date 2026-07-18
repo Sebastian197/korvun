@@ -73,6 +73,17 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 >   line and errors, gated by `styleEnabled` on the TARGET stream, **always with a
 >   textual label** (color is never the only channel). `--plain`/`--no-color`
 >   honored; stdout escape-free under `--plain`/non-TTY (R1–R3, tested).
+> - **R4/FR-STY-9 CLOSED — Windows VT guard** (pre-push fix, `dc68aae`). Since the
+>   CLI now emits ANSI, a legacy Windows conhost without VT would print the escapes
+>   literally. A build-tagged `vtCapable()` guards it: `style_unix.go` (no-op true,
+>   Unix is ANSI-native — host/tests byte-identical); `style_windows.go` turns VT on
+>   via a raw kernel32 `GetConsoleMode`/`SetConsoleMode` syscall (stdlib, zero deps,
+>   `sync.Once`), and on failure `styleEnabled` degrades to plain — never literal
+>   escapes (R4). The Windows true branch needs a real console (not unit-testable,
+>   like `isTerminal`'s TTY branch); covered by cross-compile ×6 + windows-latest,
+>   documented in the godoc. Same silence closed in `config check`: a residual
+>   positional after a `--` terminator is now a usage error (exit 2), symmetric with
+>   serve.
 > - **serve strictness (SP2's parked item)**: a stray positional (`serve mycfg.json`
 >   OR a trailing token on the shim) → usage error, **exit 2**, never a silent
 >   default-config boot. **DECISION for Chano's review:** the rejection fires
@@ -83,10 +94,12 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 >   you'd rather exempt the shim.
 >
 > `make quality` green `-race` over the WHOLE suite (total **93.0%**);
-> **`internal/cli` 93.5%** (≥85 maintained; `configCheck`/`serveCmd`/`parseStyled`
-> 100%; `runPreflight`/`defaultPreflight`/`bootServe` are injected/e2e glue). Every
-> case smoke-tested on the built binary (offline valid/invalid, `--preflight` with an
-> absent secret → hermetic exit 1, path-first flags, shim + stray token).
+> **`internal/cli` 93.8%** (≥85 maintained; `configCheck`/`serveCmd`/`parseStyled`
+> 100%; `runPreflight`/`defaultPreflight`/`bootServe`/the Windows `vtCapable` true
+> branch are injected/e2e/platform glue). Cross-compile ×6 `CGO_ENABLED=0` green
+> (both Windows targets compile the VT file). Every case smoke-tested on the built
+> binary (offline valid/invalid, `--preflight` with an absent secret → hermetic exit
+> 1, path-first flags, shim + stray token, `config check -- -x` residual token).
 >
 > **`/review` (high, workflow-backed) on the SP3 diff → 4 CONFIRMED findings, all
 > resolved before commit** (2 refuted): (1) **correctness** — a flag AFTER the path
@@ -113,9 +126,10 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), SP4. After SP4 comes
 > SP5 (docs rewrite `-config …` → `serve …` + macOS re-validation, closes the piece).
 >
-> **NOT pushed** — pushing master is Chano's act. Commit `26164a5` (SP3) is local on
-> master atop the already-pushed `23b96f0`; it goes with the push Chano runs after
-> reviewing this diff.
+> **NOT pushed** — pushing master is Chano's act. Three commits are local on master
+> atop the already-pushed `23b96f0`: `26164a5` (SP3), `17adf6a` (this HANDOFF note),
+> and `dc68aae` (the R4/FR-STY-9 Windows VT guard + config-check strictness pre-push
+> fix). They go with the push Chano runs after reviewing this diff.
 >
 > **Brand assets** (`chore(brand)`, prior session): see the "Brand assets" section
 > below (`assets/brand/`).
