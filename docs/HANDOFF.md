@@ -84,6 +84,13 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 >   documented in the godoc. Same silence closed in `config check`: a residual
 >   positional after a `--` terminator is now a usage error (exit 2), symmetric with
 >   serve.
+>   **Follow-up fix (`0a6eba4`):** the VT probe is behind an injectable `c.vt` seam
+>   (like `isTTY`/`boot`/`preflight`) — the real binary uses `vtCapable`, but the
+>   windows-latest test process runs with redirected pipes where the live probe
+>   reports false, which would have failed the `isTTY=true` styling tests THERE only.
+>   `newTestCLI` injects `vt=true` so gating is deterministic on all 3 OSes, and a
+>   new test bites the degradation branch (`isTTY=true` + `vt=false` → plain),
+>   bringing `styleEnabled` to 100%.
 > - **serve strictness (SP2's parked item)**: a stray positional (`serve mycfg.json`
 >   OR a trailing token on the shim) → usage error, **exit 2**, never a silent
 >   default-config boot. **DECISION for Chano's review:** the rejection fires
@@ -126,10 +133,11 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 > (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), SP4. After SP4 comes
 > SP5 (docs rewrite `-config …` → `serve …` + macOS re-validation, closes the piece).
 >
-> **NOT pushed** — pushing master is Chano's act. Three commits are local on master
-> atop the already-pushed `23b96f0`: `26164a5` (SP3), `17adf6a` (this HANDOFF note),
-> and `dc68aae` (the R4/FR-STY-9 Windows VT guard + config-check strictness pre-push
-> fix). They go with the push Chano runs after reviewing this diff.
+> **NOT pushed** — pushing master is Chano's act. Local on master atop the
+> already-pushed `23b96f0`: `26164a5` (SP3), `17adf6a` (this HANDOFF note), `dc68aae`
+> (the R4/FR-STY-9 Windows VT guard + config-check strictness pre-push fix), `0a6eba4`
+> (the VT-probe seam so windows-latest tests are deterministic), plus this HANDOFF
+> update. They go with the push Chano runs after reviewing this diff.
 >
 > **Brand assets** (`chore(brand)`, prior session): see the "Brand assets" section
 > below (`assets/brand/`).
