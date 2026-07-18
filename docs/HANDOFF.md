@@ -82,63 +82,48 @@ explicit decision.
 
 ## Current state (as of session close, 2026-07-18)
 
-> **CURRENT (2026-07-18): Piece 3 (CLI) — COMPLETE (SP1–SP5), validated end-to-end
-> on hardware.** The `korvun` binary now has a first-class command line — `serve` /
-> `config check [--preflight]` / `status [--addr]` / `version` / `help` — behind a
-> 3-line `main` (ADR-0017), **pure-stdlib styling, `go.mod` unchanged at 3 direct
-> deps**. The interface contract is pinned by **ADR-0032 (accepted)** and the
-> `internal/cli` suite. What the five sub-phases delivered (all pushed except SP5):
-> - **SP1** — scaffold: `Run(args, stdout, stderr) int`, subcommand dispatch, exit
->   codes 0/1/2, `version` (via `buildinfo`), styled `help`, TTY-gated banner.
-> - **SP2** — `serve`'s own flag surface (`serveCmd`) split from the boot behind the
->   injectable `c.boot` seam; retrocompat shim narrowed to `-config`/`--config`.
-> - **SP3** — `config check [--preflight]` (offline validate + injectable preflight
->   seam) + first color roles + the R4/FR-STY-9 Windows VT guard (`c.vt` seam) +
->   uniform positional strictness.
-> - **SP4** — `status [--addr]`: a thin read-only client of the admin API (ADR-0022,
->   no server code, no token) rendering the live wiring as `text/tabwriter` tables;
->   honest exit-1 on an unreachable admin; context-cancellable requests.
-> - **SP5** — closure: **ADR-0032** (interface contract), docs rewritten to the
->   canonical `korvun serve --config …` (legacy `-config` mentioned once as
->   shim-supported), `korvun.example.json` at the repo root + shipped in the release
->   archives, **ldflags retargeted `main.version` → `internal/cli.version`** (the old
->   target was a silent no-op — a real tag would have reported `dev`; verified fixed),
->   and the color-depth fix below.
+> **CURRENT (2026-07-18): Piece 4 (the Discord channel, ADR-0033 + ADR-0034) — IN
+> PROGRESS.** Sub-phases SP1–SP5 are closed, pushed, and CI-green in an unbroken chain
+> through `51e0d16` (Quality Gate on the 3 OSes + cross-compile ×6 + CodeQL + Scorecard
+> green at every push). Discord is a NEW adapter behind the unchanged `channel.Channel`
+> seam; receiving free-form messages is Gateway-WebSocket-only (`coder/websocket`
+> v1.8.15, the 4th direct dep, ADR-0034), sending is plain REST. What landed:
+> - **SP1** — dependency `github.com/coder/websocket@v1.8.15` (ADR-0034) + config
+>   (`type:"discord"`/`mode:"gateway"`/`token_env`) + package skeleton + an honest
+>   "configured but not wired" boot error (`43eff38`, `f5fe693`, `2d6585e`).
+> - **SP2** — pure inbound `MESSAGE_CREATE` → Envelope mapping (guild channels + DMs,
+>   keyed by `conversation.id = channel_id`) + the anti-loop drop family
+>   self/other-bots/webhooks (`850a543`, `d35cd27`).
+> - **SP3** — the base Gateway lifecycle: Hello → Identify(intents 37377) → Ready →
+>   Dispatch, heartbeat + ACK + zombie detection, clean ctx-cancel with no leaks
+>   (`fc18ecb`).
+> - **SP4** — the resume/reconnect SUPERVISOR (the piece's #1 risk): op7/zombie → Resume
+>   on the SAME never-closed inbound, op9 → resume-or-re-identify, fatal close codes →
+>   named terminal cause (no retry), exponential backoff + the mandated op9 1-5s wait
+>   (`1abd012`).
+> - **SP5** — outbound REST `createMessage`: env-only "Bot <token>", `allowed_mentions
+>   {"parse":[]}` (model output can never mass-ping), 2000-char rune-safe split, 429 →
+>   the house `RateLimitError`, the full error grammar (`51e0d16`).
 >
-> **End-to-end validation on Chano's Mac (iMac Intel, macOS 13, Terminal.app) —
-> PASSED.** Built from source; exercised `help`/banner, `NO_COLOR`, `config check`
-> printing a colored `OK`/`FAILED`, `serve`, `status` against the live server, a full
-> **Telegram roundtrip**, and a clean shutdown. **The first COLD request completed in
-> ~6s with no timeout** — this is **ADR-0031 (Piece 2 resilience: boot warmup +
-> generous per-attempt timeout + retry) verified on the very hardware that first
-> surfaced F6**, where `v0.1.0` failed. QUICKSTART's cold-start note is corrected to
-> say so (workaround on `v0.1.0`, fixed after).
+> **Remaining: SP6, split into two halves.** **Half A** (this session): wire the Discord
+> adapter into `internal/app` (config → adapter; the generic channel→brain route), raise
+> `ReconnectCount` to Prometheus (`korvun_channel_reconnects_total{channel}`), and write
+> the bot-setup docs (the manual **MESSAGE CONTENT INTENT** step, documented like the
+> Telegram BotFather step). **Half B** (Chano's hardware): a real Discord round-trip
+> validated end to end. **The piece is NOT closed and v0.3.0 is NOT proposed until Half B
+> passes.** TODO-VERIFY discipline holds: nothing in the Discord docs is marked
+> hardware-verified until Half B.
 >
-> **Validation finding + fix (`8048cbb`): truecolor → xterm-256 by default.**
-> Terminal.app rendered `OK` **blue** and `FAILED` **grey** — Apple Terminal does not
-> support 24-bit `38;2;r;g;b` and parses each parameter as a standalone SGR (the "2"
-> becomes faint/grey, the first component its own code: `roleSuccess` r=34 → SGR 34 =
-> blue). Fix: `paint` emits xterm-256 indexed color (`38;5;n`, correct on every color
-> terminal incl. Apple Terminal) by default and escalates to truecolor **only** when
-> `COLORTERM` ∈ {`truecolor`,`24bit`}. Roles carry a precomputed cube index (success
-> 78, error 203, warn 214). Verified on a real pty.
+> **Piece 3 (the CLI, ADR-0032) is CLOSED and PUBLISHED** — `serve` / `config check` /
+> `status` / `version` / `help`, hardware-validated (a full Telegram round-trip plus the
+> ADR-0031 cold-start fix confirmed on the very Mac that first surfaced F6), shipped in
+> **`v0.2.0`** (2026-07-18, signed + SBOM, cosign **Verified OK**). Retained as history
+> in the PREVIOUS blocks below.
 >
-> `make quality` green `-race` over the WHOLE suite; **`internal/cli` ≥85 maintained
-> (94.3% at the color fix)**; cross-compile ×6 + windows-latest green across the piece.
->
-> **PARKED follow-up (not today):** `make build` regenerates `web/builder/dist`
-> (`.gitkeep` deleted + `index.html` rewritten), dirtying the working tree — this
-> caused two false "phantom change" scares this session (both correctly reverted,
-> and it is why a source build reports `korvun … +dirty`). It deserves a make target
-> that recompiles the web bundle **only when its sources change** (a proper
-> dependency on `web/builder/src`), so a plain `make build` no longer touches the
-> committed `dist`. Noted for a later chore; NOT done here.
->
-> **NOT pushed** — the final push of the piece is Chano's act. Local on master atop
-> the already-pushed `2f562a7` (SP4): `99c2ddd` (docs: ADR-0032 + canonical rewrite),
-> `8526f6b` (korvun.example.json in archives), `87aa4a3` (ldflags retarget), `8048cbb`
-> (truecolor→256 fix), plus the final docs commit closing this block. They go with the
-> push Chano runs after reviewing this diff.
+> **Standing repo quirk (parked chore):** `make build` regenerates `web/builder/dist`,
+> dirtying the working tree (a source build reports `korvun … +dirty`). It wants a make
+> target that recompiles the web bundle only when `web/builder/src` changes. Not a
+> blocker; noted for a later chore.
 >
 > **Brand assets** (`chore(brand)`, prior session): see the "Brand assets" section
 > below (`assets/brand/`).
