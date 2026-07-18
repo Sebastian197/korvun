@@ -17,12 +17,18 @@ a shell's `|<` (the terminal Korvun orchestrates).
 
 | File | Use |
 |------|-----|
-| `korvun-logo-hero.svg` | Hero signature (teal→violet gradient). README header, social preview, splash. |
+| `korvun-logo-hero.svg` | Hero signature (teal→violet gradient). README header, splash, source of the social preview. |
 | `korvun-logo-mono.svg` | Flat violet `#7A5AF5` mark. Favicon, single-ink contexts, embeds where the gradient is out of place. |
 | `korvun-avatar-512.png` | 512×512 avatar for the GitHub org/repo and social profiles. |
+| `korvun-social-preview.png` | GitHub social preview / link-share cards (1280×640, rendered from the hero). |
+
+## Done
+
+- **Social preview** set on the repo (2026-07-18): generated from the canonical hero
+  at 1280×640, versioned here as `korvun-social-preview.png`.
 
 ## Pending (Chano, via web)
 
-- Upload the avatar to the GitHub profile/repo; set the hero as the social preview.
+- Upload the avatar to the GitHub profile/repo.
 - Derive the CLI header ASCII art from this mark (`internal/cli` ships an honest
   placeholder banner today).
