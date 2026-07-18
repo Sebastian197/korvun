@@ -25,12 +25,14 @@ builds:
     goarch:
       - amd64
       - arm64
-    # Inject the SemVer version into cmd/korvun/main.var version (ADR-0025 §2);
-    # GoReleaser's {{ .Version }} strips the leading "v", so prefix it back to
-    # match the documented `korvun vX.Y.Z` (and a snapshot prints vX.Y.Z-snapshot).
-    # -s -w strip the symbol table and DWARF for a smaller binary.
+    # Inject the SemVer version into internal/cli.version (ADR-0025 §2; the version
+    # var moved out of package main into internal/cli in Piece 3 SP1, so this target
+    # moved with it — `-X main.version` would now be a silent no-op). GoReleaser's
+    # {{ .Version }} strips the leading "v", so prefix it back to match the documented
+    # `korvun vX.Y.Z` (and a snapshot prints vX.Y.Z-snapshot). -s -w strip the symbol
+    # table and DWARF for a smaller binary.
     ldflags:
-      - -s -w -X main.version=v{{ .Version }}
+      - -s -w -X github.com/Sebastian197/korvun/internal/cli.version=v{{ .Version }}
 
 archives:
   - id: korvun
