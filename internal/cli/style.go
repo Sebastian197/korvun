@@ -75,5 +75,14 @@ func (c *cli) styleEnabled(w io.Writer, plain, noColor bool) bool {
 	if os.Getenv("NO_COLOR") != "" {
 		return false
 	}
-	return c.isTTY(w)
+	if !c.isTTY(w) {
+		return false
+	}
+	// The stream is an interactive terminal and the user has not opted out; emit
+	// styling only if the terminal can actually render ANSI VT sequences. On Unix
+	// this is a no-op true (terminals are ANSI-native); on Windows it enables VT on
+	// the console once via a raw kernel32 SetConsoleMode syscall and reports false
+	// when that is impossible, so escapes never print literally in a legacy conhost
+	// that would show them (design spec R4/FR-STY-9).
+	return vtCapable()
 }

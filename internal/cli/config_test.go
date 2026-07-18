@@ -316,6 +316,25 @@ func TestConfigCheck_usageErrors(t *testing.T) {
 			t.Errorf("stdout must stay empty, got %q", stdout.String())
 		}
 	})
+
+	t.Run("residual token after -- -> usage error, exit 2 (nothing silently ignored)", func(t *testing.T) {
+		c, stdout, stderr, _ := newTestCLI(0)
+
+		// A dash-looking token after the `--` terminator survives as a FlagSet
+		// positional; config check must reject it, not silently drop it (symmetry
+		// with serve's strictness).
+		got := c.run([]string{"config", "check", "--", "-x"})
+
+		if got != 2 {
+			t.Errorf("exit = %d, want 2", got)
+		}
+		if !strings.Contains(stderr.String(), "-x") {
+			t.Errorf("stderr should name the unexpected token; got %q", stderr.String())
+		}
+		if stdout.Len() != 0 {
+			t.Errorf("stdout must stay empty, got %q", stdout.String())
+		}
+	})
 }
 
 // TestConfigCheck_help pins that a help request on config check (-h/--help) is a

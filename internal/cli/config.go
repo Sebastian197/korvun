@@ -71,6 +71,15 @@ func (c *cli) configCheck(args []string) int {
 		return code // -h/--help (0) or a bad flag (2), already written to the right stream
 	}
 
+	// Close the same silence serve does: a residual positional the FlagSet itself
+	// parsed (a token after a `--` terminator) must not be ignored — it is a usage
+	// error, not a silently-dropped argument. (Non-dash tokens are already pulled
+	// into `positionals` above; this catches dash-looking tokens after `--`.)
+	if fs.NArg() > 0 {
+		_, _ = fmt.Fprintf(c.stderr, "korvun config check: unexpected argument %q\nRun 'korvun help' for usage.\n", fs.Arg(0))
+		return 2
+	}
+
 	if len(positionals) > 1 {
 		_, _ = fmt.Fprintf(c.stderr, "korvun config check: expected at most one path, got %d\nRun 'korvun help' for usage.\n", len(positionals))
 		return 2
