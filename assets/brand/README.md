@@ -1,38 +1,28 @@
-# Marca Korvun — fuentes del logo
+# Korvun brand — logo sources
 
-Logo único **"K terminal"**: la letra **K** vaciada de la baldosa redondeada, un
-guiño al `|<` de una shell (la terminal que Korvun orquesta). Decidido el
-**2026-07-12**.
+The **"K terminal"** mark: the letter **K** knocked out of a rounded tile, a nod to
+a shell's `|<` (the terminal Korvun orchestrates).
 
-## Identidad
+## Identity palette (ADR-0030)
 
-- **Degradado teal `#2BC8B7` → violeta `#7A5AF5`**, usado **solo** como firma
-  *hero* (momentos de identidad, ADR-0030).
-- **Monocromo garantizado**: la forma se lee entera en un solo color, sin depender
-  del degradado (favicon, avatar, tinta única).
+- **Violet `#7A5AF5`** — the single identity/accent color. Chano's decision
+  (2026-07-18) unified the mark on it: use `#7A5AF5` for any flat-ink rendering
+  (mono logo, favicon, avatar, the CLI accent).
+- **Gradient teal `#2BC8B7` → violet `#7A5AF5`** — reserved for **identity moments
+  only** (the hero signature), never for functional UI color.
+- **Monochrome-safe by construction** — the shape reads whole in a single color,
+  independent of the gradient.
 
-## Archivos
+## Files
 
-- `korvun-logo-hero.svg` — versión con el degradado teal→violeta (firma hero).
-- `korvun-logo-mono-violeta.svg` — versión monocroma (entregada por Chano).
-- `korvun-avatar-512.png` — avatar 512×512 para GitHub / redes.
+| File | Use |
+|------|-----|
+| `korvun-logo-hero.svg` | Hero signature (teal→violet gradient). README header, social preview, splash. |
+| `korvun-logo-mono.svg` | Flat violet `#7A5AF5` mark. Favicon, single-ink contexts, embeds where the gradient is out of place. |
+| `korvun-avatar-512.png` | 512×512 avatar for the GitHub org/repo and social profiles. |
 
-## Usos
+## Pending (Chano, via web)
 
-Marca general, favicon, avatar de GitHub, futuro icono de la app de escritorio
-(Wails) y **fuente del arte ASCII de la cabecera de la CLI** (`internal/cli`, hoy
-un placeholder).
-
-## Pregunta abierta (decisión de Chano — NO resolver aquí)
-
-El monocromo se entregó con `fill="#6E56CF"`, **distinto** del violeta `#7A5AF5`
-de la identidad. ¿Es intencional (un violeta de marca aparte para tinta plana) o
-hay que corregirlo a `#7A5AF5`? Se conserva tal cual se entregó hasta que Chano
-decida.
-
-## Pendientes
-
-- Derivar el **arte ASCII** de la cabecera CLI (`internal/cli`) desde este logo
-  (actualmente es un placeholder honesto).
-- **Social preview** de GitHub a partir del hero.
-- **Subir el avatar** al perfil/repo de GitHub (Chano, vía web).
+- Upload the avatar to the GitHub profile/repo; set the hero as the social preview.
+- Derive the CLI header ASCII art from this mark (`internal/cli` ships an honest
+  placeholder banner today).
