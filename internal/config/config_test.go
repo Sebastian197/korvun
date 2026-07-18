@@ -101,6 +101,17 @@ func TestValidate_agentConfigValid(t *testing.T) {
 	}
 }
 
+// TestValidate_discordChannelValid proves a well-formed Discord channel passes
+// Validate (Piece 4, ADR-0033): type "discord" with mode "gateway" and a token_env.
+func TestValidate_discordChannelValid(t *testing.T) {
+	t.Parallel()
+	js := `{"channels":[{"type":"discord","mode":"gateway","token_env":"DISCORD_BOT_TOKEN"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"discord","brain":"d"}]}`
+	path := writeConfig(t, js)
+	if _, err := config.Load(path); err != nil {
+		t.Fatalf("valid discord config rejected: %v", err)
+	}
+}
+
 // TestValidate_fieldErrors drives one mutation per offending field and asserts
 // the error wraps ErrInvalidConfig and NAMES the field (ADR-0017 §5).
 func TestValidate_fieldErrors(t *testing.T) {
@@ -118,13 +129,33 @@ func TestValidate_fieldErrors(t *testing.T) {
 		},
 		{
 			name:      "unknown channel type",
-			json:      `{"channels":[{"type":"discord","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			json:      `{"channels":[{"type":"slack","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
 			wantField: "channels[0].type",
 		},
 		{
 			name:      "missing token_env",
 			json:      `{"channels":[{"type":"telegram","mode":"polling"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
 			wantField: "channels[0].token_env",
+		},
+		{
+			name:      "discord missing token_env",
+			json:      `{"channels":[{"type":"discord","mode":"gateway"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"discord","brain":"d"}]}`,
+			wantField: "channels[0].token_env",
+		},
+		{
+			name:      "discord with telegram's mode (polling) is rejected",
+			json:      `{"channels":[{"type":"discord","mode":"polling","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"discord","brain":"d"}]}`,
+			wantField: "channels[0].mode",
+		},
+		{
+			name:      "telegram with discord's mode (gateway) is rejected",
+			json:      `{"channels":[{"type":"telegram","mode":"gateway","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
+			wantField: "channels[0].mode",
+		},
+		{
+			name:      "discord missing mode",
+			json:      `{"channels":[{"type":"discord","token_env":"T"}],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"discord","brain":"d"}]}`,
+			wantField: "channels[0].mode",
 		},
 		{
 			name:      "unknown sensitivity",

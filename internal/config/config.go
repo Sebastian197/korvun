@@ -147,9 +147,9 @@ func parsePositiveDuration(s string) time.Duration {
 }
 
 // ChannelConfig declares one messaging channel. Type selects the adapter
-// (currently "telegram"); Mode selects its transport ("polling"). TokenEnv is
-// the NAME of the environment variable holding the bot token — never the token
-// itself.
+// ("telegram" or "discord"); Mode selects its transport, which is type-aware
+// (telegram="polling", discord="gateway"). TokenEnv is the NAME of the environment
+// variable holding the bot token — never the token itself.
 type ChannelConfig struct {
 	Type     string `json:"type"`
 	Mode     string `json:"mode"`
@@ -317,27 +317,44 @@ func (c *Config) validateChannels() (map[string]bool, error) {
 	}
 	names := make(map[string]bool, len(c.Channels))
 	for i, ch := range c.Channels {
+		// The transport mode is TYPE-AWARE: each channel type wires exactly one
+		// receive mode in this build (telegram=polling, discord=gateway), so a
+		// mode that belongs to another channel is rejected with its field path.
 		switch ch.Type {
 		case "telegram":
+			if err := validateChannelMode(i, ch.Mode, "polling"); err != nil {
+				return nil, err
+			}
+		case "discord":
+			if err := validateChannelMode(i, ch.Mode, "gateway"); err != nil {
+				return nil, err
+			}
 		case "":
 			return nil, fmt.Errorf("%w: channels[%d].type: required", ErrInvalidConfig, i)
 		default:
-			return nil, fmt.Errorf("%w: channels[%d].type: unknown channel type %q (supported: telegram)", ErrInvalidConfig, i, ch.Type)
-		}
-		switch ch.Mode {
-		case "polling":
-		case "":
-			return nil, fmt.Errorf("%w: channels[%d].mode: required", ErrInvalidConfig, i)
-		default:
-			return nil, fmt.Errorf("%w: channels[%d].mode: unsupported mode %q (this build wires: polling)", ErrInvalidConfig, i, ch.Mode)
+			return nil, fmt.Errorf("%w: channels[%d].type: unknown channel type %q (supported: telegram, discord)", ErrInvalidConfig, i, ch.Type)
 		}
 		if ch.TokenEnv == "" {
 			return nil, fmt.Errorf("%w: channels[%d].token_env: required (name of the env var holding the bot token)", ErrInvalidConfig, i)
 		}
-		// A telegram channel registers under its type name ("telegram").
+		// A channel registers under its type name ("telegram" / "discord").
 		names[ch.Type] = true
 	}
 	return names, nil
+}
+
+// validateChannelMode checks a channel's mode against the single mode its type
+// supports in this build, returning a field-path error (ADR-0017 §5) for a missing
+// or wrong mode.
+func validateChannelMode(i int, mode, want string) error {
+	switch mode {
+	case want:
+		return nil
+	case "":
+		return fmt.Errorf("%w: channels[%d].mode: required", ErrInvalidConfig, i)
+	default:
+		return fmt.Errorf("%w: channels[%d].mode: unsupported mode %q (this build wires: %s)", ErrInvalidConfig, i, mode, want)
+	}
 }
 
 func (c *Config) validateBrains() (map[string]bool, error) {
