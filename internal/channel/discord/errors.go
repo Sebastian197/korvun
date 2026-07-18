@@ -48,9 +48,9 @@ var (
 	// cannot see it).
 	ErrChannelNotFound = errors.New("discord: REST channel not found (404)")
 
-	// ErrAlreadyReceiving is returned by a second Receive call on an Adapter whose
-	// Gateway supervisor is already running. One Adapter drives one supervisor.
-	ErrAlreadyReceiving = errors.New("discord: Receive was already called; one Adapter drives one Gateway supervisor")
+	// ErrAlreadyStarted is returned by a second Start call on an Adapter whose Gateway
+	// supervisor is already running. One Adapter drives one supervisor.
+	ErrAlreadyStarted = errors.New("discord: Start was already called; one Adapter drives one Gateway supervisor")
 
 	// ErrGatewayFatalClose is the terminal cause when the Gateway closes with a
 	// non-recoverable close code (authentication failed, invalid/disallowed intents,

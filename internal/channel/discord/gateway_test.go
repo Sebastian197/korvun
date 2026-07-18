@@ -216,6 +216,29 @@ func newGatewayAdapter(t *testing.T, url string, extra ...Option) *Adapter {
 	return a
 }
 
+// startGateway wires the adapter the way the app does — Receive to get the inbound
+// channel, then Start to launch the supervisor — and returns the channel plus an
+// idempotent stop func (Stop with a bounded ctx). Replaces the SP3/SP4 Receive(ctx)+
+// cancel driving now that the lifecycle is Start/Stop (SP6).
+func startGateway(t *testing.T, a *Adapter) (<-chan *envelope.Envelope, func()) {
+	t.Helper()
+	inbound, err := a.Receive(context.Background())
+	if err != nil {
+		t.Fatalf("Receive = %v", err)
+	}
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("Start = %v", err)
+	}
+	var once sync.Once
+	return inbound, func() {
+		once.Do(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = a.Stop(ctx)
+		})
+	}
+}
+
 func waitFor(t *testing.T, d time.Duration, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(d)
@@ -285,12 +308,8 @@ func TestGateway_HappyFlow(t *testing.T) {
 	})
 
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 
 	env := recvEnvelope(t, inbound, 2*time.Second)
 	if env.Sender.ID != "222" || env.Meta[conversation.MetaConversationID] != "555" ||
@@ -321,7 +340,7 @@ func TestGateway_HappyFlow(t *testing.T) {
 		t.Errorf("readyInfo = %+v, want session id + resume url recorded", ri)
 	}
 
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -359,12 +378,8 @@ func TestGateway_Heartbeat(t *testing.T) {
 	})
 
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 
 	deadline := time.After(2 * time.Second)
 	got, sawSeq5 := 0, false
@@ -382,7 +397,7 @@ func TestGateway_Heartbeat(t *testing.T) {
 	if !sawSeq5 {
 		t.Error("no heartbeat carried the latest tracked seq (5)")
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -404,12 +419,8 @@ func TestGateway_DropReasons(t *testing.T) {
 	})
 
 	a := newGatewayAdapter(t, url, WithLogger(slog.New(handler)))
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 
 	for _, want := range []string{"bot", "webhook", "self"} {
 		want := want
@@ -418,7 +429,7 @@ func TestGateway_DropReasons(t *testing.T) {
 	if got := a.DroppedCount(); got != 3 {
 		t.Errorf("DroppedCount = %d, want 3", got)
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -440,12 +451,8 @@ func TestGateway_Backpressure(t *testing.T) {
 	})
 
 	a := newGatewayAdapter(t, url, WithLogger(slog.New(handler)), withInboundCapacityForTests(1))
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 
 	waitFor(t, 2*time.Second, func() bool {
 		n := 0
@@ -459,7 +466,7 @@ func TestGateway_Backpressure(t *testing.T) {
 	if got := a.DroppedCount(); got != 2 {
 		t.Errorf("DroppedCount = %d, want 2", got)
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -506,12 +513,8 @@ func TestGateway_Op7Resumes(t *testing.T) {
 	)
 
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 
 	if env := recvEnvelope(t, inbound, 2*time.Second); env.Parts[0].Content != "hola korvun" {
 		t.Errorf("first message = %q, want 'hola korvun'", env.Parts[0].Content)
@@ -539,7 +542,7 @@ func TestGateway_Op7Resumes(t *testing.T) {
 	if a.ReconnectCount() < 1 {
 		t.Errorf("ReconnectCount = %d, want >= 1", a.ReconnectCount())
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -572,18 +575,14 @@ func TestGateway_ZombieResumes(t *testing.T) {
 	)
 
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 	select {
 	case <-resumed:
 	case <-time.After(3 * time.Second):
 		t.Fatal("zombie did not trigger a resume within 3s")
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -618,12 +617,8 @@ func TestGateway_Op9ResumableResumes(t *testing.T) {
 	)
 
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 	select {
 	case op := <-secondOp:
 		if op != opResume {
@@ -632,7 +627,7 @@ func TestGateway_Op9ResumableResumes(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("no resume after op9 d=true")
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -663,18 +658,14 @@ func TestGateway_ServerRequestedHeartbeat(t *testing.T) {
 		}
 	})
 	a := newGatewayAdapter(t, url, withRandForTests(func() float64 { return 0.99 }))
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 	select {
 	case <-beat:
 	case <-time.After(2 * time.Second):
 		t.Fatal("client did not answer the server heartbeat request within 2s")
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -710,12 +701,8 @@ func TestGateway_Op9NonResumableReidentifies(t *testing.T) {
 	)
 
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 	select {
 	case op := <-secondOp:
 		if op != opIdentify {
@@ -724,7 +711,7 @@ func TestGateway_Op9NonResumableReidentifies(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("no second connection after op9 d=false")
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -767,12 +754,8 @@ func TestGateway_Op9DuringResumeFallsBackToIdentify(t *testing.T) {
 	)
 
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 	select {
 	case op := <-thirdOp:
 		if op != opIdentify {
@@ -781,7 +764,7 @@ func TestGateway_Op9DuringResumeFallsBackToIdentify(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("no fallback Identify after op9 during resume")
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -797,12 +780,8 @@ func TestGateway_FatalCloseCodeTerminates(t *testing.T) {
 	})
 
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 	waitClosed(t, inbound, 3*time.Second)
 	if e := a.terminalErr(); !errors.Is(e, ErrGatewayFatalClose) {
 		t.Errorf("terminalErr = %v, want ErrGatewayFatalClose", e)
@@ -827,11 +806,7 @@ func TestGateway_BackoffSequence(t *testing.T) {
 		withRandForTests(func() float64 { return 0.5 }),
 		withClockForTests(clock),
 	)
-	ctx, cancel := context.WithCancel(context.Background())
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
 
 	// backoff(n) = 0.5 * (1s << n): 500ms, 1s, 2s, 4s ...
 	want := []time.Duration{500 * time.Millisecond, 1 * time.Second, 2 * time.Second, 4 * time.Second}
@@ -845,7 +820,7 @@ func TestGateway_BackoffSequence(t *testing.T) {
 			t.Fatalf("only %d backoff sleeps observed", i)
 		}
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -867,11 +842,7 @@ func TestGateway_Op9FreshWait(t *testing.T) {
 		withRandForTests(func() float64 { return 0.5 }),
 		withClockForTests(clock),
 	)
-	ctx, cancel := context.WithCancel(context.Background())
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
 	select {
 	case got := <-clock.durs:
 		if got != 3*time.Second {
@@ -880,7 +851,7 @@ func TestGateway_Op9FreshWait(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("no re-identify wait observed after op9 d=false")
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -909,14 +880,10 @@ func TestGateway_NoTokenInLogs(t *testing.T) {
 		},
 	)
 	a := newGatewayAdapter(t, url, WithLogger(slog.New(handler)))
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 	waitFor(t, 2*time.Second, func() bool { return a.ReconnectCount() >= 1 })
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 
 	handler.mu.Lock()
@@ -981,11 +948,7 @@ func TestGateway_ShutdownIsClean(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			url := scriptGateway(t, tc.script)
 			a := newGatewayAdapter(t, url)
-			ctx, cancel := context.WithCancel(context.Background())
-			inbound, err := a.Receive(ctx)
-			if err != nil {
-				t.Fatalf("Receive = %v", err)
-			}
+			inbound, stop := startGateway(t, a)
 			if tc.drain {
 				select {
 				case <-inbound:
@@ -994,7 +957,7 @@ func TestGateway_ShutdownIsClean(t *testing.T) {
 			} else {
 				time.Sleep(30 * time.Millisecond)
 			}
-			cancel()
+			stop()
 			waitClosed(t, inbound, 2*time.Second)
 		})
 	}
@@ -1013,17 +976,13 @@ func TestGateway_CancelMidBackoff(t *testing.T) {
 	})
 	clock := blockingClock{entered: make(chan struct{}, 1)}
 	a := newGatewayAdapter(t, url, withClockForTests(clock))
-	ctx, cancel := context.WithCancel(context.Background())
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
 	select {
 	case <-clock.entered: // supervisor is parked in the backoff wait
 	case <-time.After(2 * time.Second):
 		t.Fatal("supervisor never reached the backoff wait")
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 	if e := a.terminalErr(); e != nil {
 		t.Errorf("terminalErr on clean mid-backoff cancel = %v, want nil", e)
@@ -1050,20 +1009,16 @@ func TestGateway_CancelMidResume(t *testing.T) {
 		},
 	)
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
 	time.Sleep(60 * time.Millisecond) // let it reach the resume session
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
 // --- construction / guards -------------------------------------------------
 
-func TestGateway_SecondReceiveRejected(t *testing.T) {
-	const self = "BOT-2R"
+func TestGateway_SecondStartRejected(t *testing.T) {
+	const self = "BOT-2S"
 	url := scriptGateway(t, func(ctx context.Context, c *websocket.Conn, selfURL string) {
 		_ = wsjson.Write(ctx, c, helloFrame(60000))
 		if _, err := serverRead(ctx, c); err != nil {
@@ -1073,16 +1028,12 @@ func TestGateway_SecondReceiveRejected(t *testing.T) {
 		drainClient(ctx, c)
 	})
 	a := newGatewayAdapter(t, url)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("first Receive = %v", err)
+	inbound, stop := startGateway(t, a)
+	defer stop()
+	if err := a.Start(context.Background()); !errors.Is(err, ErrAlreadyStarted) {
+		t.Errorf("second Start = %v, want ErrAlreadyStarted", err)
 	}
-	if _, err := a.Receive(ctx); !errors.Is(err, ErrAlreadyReceiving) {
-		t.Errorf("second Receive = %v, want ErrAlreadyReceiving", err)
-	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }
 
@@ -1105,12 +1056,8 @@ func TestGateway_TokenMissingAtConnectIsFatal(t *testing.T) {
 	if err := os.Unsetenv(gwTestTokenEnv); err != nil {
 		t.Fatalf("Unsetenv = %v", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
+	defer stop()
 	waitClosed(t, inbound, 2*time.Second)
 	e := a.terminalErr()
 	if !errors.Is(e, ErrMissingToken) {
@@ -1134,11 +1081,7 @@ func TestGateway_DialFailureRetries(t *testing.T) {
 	// rnd 0.5 so the backoff is non-zero and the (blocking) recording clock is
 	// actually invoked — this test proves retry happens, not the exact durations.
 	a := newGatewayAdapter(t, url, withRandForTests(func() float64 { return 0.5 }), withClockForTests(clock))
-	ctx, cancel := context.WithCancel(context.Background())
-	inbound, err := a.Receive(ctx)
-	if err != nil {
-		t.Fatalf("Receive = %v", err)
-	}
+	inbound, stop := startGateway(t, a)
 	// Observe at least two backoff sleeps (proves it retried, did not terminate).
 	for i := 0; i < 2; i++ {
 		select {
@@ -1150,6 +1093,6 @@ func TestGateway_DialFailureRetries(t *testing.T) {
 	if a.ReconnectCount() < 2 {
 		t.Errorf("ReconnectCount = %d, want >= 2", a.ReconnectCount())
 	}
-	cancel()
+	stop()
 	waitClosed(t, inbound, 2*time.Second)
 }

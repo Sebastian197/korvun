@@ -14,11 +14,12 @@ import (
 	"github.com/Sebastian197/korvun/internal/envelope"
 )
 
-// Adapter is the Discord channel adapter; it implements channel.Channel. New
-// validates the config and the env-only token name (ADR-0010). Receive runs the
-// Gateway reconnect SUPERVISOR (SP4); Send (REST) is the SP5 stub. The bot token
-// value is never stored on the Adapter — it is read from the environment at each
-// connect.
+// Adapter is the Discord channel adapter; it implements the app's Channel contract
+// (channel.Channel + Start/Stop). New validates the config and the env-only token name
+// (ADR-0010) and creates the inbound channel; Start launches the Gateway reconnect
+// SUPERVISOR (SP4), Stop tears it down (parity with the Telegram adapter's lifecycle,
+// ADR-0008). Send (REST, SP5) is the outbound path. The bot token value is never
+// stored on the Adapter — it is read from the environment at each connect.
 type Adapter struct {
 	cfg        *config
 	dropped    atomic.Uint64
@@ -26,21 +27,29 @@ type Adapter struct {
 
 	// inbound carries mapped Envelopes to the router. It is OWNED BY THE SUPERVISOR
 	// (not by any single session): it survives every reconnect and is closed exactly
-	// once, only when the caller's ctx dies or a fatal cause stops the supervisor. The
-	// router therefore never sees an end-of-stream because of a reconnect.
+	// once, when the supervisor stops (Stop, or a fatal cause). The router therefore
+	// never sees an end-of-stream because of a reconnect.
 	inbound chan *envelope.Envelope
 
 	// termMu guards termErr, the terminal cause the supervisor stopped on (a fatal
-	// close code / missing token, or nil for a clean ctx-cancel shutdown). It is set
-	// before inbound is closed, so a reader that observes inbound closed can read it.
+	// close code / missing token, or nil for a clean Stop). It is set before inbound is
+	// closed, so a reader that observes inbound closed can read it.
 	termMu  sync.Mutex
 	termErr error
 
 	// ready records the session id + resume URL from the most recent READY event.
 	ready atomic.Pointer[readySession]
 
-	// started guards against a second Receive racing (and double-closing) inbound.
-	started atomic.Bool
+	// Lifecycle, guarded by mu (parity with the Telegram adapter): started admits a
+	// single Start; loopCancel stops the supervisor; supDone closes once the supervisor
+	// goroutine has returned (after it closes inbound). stopOnce makes Stop idempotent.
+	// The mutex publishes loopCancel/supDone before started is observable, so a
+	// concurrent Stop never sees started==true with a nil cancel/channel.
+	mu         sync.Mutex
+	started    bool
+	loopCancel context.CancelFunc
+	supDone    chan struct{}
+	stopOnce   sync.Once
 }
 
 // readySession is the reconnect-relevant subset of a READY event (ADR-0033 §3).
@@ -70,7 +79,10 @@ func New(opts ...Option) (*Adapter, error) {
 		return nil, fmt.Errorf("%w: %q (discord bot token)", ErrMissingToken, cfg.tokenEnv)
 	}
 
-	return &Adapter{cfg: cfg}, nil
+	return &Adapter{
+		cfg:     cfg,
+		inbound: make(chan *envelope.Envelope, cfg.inboundCapacity),
+	}, nil
 }
 
 // Name returns the channel identifier ("discord").
@@ -115,20 +127,63 @@ func (a *Adapter) terminalErr() error {
 // nil before the first READY. Used by tests.
 func (a *Adapter) readyInfo() *readySession { return a.ready.Load() }
 
-// Receive returns the inbound Envelope channel the router consumes and starts the
-// Gateway reconnect supervisor in the background. Unlike a one-shot dial, Receive
-// does NOT fail on a connectivity error: the channel is availability, so the
-// supervisor keeps (re)connecting with exponential backoff for as long as ctx lives —
-// dialing, identifying, resuming after a drop, re-identifying when a resume is
-// rejected — logging each attempt. The returned channel is closed exactly once: when
-// ctx is cancelled (clean stop) or a fatal, non-recoverable cause is hit (a bad
-// token/intents close code) — never because of a reconnect. Call Receive once per
-// Adapter; a second call returns ErrAlreadyReceiving.
-func (a *Adapter) Receive(ctx context.Context) (<-chan *envelope.Envelope, error) {
-	if !a.started.CompareAndSwap(false, true) {
-		return nil, ErrAlreadyReceiving
-	}
-	a.inbound = make(chan *envelope.Envelope, a.cfg.inboundCapacity)
-	go a.supervise(ctx)
+// Receive returns the inbound Envelope channel the router pump consumes. The channel
+// exists from construction (parity with the Telegram adapter); the supervisor that
+// feeds it is started by Start, not here. The supplied ctx is not bound — Start/Stop
+// own the lifecycle. The same channel is returned on every call.
+func (a *Adapter) Receive(_ context.Context) (<-chan *envelope.Envelope, error) {
 	return a.inbound, nil
+}
+
+// Start launches the Gateway reconnect supervisor in the background. It does NOT fail
+// on a connectivity error: the channel is availability, so the supervisor keeps
+// (re)connecting with exponential backoff for as long as it runs — dialing,
+// identifying, resuming after a drop, re-identifying when a resume is rejected —
+// logging each attempt. The supervisor runs under its own context (not the Start ctx),
+// cancelled by Stop; the inbound channel is closed exactly once, when the supervisor
+// stops (Stop or a fatal, non-recoverable cause), never on a reconnect. A second Start
+// returns ErrAlreadyStarted.
+func (a *Adapter) Start(_ context.Context) error {
+	a.mu.Lock()
+	if a.started {
+		a.mu.Unlock()
+		return ErrAlreadyStarted
+	}
+	a.started = true
+	loopCtx, cancel := context.WithCancel(context.Background())
+	a.loopCancel = cancel
+	a.supDone = make(chan struct{})
+	done := a.supDone
+	a.mu.Unlock()
+
+	go func() {
+		defer close(done)
+		a.supervise(loopCtx)
+	}()
+	return nil
+}
+
+// Stop tears the supervisor down: it cancels the supervisor's context, then waits
+// (bounded by ctx) for the supervisor goroutine to return, which closes the inbound
+// channel so the router's pump drains and exits. Stop is idempotent and a no-op if
+// Start was never called.
+func (a *Adapter) Stop(ctx context.Context) error {
+	a.mu.Lock()
+	started := a.started
+	cancel := a.loopCancel
+	done := a.supDone
+	a.mu.Unlock()
+	if !started {
+		return nil // never started; nothing to tear down
+	}
+	var err error
+	a.stopOnce.Do(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+	})
+	return err
 }
