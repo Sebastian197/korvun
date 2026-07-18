@@ -115,13 +115,6 @@ func (a *Adapter) terminalErr() error {
 // nil before the first READY. Used by tests.
 func (a *Adapter) readyInfo() *readySession { return a.ready.Load() }
 
-// Send delivers an outbound Envelope via the Discord REST API. Sub-phase 1 is an
-// explicit stub — the REST createMessage path (with 429/Retry-After handling) lands
-// in sub-phase 5; it is never a silent no-op.
-func (a *Adapter) Send(_ context.Context, _ *envelope.Envelope) error {
-	return ErrSendNotImplemented
-}
-
 // Receive returns the inbound Envelope channel the router consumes and starts the
 // Gateway reconnect supervisor in the background. Unlike a one-shot dial, Receive
 // does NOT fail on a connectivity error: the channel is availability, so the

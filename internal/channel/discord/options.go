@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"math/rand/v2"
+	"net/http"
 	"time"
 )
 
@@ -22,6 +23,14 @@ const defaultGatewayURL = "wss://gateway.discord.gg/?v=10&encoding=json"
 // defaultInboundCapacity is the buffered depth of the inbound Envelope channel. When
 // full, further inbound messages are dropped at the edge and counted (backpressure).
 const defaultInboundCapacity = 256
+
+// defaultRESTBaseURL is the Discord REST API base (v10). Send posts under it; tests
+// override it with a fake server URL.
+const defaultRESTBaseURL = "https://discord.com/api/v10"
+
+// defaultSendTimeout bounds a single createMessage request when the caller's ctx
+// carries no deadline (a hung Discord must not hang Send forever).
+const defaultSendTimeout = 30 * time.Second
 
 // Mode is the Discord transport mode. Only ModeGateway exists: the Gateway
 // WebSocket is the sole way to receive messages (ADR-0033); REST send is not a
@@ -64,6 +73,8 @@ type config struct {
 	tokenEnv        string
 	mode            Mode
 	gatewayURL      string
+	restBaseURL     string
+	httpClient      *http.Client
 	inboundCapacity int
 	logger          *slog.Logger
 	clock           gwClock
@@ -76,6 +87,8 @@ func defaultConfig() *config {
 	return &config{
 		mode:            ModeGateway,
 		gatewayURL:      defaultGatewayURL,
+		restBaseURL:     defaultRESTBaseURL,
+		httpClient:      &http.Client{Timeout: defaultSendTimeout},
 		inboundCapacity: defaultInboundCapacity,
 		logger:          slog.Default(),
 		clock:           realGWClock{},
@@ -112,6 +125,10 @@ func WithLogger(l *slog.Logger) Option {
 // withGatewayURLForTests overrides the Gateway URL so tests can dial a fake server
 // instead of the real Discord endpoint. Unexported: not part of the public API.
 func withGatewayURLForTests(u string) Option { return func(c *config) { c.gatewayURL = u } }
+
+// withRESTBaseURLForTests overrides the REST base URL so tests can post to a fake
+// server instead of the real Discord endpoint. Unexported: not part of the public API.
+func withRESTBaseURLForTests(u string) Option { return func(c *config) { c.restBaseURL = u } }
 
 // withInboundCapacityForTests overrides the inbound buffer depth so tests can force
 // backpressure deterministically. Unexported: not part of the public API.

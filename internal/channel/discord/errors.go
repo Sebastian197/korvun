@@ -24,9 +24,29 @@ var (
 	// receives only over the Gateway, so ModeGateway is the sole valid mode.
 	ErrInvalidMode = errors.New("discord: invalid or missing transport mode (supported: gateway)")
 
-	// ErrSendNotImplemented is the honest stub for the REST send path (createMessage
-	// with rate-limit handling lands in SP5).
-	ErrSendNotImplemented = errors.New("discord: REST send is not implemented yet (sub-phase 5)")
+	// ErrMissingChannelID is returned by Send when the outbound Envelope carries no
+	// destination channel id (conversation.id Meta key) — nowhere to deliver the reply.
+	ErrMissingChannelID = errors.New("discord: outbound envelope has no channel id (conversation.id)")
+
+	// ErrInvalidChannelID is returned by Send when the destination channel id is not a
+	// numeric Discord snowflake — rejected at the edge so it cannot be injected into
+	// the request URL.
+	ErrInvalidChannelID = errors.New("discord: outbound channel id is not a valid snowflake")
+
+	// ErrEmptyMessage is returned by Send when the outbound Envelope has no non-blank
+	// text to deliver — refused rather than posting an empty message.
+	ErrEmptyMessage = errors.New("discord: outbound envelope has no text content to send")
+
+	// ErrSendUnauthorized wraps a REST 401 (the bot token is invalid). Named because a
+	// retry will not help until the operator fixes the token.
+	ErrSendUnauthorized = errors.New("discord: REST unauthorized (401): check the bot token")
+
+	// ErrSendForbidden wraps a REST 403 (the bot lacks permission in the channel).
+	ErrSendForbidden = errors.New("discord: REST forbidden (403): the bot lacks permission in this channel")
+
+	// ErrChannelNotFound wraps a REST 404 (the target channel does not exist / the bot
+	// cannot see it).
+	ErrChannelNotFound = errors.New("discord: REST channel not found (404)")
 
 	// ErrAlreadyReceiving is returned by a second Receive call on an Adapter whose
 	// Gateway supervisor is already running. One Adapter drives one supervisor.

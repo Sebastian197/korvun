@@ -9,7 +9,6 @@
 package discord
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -73,20 +72,5 @@ func TestNew_invalidMode(t *testing.T) {
 	t.Setenv(testTokenEnv, "tok")
 	if _, err := New(WithTokenEnv(testTokenEnv), WithMode("polling")); !errors.Is(err, ErrInvalidMode) {
 		t.Fatalf("New with mode=polling = %v, want ErrInvalidMode", err)
-	}
-}
-
-// TestSendStub_returnsExplicitError pins that the not-yet-built REST send path (SP5)
-// fails honestly with its explicit error, never a silent no-op. The Gateway receive
-// path is implemented in SP3 and exercised end-to-end in gateway_test.go.
-func TestSendStub_returnsExplicitError(t *testing.T) {
-	t.Setenv(testTokenEnv, "tok")
-	a, err := New(WithTokenEnv(testTokenEnv))
-	if err != nil {
-		t.Fatalf("New = %v, want nil", err)
-	}
-
-	if err := a.Send(context.Background(), nil); !errors.Is(err, ErrSendNotImplemented) {
-		t.Errorf("Send stub = %v, want ErrSendNotImplemented", err)
 	}
 }
