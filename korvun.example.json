@@ -1,0 +1,32 @@
+{
+  "_comment": "Minimal, valid starting config: one Telegram channel (polling) routed to one LOCAL Ollama brain, zero cloud. sensitivity=private keeps dispatch local-only. The bot token resolves from the env var NAMED here (export TELEGRAM_BOT_TOKEN=...; never inline the value). Validate it with `korvun config check korvun.example.json`, then run with `korvun serve --config korvun.example.json`. See docs/CONFIGURATION.md for every field and the configs/ profiles for edge/cloud variants.",
+  "channels": [
+    {
+      "type": "telegram",
+      "mode": "polling",
+      "token_env": "TELEGRAM_BOT_TOKEN"
+    }
+  ],
+  "brains": [
+    {
+      "name": "default",
+      "sensitivity": "private",
+      "dispatch": "fanout",
+      "policy": {
+        "kind": "priority",
+        "order": ["ollama"]
+      },
+      "models": [
+        {
+          "provider": "ollama",
+          "model_id": "llama3.2",
+          "locality": "local",
+          "base_url": "http://127.0.0.1:11434"
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {"channel": "telegram", "brain": "default"}
+  ]
+}

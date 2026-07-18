@@ -39,10 +39,12 @@ archives:
     format_overrides:
       - goos: windows
         formats: ["zip"]
-    # Each archive bundles the binary plus the licence and readme.
+    # Each archive bundles the binary plus the licence, readme, and a minimal,
+    # valid starting config (validate with `korvun config check korvun.example.json`).
     files:
       - LICENSE
       - README.md
+      - korvun.example.json
 
 checksum:
   algorithm: sha256
