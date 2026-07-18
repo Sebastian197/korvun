@@ -41,26 +41,57 @@ func (c *cli) parseStyled(fs *flag.FlagSet, args []string) (plain, noColor bool,
 // event palette: success (sent #22C55E), error (failed #EF4444), and warn (dropped
 // #F59E0B). Roles are added where a command's output first needs one — success/error
 // arrived with config check, warn with the status drop-count line — never
-// speculatively; info is still unused.
-type role struct{ r, g, b uint8 }
+// speculatively; info is still unused. Each role carries BOTH its 24-bit hex and a
+// precomputed xterm-256 index (the nearest 6x6x6 cube slot), so paint can emit the
+// safe indexed form by default and the exact hex only where truecolor is advertised.
+type role struct {
+	r, g, b uint8
+	idx256  uint8 // nearest xterm-256 cube index, the default emission
+}
 
 var (
-	roleSuccess = role{0x22, 0xC5, 0x5E} // #22C55E — "sent"/OK/up
-	roleError   = role{0xEF, 0x44, 0x44} // #EF4444 — "failed"/error/down
-	roleWarn    = role{0xF5, 0x9E, 0x0B} // #F59E0B — "dropped"/warning
+	roleSuccess = role{0x22, 0xC5, 0x5E, 78}  // #22C55E — "sent"/OK/up
+	roleError   = role{0xEF, 0x44, 0x44, 203} // #EF4444 — "failed"/error/down
+	roleWarn    = role{0xF5, 0x9E, 0x0B, 214} // #F59E0B — "dropped"/warning
 )
 
-// paint wraps s in the role's ANSI truecolor SGR sequence when enabled, otherwise
-// returns s untouched. The caller decides enabled by asking styleEnabled about the
-// TARGET stream, so painting can never smuggle an escape into machine-clean output
-// (R3). ADR-0030's invariant — color is never the only channel — is upheld by
-// callers: the wrapped text (e.g. "OK", "FAILED") is itself a label, so stripping
-// the color leaves the meaning intact.
+// truecolorTerm reports whether the terminal advertises 24-bit color via COLORTERM
+// (the established convention: iTerm2, VS Code, and Windows Terminal set it to
+// "truecolor" or "24bit"; Apple Terminal does not). It gates paint's escalation
+// from safe indexed color to exact-hex truecolor. Pure env read, so tests drive it
+// deterministically with t.Setenv.
+func truecolorTerm() bool {
+	switch os.Getenv("COLORTERM") {
+	case "truecolor", "24bit":
+		return true
+	default:
+		return false
+	}
+}
+
+// paint wraps s in the role's ANSI SGR color when enabled, otherwise returns s
+// untouched. The caller decides enabled by asking styleEnabled about the TARGET
+// stream, so painting can never smuggle an escape into machine-clean output (R3).
+// ADR-0030's invariant — color is never the only channel — is upheld by callers:
+// the wrapped text (e.g. "OK", "FAILED") is itself a label, so stripping the color
+// leaves the meaning intact.
+//
+// Color DEPTH degrades by default: paint emits xterm-256 indexed color (38;5;n),
+// which every color terminal renders correctly, and escalates to 24-bit truecolor
+// (38;2;r;g;b) ONLY when COLORTERM advertises it. This is deliberate — Apple
+// Terminal (macOS default) does NOT support 38;2 and parses each parameter as a
+// standalone SGR, so the "2" reads as faint and the first component as its own code
+// (roleSuccess r=34 → SGR 34 = blue foreground, roleError r=239 → no-op, leaving
+// only faint/grey). Indexed color sidesteps that entirely; truecolor is used only
+// where it is known good.
 func (c *cli) paint(enabled bool, rl role, s string) string {
 	if !enabled {
 		return s
 	}
-	return fmt.Sprintf("\x1b[38;2;%d;%d;%dm%s\x1b[0m", rl.r, rl.g, rl.b, s)
+	if truecolorTerm() {
+		return fmt.Sprintf("\x1b[38;2;%d;%d;%dm%s\x1b[0m", rl.r, rl.g, rl.b, s)
+	}
+	return fmt.Sprintf("\x1b[38;5;%dm%s\x1b[0m", rl.idx256, s)
 }
 
 // styleEnabled reports whether decorative output (the banner today; ANSI color as
