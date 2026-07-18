@@ -23,14 +23,6 @@ var (
 	// build cannot construct.
 	ErrUnknownChannelType = errors.New("app: unknown channel type")
 
-	// ErrChannelNotWired is returned when a channel declares a type this build
-	// KNOWS (config.Validate accepts it) but has not wired into the app yet — a
-	// channel under construction across a piece's sub-phases. It is distinct from
-	// ErrUnknownChannelType so the boot error is truthful ("configured but not
-	// wired") rather than misleading ("unknown"). Currently: the Discord channel,
-	// wired in Piece 4 sub-phase 6.
-	ErrChannelNotWired = errors.New("app: channel type is configured but not wired in this build yet")
-
 	// ErrUnknownPolicy is returned when a brain declares a policy kind this
 	// build cannot construct.
 	ErrUnknownPolicy = errors.New("app: unknown policy kind")

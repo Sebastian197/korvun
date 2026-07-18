@@ -114,6 +114,49 @@ func TestRegisterDroppedSources(t *testing.T) {
 	}
 }
 
+// fakeReconnectRegistrar records RegisterReconnectSource calls.
+type fakeReconnectRegistrar struct {
+	got map[string]func() uint64
+}
+
+func (f *fakeReconnectRegistrar) RegisterReconnectSource(channel string, count func() uint64) error {
+	if f.got == nil {
+		f.got = map[string]func() uint64{}
+	}
+	f.got[channel] = count
+	return nil
+}
+
+// reconnectingChannel is a Channel that also exposes a cumulative ReconnectCount
+// (the discord adapter).
+type reconnectingChannel struct {
+	*fakeChannel
+	reconnects uint64
+}
+
+func (r *reconnectingChannel) ReconnectCount() uint64 { return r.reconnects }
+
+// TestRegisterReconnectSources asserts only channels exposing ReconnectCount are
+// registered, and the registered function reads the live count.
+func TestRegisterReconnectSources(t *testing.T) {
+	rc := &reconnectingChannel{fakeChannel: newFakeChannel("discord"), reconnects: 4}
+	plain := newFakeChannel("telegram") // no ReconnectCount: must be skipped
+	reg := &fakeReconnectRegistrar{}
+
+	registerReconnectSources(reg, []Channel{rc, plain}, slog.New(slog.DiscardHandler))
+
+	if len(reg.got) != 1 {
+		t.Fatalf("registered %d sources, want 1 (only the reconnecting channel)", len(reg.got))
+	}
+	fn, ok := reg.got["discord"]
+	if !ok {
+		t.Fatalf("discord reconnect source not registered; got keys %v", reg.got)
+	}
+	if got := fn(); got != 4 {
+		t.Errorf("source fn = %d, want 4 (reads the live count)", got)
+	}
+}
+
 // inboundText builds an inbound text Envelope carrying a conversation id, so the
 // brain has something to dispatch.
 func inboundText(channel, convID, text string) *envelope.Envelope {

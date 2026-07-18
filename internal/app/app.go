@@ -278,6 +278,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	// adapters exist; only when the Prometheus backend is active (pm != nil).
 	if pm != nil {
 		registerDroppedSources(pm, channels, b.logger)
+		registerReconnectSources(pm, channels, b.logger)
 		if eventBus != nil {
 			if err := pm.RegisterPullCounter("korvun_bus_events_dropped_total",
 				"Events dropped because a bus subscriber's buffer was full.", eventBus.DroppedCount); err != nil {
@@ -388,6 +389,33 @@ func registerDroppedSources(reg droppedRegistrar, channels []Channel, logger *sl
 		if dc, ok := ch.(droppedCounter); ok {
 			if err := reg.RegisterDroppedSource(ch.Name(), dc.DroppedCount); err != nil {
 				logger.Warn("observability: dropped-count source not registered",
+					"channel", ch.Name(), "error", err)
+			}
+		}
+	}
+}
+
+// reconnectRegistrar is the metrics-backend surface for the reconnect pull counter.
+// *prom.Metrics satisfies it; a narrow interface keeps the wiring testable.
+type reconnectRegistrar interface {
+	RegisterReconnectSource(channel string, count func() uint64) error
+}
+
+// reconnectCounter is a channel that maintains a cumulative Gateway reconnect count
+// (the discord adapter). Other channels do not implement it and are skipped.
+type reconnectCounter interface {
+	ReconnectCount() uint64
+}
+
+// registerReconnectSources wires each channel's ReconnectCount (when it has one) as a
+// pull metric (korvun_channel_reconnects_total{channel}), the same scrape-time,
+// no-double-instrument pattern as registerDroppedSources. A registration error is
+// logged and skipped, never fatal (review F2).
+func registerReconnectSources(reg reconnectRegistrar, channels []Channel, logger *slog.Logger) {
+	for _, ch := range channels {
+		if rc, ok := ch.(reconnectCounter); ok {
+			if err := reg.RegisterReconnectSource(ch.Name(), rc.ReconnectCount); err != nil {
+				logger.Warn("observability: reconnect-count source not registered",
 					"channel", ch.Name(), "error", err)
 			}
 		}
@@ -780,12 +808,22 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 		}
 		return ad, nil
 	case discord.ChannelName:
-		// Piece 4 lands the Discord channel across sub-phases; config.Validate
-		// already accepts type "discord", so the type is KNOWN here — just not
-		// runnable yet. Fail honestly ("configured but not wired") instead of the
-		// misleading "unknown channel type". SP6 REPLACES this case with the real
-		// wiring: resolve the token env, construct discord.New, return the adapter.
-		return nil, fmt.Errorf("%w: %q (the Discord channel lands in Piece 4, sub-phase 6)", ErrChannelNotWired, cc.Type)
+		// Pre-check the env at the app layer so a missing secret is a loud, named boot
+		// error consistent with the telegram case (SP1 F4 reconciliation). discord.New
+		// resolves the token again from the same env var at connect time and never
+		// stores it; the pre-check only tests presence, never the value (ADR-0010).
+		if os.Getenv(cc.TokenEnv) == "" {
+			return nil, fmt.Errorf("%w: %q (discord bot token)", ErrMissingSecret, cc.TokenEnv)
+		}
+		ad, err := discord.New(
+			discord.WithTokenEnv(cc.TokenEnv),
+			discord.WithMode(discord.ModeGateway),
+			discord.WithLogger(b.logger),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return ad, nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownChannelType, cc.Type)
 	}

@@ -191,6 +191,20 @@ func (m *Metrics) RegisterDroppedSource(channel string, count func() uint64) err
 	}, func() float64 { return float64(count()) }))
 }
 
+// RegisterReconnectSource registers a PULL counter exposing
+// korvun_channel_reconnects_total{channel} sourced from a cumulative counter function
+// (e.g. discord.Adapter.ReconnectCount), read at scrape time — the same
+// no-double-instrument pull pattern as RegisterDroppedSource (ADR-0020 §3). The channel
+// name is a ConstLabel; call once per channel. It returns the registration error rather
+// than panicking, so a duplicate channel never takes down boot (review F2).
+func (m *Metrics) RegisterReconnectSource(channel string, count func() uint64) error {
+	return m.reg.Register(prometheus.NewCounterFunc(prometheus.CounterOpts{
+		Name:        "korvun_channel_reconnects_total",
+		Help:        "Gateway reconnect attempts (dial/resume/re-identify), by channel.",
+		ConstLabels: prometheus.Labels{"channel": channel},
+	}, func() float64 { return float64(count()) }))
+}
+
 // RegisterPullCounter registers a named PULL counter sourced from a cumulative
 // counter function read at scrape time (prometheus.NewCounterFunc), the same
 // no-double-instrument pattern as RegisterDroppedSource (ADR-0020 §3). The

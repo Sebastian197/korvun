@@ -17,6 +17,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/controlapi"
 	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/router"
@@ -375,30 +376,65 @@ func TestBuild_unknownChannelType(t *testing.T) {
 	}
 }
 
-// TestBuild_discordNotWired covers the honest interim state for Piece 4: a
-// config with a discord channel is a KNOWN type (config.Validate accepts it), but
-// the adapter is not wired into the app until SP6. The factory must fail with a
-// truthful error — NOT "unknown channel type" — that names the channel and says it
-// is configured-but-not-wired.
-func TestBuild_discordNotWired(t *testing.T) {
+// discordChannel is a config channel for the Discord adapter (gateway mode).
+func discordChannel() config.ChannelConfig {
+	return config.ChannelConfig{Type: "discord", Mode: "gateway", TokenEnv: "KORVUN_DISCORD_TEST_TOKEN"}
+}
+
+// TestBuild_discordWired covers SP6 Half A: with the token env set, a discord channel
+// CONSTRUCTS the real adapter, registers its channel->brain route, and appears in the
+// status summary (type/mode/name + a live drop count). Build makes no network call —
+// discord.New only validates config + env presence; the Gateway dials later, in Start.
+func TestBuild_discordWired(t *testing.T) {
+	t.Setenv("KORVUN_DISCORD_TEST_TOKEN", "a-discord-bot-token")
 	cfg := cfgWith(ollamaBrain())
-	cfg.Channels[0].Type = "discord"
-	cfg.Channels[0].Mode = "gateway"
+	cfg.Channels[0] = discordChannel()
+	cfg.Routes[0].Channel = "discord"
+
+	app, err := Build(cfg) // real defaultChannelFactory, no injection
+	if err != nil {
+		t.Fatalf("Build with discord + env set = %v, want nil", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = app.Shutdown(ctx)
+	})
+
+	var found *controlapi.ChannelSummary
+	for _, cs := range app.ChannelSummaries() {
+		if cs.Type == "discord" {
+			cs := cs
+			found = &cs
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("discord channel not registered / not in the status summary")
+	}
+	if found.Mode != "gateway" || found.Name != "discord" {
+		t.Errorf("summary = %+v, want mode=gateway name=discord", *found)
+	}
+	if found.Dropped == nil {
+		t.Error("discord channel must expose a live drop count (status type/mode/name/dropped)")
+	}
+}
+
+// TestBuild_discordTokenEnvMissing pins the ADR-0010 boot contract, reconciled with the
+// telegram case (SP1 F4): an unset token env is a loud, named boot error at the app
+// layer (ErrMissingSecret) that names the variable and NEVER its value.
+func TestBuild_discordTokenEnvMissing(t *testing.T) {
+	cfg := cfgWith(ollamaBrain())
+	cfg.Channels[0] = discordChannel()
+	cfg.Channels[0].TokenEnv = "KORVUN_DISCORD_TOKEN_DEFINITELY_UNSET"
 	cfg.Routes[0].Channel = "discord"
 
 	_, err := Build(cfg)
-	if !errors.Is(err, ErrChannelNotWired) {
-		t.Fatalf("err = %v, want ErrChannelNotWired", err)
+	if !errors.Is(err, ErrMissingSecret) {
+		t.Fatalf("err = %v, want ErrMissingSecret", err)
 	}
-	if errors.Is(err, ErrUnknownChannelType) {
-		t.Errorf("discord must NOT surface as an unknown channel type; got %v", err)
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "unknown") {
-		t.Errorf("error must not call a configured channel %q; got %q", "unknown", msg)
-	}
-	if !strings.Contains(msg, "discord") || !strings.Contains(msg, "not wired") {
-		t.Errorf("error must name the channel and the truth (configured but not wired); got %q", msg)
+	if !strings.Contains(err.Error(), "KORVUN_DISCORD_TOKEN_DEFINITELY_UNSET") {
+		t.Errorf("error %q must name the missing env var", err.Error())
 	}
 }
 

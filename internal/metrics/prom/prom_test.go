@@ -183,6 +183,37 @@ korvun_channel_messages_dropped_total{channel="telegram"} 3
 	}
 }
 
+// TestRegisterReconnectSource_isPull asserts the reconnect counter reflects the
+// source AT SCRAPE TIME (pull-collected, not a registration-time snapshot), by
+// channel label — mirrors the dropped-source pull semantics (ADR-0020 §3).
+func TestRegisterReconnectSource_isPull(t *testing.T) {
+	m := New()
+	var reconnects atomic.Uint64
+	if err := m.RegisterReconnectSource("discord", reconnects.Load); err != nil {
+		t.Fatalf("RegisterReconnectSource: %v", err)
+	}
+
+	const before = `
+# HELP korvun_channel_reconnects_total Gateway reconnect attempts (dial/resume/re-identify), by channel.
+# TYPE korvun_channel_reconnects_total counter
+korvun_channel_reconnects_total{channel="discord"} 0
+`
+	if err := testutil.GatherAndCompare(m.Gatherer(), strings.NewReader(before), "korvun_channel_reconnects_total"); err != nil {
+		t.Errorf("reconnects before any reconnect:\n%v", err)
+	}
+
+	reconnects.Add(2)
+
+	const after = `
+# HELP korvun_channel_reconnects_total Gateway reconnect attempts (dial/resume/re-identify), by channel.
+# TYPE korvun_channel_reconnects_total counter
+korvun_channel_reconnects_total{channel="discord"} 2
+`
+	if err := testutil.GatherAndCompare(m.Gatherer(), strings.NewReader(after), "korvun_channel_reconnects_total"); err != nil {
+		t.Errorf("reconnects after 2 (pull semantics):\n%v", err)
+	}
+}
+
 // TestRegisterDroppedSource_duplicateReturnsErrorNoPanic asserts a second
 // registration for the same channel returns an error instead of panicking
 // (MustRegister would panic). Defensive: today the router rejects duplicate
