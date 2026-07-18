@@ -105,8 +105,7 @@ func (c *cli) run(args []string) int {
 	case "config":
 		return c.configCmd(args[1:])
 	case "status":
-		_, _ = fmt.Fprintf(c.stderr, "korvun: %q is not available yet (coming in a later release).\nRun 'korvun help' for usage.\n", args[0])
-		return 2
+		return c.statusCmd(args[1:])
 	}
 
 	// Retrocompat shim: the pre-CLI `korvun -config x.json` invocation (a leading
@@ -193,15 +192,14 @@ Usage:
 Commands:
   serve         Load config, wire channels/brains, and serve until SIGINT/SIGTERM.
   config check  Validate a config file (offline; --preflight adds online checks).
+  status        Show the live wiring of a running korvun via its admin API.
   version       Print the binary version and exit.
   help          Show this help.
-
-Coming in a later release:
-  status        Show the live wiring of a running korvun via its admin API.
 
 Examples:
   korvun serve --config korvun.json
   korvun config check --preflight korvun.json
+  korvun status --addr 127.0.0.1:2112
 
 See the docs in docs/ — QUICKSTART.md, packaging/INSTALL.md, CONFIGURATION.md.
 `

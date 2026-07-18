@@ -44,8 +44,9 @@ func (c *cli) parseStyled(fs *flag.FlagSet, args []string) (plain, noColor bool,
 type role struct{ r, g, b uint8 }
 
 var (
-	roleSuccess = role{0x22, 0xC5, 0x5E} // #22C55E — "sent"/OK
-	roleError   = role{0xEF, 0x44, 0x44} // #EF4444 — "failed"/error
+	roleSuccess = role{0x22, 0xC5, 0x5E} // #22C55E — "sent"/OK/up
+	roleError   = role{0xEF, 0x44, 0x44} // #EF4444 — "failed"/error/down
+	roleWarn    = role{0xF5, 0x9E, 0x0B} // #F59E0B — "dropped"/warning
 )
 
 // paint wraps s in the role's ANSI truecolor SGR sequence when enabled, otherwise

@@ -140,11 +140,11 @@ func TestRun_dispatch(t *testing.T) {
 			stderrContains: []string{"frobnicate", "help"},
 		},
 		{
-			name:           "status -> still announced but not yet available, exit 2",
-			args:           []string{"status"},
-			wantExit:       2,
-			stdoutEmpty:    true,
-			stderrContains: []string{"status", "not available", "help"},
+			name:           "status --help -> routes to statusCmd, help query to stdout, exit 0 (no dial)",
+			args:           []string{"status", "--help"},
+			wantExit:       0,
+			stdoutContains: []string{"addr"}, // status' own flag surface
+			stderrEmpty:    true,
 		},
 		{
 			name:           "serve subcommand routes to boot with the parsed --config path",
