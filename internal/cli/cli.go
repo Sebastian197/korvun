@@ -9,11 +9,14 @@
 // (ADR-0017) and every behaviour is unit-tested against injected writers rather
 // than the real os.Std* streams.
 //
-// Sub-phase 1 lands the scaffold: dispatch, `version` (via internal/buildinfo),
+// Sub-phase 1 landed the scaffold: dispatch, `version` (via internal/buildinfo),
 // `help`, the TTY-gated logo banner, and the shim/serve seam wired to the
-// existing boot. `config` and `status` are announced but land in later
-// sub-phases; ANSI styling (KORVUN's violet identity, ADR-0030) is integrated
-// where each command's output is born.
+// existing boot. Sub-phase 2 gives `serve` its own flag surface (serveCmd: a
+// pure, unit-testable parse/validate step over injected writers) split from the
+// real boot behind the injectable c.boot seam, plus a gated pre-serve banner.
+// `config` and `status` are announced but land in later sub-phases; ANSI styling
+// (KORVUN's violet identity, ADR-0030) is integrated where each command's output
+// is born.
 package cli
 
 import (
@@ -39,13 +42,15 @@ var version = "dev"
 
 // cli holds the output writers plus the injectable seams a test overrides: isTTY
 // (terminal detection, so the logo is emitted only on an interactive stderr) and
-// serve (the boot entry point, faked in tests and real via serveMain).
+// boot (the real serve boot, faked in tests and real via bootServe). serve's flag
+// surface (serveCmd) is pure and unit-tested against the injected writers; only
+// the boot behind it opens ports, so tests drive routing without booting the app.
 type cli struct {
 	stdout  io.Writer
 	stderr  io.Writer
 	version string
 	isTTY   func(io.Writer) bool
-	serve   func(args []string) int
+	boot    func(configPath string) int
 }
 
 // Run is the single entry point of the korvun command line. It dispatches args
@@ -57,14 +62,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 }
 
 // newCLI builds a cli over the given writers with the real default seams:
-// terminal detection via the OS file mode, and serveMain as the boot entry.
+// terminal detection via the OS file mode, and bootServe as the boot entry.
 func newCLI(stdout, stderr io.Writer) *cli {
 	return &cli{
 		stdout:  stdout,
 		stderr:  stderr,
 		version: version,
 		isTTY:   isTerminal,
-		serve:   serveMain,
+		boot:    bootServe,
 	}
 }
 
@@ -82,20 +87,33 @@ func (c *cli) run(args []string) int {
 	case "version", "-version", "--version":
 		return c.printVersion()
 	case "serve":
-		return c.serve(args[1:])
+		return c.serveCmd(args[1:])
 	case "config", "status":
 		_, _ = fmt.Fprintf(c.stderr, "korvun: %q is not available yet (coming in a later release).\nRun 'korvun help' for usage.\n", args[0])
 		return 2
 	}
 
-	// Retrocompat shim: a leading flag with no subcommand (e.g. `korvun -config
-	// x.json`) is the pre-CLI invocation — route it to serve unchanged.
-	if strings.HasPrefix(args[0], "-") {
-		return c.serve(args)
+	// Retrocompat shim: the pre-CLI `korvun -config x.json` invocation (a leading
+	// -config/--config flag with no subcommand) routes to serve unchanged. Narrowed
+	// to the config flag on purpose: a bare display flag like `korvun --plain` /
+	// `--no-color` must NOT silently boot the server — those are serve-subcommand
+	// flags, not top-level ones, so they fall through to the usage error below.
+	if isServeShim(args[0]) {
+		return c.serveCmd(args)
 	}
 
 	_, _ = fmt.Fprintf(c.stderr, "korvun: unknown command %q\nRun 'korvun help' for usage.\n", args[0])
 	return 2
+}
+
+// isServeShim reports whether arg is the retrocompat serve invocation: a leading
+// -config / --config flag (with either a following value or the `=value` form),
+// the only pre-CLI shape the validated docs/systemd unit used. It is deliberately
+// narrower than "any leading dash" so serve-only display flags (--plain,
+// --no-color) do not slip through the shim and boot a server unasked.
+func isServeShim(arg string) bool {
+	return arg == "-config" || arg == "--config" ||
+		strings.HasPrefix(arg, "-config=") || strings.HasPrefix(arg, "--config=")
 }
 
 // printVersion writes the one-line build identity to stdout (machine-clean, no
@@ -107,11 +125,14 @@ func (c *cli) printVersion() int {
 	return 0
 }
 
-// help writes the usage screen to stdout (exit 0) and, only when stderr is an
-// interactive terminal, the logo banner to stderr. The banner is decoration and
-// never touches stdout, so `korvun help` piped to a file stays banner-free.
+// help writes the usage screen to stdout (exit 0) and, only when styling is
+// enabled on stderr, the logo banner to stderr. Banner gating goes through the
+// shared styleEnabled helper (help has no flags of its own, so plain/no-color are
+// false) so the NO_COLOR opt-out is honored identically to serve — the banner is
+// decoration and never touches stdout, so `korvun help` piped to a file, or run
+// under NO_COLOR, stays banner-free.
 func (c *cli) help() int {
-	if c.isTTY(c.stderr) {
+	if c.styleEnabled(c.stderr, false, false) {
 		_, _ = fmt.Fprint(c.stderr, logo)
 	}
 	_, _ = fmt.Fprint(c.stdout, helpText)

@@ -1,26 +1,27 @@
 // Copyright 2026 Sebastián Moreno Saavedra
 // SPDX-License-Identifier: Apache-2.0
 
-// Package cli tests — Piece 3, sub-phase 1 (scaffold + dispatch + version + logo).
+// Package cli tests — Piece 3, dispatch + version + help + logo (sub-phase 1) and
+// serve's flag surface + injectable boot seam + banner gating (sub-phase 2).
 //
-// RED phase: this file defines the contract of internal/cli BEFORE the
-// implementation exists. It compiles against a surface the green phase must
-// provide:
+// These pin the contract of internal/cli against the surface the implementation
+// provides:
 //
 //	func Run(args []string, stdout, stderr io.Writer) int
 //	type cli struct {
 //	    stdout, stderr io.Writer
-//	    version        string             // ldflags-set default via a package var
-//	    isTTY          func(io.Writer) bool
-//	    serve          func([]string) int // serve seam; the real serve is sub-phase 2
+//	    version        string                  // ldflags-set default via a package var
+//	    isTTY          func(io.Writer) bool     // TTY detection seam
+//	    boot           func(configPath string) int // real serve boot seam (sub-phase 2)
 //	}
 //	func newCLI(stdout, stderr io.Writer) *cli // real defaults
 //	func (c *cli) run(args []string) int
+//	func (c *cli) serveCmd(args []string) int // pure serve flag surface (sub-phase 2)
 //
 // Run is the ONLY public entry; main is a 3-line glue that forwards os.Args and
 // os.Std* into it (ADR-0017: main stays un-unit-tested glue), so every behaviour
 // is exercised here against injected buffers — never the real os.Stdout/os.Stderr.
-// The seams (isTTY, serve) are injected so a test can drive TTY-gated styling and
+// The seams (isTTY, boot) are injected so a test can drive TTY-gated styling and
 // serve routing without a real terminal or a real boot.
 package cli
 
@@ -33,51 +34,54 @@ import (
 	"testing"
 )
 
-// serveRec records an invocation of the serve seam so a test can assert the
-// dispatch routed to serve with the exact args (including the config path),
-// without serve actually existing yet (sub-phase 2).
-type serveRec struct {
-	called bool
-	args   []string
-	ret    int // the exit code the fake serve returns (to prove Run forwards it)
+// bootRec records an invocation of the boot seam so a test can assert that the
+// serve flag surface parsed argv and routed to boot with the exact config path,
+// WITHOUT the real supervisor booting or a port opening (sub-phase 2: flag
+// parsing is pure/testable, the boot lives behind this injectable seam).
+type bootRec struct {
+	called     bool
+	configPath string
+	ret        int // the exit code the fake boot returns (to prove serveCmd forwards it)
 }
 
-func (r *serveRec) fn(args []string) int {
+func (r *bootRec) fn(configPath string) int {
 	r.called = true
-	r.args = args
+	r.configPath = configPath
 	return r.ret
 }
 
 // newTestCLI wires a cli over two buffers with the seams stubbed for a
-// non-interactive run: isTTY=false (no terminal), a recording serve seam. Tests
+// non-interactive run: isTTY=false (no terminal), a recording boot seam. Tests
 // override the individual seams they exercise.
-func newTestCLI(serveRet int) (c *cli, stdout, stderr *bytes.Buffer, rec *serveRec) {
+func newTestCLI(bootRet int) (c *cli, stdout, stderr *bytes.Buffer, rec *bootRec) {
 	stdout = &bytes.Buffer{}
 	stderr = &bytes.Buffer{}
-	rec = &serveRec{ret: serveRet}
+	rec = &bootRec{ret: bootRet}
 	c = newCLI(stdout, stderr)
 	c.isTTY = func(io.Writer) bool { return false } // default: not a terminal
-	c.serve = rec.fn
+	c.boot = rec.fn
 	return c, stdout, stderr, rec
 }
 
 const escape = "\x1b" // ANSI escape introducer; must never reach stdout off-TTY
 
 // TestRun_dispatch pins the subcommand dispatch table: which token routes where,
-// on which stream, with which exit code, and whether it reaches the serve seam.
+// on which stream, with which exit code, and — for the serve paths — that the
+// serve flag surface parsed argv and reached the boot seam with the right config
+// path (sub-phase 2). The boot seam is faked, so no supervisor boots.
 func TestRun_dispatch(t *testing.T) {
-	const serveExit = 42 // a distinctive value to prove Run forwards serve's return
+	const bootExit = 42 // a distinctive value to prove serveCmd forwards boot's return
 
 	tests := []struct {
-		name            string
-		args            []string
-		wantExit        int
-		wantServeCalled bool
-		wantServeArgs   []string // when routed to serve, the exact args passed
-		stdoutContains  []string
-		stderrContains  []string
-		stdoutEmpty     bool
-		stderrEmpty     bool
+		name           string
+		args           []string
+		wantExit       int
+		wantBootCalled bool
+		wantConfigPath string // when routed to serve, the config path the seam receives
+		stdoutContains []string
+		stderrContains []string
+		stdoutEmpty    bool
+		stderrEmpty    bool
 	}{
 		{
 			name:           "no args -> help to stdout, exit 0 (help is a query, not an error)",
@@ -129,42 +133,70 @@ func TestRun_dispatch(t *testing.T) {
 			stderrContains: []string{"status", "not available", "help"},
 		},
 		{
-			name:            "serve subcommand routes to the serve seam with args after 'serve'",
-			args:            []string{"serve", "--config", "korvun.json"},
-			wantExit:        serveExit,
-			wantServeCalled: true,
-			wantServeArgs:   []string{"--config", "korvun.json"},
+			name:           "serve subcommand routes to boot with the parsed --config path",
+			args:           []string{"serve", "--config", "korvun.json"},
+			wantExit:       bootExit,
+			wantBootCalled: true,
+			wantConfigPath: "korvun.json",
 		},
 		{
-			name:            "shim: -config <path> without a subcommand -> implicit serve, full args",
-			args:            []string{"-config", "korvun.local.json"},
-			wantExit:        serveExit,
-			wantServeCalled: true,
-			wantServeArgs:   []string{"-config", "korvun.local.json"},
+			name:           "serve with no flags -> boot with the default config path",
+			args:           []string{"serve"},
+			wantExit:       bootExit,
+			wantBootCalled: true,
+			wantConfigPath: "korvun.json",
 		},
 		{
-			name:            "shim: --config <path> -> implicit serve",
-			args:            []string{"--config", "x.json"},
-			wantExit:        serveExit,
-			wantServeCalled: true,
-			wantServeArgs:   []string{"--config", "x.json"},
+			name:           "shim: -config <path> without a subcommand -> implicit serve, parsed path",
+			args:           []string{"-config", "korvun.local.json"},
+			wantExit:       bootExit,
+			wantBootCalled: true,
+			wantConfigPath: "korvun.local.json",
+		},
+		{
+			name:           "shim: --config <path> -> implicit serve, parsed path",
+			args:           []string{"--config", "x.json"},
+			wantExit:       bootExit,
+			wantBootCalled: true,
+			wantConfigPath: "x.json",
+		},
+		{
+			name:           "shim: -config=<path> (equals form) -> implicit serve, parsed path",
+			args:           []string{"-config=cfg.json"},
+			wantExit:       bootExit,
+			wantBootCalled: true,
+			wantConfigPath: "cfg.json",
+		},
+		{
+			name:           "bare --plain (a serve display flag, no config) is NOT the shim -> usage error, exit 2",
+			args:           []string{"--plain"},
+			wantExit:       2,
+			stdoutEmpty:    true,
+			stderrContains: []string{"--plain", "help"}, // must NOT boot a server
+		},
+		{
+			name:           "bare --no-color is NOT the shim -> usage error, exit 2 (never boots)",
+			args:           []string{"--no-color"},
+			wantExit:       2,
+			stdoutEmpty:    true,
+			stderrContains: []string{"no-color", "help"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, stdout, stderr, rec := newTestCLI(serveExit)
+			c, stdout, stderr, rec := newTestCLI(bootExit)
 
 			got := c.run(tt.args)
 
 			if got != tt.wantExit {
 				t.Errorf("exit code = %d, want %d", got, tt.wantExit)
 			}
-			if rec.called != tt.wantServeCalled {
-				t.Errorf("serve called = %v, want %v", rec.called, tt.wantServeCalled)
+			if rec.called != tt.wantBootCalled {
+				t.Errorf("boot called = %v, want %v", rec.called, tt.wantBootCalled)
 			}
-			if tt.wantServeCalled && !equalArgs(rec.args, tt.wantServeArgs) {
-				t.Errorf("serve args = %q, want %q", rec.args, tt.wantServeArgs)
+			if tt.wantBootCalled && rec.configPath != tt.wantConfigPath {
+				t.Errorf("boot config path = %q, want %q", rec.configPath, tt.wantConfigPath)
 			}
 			assertStream(t, "stdout", stdout.String(), tt.stdoutContains, tt.stdoutEmpty)
 			assertStream(t, "stderr", stderr.String(), tt.stderrContains, tt.stderrEmpty)
@@ -274,6 +306,7 @@ func TestHelp_structure(t *testing.T) {
 // interactive TTY, and the stdout payload is byte-identical whether or not a TTY
 // is present — i.e. the logo can never leak into machine-readable stdout.
 func TestLogo_TTYGating(t *testing.T) {
+	t.Setenv("NO_COLOR", "") // empty reads as unset: keep the TTY assertion env-independent
 	run := func(tty bool) (stdout, stderr string) {
 		c, out, errb, _ := newTestCLI(0)
 		c.isTTY = func(io.Writer) bool { return tty }
@@ -315,6 +348,127 @@ func TestIsTerminal(t *testing.T) {
 	}
 }
 
+// TestHelp_bannerHonorsNoColor pins that help's banner obeys the SAME opt-out
+// precedence as serve (the review's F3): NO_COLOR set suppresses the banner even
+// on an interactive terminal, while the help text still prints to stdout. Without
+// this, the opt-out the package introduced for serve would be silently ignored by
+// help — an inconsistency across two commands in the same sub-phase.
+func TestHelp_bannerHonorsNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	c, stdout, stderr, _ := newTestCLI(0)
+	c.isTTY = func(io.Writer) bool { return true } // interactive, but NO_COLOR opts out
+
+	if got := c.run([]string{"help"}); got != 0 {
+		t.Fatalf("help exit = %d, want 0", got)
+	}
+	if strings.Contains(stderr.String(), "KORVUN") {
+		t.Errorf("NO_COLOR must suppress the help banner even on a TTY, got stderr %q", stderr.String())
+	}
+	if stdout.Len() == 0 {
+		t.Error("help text must still print to stdout under NO_COLOR")
+	}
+}
+
+// TestServeCmd_help pins that a help request on the serve subcommand (-h/--help)
+// is a QUERY, not a usage error (the review's F2): exit 0 (matching top-level
+// help, so a `set -e` wrapper does not abort), the serve usage prints to stdout,
+// stderr stays empty, and the boot seam is never reached.
+func TestServeCmd_help(t *testing.T) {
+	for _, form := range [][]string{{"--help"}, {"-h"}} {
+		t.Run(strings.Join(form, " "), func(t *testing.T) {
+			c, stdout, stderr, rec := newTestCLI(0)
+
+			got := c.serveCmd(form)
+
+			if got != 0 {
+				t.Errorf("serveCmd(%v) = %d, want 0 (help is a query, not a usage error)", form, got)
+			}
+			if rec.called {
+				t.Error("serve help must not reach the boot seam")
+			}
+			if !strings.Contains(stdout.String(), "config") {
+				t.Errorf("serve help must print its flag usage (incl. -config) to stdout; got %q", stdout.String())
+			}
+			if stderr.Len() != 0 {
+				t.Errorf("serve help is a query: stderr must stay empty, got %q", stderr.String())
+			}
+		})
+	}
+}
+
+// TestServeCmd_flagSurface pins serve's own flag surface (sub-phase 2, FR-CLI-4):
+// an invalid serve flag is a usage error — exit 2, the message goes to the
+// INJECTED stderr (never os.Stderr directly), stdout stays empty, and the boot
+// seam is never reached (parse failed before any boot could start).
+func TestServeCmd_flagSurface(t *testing.T) {
+	c, stdout, stderr, rec := newTestCLI(0)
+
+	got := c.serveCmd([]string{"--definitely-not-a-flag"})
+
+	if got != 2 {
+		t.Errorf("serveCmd(bad flag) exit = %d, want 2", got)
+	}
+	if rec.called {
+		t.Error("boot must NOT be reached when serve flag parsing fails")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("a serve usage error must keep stdout empty, got %q", stdout.String())
+	}
+	if stderr.Len() == 0 {
+		t.Error("a serve usage error must be written to the injected stderr, got empty")
+	}
+	if !strings.Contains(stderr.String(), "definitely-not-a-flag") {
+		t.Errorf("serve usage error should name the offending flag; got %q", stderr.String())
+	}
+}
+
+// TestServeCmd_bannerGating pins the pre-serve banner contract (FR-STY-8, R1–R3):
+// the placeholder banner is decoration on stderr, emitted ONLY on an interactive
+// terminal with no opt-out, and NEVER when --plain / --no-color / NO_COLOR is set
+// or the stream is not a TTY. In every case boot is still reached with the config
+// path (the banner never gates the boot itself), and stdout stays untouched.
+func TestServeCmd_bannerGating(t *testing.T) {
+	tests := []struct {
+		name       string
+		tty        bool
+		noColorEnv string
+		args       []string
+		wantBanner bool
+	}{
+		{name: "TTY, no opt-out -> banner", tty: true, args: []string{"--config", "x.json"}, wantBanner: true},
+		{name: "non-TTY -> no banner", tty: false, args: []string{"--config", "x.json"}, wantBanner: false},
+		{name: "TTY but --plain -> no banner", tty: true, args: []string{"--plain", "--config", "x.json"}, wantBanner: false},
+		{name: "TTY but --no-color -> no banner", tty: true, args: []string{"--no-color", "--config", "x.json"}, wantBanner: false},
+		{name: "TTY but NO_COLOR=1 -> no banner", tty: true, noColorEnv: "1", args: []string{"--config", "x.json"}, wantBanner: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Make the banner-present cases independent of the ambient environment:
+			// an empty value reads as unset under the NO_COLOR convention.
+			t.Setenv("NO_COLOR", tt.noColorEnv)
+
+			c, stdout, stderr, rec := newTestCLI(0)
+			c.isTTY = func(io.Writer) bool { return tt.tty }
+
+			if got := c.serveCmd(tt.args); got != 0 {
+				t.Fatalf("serveCmd exit = %d, want 0", got)
+			}
+			if !rec.called || rec.configPath != "x.json" {
+				t.Errorf("boot must be reached with the parsed config path; called=%v path=%q", rec.called, rec.configPath)
+			}
+			gotBanner := strings.Contains(stderr.String(), "KORVUN")
+			if gotBanner != tt.wantBanner {
+				t.Errorf("banner present = %v, want %v; stderr=%q", gotBanner, tt.wantBanner, stderr.String())
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("the pre-serve banner must never touch stdout, got %q", stdout.String())
+			}
+		})
+	}
+}
+
 // --- helpers ---
 
 func assertStream(t *testing.T, name, got string, contains []string, wantEmpty bool) {
@@ -327,16 +481,4 @@ func assertStream(t *testing.T, name, got string, contains []string, wantEmpty b
 			t.Errorf("%s: missing %q; got:\n%s", name, sub, got)
 		}
 	}
-}
-
-func equalArgs(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

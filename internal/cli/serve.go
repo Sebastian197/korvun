@@ -4,8 +4,12 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"flag"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -16,30 +20,62 @@ import (
 	"github.com/Sebastian197/korvun/internal/supervisor"
 )
 
-// serveMain is the default serve seam: it parses the serve flags (-config) from
-// args and hands the lifecycle to the supervisor (ADR-0027), which runs the
-// wired channel -> router -> brain -> channel system and performs a cutover on a
-// reload request, until SIGINT/SIGTERM. It returns a process exit code (0 clean
-// stop, 1 boot/run failure, 2 usage error) instead of calling os.Exit, so the
-// CLI dispatch owns the exit.
+// serveCmd is serve's own flag surface (sub-phase 2, FR-CLI-1/FR-CLI-4): a pure,
+// unit-testable parse/validate step that owns argv and the pre-serve banner, then
+// hands the real boot to the injectable c.boot seam. It is reached by BOTH the
+// canonical `korvun serve --config x.json` (args after "serve") and the
+// retrocompat shim `korvun -config x.json` (full args) — stdlib flag accepts
+// `-config` and `--config` identically, so the shim stays byte-compatible.
 //
-// This is the pre-CLI main body, moved verbatim behind the seam: the CLI routes
-// both the canonical `korvun serve --config x.json` and the retrocompat shim
-// `korvun -config x.json` here, so today's boot is byte-for-byte unchanged. A
-// dedicated serve flag surface (and its styling) is sub-phase 2; sub-phase 1 only
-// preserves the existing behaviour. Logging stays the structured slog JSON on
-// stderr (ADR-0017 §5) — serve is deliberately not restyled.
-func serveMain(args []string) int {
+// The flag surface writes usage errors to the INJECTED c.stderr (never os.Stderr
+// directly), so a bad serve flag is a usage error (exit 2) a test can assert
+// without a real terminal. The banner is decoration on stderr, gated exactly like
+// all styling (FR-STY-8): TTY-only, off under --plain/--no-color/NO_COLOR. serve
+// itself is NOT restyled — its slog JSON (bootServe) is untouched.
+func (c *cli) serveCmd(args []string) int {
 	fs := flag.NewFlagSet("korvun serve", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
+	// Buffer the flag package's output so it can be routed by kind: -h/--help is a
+	// query (usage -> stdout, exit 0, matching top-level help), while a bad flag is
+	// a usage error (message -> stderr, exit 2, keeping stdout machine-clean —
+	// R3/FR-STY-5). Deciding the stream after Parse is why the buffer is needed:
+	// flag writes during Parse, before we know which case occurred.
+	var usage bytes.Buffer
+	fs.SetOutput(&usage)
 	configPath := fs.String("config", "korvun.json", "path to the Korvun JSON config file")
+	var plain, noColor bool
+	fs.BoolVar(&plain, "plain", false, "disable the decorative pre-serve banner")
+	fs.BoolVar(&noColor, "no-color", false, "disable ANSI color and the banner")
 	if err := fs.Parse(args); err != nil {
-		return 2 // usage error: bad/unknown serve flag
+		if errors.Is(err, flag.ErrHelp) {
+			_, _ = io.Copy(c.stdout, &usage) // help is a query, not an error
+			return 0
+		}
+		_, _ = io.Copy(c.stderr, &usage) // usage error: bad/unknown serve flag
+		return 2
 	}
 
+	if c.styleEnabled(c.stderr, plain, noColor) {
+		_, _ = fmt.Fprint(c.stderr, logo) // pre-serve banner: decoration, stderr only
+	}
+
+	return c.boot(*configPath)
+}
+
+// bootServe is the default boot seam: it hands the lifecycle to the supervisor
+// (ADR-0027), which runs the wired channel -> router -> brain -> channel system
+// and performs a cutover on a reload request, until SIGINT/SIGTERM. It returns a
+// process exit code (0 clean stop, 1 boot/run failure) instead of calling
+// os.Exit, so the CLI dispatch owns the exit.
+//
+// This is the pre-CLI main boot body: flag parsing/validation lived here in
+// sub-phase 1 and moved to serveCmd in sub-phase 2, leaving bootServe as pure
+// boot glue (still un-unit-tested beyond the config.Load fatal, covered by
+// internal/app's lifecycle e2e — ADR-0017). Logging stays the structured slog
+// JSON on stderr (ADR-0017 §5) — serve is deliberately not restyled.
+func bootServe(configPath string) int {
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
-	cfg, err := config.Load(*configPath)
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		return serveFatal(logger, "config", err) // malformed/missing config: fatal, named
 	}
@@ -67,7 +103,7 @@ func serveMain(args []string) int {
 	// After a successful cutover the supervisor persists the new config atomically
 	// back to the -config file (ADR-0027 §F5).
 	persist := func(c *config.Config) error {
-		return supervisor.WriteConfigAtomic(*configPath, c)
+		return supervisor.WriteConfigAtomic(configPath, c)
 	}
 
 	sup = supervisor.New(cfg,
