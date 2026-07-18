@@ -363,14 +363,42 @@ func TestBuild_unknownLocality(t *testing.T) {
 }
 
 // TestBuild_unknownChannelType covers defaultChannelFactory's guard for a
-// channel type this build cannot construct (raw Config, no injection).
+// genuinely unknown channel type this build cannot construct (raw Config, no
+// injection).
 func TestBuild_unknownChannelType(t *testing.T) {
 	cfg := cfgWith(ollamaBrain())
-	cfg.Channels[0].Type = "discord"
-	cfg.Routes[0].Channel = "discord"
+	cfg.Channels[0].Type = "slack"
+	cfg.Routes[0].Channel = "slack"
 	_, err := Build(cfg) // default factory → unknown type
 	if !errors.Is(err, ErrUnknownChannelType) {
 		t.Fatalf("err = %v, want ErrUnknownChannelType", err)
+	}
+}
+
+// TestBuild_discordNotWired covers the honest interim state for Piece 4: a
+// config with a discord channel is a KNOWN type (config.Validate accepts it), but
+// the adapter is not wired into the app until SP6. The factory must fail with a
+// truthful error — NOT "unknown channel type" — that names the channel and says it
+// is configured-but-not-wired.
+func TestBuild_discordNotWired(t *testing.T) {
+	cfg := cfgWith(ollamaBrain())
+	cfg.Channels[0].Type = "discord"
+	cfg.Channels[0].Mode = "gateway"
+	cfg.Routes[0].Channel = "discord"
+
+	_, err := Build(cfg)
+	if !errors.Is(err, ErrChannelNotWired) {
+		t.Fatalf("err = %v, want ErrChannelNotWired", err)
+	}
+	if errors.Is(err, ErrUnknownChannelType) {
+		t.Errorf("discord must NOT surface as an unknown channel type; got %v", err)
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "unknown") {
+		t.Errorf("error must not call a configured channel %q; got %q", "unknown", msg)
+	}
+	if !strings.Contains(msg, "discord") || !strings.Contains(msg, "not wired") {
+		t.Errorf("error must name the channel and the truth (configured but not wired); got %q", msg)
 	}
 }
 

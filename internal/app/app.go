@@ -31,6 +31,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/channel"
+	"github.com/Sebastian197/korvun/internal/channel/discord"
 	"github.com/Sebastian197/korvun/internal/channel/telegram"
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/controlapi"
@@ -778,6 +779,13 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 			return nil, err
 		}
 		return ad, nil
+	case discord.ChannelName:
+		// Piece 4 lands the Discord channel across sub-phases; config.Validate
+		// already accepts type "discord", so the type is KNOWN here — just not
+		// runnable yet. Fail honestly ("configured but not wired") instead of the
+		// misleading "unknown channel type". SP6 REPLACES this case with the real
+		// wiring: resolve the token env, construct discord.New, return the adapter.
+		return nil, fmt.Errorf("%w: %q (the Discord channel lands in Piece 4, sub-phase 6)", ErrChannelNotWired, cc.Type)
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownChannelType, cc.Type)
 	}
