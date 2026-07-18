@@ -66,6 +66,7 @@ func newTestCLI(bootRet int) (c *cli, stdout, stderr *bytes.Buffer, rec *bootRec
 	c.isTTY = func(io.Writer) bool { return false }         // default: not a terminal
 	c.boot = rec.fn                                         // faked serve boot
 	c.preflight = func(*config.Config) error { return nil } // hermetic default: preflight passes, no network
+	c.vt = func() bool { return true }                      // VT available: gating tested identically on all OSes
 	return c, stdout, stderr, rec
 }
 
@@ -529,6 +530,31 @@ func TestServeCmd_bannerGating(t *testing.T) {
 				t.Errorf("the pre-serve banner must never touch stdout, got %q", stdout.String())
 			}
 		})
+	}
+}
+
+// TestStyleEnabled_degradesWithoutVT pins the R4/FR-STY-9 degradation branch
+// through the vt seam: on an interactive TTY with no opt-out, styling is on only
+// when the terminal can render VT sequences; when it cannot (a legacy Windows
+// conhost that rejects ENABLE_VIRTUAL_TERMINAL_PROCESSING), styleEnabled falls back
+// to plain so escapes never print literally. Driven by the injected vt seam so the
+// branch is exercised deterministically on every OS (the real Windows probe needs a
+// console the CI test process does not have).
+func TestStyleEnabled_degradesWithoutVT(t *testing.T) {
+	t.Setenv("NO_COLOR", "") // keep the TTY assertion independent of the ambient env
+
+	c, _, _, _ := newTestCLI(0)
+	c.isTTY = func(io.Writer) bool { return true } // an interactive terminal
+	var w bytes.Buffer
+
+	c.vt = func() bool { return true }
+	if !c.styleEnabled(&w, false, false) {
+		t.Error("styleEnabled must be true on a TTY with VT available and no opt-out")
+	}
+
+	c.vt = func() bool { return false }
+	if c.styleEnabled(&w, false, false) {
+		t.Error("styleEnabled must degrade to plain when VT is unavailable, even on a TTY (R4)")
 	}
 }
 

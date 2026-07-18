@@ -55,6 +55,14 @@ type cli struct {
 	isTTY     func(io.Writer) bool
 	boot      func(configPath string) int
 	preflight func(cfg *config.Config) error
+	// vt reports whether the terminal can render ANSI VT sequences (enabling it on
+	// Windows). It is a seam like isTTY/boot/preflight so styleEnabled's gating is
+	// deterministic in tests on every OS: the real binary uses vtCapable (a no-op
+	// true on Unix, a live console-mode probe on Windows), but the windows-latest
+	// test process runs with redirected pipes where that probe would report false —
+	// tests inject a fixed vt so the gating logic is exercised identically on all
+	// three OSes.
+	vt func() bool
 }
 
 // Run is the single entry point of the korvun command line. It dispatches args
@@ -75,6 +83,7 @@ func newCLI(stdout, stderr io.Writer) *cli {
 		isTTY:     isTerminal,
 		boot:      bootServe,
 		preflight: defaultPreflight,
+		vt:        vtCapable,
 	}
 }
 
