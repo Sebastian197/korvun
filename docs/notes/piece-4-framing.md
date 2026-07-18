@@ -62,12 +62,16 @@ DMs, Korvun necesita:
 
 Suma = **37377**. `MESSAGE_CONTENT` es uno de los **tres intents privilegiados**: se
 habilita **manualmente en el Developer Portal** del bot y controla el acceso a los
-campos de contenido (`content`, `embeds`, `attachments`) en TODOS los eventos. La
-verificación (aprobación de Discord) es obligatoria a partir de **100 servidores**
-(confirmado en la doc: `GATEWAY_MESSAGE_CONTENT` requerido para bots en 100+
-servidores). Por debajo, es un toggle self-serve. El modelo per-usuario de Korvun
-queda muy por debajo de cualquier umbral → **el argumento se sostiene sea el umbral
-"100 servidores" (doc) o "10.000 usuarios/junio 2026" (intel de Chano)**; ver `[NC-1]`.
+campos de contenido (`content`, `embeds`, `attachments`) en TODOS los eventos.
+**Política vigente (RESUELTO, `[NC-1]`):** el toggle self-serve del intent aguanta
+hasta **10.000 USUARIOS** (anuncio oficial de Discord del **2026-06-11**), no 100
+servidores — la doc que trajo Context7 va por detrás del anuncio. La **verificación de
+bot a los 100 servidores sigue existiendo como proceso SEPARADO** (afecta a otras
+capacidades del bot, no al toggle del intent). El modelo per-usuario de Korvun (cada
+usuario corre SU propio bot) queda muy por debajo de **cualquiera** de los dos regímenes
+→ **no bloqueante** por construcción. Fuentes:
+`support-dev.discord.com/hc/en-us/articles/40281523410967` ·
+`docs.discord.com/developers/gateway/getting-started-with-privileged-intent-review`.
 
 ### Envío = REST puro (HTTP)
 
@@ -198,27 +202,53 @@ Start/Stop limpio; validación de entrada.
   lifecycle (arranque/paro limpio, drops contados, resume tras corte) pasa `-race`. **No
   bloquea la beta** (Pieza 4 es más alcance, no criterio V1 — los 6 ya están cerrados).
 
-## 7. `[NEEDS CLARIFICATION]`
+## 7. `[NEEDS CLARIFICATION]` — TODOS RESUELTOS (2026-07-18)
 
-- **`[NC-1]` Umbral exacto del Message Content self-serve.** Context7 confirma el umbral
-  de verificación en **100 servidores**; la cifra "10.000 usuarios / junio 2026" (intel
-  de Chano) NO aparece en la doc que traje. Reconfirmar la política vigente. *No
-  bloqueante:* Korvun-por-usuario queda por debajo de cualquiera de los dos.
-- **`[NC-2]` LA decisión: cliente WS (a) hand-rolled vs (b) `coder/websocket`.** Mi
-  recomendación es (b); **veto del copiloto requerido** antes del ADR. Si (b), el ADR de
-  dependencia debe pasar el test de 4 ejes explícito.
-- **`[NC-3]` ¿DMs en v1, o solo canales de guild?** El seam da paridad barata (Telegram
-  v1 maneja privados + grupos), y DMs solo añade el intent `DIRECT_MESSAGES` (4096) +
-  abrir el DM channel. Recomiendo **incluir DMs en v1**; confirmar.
-- **`[NC-4]` `allowed_mentions` por defecto = ninguna.** Decisión de seguridad
-  (impide pings masivos desde el modelo). Confirmar que es el default deseado (se puede
-  hacer configurable después).
-- **`[NC-5]` ¿El `mode` se llama `"gateway"`?** Telegram usa `polling`/`webhook`;
-  Discord solo tiene un modo de recepción real. Confirmar el literal del contrato de
-  config (`"gateway"` propuesto) para el schema.
+- **`[NC-1]` Umbral del Message Content — RESUELTO.** Política vigente: **10.000
+  usuarios** (anuncio oficial 2026-06-11; la doc de Context7 iba por detrás). La
+  verificación de bot a 100 servidores es un proceso SEPARADO. No bloqueante bajo
+  cualquiera de los dos regímenes (ver §1). Corregido arriba.
+- **`[NC-2]` Cliente WS — RESUELTO (decisión de Chano): 4ª dependencia,
+  `coder/websocket`.** La opción (a) hand-rolled queda descartada. → **ADR-0034**.
+- **`[NC-3]` DMs — RESUELTO: INCLUIDOS en v1** (intent `DIRECT_MESSAGES` 4096; ya en la
+  suma 37377). → **ADR-0033**.
+- **`[NC-4]` `allowed_mentions` — RESUELTO: ninguna mención por defecto (`parse: []`)**.
+  → **ADR-0033** (§seguridad).
+- **`[NC-5]` `mode` — RESUELTO: `"gateway"`** (literal del contrato de config). →
+  **ADR-0033**.
 
 ---
 
-**Siguiente paso (tras la revisión del copiloto):** resolver los `[NC]`, escribir el
-ADR del canal (+ ADR de dependencia si (b)), y arrancar TDD. **NO se ha escrito ADR ni
-código.**
+**Estado:** encuadre cerrado, los 5 `[NC]` resueltos. Escritos **ADR-0033** (canal
+Discord) y **ADR-0034** (dependencia `coder/websocket`), ambos `status: proposed`
+pendientes del flip a `accepted` por el copiloto antes del TDD. `go.mod` sin tocar
+(la 4ª dep entra con SP1).
+
+## 8. Desglose TDD propuesto (para el visto del copiloto)
+
+Una sub-fase a la vez, rojo→verde, `/review`, `make quality` verde `-race` antes de
+cerrar. Sin proveedor real: un **fake Gateway** (servidor WS sobre `httptest`) +
+`httptest` para el REST simulan identify/heartbeat/resume/dispatch/429.
+
+- **SP1 — Dependencia + config + esqueleto.** `go get github.com/coder/websocket@v1.8.15`
+  (la 4ª dep entra AQUÍ, ADR-0034); paquete `internal/channel/discord`; parseo de config
+  `type:"discord"`/`mode:"gateway"`/`token_env`; validación (falta token_env → fatal);
+  seam `channel.Channel` (`Name`/`Manifest`/`Mode`). Rojo: config + construcción.
+- **SP2 — Mapeo inbound (puro).** `MESSAGE_CREATE` JSON → Envelope (guild + DM,
+  `conversation.id = channel.id`, autor, `content`); ignorar mensajes del propio bot;
+  validación de entrada en el borde. Función pura, table-driven, sin red.
+- **SP3 — Lifecycle del Gateway.** Máquina de estado sobre `coder/websocket`: identify,
+  heartbeat + ACK/detección de zombi, dispatch → canal inbound, `Receive`. Fake Gateway;
+  `-race` sobre `Start`/`Stop` + `DroppedCount`.
+- **SP4 — Resume/reconnect.** `session_id` + `seq` + `resume_gateway_url`; op7/op9/close-
+  codes; backoff; fallback a Identify. Fake Gateway que fuerza corte y resume.
+- **SP5 — Outbound REST.** `Send` → `POST /channels/{id}/messages` sobre `net/http`;
+  `content` ≤2000; `allowed_mentions:[]` por defecto; 429 → `RateLimitError`/`Retry-After`.
+  `httptest` (200 + 429).
+- **SP6 — Wiring + docs + validación en vivo.** Montar el canal en `app` (config →
+  adaptador); doc de setup (el paso MANUAL del Message Content intent, como BotFather);
+  config de ejemplo; **round-trip real de Discord validado en hardware**.
+
+Notas: SP1 es la ÚNICA sub-fase que toca `go.mod`. SP4 puede fusionarse con SP3 si el
+copiloto lo prefiere (misma máquina de estado); se dejan separadas por blast-radius
+(el resume es la parte con más aristas).
