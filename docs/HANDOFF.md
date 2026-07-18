@@ -58,70 +58,63 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ## Current state (as of session close, 2026-07-18)
 
-> **CURRENT (2026-07-18): Piece 3 (CLI) sub-phase 4 (SP4) DONE and committed
-> (`feat(cli): add 'korvun status [--addr]' admin-API client (Piece 3 SP4)`,
-> `21ff261`).** The last read command landed — the CLI verb set (serve / config
-> check / status / version / help) is now complete; only SP5 (docs) remains.
-> - **`status [--addr host:port]`** (`internal/cli/status.go`) — a thin HTTP client
->   of the already-serving admin API (ADR-0022), **no new server code, no token**.
->   Gates on `/healthz`, then GETs `/api/brains` + `/api/channels` and renders the
->   resolved wiring (brains + privacy-selector-surviving models + channels + drop
->   counts) as aligned `text/tabwriter` tables to stdout (FR-STA-1/3). Decodes into
->   **`internal/controlapi`'s own summary types** (single source of truth, no mirror).
-> - **Honest failure (FR-STA-2)**: dial error or non-200 `/healthz` → clear "admin
->   API not reachable at <addr>" to stderr, **exit 1**, never a panic. Requests carry
->   a signal-cancellable `context` (Ctrl-C/SIGTERM) bounded by a 5s client timeout —
->   no path hangs.
-> - **Style (FR-STY-6, R1–R3)**: health line `success`-colored, plus a `warn`
->   (#F59E0B, new role) line when a channel is dropping — both gated by `styleEnabled`
->   with a textual label always present. Color is kept **OUT of the tabwriter tables**
->   on purpose (ANSI has zero display width but tabwriter counts bytes → colored cells
->   would misalign); columns are byte-identical on/off TTY, escape-free under
->   `--plain`/`--no-color`/non-TTY.
-> - **Dispatch/help**: `status` leaves "not available yet" → joins Commands with a
->   description + example; the now-empty "Coming in a later release" section removed.
->   Flags via the shared `parseStyled`; `-h/--help` query (exit 0), bad flag / stray
->   positional → usage error (exit 2), uniform with serve/config check.
+> **CURRENT (2026-07-18): Piece 3 (CLI) — COMPLETE (SP1–SP5), validated end-to-end
+> on hardware.** The `korvun` binary now has a first-class command line — `serve` /
+> `config check [--preflight]` / `status [--addr]` / `version` / `help` — behind a
+> 3-line `main` (ADR-0017), **pure-stdlib styling, `go.mod` unchanged at 3 direct
+> deps**. The interface contract is pinned by **ADR-0032 (accepted)** and the
+> `internal/cli` suite. What the five sub-phases delivered (all pushed except SP5):
+> - **SP1** — scaffold: `Run(args, stdout, stderr) int`, subcommand dispatch, exit
+>   codes 0/1/2, `version` (via `buildinfo`), styled `help`, TTY-gated banner.
+> - **SP2** — `serve`'s own flag surface (`serveCmd`) split from the boot behind the
+>   injectable `c.boot` seam; retrocompat shim narrowed to `-config`/`--config`.
+> - **SP3** — `config check [--preflight]` (offline validate + injectable preflight
+>   seam) + first color roles + the R4/FR-STY-9 Windows VT guard (`c.vt` seam) +
+>   uniform positional strictness.
+> - **SP4** — `status [--addr]`: a thin read-only client of the admin API (ADR-0022,
+>   no server code, no token) rendering the live wiring as `text/tabwriter` tables;
+>   honest exit-1 on an unreachable admin; context-cancellable requests.
+> - **SP5** — closure: **ADR-0032** (interface contract), docs rewritten to the
+>   canonical `korvun serve --config …` (legacy `-config` mentioned once as
+>   shim-supported), `korvun.example.json` at the repo root + shipped in the release
+>   archives, **ldflags retargeted `main.version` → `internal/cli.version`** (the old
+>   target was a silent no-op — a real tag would have reported `dev`; verified fixed),
+>   and the color-depth fix below.
 >
-> `make quality` green `-race` over the WHOLE suite (total **93.2%**);
-> **`internal/cli` 94.2%** (≥85 maintained; `statusCmd`/`statusError`/`renderStatus`/
-> `joinModels` 100%; the residual `adminReachable`/`getJSON` gaps are defensive
-> transport-error branches unreachable after a healthy `/healthz`). Windows build +
-> vet clean. Smoke-tested on the built binary against a live admin stub: `host:port`
-> and `http://host:port` both render; unreachable → honest exit 1.
+> **End-to-end validation on Chano's Mac (iMac Intel, macOS 13, Terminal.app) —
+> PASSED.** Built from source; exercised `help`/banner, `NO_COLOR`, `config check`
+> printing a colored `OK`/`FAILED`, `serve`, `status` against the live server, a full
+> **Telegram roundtrip**, and a clean shutdown. **The first COLD request completed in
+> ~6s with no timeout** — this is **ADR-0031 (Piece 2 resilience: boot warmup +
+> generous per-attempt timeout + retry) verified on the very hardware that first
+> surfaced F6**, where `v0.1.0` failed. QUICKSTART's cold-start note is corrected to
+> say so (workaround on `v0.1.0`, fixed after).
 >
-> **`/review` (high, workflow-backed) on the SP4 diff → 7 findings (1 correctness),
-> resolved before commit** (1 refuted — gosec G107 does NOT fire): (1) **correctness**
-> — a scheme-qualified `--addr http://…` built `http://http://…` and misreported a
-> live server as unreachable → fixed by stripping the scheme; (2) default reused
-> `config.DefaultObservabilityAddr`; (3) wire structs replaced by `controlapi` types;
-> (4) requests now carry a context; (6) the error-to-stderr path is one `statusError`
-> helper; (7) dead test setup removed. **(5) the two independent data GETs stay
-> sequential ON PURPOSE** — the admin API is loopback by default (sub-ms), so
-> parallelizing adds concurrency machinery for a remote case this local-first tool
-> does not target; noted in the godoc (Chano: veto if you'd rather it parallelize).
+> **Validation finding + fix (`8048cbb`): truecolor → xterm-256 by default.**
+> Terminal.app rendered `OK` **blue** and `FAILED` **grey** — Apple Terminal does not
+> support 24-bit `38;2;r;g;b` and parses each parameter as a standalone SGR (the "2"
+> becomes faint/grey, the first component its own code: `roleSuccess` r=34 → SGR 34 =
+> blue). Fix: `paint` emits xterm-256 indexed color (`38;5;n`, correct on every color
+> terminal incl. Apple Terminal) by default and escalates to truecolor **only** when
+> `COLORTERM` ∈ {`truecolor`,`24bit`}. Roles carry a precomputed cube index (success
+> 78, error 203, warn 214). Verified on a real pty.
 >
-> **ldflags: STILL PARKED (its own sub-phase).** `.goreleaser.yaml` still targets
-> `-X main.version`; `version` lives in `internal/cli`, so that must move to
-> `-X …/internal/cli.version` — **not touched** here. Impact today: nil (no real
-> release tag pushed; a local build reports `korvun dev (rev)` correctly).
+> `make quality` green `-race` over the WHOLE suite; **`internal/cli` ≥85 maintained
+> (94.3% at the color fix)**; cross-compile ×6 + windows-latest green across the piece.
 >
-> **NEXT STEP: Piece 3 sub-phase 5 (SP5) — docs + macOS re-validation (CLOSES the
-> piece).** Rewrite `INSTALL.md`/`QUICKSTART.md`/`BUILDER.md`/`CONFIGURATION.md` +
-> `korvun.service` from `./korvun -config …` to `korvun serve …` (the shim keeps the
-> old form valid but non-canonical); add a repo `korvun.example.json`; **re-validate
-> the full quickstart on Chano's Mac** with the new commands. See the design spec
-> (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), SP5.
+> **PARKED follow-up (not today):** `make build` regenerates `web/builder/dist`
+> (`.gitkeep` deleted + `index.html` rewritten), dirtying the working tree — this
+> caused two false "phantom change" scares this session (both correctly reverted,
+> and it is why a source build reports `korvun … +dirty`). It deserves a make target
+> that recompiles the web bundle **only when its sources change** (a proper
+> dependency on `web/builder/src`), so a plain `make build` no longer touches the
+> committed `dist`. Noted for a later chore; NOT done here.
 >
-> **SP3 (done, pushed):** `config check [--preflight]` + first color roles +
-> R4/FR-STY-9 Windows VT guard (+ its `c.vt` seam) + serve/config-check positional
-> strictness — commits `26164a5`/`17adf6a`/`dc68aae`/`8de1003`/`0a6eba4`/`6ef4e20`,
-> pushed (CI green ×3 OS incl. windows-latest). The serve-strictness uniform-shim
-> DECISION flagged there stands (no documented invocation regresses).
->
-> **NOT pushed** — pushing master is Chano's act. `21ff261` (SP4) + this HANDOFF
-> update are local on master atop the already-pushed `6ef4e20`; they go with the push
-> Chano runs after reviewing this diff.
+> **NOT pushed** — the final push of the piece is Chano's act. Local on master atop
+> the already-pushed `2f562a7` (SP4): `99c2ddd` (docs: ADR-0032 + canonical rewrite),
+> `8526f6b` (korvun.example.json in archives), `87aa4a3` (ldflags retarget), `8048cbb`
+> (truecolor→256 fix), plus the final docs commit closing this block. They go with the
+> push Chano runs after reviewing this diff.
 >
 > **Brand assets** (`chore(brand)`, prior session): see the "Brand assets" section
 > below (`assets/brand/`).

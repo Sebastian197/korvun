@@ -48,9 +48,10 @@ ollama pull llama3.2:1b
 ## Step 3 — Create `korvun.local.json`
 
 > The `v0.1.0` release archive does **not** ship an example config, so create this
-> file yourself. Every field name below is exact — verified against the config
-> parser (`internal/config`). It is the canonical minimal config: one Telegram
-> channel, one brain, one local model.
+> file yourself. (From the next release the archive bundles `korvun.example.json` —
+> the same minimal config — so you can copy and adapt it instead.) Every field name
+> below is exact — verified against the config parser (`internal/config`). It is the
+> canonical minimal config: one Telegram channel, one brain, one local model.
 
 ```json
 {
@@ -177,21 +178,26 @@ brain: no usable answer ... "model: provider unavailable:
 Post http://127.0.0.1:11434/api/chat: context deadline exceeded"
 ```
 
-…the model was **too slow to load on a cold start**. Korvun's timeout to the
-provider (~5s) is shorter than the time a first-time model load can take on some
-hardware — Ollama logs `client connection closed before llama-server finished
-loading` and cancels the `POST /api/chat` at ~5s.
+…the model was **too slow to load on a cold start**. On `v0.1.0`, Korvun's fixed
+~5s timeout to the provider is shorter than the time a first-time model load can
+take on some hardware — Ollama logs `client connection closed before llama-server
+finished loading` and cancels the `POST /api/chat` at ~5s.
 
-**Fix for the quickstart:** warm the model once and retry:
+**Fix on `v0.1.0`:** warm the model once and retry:
 
 ```sh
 ollama run llama3.2:1b   # type a word, get a reply, then /bye
 ```
 
-With the model already warm, the bot answers immediately. *(This cold-start timeout
-is a known product limitation, tracked as motivation for configurable/retrying
-provider timeouts — see `ROAD-TO-BETA.md`, Pieza 2. It is not a config error on your
-side.)*
+With the model already warm, the bot answers immediately. It is not a config error
+on your side.
+
+> **Fixed after `v0.1.0`.** On `master` (and the next release) this cold-start path
+> is resolved — ADR-0031 adds an optional boot warmup, a generous per-attempt
+> timeout, and retry with differentiated fallback. Confirmed on the same hardware
+> that first surfaced the issue: the **first cold request completed in ~6s with no
+> timeout**, where `v0.1.0` failed. Once you are on a post-`v0.1.0` build, the manual
+> warm-up above is no longer needed.
 
 ### A `DeleteWebhook` WARN at startup
 
