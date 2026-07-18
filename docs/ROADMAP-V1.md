@@ -288,9 +288,17 @@ más las piezas de robustez que un producto de verdad necesita.
         de seam para el control API de Stage 13. ADR-0020.
       - *Alcance honesto:* sin trazas distribuidas (diferidas), sin dashboards ni
         alerting (lado operador), sin auth/TLS en el admin server (Stage 13).
-- [ ] Lo configura alguien por fichero, sin recompilar.
-- [ ] Lo instala alguien que no soy yo, en su máquina, siguiendo la documentación.
-- [ ] Aguanta un proveedor caído sin caerse.
+- [x] Lo configura alguien por fichero, sin recompilar. **COMPLETO (Pieza 1,
+      validado en hardware 2026-07-05).** Documentación de usuario + `korvun.example.json`
+      + `korvun config check` (Pieza 3); un tercero escribe el fichero y arranca.
+- [x] Lo instala alguien que no soy yo, en su máquina, siguiendo la documentación.
+      **COMPLETO (Pieza 1, PR #8, validado en hardware 2026-07-05:** iMac Intel,
+      macOS 13 — install + quickstart end-to-end, un mensaje de Telegram con respuesta
+      del modelo local, cero nube).
+- [x] Aguanta un proveedor caído sin caerse. **COMPLETO (Pieza 2 — ADR-0031
+      resiliencia: timeouts por intento + retry + degradación diferenciada;
+      verificado en hardware 2026-07-18:** primera petición en frío en ~6s sin
+      timeout, en la máquina que descubrió F6).
 - [x] Las políticas se expresan sin tocar Go (builder no-code). **COMPLETO
       (Stage 14 Fase 2 — PR #6 mutación de config en caliente + PR #7 la UI
       React/TS/Vite, merge `442f7ea`).** El builder monta en `/builder`, edita

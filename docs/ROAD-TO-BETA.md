@@ -32,8 +32,8 @@ ambos) y su criterio de "hecho".
 
 ## Estado actual (honesto)
 
-Korvun cumple **4 de los 6** criterios de "esto ya es V1" del
-[`ROADMAP-V1.md`](./ROADMAP-V1.md) §5:
+Korvun cumple **los 6 de 6** criterios de "esto ya es V1" del
+[`ROADMAP-V1.md`](./ROADMAP-V1.md) §5 — **checklist V1 CUMPLIDA**:
 
 - **[x] Mensaje end-to-end por el binario real** (Stage 11, verificado en vivo
   2026-06-21: Telegram → fan-out → política → respuesta).
@@ -43,27 +43,30 @@ Korvun cumple **4 de los 6** criterios de "esto ya es V1" del
   `/healthz`).
 - **[x] Las políticas se expresan sin tocar Go** — el **builder no-code**
   (Stage 14 Fase 2: mutación de config en caliente vía **PR #6** + la UI React/TS/
-  Vite vía **PR #7**, merge `442f7ea`). Este es el criterio que se acaba de tachar.
-
-Faltan **2** criterios:
-
+  Vite vía **PR #7**, merge `442f7ea`).
+- **[x] Lo configura alguien por fichero, sin recompilar** → **Pieza 1**
+  (documentación de usuario + `korvun.example.json` + `config check`), validada en
+  hardware (macOS, 2026-07-05: un tercero escribió el fichero y arrancó).
 - **[x] Lo instala alguien que no soy yo, siguiendo la documentación** → **Pieza 1
-  COMPLETADA/MERGEADA (PR #8)**, validada en hardware. *(Queda tacharlo formalmente en
-  ROADMAP-V1 §5 cuando se cierre el ciclo; la doc existe y fue probada por un tercero.)*
-- **[ ] Aguanta un proveedor caído sin caerse** → **Pieza 2** (próximo trabajo).
+  COMPLETADA/MERGEADA (PR #8)**, validada en hardware (iMac Intel, macOS 13,
+  2026-07-05): install + quickstart end-to-end, un mensaje de Telegram con respuesta
+  del modelo local, cero nube.
+- **[x] Aguanta un proveedor caído sin caerse** → **Pieza 2 COMPLETADA**
+  (ADR-0031, resiliencia), **verificada en hardware 2026-07-18**: primera petición
+  en frío completada en ~6s sin timeout, en la misma máquina que descubrió F6.
 
-**Orden del plan (actualizado 2026-07-11 — las 4 piezas son el objetivo de beta de
-Chano):** Pieza 1 ✅ hecha → **Pieza 2** (errores producción, **EN CURSO** — la única que
-cierra el 6º criterio V1; ADR-0031 en borrador) → **Pieza 3** (CLI subcomandos,
-encuadrada) → **Pieza 4** (tercer canal, **opcional** por el doc maestro §9) → **Pieza 5**
-(app Wails, la más pesada). **Secuencial, una a una**, cerrando cada una antes de la
-siguiente. La Pieza 3 **no cierra ningún criterio V1** pero va **antes que 4-5** porque
-**reescribe la doc de la Pieza 1** (INSTALL/QUICKSTART/BUILDER/`korvun.service` usan
-`./korvun -config`), minimizando el drift. Las Piezas 4 y 5 **no cierran criterio** (más
-alcance) pero Chano las quiere hechas igualmente — objetivo de *ejecución*, no de
-*criterio*. **Pieza 4:** mantener el aviso del doc maestro §9 — WhatsApp es "la más
-traicionera, opcional en beta"; al llegar, valorar WhatsApp concreto vs un canal más
-amable (Discord/Slack) si aporta más con menos riesgo.
+**Orden del plan (las 4 piezas son el objetivo de beta de Chano):** Pieza 1 ✅ →
+**Pieza 2 ✅** (errores de producción — cerró el 6º criterio V1; ADR-0031 accepted) →
+**Pieza 3 ✅** (CLI subcomandos, ADR-0032, validada end-to-end en la Mac de Chano
+2026-07-18) → **Pieza 4** (tercer canal, **próximo trabajo**, **opcional** por el doc
+maestro §9) → **Pieza 5** (app Wails, la más pesada). **Secuencial, una a una**,
+cerrando cada una antes de la siguiente. La Pieza 3 **no cerró ningún criterio V1**
+pero fue **antes que 4-5** porque **reescribió la doc de la Pieza 1** a la forma
+canónica `korvun serve --config …`, minimizando el drift. Las Piezas 4 y 5 **no
+cierran criterio** (más alcance) pero Chano las quiere hechas igualmente — objetivo de
+*ejecución*, no de *criterio*. **Pieza 4:** mantener el aviso del doc maestro §9 —
+WhatsApp es "la más traicionera, opcional en beta"; al llegar, valorar WhatsApp
+concreto vs un canal más amable (Discord/Slack) si aporta más con menos riesgo.
 
 ---
 
@@ -152,17 +155,22 @@ por fichero" y "lo instala alguien que no soy yo".
 
 ## PIEZA 2 — Manejo de errores de producción
 
-> ▶️ **EN CURSO — ESTADO: ADR EN BORRADOR** (2026-07-11). Encuadre (`/office-hours`) +
-> `/plan-eng-review` hechos. **F6 verificado en hardware** (el Mac de Chano): al
-> desconectar durante la carga, **Ollama ABORTA la carga** (`aborting load`, 499) — ver
-> `docs/notes/piece-2-framing.md`. Esto **tumbó la suposición** de que el retry salvaba
-> el arranque en frío (el fix es timeout generoso y/o warmup, no retry). **ADR-0031**
-> (`status: proposed`) redactado y **validado por el copiloto**; **2ª voz** (subagente
-> adversarial, fallback documentado — Codex no instalado) **hecha → 3 hallazgos
-> pendientes de absorber** (ver `docs/HANDOFF.md` §Pieza 2 y `docs/notes/piece-2-framing.md`).
-> **Próximo paso literal:** absorber los 3 hallazgos → revisión final del copiloto →
-> ADR a `accepted` → TDD. **Motivación DEMOSTRADA en hardware** — ver el bloque
-> "Motivación DEMOSTRADA" más abajo (el timeout Korvun→Ollama en frío).
+> ✅ **COMPLETADA — ADR-0031 `accepted`** (resiliencia: timeouts + retry +
+> degradación). Encuadre (`/office-hours`) + `/plan-eng-review` + segunda voz
+> adversarial absorbidos. Entregado en master, **SP1–SP7**: timeouts de dos capas
+> (per-attempt + ceiling de router DERIVADO por forma de brain), cancel-on-first-
+> usable-success con **carve-out de consenso** (SV1), mapeo HTTP del adapter de
+> Ollama, retry decorator sobre el seam `Model` (SV2), la **invariante de arranque en
+> frío F6** (un disconnect DURANTE la carga hace que Ollama ABORTE la carga
+> `aborting load`/499 — el fix es timeout generoso por intento + warmup, no retry),
+> **boot warmup** best-effort por el path decorado, y **fallback diferenciado +
+> métricas de retry**.
+>
+> **Cierra el 6º criterio V1 ("aguanta un proveedor caído sin caerse") y está
+> VERIFICADO en hardware (2026-07-18)** — en la misma máquina que descubrió F6 (iMac
+> Intel, macOS 13), la **primera petición en frío completó en ~6s sin timeout**,
+> donde `v0.1.0` fallaba. Ver `docs/notes/piece-2-framing.md` y el bloque "Motivación
+> DEMOSTRADA" más abajo (el timeout Korvun→Ollama en frío, ya resuelto).
 
 **PRIORIDAD 2.** Cierra el criterio V1 **☐ "aguanta un proveedor caído sin
 caerse"**. Hoy los adapters **mapean** los errores (la gramática de sentinelas
@@ -198,24 +206,31 @@ cuidado (`-race`, tests que muerden).
 
 ### Checklist
 
-- [ ] **Timeout Korvun→proveedor configurable / warmup** — el caso demostrado arriba:
-      timeout de modelo configurable y/o más generoso, y/o reintento durante la carga
-      en frío del proveedor. El workaround (calentar el modelo) queda en el quickstart.
-- [ ] **Retry con backoff** — reintento sobre errores recuperables
-      (`ErrProviderUnavailable`, `ErrRateLimited` respetando `RetryAfter`), backoff
-      exponencial con jitter, tope de intentos; **nunca** reintentar `ErrAuthInvalid`.
-- [ ] **Circuit breaker por proveedor** — abrir el circuito tras N fallos seguidos,
-      medio-abrir tras un cooldown, cerrar al primer éxito; evita martillar un
-      proveedor caído y libera el fan-out para responder con los sanos.
-- [ ] **Degradación elegante** — con un proveedor caído, el Brain sigue respondiendo
-      con los supervivientes (encaja con el selector de privacidad y el coordinator
-      secuencial ya existentes); si TODOS caen, el contrato de fallback (ADR-0014 §3)
-      da una respuesta honesta, no un crash.
-- [ ] **Métricas del breaker** — estado del circuito y reintentos expuestos en
-      `/metrics` (extiende el seam `Metrics` de Stage 12, aditivo).
-- [ ] **Dónde vive** — decidir en el ADR si es un decorador de `model.Model`, una
-      capa en el `Coordinator`, o política en el Brain (respetando la frontera
-      mecanismo/política de ADR-0011).
+> **Entregado (ADR-0031 `accepted`, SP1–SP7 en master).** El diseño se afinó
+> respecto al encuadre original: timeouts de dos capas + retry + degradación en vez
+> de un circuit breaker (ver el ítem del breaker abajo).
+
+- [x] **Timeout Korvun→proveedor por intento + warmup** — timeouts de dos capas
+      (per-attempt configurable + ceiling de router DERIVADO por forma de brain), y
+      **boot warmup** best-effort. Resuelve el arranque en frío (la invariante F6:
+      un disconnect durante la carga hace que Ollama ABORTE la carga, así que el fix
+      es timeout generoso + warmup, **no** retry). El workaround manual queda en el
+      quickstart, marcado como innecesario post-`v0.1.0`.
+- [x] **Retry con backoff** — retry decorator sobre el seam `Model` para errores
+      recuperables (`ErrProviderUnavailable`, `ErrRateLimited` respetando `RetryAfter`),
+      backoff exponencial con jitter, tope de intentos; **nunca** `ErrAuthInvalid`.
+- [ ] **Circuit breaker por proveedor** — **DIFERIDO a post-beta** (ADR-0031 §7,
+      decisión consciente): tras SV1/SV2 no hace falta para *no caerse*; lo que
+      mitigaría es residual. No es un pendiente de beta.
+- [x] **Degradación elegante** — cancel-on-first-usable-success con **carve-out de
+      consenso** (SV1) + **fallback diferenciado**: con un proveedor caído el Brain
+      responde con los supervivientes; si TODOS caen, el contrato de fallback
+      (ADR-0014 §3) da respuesta honesta, no un crash.
+- [x] **Métricas de retry** — reintentos expuestos en `/metrics` (extiende el seam
+      `Metrics` de Stage 12, aditivo). *(Métricas de breaker: van con el breaker,
+      diferidas.)*
+- [x] **Dónde vive** — decidido: **retry decorator sobre `model.Model`** + ceiling de
+      router derivado por el app, respetando la frontera mecanismo/política (ADR-0011).
 
 ### ADRs previstos
 
@@ -236,10 +251,12 @@ y ver que Korvun **no se cae**.
 
 ## PIEZA 3 — CLI con subcomandos (estilo git/docker)
 
-> 📐 **ENCUADRADA y APROBADA por el copiloto (2026-07-05); PENDIENTE de implementar
-> DESPUÉS de la Pieza 2.** Reemplaza `./korvun -config x.json` (un binario con flags)
-> por una CLI que se siente como herramienta instalada: `korvun serve` / `config check`
-> / `status` / `version` / `help`, con logo ASCII de arranque.
+> ✅ **COMPLETADA (SP1–SP5, ADR-0032 `accepted`); validada end-to-end en la Mac de
+> Chano (2026-07-18).** Reemplazó `./korvun -config x.json` (un binario con flags) por
+> una CLI que se siente como herramienta instalada: `korvun serve` / `config check` /
+> `status` / `version` / `help`, con banner de arranque gated a stderr. Estilo
+> pure-stdlib (color 256 por defecto, truecolor bajo `COLORTERM`; guard VT en Windows),
+> `go.mod` intacto en 3 deps. Contrato pineado por ADR-0032 y la suite de `internal/cli`.
 
 **PRIORIDAD 3 — DX / pulido, NO cierra ningún criterio V1.** No cierra ninguno de los
 6 criterios de beta; es ergonomía de cara al usuario. **Dos ejes de prioridad:** la
@@ -276,15 +293,16 @@ pronto tras la Pieza 2 para minimizar el drift.
 
 ### Checklist (5 sub-fases TDD, una a una)
 
-- [ ] **1 — scaffold + dispatch** — `internal/cli`, `version`, `help`/no-args, logo.
-- [ ] **2 — `serve` + shim de retrocompat** — mueve el arranque actual a `serve`;
-      `main.go` pasa a llamar `cli.Run`; `korvun -config` sigue funcionando.
-- [ ] **3 — `config check`** — offline `Validate()` + `--preflight` online.
-- [ ] **4 — `status`** — cliente HTTP de la control API; tests con `httptest`.
-- [ ] **5 — docs-update + re-validación macOS** — actualizar
-      `INSTALL.md`/`QUICKSTART.md`/`BUILDER.md`/`korvun.service` de `./korvun -config` a
-      `korvun serve …`, y **re-validar en el Mac de Chano** que el nuevo comando arranca
-      end-to-end. *(Coordinar con el follow-up `korvun.example.json` de empaquetado.)*
+- [x] **1 — scaffold + dispatch** — `internal/cli`, `version`, `help`/no-args, banner.
+- [x] **2 — `serve` + shim de retrocompat** — arranque tras el seam `c.boot`;
+      `main.go` de 3 líneas llama `cli.Run`; shim estrechado a `-config`/`--config`.
+- [x] **3 — `config check`** — offline `config.Load`/`Validate` + `--preflight` online
+      (seam `c.preflight`); primeros roles de color + guard VT de Windows (R4).
+- [x] **4 — `status`** — cliente HTTP fino de la control API; tests con `httptest`.
+- [x] **5 — docs-update + re-validación macOS** — docs reescritas a `korvun serve
+      --config …` (legacy mencionado una vez), ADR-0032, `korvun.example.json` en la
+      raíz + en los archives, ldflags retargeteados a `internal/cli.version`, y
+      **re-validado end-to-end en la Mac de Chano** (2026-07-18).
 
 ### ADR previsto
 
