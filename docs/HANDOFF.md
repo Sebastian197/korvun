@@ -56,6 +56,30 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
+## Release outlook
+
+The release plan. **The tag is ALWAYS Chano's explicit call** — the copilot prepares
+and proposes, never tags.
+
+- **IN FLIGHT: `v0.2.0` (2026-07-18).** Preparation is pushed (`c9bef1f`: curated notes
+  in `docs/releases/v0.2.0.md` + a docs sweep to post-release truth). Only the tag is
+  missing; it goes with the copilot's prompt after the CI is green. Ships the ADR-0031
+  cold-start fix and the full CLI (ADR-0032), both hardware-validated.
+- **NEXT PLANNED: `v0.3.0` — MINOR.** Trigger: **Piece 4 (the Discord channel) COMPLETE
+  end to end** — SP1–SP6 closed, the round-trip validated on real hardware (SP6), and
+  the bot-setup docs published. Not before.
+- **POSSIBLE INTERIM: `v0.2.x` — PATCH.** If, before `v0.3.0`, a bug that `v0.2.0` users
+  actually hit is fixed on `master`, cut a `v0.2.1` patch carrying only that fix.
+
+**Standing policy (Chano, 2026-07-18): the copilot proactively PROPOSES a release when
+the signals light up** — validated user-facing value piling up unreleased on `master`;
+users of the current release suffering an already-fixed bug; docs promising things "in
+the next release"; a public-attention moment. **SemVer typing:** minor = compatible
+features, patch = fixes only, major = breaking. The tag itself is always Chano's
+explicit decision.
+
+---
+
 ## Current state (as of session close, 2026-07-18)
 
 > **CURRENT (2026-07-18): Piece 3 (CLI) — COMPLETE (SP1–SP5), validated end-to-end
