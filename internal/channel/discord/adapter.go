@@ -16,29 +16,30 @@ import (
 
 // Adapter is the Discord channel adapter; it implements channel.Channel. New
 // validates the config and the env-only token name (ADR-0010). Receive runs the
-// Gateway state machine (SP3); Send (REST) is the SP5 stub. The bot token value is
-// never stored on the Adapter — it is read from the environment at connect time.
+// Gateway reconnect SUPERVISOR (SP4); Send (REST) is the SP5 stub. The bot token
+// value is never stored on the Adapter — it is read from the environment at each
+// connect.
 type Adapter struct {
-	cfg     *config
-	dropped atomic.Uint64
+	cfg        *config
+	dropped    atomic.Uint64
+	reconnects atomic.Uint64
 
-	// inbound carries mapped Envelopes from the Gateway read loop to the router. It
-	// is created per Receive and closed once every gateway goroutine has returned.
+	// inbound carries mapped Envelopes to the router. It is OWNED BY THE SUPERVISOR
+	// (not by any single session): it survives every reconnect and is closed exactly
+	// once, only when the caller's ctx dies or a fatal cause stops the supervisor. The
+	// router therefore never sees an end-of-stream because of a reconnect.
 	inbound chan *envelope.Envelope
 
-	// termMu guards termErr, the terminal cause of the last Gateway session (zombie,
-	// op7/op9, a read failure, or nil for a clean ctx-cancel shutdown). It is set by
-	// run before it closes inbound, so a reader that observes inbound closed can read
-	// it safely.
+	// termMu guards termErr, the terminal cause the supervisor stopped on (a fatal
+	// close code / missing token, or nil for a clean ctx-cancel shutdown). It is set
+	// before inbound is closed, so a reader that observes inbound closed can read it.
 	termMu  sync.Mutex
 	termErr error
 
-	// ready records the session id + resume URL captured from the READY event. SP3
-	// only stores them; SP4 uses them to resume a dropped connection.
+	// ready records the session id + resume URL from the most recent READY event.
 	ready atomic.Pointer[readySession]
 
-	// started guards against a second Receive racing (and double-closing) the inbound
-	// channel of a session that is already running.
+	// started guards against a second Receive racing (and double-closing) inbound.
 	started atomic.Bool
 }
 
@@ -89,24 +90,29 @@ func (a *Adapter) Mode() Mode { return a.cfg.mode }
 // drops (inbound buffer saturated).
 func (a *Adapter) DroppedCount() uint64 { return a.dropped.Load() }
 
-// setTermErr records the terminal cause of the Gateway session. Called by run
-// before it closes the inbound channel.
+// ReconnectCount returns the cumulative number of Gateway reconnect attempts (dial
+// failures plus resume/re-identify after a dropped session). Exposed like
+// DroppedCount for observability; SP6 decides whether it becomes a Prometheus series.
+func (a *Adapter) ReconnectCount() uint64 { return a.reconnects.Load() }
+
+// setTermErr records the terminal cause the supervisor stopped on. Called before the
+// inbound channel is closed.
 func (a *Adapter) setTermErr(err error) {
 	a.termMu.Lock()
 	a.termErr = err
 	a.termMu.Unlock()
 }
 
-// terminalErr returns the terminal cause of the last Gateway session (nil for a
-// clean shutdown). Used by tests; SP4 reads it to drive resume/reconnect.
+// terminalErr returns the terminal cause the supervisor stopped on (nil for a clean
+// ctx-cancel shutdown, a fatal cause otherwise). Used by tests.
 func (a *Adapter) terminalErr() error {
 	a.termMu.Lock()
 	defer a.termMu.Unlock()
 	return a.termErr
 }
 
-// readyInfo returns the session id + resume URL captured from the READY event, or
-// nil before READY. Recorded for SP4's resume path.
+// readyInfo returns the session id + resume URL from the most recent READY event, or
+// nil before the first READY. Used by tests.
 func (a *Adapter) readyInfo() *readySession { return a.ready.Load() }
 
 // Send delivers an outbound Envelope via the Discord REST API. Sub-phase 1 is an
@@ -116,23 +122,20 @@ func (a *Adapter) Send(_ context.Context, _ *envelope.Envelope) error {
 	return ErrSendNotImplemented
 }
 
-// Receive opens the Gateway WebSocket and returns the inbound Envelope channel the
-// router consumes. It dials synchronously so a connection failure is an honest error
-// to the caller; the handshake (Hello → Identify → Ready) and the read/heartbeat
-// loops then run in background goroutines bound to ctx. Cancelling ctx closes the
-// WebSocket and joins every gateway goroutine, after which the returned channel is
-// closed — a clean end-of-stream the router can drain. Call Receive once per Adapter
-// (SP4 adds resume/reconnect on top of this base lifecycle).
+// Receive returns the inbound Envelope channel the router consumes and starts the
+// Gateway reconnect supervisor in the background. Unlike a one-shot dial, Receive
+// does NOT fail on a connectivity error: the channel is availability, so the
+// supervisor keeps (re)connecting with exponential backoff for as long as ctx lives —
+// dialing, identifying, resuming after a drop, re-identifying when a resume is
+// rejected — logging each attempt. The returned channel is closed exactly once: when
+// ctx is cancelled (clean stop) or a fatal, non-recoverable cause is hit (a bad
+// token/intents close code) — never because of a reconnect. Call Receive once per
+// Adapter; a second call returns ErrAlreadyReceiving.
 func (a *Adapter) Receive(ctx context.Context) (<-chan *envelope.Envelope, error) {
 	if !a.started.CompareAndSwap(false, true) {
 		return nil, ErrAlreadyReceiving
 	}
-	conn, err := a.dial(ctx)
-	if err != nil {
-		a.started.Store(false) // dial failed: no session started, allow a retry
-		return nil, err
-	}
 	a.inbound = make(chan *envelope.Envelope, a.cfg.inboundCapacity)
-	go a.run(ctx, conn)
+	go a.supervise(ctx)
 	return a.inbound, nil
 }

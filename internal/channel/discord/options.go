@@ -4,8 +4,10 @@
 package discord
 
 import (
+	"context"
 	"log/slog"
 	"math/rand/v2"
+	"time"
 )
 
 // ChannelName is the unique identifier of the Discord channel (the value of
@@ -29,6 +31,33 @@ type Mode string
 // ModeGateway is the Gateway WebSocket receive mode.
 const ModeGateway Mode = "gateway"
 
+// gwClock abstracts the reconnect backoff sleep so tests never wait in wall-clock
+// time. Sleep MUST honor ctx: a cancel during the wait returns promptly with the ctx
+// error (mirrors the retry decorator's Clock seam, ADR-0031).
+type gwClock interface {
+	Sleep(ctx context.Context, d time.Duration) error
+}
+
+// realGWClock is the default time-backed clock.
+type realGWClock struct{}
+
+func (realGWClock) Sleep(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
 // config carries the resolved options after every Option has run. It holds only the
 // env-var NAME, never the token VALUE (ADR-0010).
 type config struct {
@@ -37,10 +66,10 @@ type config struct {
 	gatewayURL      string
 	inboundCapacity int
 	logger          *slog.Logger
-	// jitterFrac returns the fraction of the heartbeat interval to wait before the
-	// FIRST heartbeat (Discord's recommended startup jitter). It returns a value in
-	// [0,1); tests inject a deterministic 0.
-	jitterFrac func() float64
+	clock           gwClock
+	// rnd returns a fraction in [0,1); it feeds BOTH the heartbeat startup jitter
+	// and the full-jitter reconnect backoff. Tests inject a deterministic value.
+	rnd func() float64
 }
 
 func defaultConfig() *config {
@@ -49,15 +78,15 @@ func defaultConfig() *config {
 		gatewayURL:      defaultGatewayURL,
 		inboundCapacity: defaultInboundCapacity,
 		logger:          slog.Default(),
-		jitterFrac:      randJitterFrac,
+		clock:           realGWClock{},
+		rnd:             randFrac,
 	}
 }
 
-// randJitterFrac returns a random fraction in [0,1) for the heartbeat startup jitter
-// (Discord's recommended spread). The value is timing jitter, never a secret, so a
-// non-cryptographic RNG is appropriate.
-func randJitterFrac() float64 {
-	return rand.Float64() // #nosec G404 -- heartbeat startup jitter, not security-sensitive
+// randFrac returns a random fraction in [0,1) for jitter (heartbeat startup + backoff).
+// The value is timing jitter, never a secret, so a non-cryptographic RNG is fine.
+func randFrac() float64 {
+	return rand.Float64() // #nosec G404 -- timing jitter, not security-sensitive
 }
 
 // Option configures the Adapter at construction time.
@@ -71,7 +100,7 @@ func WithTokenEnv(name string) Option { return func(c *config) { c.tokenEnv = na
 func WithMode(m Mode) Option { return func(c *config) { c.mode = m } }
 
 // WithLogger sets the structured logger the adapter uses for edge drops and
-// lifecycle events. Defaults to slog.Default().
+// lifecycle/reconnect events. Defaults to slog.Default().
 func WithLogger(l *slog.Logger) Option {
 	return func(c *config) {
 		if l != nil {
@@ -94,12 +123,22 @@ func withInboundCapacityForTests(n int) Option {
 	}
 }
 
-// withJitterFracForTests pins the heartbeat startup jitter (normally random) so
-// tests get deterministic timing. Unexported: not part of the public API.
-func withJitterFracForTests(f func() float64) Option {
+// withRandForTests pins the jitter source (heartbeat startup + backoff) so tests get
+// deterministic timing. Unexported: not part of the public API.
+func withRandForTests(f func() float64) Option {
 	return func(c *config) {
 		if f != nil {
-			c.jitterFrac = f
+			c.rnd = f
+		}
+	}
+}
+
+// withClockForTests injects the backoff clock so tests never sleep in wall-clock
+// time. Unexported: not part of the public API.
+func withClockForTests(c gwClock) Option {
+	return func(cfg *config) {
+		if c != nil {
+			cfg.clock = c
 		}
 	}
 }
