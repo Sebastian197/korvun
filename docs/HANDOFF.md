@@ -105,14 +105,43 @@ explicit decision.
 >   {"parse":[]}` (model output can never mass-ping), 2000-char rune-safe split, 429 →
 >   the house `RateLimitError`, the full error grammar (`51e0d16`).
 >
-> **Remaining: SP6, split into two halves.** **Half A** (this session): wire the Discord
-> adapter into `internal/app` (config → adapter; the generic channel→brain route), raise
-> `ReconnectCount` to Prometheus (`korvun_channel_reconnects_total{channel}`), and write
-> the bot-setup docs (the manual **MESSAGE CONTENT INTENT** step, documented like the
-> Telegram BotFather step). **Half B** (Chano's hardware): a real Discord round-trip
-> validated end to end. **The piece is NOT closed and v0.3.0 is NOT proposed until Half B
-> passes.** TODO-VERIFY discipline holds: nothing in the Discord docs is marked
-> hardware-verified until Half B.
+> **SP6 Half A — COMPLETE, 4 commits LOCAL, NOT pushed** (awaiting the copilot's
+> on-disk review). Local on master atop the pushed `51e0d16`:
+> - `4468e71` docs: HANDOFF interim (Piece 4 in-progress).
+> - `d49f1b2` feat(channel): the Discord adapter's Start/Stop lifecycle — refactored to
+>   the Telegram-style model (New creates inbound; Receive returns it; Start launches the
+>   supervisor; Stop tears it down) so it satisfies the app's `Channel` contract, without
+>   changing the SP3/SP4 state machine.
+> - `3f06da5` feat(app): wire the Discord channel into `internal/app` (env pre-check →
+>   `ErrMissingSecret`, the F4 reconciliation; `discord.New`; the generic channel→brain
+>   route; `korvun status` lists it with no new glue) + `ReconnectCount` →
+>   `korvun_channel_reconnects_total{channel}`.
+> - `a3a0d09` docs: `docs/DISCORD-SETUP.md` (the bot walkthrough — Developer Portal, the
+>   manual **MESSAGE CONTENT INTENT** step, OAuth2 invite) + the discord block in
+>   `CONFIGURATION.md`.
+>
+> `make quality` green `-race` over the whole suite; discord `-race -count=20` stable;
+> coverage discord 89.1% / app 90.5% / prom 88.0% (≥85). `/review` ran (3 reviewers:
+> lifecycle, wiring+metric, docs); the fixes are already folded into the commits above:
+> a **mutex around the lifecycle triple** (memory-model gap on Start/Stop), **`--preflight`**
+> in the setup guide (plain `config check` does not resolve the token env), and a
+> **`t.Cleanup` Shutdown** in the wiring test (leaked goroutines). Secret trace clean (no
+> P0): the token is env-only, never in a struct/log/error — only the env-var name appears.
+>
+> **NEXT SESSION — exact order, NOTHING new before step 1:**
+> 1. **The copilot's on-disk review of Half A**, focused on the Start/Stop refactor over
+>    the SP3/SP4 state machine.
+> 2. **Push** the 4 commits (with the copilot's prompt).
+> 3. **CI green** (Quality Gate 3 OSes + cross-compile ×6 + CodeQL + Scorecard).
+> 4. **Half B**: Chano creates his bot following `docs/DISCORD-SETUP.md` (Developer
+>    Portal, MESSAGE CONTENT INTENT, invite) and validates a **real Discord round-trip on
+>    his hardware**.
+> 5. **Close Piece 4** (stage doc / the CURRENT block flip to CLOSED).
+> 6. **Propose `v0.3.0`** per the Release outlook (the trigger: Piece 4 complete end to
+>    end). The tag is always Chano's explicit call.
+>
+> **The piece is NOT closed and v0.3.0 is NOT proposed until Half B passes.** TODO-VERIFY
+> discipline holds: nothing in the Discord docs is marked hardware-verified until Half B.
 >
 > **Piece 3 (the CLI, ADR-0032) is CLOSED and PUBLISHED** — `serve` / `config check` /
 > `status` / `version` / `help`, hardware-validated (a full Telegram round-trip plus the
