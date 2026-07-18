@@ -1,13 +1,13 @@
 # ADR-0033: Discord channel (Piece 4, third channel)
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-18
 > **Deciders:** Sebastián Moreno Saavedra
 >
-> The flip to `accepted` is authorized by the copilot after its review, before any
-> TDD. Framing: `docs/notes/piece-4-framing.md`. Companion dependency ADR: ADR-0034
-> (the WebSocket client). `go.mod` is NOT touched by this ADR — the 4th dependency
-> lands with the first TDD sub-phase.
+> **Accepted 2026-07-18, reviewed by the copilot.** Framing:
+> `docs/notes/piece-4-framing.md`. Companion dependency ADR: ADR-0034 (the WebSocket
+> client). `go.mod` is NOT touched by this ADR — the 4th dependency lands with the
+> first TDD sub-phase.
 
 ## Context
 

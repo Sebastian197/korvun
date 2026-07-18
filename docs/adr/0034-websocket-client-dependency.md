@@ -1,12 +1,12 @@
 # ADR-0034: WebSocket client dependency — `coder/websocket`
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-18
 > **Deciders:** Sebastián Moreno Saavedra
 >
-> The flip to `accepted` is authorized by the copilot after its review, before any
-> TDD. Companion channel ADR: ADR-0033 (Discord). `go.mod` is NOT touched by this ADR
-> — the dependency lands with the first TDD sub-phase (`go get` at that point).
+> **Accepted 2026-07-18, reviewed by the copilot.** Companion channel ADR: ADR-0033
+> (Discord). `go.mod` is NOT touched by this ADR — the dependency lands with the first
+> TDD sub-phase (`go get` at that point).
 
 ## Context
 

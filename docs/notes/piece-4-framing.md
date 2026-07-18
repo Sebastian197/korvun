@@ -224,7 +224,7 @@ Discord) y **ADR-0034** (dependencia `coder/websocket`), ambos `status: proposed
 pendientes del flip a `accepted` por el copiloto antes del TDD. `go.mod` sin tocar
 (la 4ª dep entra con SP1).
 
-## 8. Desglose TDD propuesto (para el visto del copiloto)
+## 8. Desglose TDD — APROBADO (copiloto, 2026-07-18)
 
 Una sub-fase a la vez, rojo→verde, `/review`, `make quality` verde `-race` antes de
 cerrar. Sin proveedor real: un **fake Gateway** (servidor WS sobre `httptest`) +
@@ -249,6 +249,6 @@ cerrar. Sin proveedor real: un **fake Gateway** (servidor WS sobre `httptest`) +
   adaptador); doc de setup (el paso MANUAL del Message Content intent, como BotFather);
   config de ejemplo; **round-trip real de Discord validado en hardware**.
 
-Notas: SP1 es la ÚNICA sub-fase que toca `go.mod`. SP4 puede fusionarse con SP3 si el
-copiloto lo prefiere (misma máquina de estado); se dejan separadas por blast-radius
-(el resume es la parte con más aristas).
+Notas: SP1 es la ÚNICA sub-fase que toca `go.mod`. **Decisión del copiloto
+(2026-07-18): SP3 y SP4 quedan SEPARADAS** — el resume/reconnect es el riesgo nº1 de la
+pieza y merece su propio ciclo rojo→verde, no se fusiona con el lifecycle base.
