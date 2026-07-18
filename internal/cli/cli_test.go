@@ -1,8 +1,9 @@
 // Copyright 2026 Sebastián Moreno Saavedra
 // SPDX-License-Identifier: Apache-2.0
 
-// Package cli tests — Piece 3, dispatch + version + help + logo (sub-phase 1) and
-// serve's flag surface + injectable boot seam + banner gating (sub-phase 2).
+// Package cli tests — Piece 3, dispatch + version + help + logo (sub-phase 1),
+// serve's flag surface + injectable boot seam + banner gating (sub-phase 2), and
+// `config check [--preflight]` + color roles (sub-phase 3).
 //
 // These pin the contract of internal/cli against the surface the implementation
 // provides:
@@ -10,19 +11,21 @@
 //	func Run(args []string, stdout, stderr io.Writer) int
 //	type cli struct {
 //	    stdout, stderr io.Writer
-//	    version        string                  // ldflags-set default via a package var
-//	    isTTY          func(io.Writer) bool     // TTY detection seam
-//	    boot           func(configPath string) int // real serve boot seam (sub-phase 2)
+//	    version        string                       // ldflags-set default via a package var
+//	    isTTY          func(io.Writer) bool          // TTY detection seam
+//	    boot           func(configPath string) int   // real serve boot seam (sub-phase 2)
+//	    preflight      func(*config.Config) error    // online preflight seam (sub-phase 3)
 //	}
 //	func newCLI(stdout, stderr io.Writer) *cli // real defaults
 //	func (c *cli) run(args []string) int
-//	func (c *cli) serveCmd(args []string) int // pure serve flag surface (sub-phase 2)
+//	func (c *cli) serveCmd(args []string) int  // pure serve flag surface (sub-phase 2)
+//	func (c *cli) configCmd(args []string) int // config noun dispatch (sub-phase 3)
 //
 // Run is the ONLY public entry; main is a 3-line glue that forwards os.Args and
 // os.Std* into it (ADR-0017: main stays un-unit-tested glue), so every behaviour
 // is exercised here against injected buffers — never the real os.Stdout/os.Stderr.
-// The seams (isTTY, boot) are injected so a test can drive TTY-gated styling and
-// serve routing without a real terminal or a real boot.
+// The seams (isTTY, boot, preflight) are injected so a test can drive TTY-gated
+// styling, serve routing, and preflight outcomes without a terminal or a network.
 package cli
 
 import (
@@ -32,6 +35,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Sebastian197/korvun/internal/config"
 )
 
 // bootRec records an invocation of the boot seam so a test can assert that the
@@ -58,8 +63,9 @@ func newTestCLI(bootRet int) (c *cli, stdout, stderr *bytes.Buffer, rec *bootRec
 	stderr = &bytes.Buffer{}
 	rec = &bootRec{ret: bootRet}
 	c = newCLI(stdout, stderr)
-	c.isTTY = func(io.Writer) bool { return false } // default: not a terminal
-	c.boot = rec.fn
+	c.isTTY = func(io.Writer) bool { return false }         // default: not a terminal
+	c.boot = rec.fn                                         // faked serve boot
+	c.preflight = func(*config.Config) error { return nil } // hermetic default: preflight passes, no network
 	return c, stdout, stderr, rec
 }
 
@@ -119,14 +125,21 @@ func TestRun_dispatch(t *testing.T) {
 			stderrContains: []string{"frobnicate", "help"}, // names the bad token + points to help
 		},
 		{
-			name:           "config -> announced but not yet available, exit 2",
+			name:           "bare config (no sub-verb) -> usage error naming the subcommand, exit 2",
 			args:           []string{"config"},
 			wantExit:       2,
 			stdoutEmpty:    true,
-			stderrContains: []string{"config", "not available", "help"},
+			stderrContains: []string{"config", "check", "help"}, // points at 'config check'
 		},
 		{
-			name:           "status -> announced but not yet available, exit 2",
+			name:           "config with an unknown sub-verb -> usage error, exit 2",
+			args:           []string{"config", "frobnicate"},
+			wantExit:       2,
+			stdoutEmpty:    true,
+			stderrContains: []string{"frobnicate", "help"},
+		},
+		{
+			name:           "status -> still announced but not yet available, exit 2",
 			args:           []string{"status"},
 			wantExit:       2,
 			stdoutEmpty:    true,
@@ -420,6 +433,56 @@ func TestServeCmd_flagSurface(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "definitely-not-a-flag") {
 		t.Errorf("serve usage error should name the offending flag; got %q", stderr.String())
+	}
+}
+
+// TestServeCmd_rejectsPositional pins the strictness parked in sub-phase 2: serve
+// takes its config via the --config flag, so a stray positional argument (a user
+// typing `korvun serve mycfg.json`, meaning `--config mycfg.json`) must NOT
+// silently boot with the DEFAULT config — it is a usage error (exit 2) to stderr,
+// and the boot seam is never reached. Without this, the typo boots korvun.json and
+// serves the wrong config unnoticed.
+func TestServeCmd_rejectsPositional(t *testing.T) {
+	c, stdout, stderr, rec := newTestCLI(0)
+
+	got := c.serveCmd([]string{"mycfg.json"})
+
+	if got != 2 {
+		t.Errorf("serveCmd(positional) = %d, want 2", got)
+	}
+	if rec.called {
+		t.Error("a stray positional must NOT reach the boot seam (no silent default-config boot)")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("serve usage error must keep stdout empty, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "mycfg.json") {
+		t.Errorf("serve usage error should name the unexpected argument; got %q", stderr.String())
+	}
+}
+
+// TestServeShim_rejectsTrailingToken pins that the positional-rejection strictness
+// applies UNIFORMLY, including the retrocompat shim path: `korvun -config x.json
+// extra` (a stray trailing token) is a usage error (exit 2), never a boot. This is
+// intentional — a stray positional always signals user confusion, and no DOCUMENTED
+// invocation (`korvun -config <path>`, systemd, the docs) carries a trailing token,
+// so none of them regress. Pinned so the tightening is a decision, not an accident.
+func TestServeShim_rejectsTrailingToken(t *testing.T) {
+	c, stdout, stderr, rec := newTestCLI(0)
+
+	got := c.run([]string{"-config", "x.json", "extra"})
+
+	if got != 2 {
+		t.Errorf("exit = %d, want 2 (stray trailing token on the shim)", got)
+	}
+	if rec.called {
+		t.Error("a stray trailing token must NOT boot, even via the shim")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout must stay empty, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "extra") {
+		t.Errorf("usage error should name the unexpected token; got %q", stderr.String())
 	}
 }
 

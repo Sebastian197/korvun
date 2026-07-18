@@ -4,12 +4,9 @@
 package cli
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -34,23 +31,20 @@ import (
 // itself is NOT restyled — its slog JSON (bootServe) is untouched.
 func (c *cli) serveCmd(args []string) int {
 	fs := flag.NewFlagSet("korvun serve", flag.ContinueOnError)
-	// Buffer the flag package's output so it can be routed by kind: -h/--help is a
-	// query (usage -> stdout, exit 0, matching top-level help), while a bad flag is
-	// a usage error (message -> stderr, exit 2, keeping stdout machine-clean —
-	// R3/FR-STY-5). Deciding the stream after Parse is why the buffer is needed:
-	// flag writes during Parse, before we know which case occurred.
-	var usage bytes.Buffer
-	fs.SetOutput(&usage)
 	configPath := fs.String("config", "korvun.json", "path to the Korvun JSON config file")
-	var plain, noColor bool
-	fs.BoolVar(&plain, "plain", false, "disable the decorative pre-serve banner")
-	fs.BoolVar(&noColor, "no-color", false, "disable ANSI color and the banner")
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			_, _ = io.Copy(c.stdout, &usage) // help is a query, not an error
-			return 0
-		}
-		_, _ = io.Copy(c.stderr, &usage) // usage error: bad/unknown serve flag
+	plain, noColor, code, done := c.parseStyled(fs, args)
+	if done {
+		return code // -h/--help (0) or a bad flag (2), already written to the right stream
+	}
+
+	// serve takes its config via --config, so a stray positional (a user typing
+	// `korvun serve mycfg.json`, or a trailing token on the retrocompat shim) is a
+	// usage error, NOT a silent boot with the default korvun.json (the strictness
+	// parked in sub-phase 2). This fires uniformly, including on the shim path; the
+	// documented `korvun -config <path>` invocations pass zero positionals, so none
+	// of them regress.
+	if fs.NArg() > 0 {
+		_, _ = fmt.Fprintf(c.stderr, "korvun serve: unexpected argument %q (did you mean --config %s?)\nRun 'korvun help' for usage.\n", fs.Arg(0), fs.Arg(0))
 		return 2
 	}
 
@@ -89,9 +83,11 @@ func bootServe(configPath string) int {
 		return app.Build(c, app.WithLogger(logger), app.WithReloader(sup))
 	}
 
-	// The effect-free pre-cutover validation seam (ADR-0027 §5).
+	// The effect-free pre-cutover validation seam (ADR-0027 §5). Shares the single
+	// app.Preflight call site with the CLI's config-check seam (runPreflight), so
+	// both construct the config with identical options; only the logger differs.
 	preflight := func(c *config.Config) error {
-		return app.Preflight(c, app.WithLogger(logger))
+		return runPreflight(c, logger)
 	}
 
 	// The supervisor listens for shutdown on its OWN channel (F6/N2), not through

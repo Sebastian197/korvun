@@ -11,12 +11,14 @@
 //
 // Sub-phase 1 landed the scaffold: dispatch, `version` (via internal/buildinfo),
 // `help`, the TTY-gated logo banner, and the shim/serve seam wired to the
-// existing boot. Sub-phase 2 gives `serve` its own flag surface (serveCmd: a
+// existing boot. Sub-phase 2 gave `serve` its own flag surface (serveCmd: a
 // pure, unit-testable parse/validate step over injected writers) split from the
 // real boot behind the injectable c.boot seam, plus a gated pre-serve banner.
-// `config` and `status` are announced but land in later sub-phases; ANSI styling
-// (KORVUN's violet identity, ADR-0030) is integrated where each command's output
-// is born.
+// Sub-phase 3 adds `config check [--preflight]` (offline config.Load/Validate by
+// default; online app.Preflight behind the injectable c.preflight seam) and the
+// first semantic color roles (success/error, ADR-0030), gated by styleEnabled.
+// `status` is announced but lands in a later sub-phase; ANSI styling (KORVUN's
+// violet identity, ADR-0030) is integrated where each command's output is born.
 package cli
 
 import (
@@ -27,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/Sebastian197/korvun/internal/buildinfo"
+	"github.com/Sebastian197/korvun/internal/config"
 )
 
 // version is the build version of the korvun binary: "dev" for a local build, or
@@ -46,11 +49,12 @@ var version = "dev"
 // surface (serveCmd) is pure and unit-tested against the injected writers; only
 // the boot behind it opens ports, so tests drive routing without booting the app.
 type cli struct {
-	stdout  io.Writer
-	stderr  io.Writer
-	version string
-	isTTY   func(io.Writer) bool
-	boot    func(configPath string) int
+	stdout    io.Writer
+	stderr    io.Writer
+	version   string
+	isTTY     func(io.Writer) bool
+	boot      func(configPath string) int
+	preflight func(cfg *config.Config) error
 }
 
 // Run is the single entry point of the korvun command line. It dispatches args
@@ -65,11 +69,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // terminal detection via the OS file mode, and bootServe as the boot entry.
 func newCLI(stdout, stderr io.Writer) *cli {
 	return &cli{
-		stdout:  stdout,
-		stderr:  stderr,
-		version: version,
-		isTTY:   isTerminal,
-		boot:    bootServe,
+		stdout:    stdout,
+		stderr:    stderr,
+		version:   version,
+		isTTY:     isTerminal,
+		boot:      bootServe,
+		preflight: defaultPreflight,
 	}
 }
 
@@ -88,7 +93,9 @@ func (c *cli) run(args []string) int {
 		return c.printVersion()
 	case "serve":
 		return c.serveCmd(args[1:])
-	case "config", "status":
+	case "config":
+		return c.configCmd(args[1:])
+	case "status":
 		_, _ = fmt.Fprintf(c.stderr, "korvun: %q is not available yet (coming in a later release).\nRun 'korvun help' for usage.\n", args[0])
 		return 2
 	}
@@ -175,13 +182,17 @@ Usage:
   korvun -config <path>        shorthand for 'korvun serve -config <path>' (retrocompat)
 
 Commands:
-  serve      Load config, wire channels/brains, and serve until SIGINT/SIGTERM.
-  version    Print the binary version and exit.
-  help       Show this help.
+  serve         Load config, wire channels/brains, and serve until SIGINT/SIGTERM.
+  config check  Validate a config file (offline; --preflight adds online checks).
+  version       Print the binary version and exit.
+  help          Show this help.
 
 Coming in a later release:
-  config     Validate a config file (offline; --preflight for online checks).
-  status     Show the live wiring of a running korvun via its admin API.
+  status        Show the live wiring of a running korvun via its admin API.
+
+Examples:
+  korvun serve --config korvun.json
+  korvun config check --preflight korvun.json
 
 See the docs in docs/ — QUICKSTART.md, packaging/INSTALL.md, CONFIGURATION.md.
 `
