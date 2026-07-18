@@ -416,7 +416,7 @@ quickstart shows `export TELEGRAM_TOKEN=...` (bash/zsh), PowerShell uses:
 
 ```powershell
 $env:TELEGRAM_TOKEN = "<your-bot-token>"
-.\korvun.exe -config korvun.local.json
+.\korvun.exe serve --config korvun.local.json
 ```
 
 This sets the variable for the **current PowerShell session** only. The secret goes
@@ -504,10 +504,10 @@ korvun --version
 
 ## 4. Configure
 
-Korvun reads one JSON config file, selected with `-config`:
+Korvun reads one JSON config file, selected with `--config`:
 
 ```bash
-korvun -config /etc/korvun/korvun.json
+korvun serve --config /etc/korvun/korvun.json
 ```
 
 Start from a profile (see `configs/`):
@@ -517,7 +517,7 @@ Start from a profile (see `configs/`):
 - **`configs/cloud.json`** — server / VM: a wider fan-out across local Ollama + a
   cloud Groq model, durable memory on, observability on loopback.
 
-Copy one, adjust models/policy, and point `-config` at it.
+Copy one, adjust models/policy, and point `--config` at it.
 
 ### Secrets are environment variables, by NAME
 
@@ -529,7 +529,7 @@ before starting — never inline them:
 ```bash
 export TELEGRAM_BOT_TOKEN=...   # the value the config's "token_env" points to
 export GROQ_API_KEY=...         # only if a Groq model is configured ("api_key_env")
-korvun -config configs/cloud.json
+korvun serve --config configs/cloud.json
 ```
 
 A missing secret is a loud, named boot error — Korvun will not start silently
@@ -585,12 +585,12 @@ then swapping it in:
 
 Updating the binary **only replaces the executable**. It does **not** touch:
 
-- **Your config file** (`korvun.local.json`, or whatever you pass with `-config`) — it
+- **Your config file** (`korvun.local.json`, or whatever you pass with `--config`) — it
   is a separate file you point Korvun at, never bundled with the binary.
 - **Your data** (the SQLite database at `storage.path`, if you enabled durable memory)
   — also a separate file.
 
-So you can update Korvun and start it again with the same `-config` and the same data,
+So you can update Korvun and start it again with the same `--config` and the same data,
 unchanged.
 
 > **More convenient update methods** — a "new version available" notice, or package

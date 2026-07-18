@@ -1,10 +1,15 @@
 # Korvun configuration reference
 
-Korvun reads **one JSON file**, passed with `-config` (default `korvun.json`):
+Korvun reads **one JSON file**, passed with `--config` (default `korvun.json`):
 
 ```sh
-korvun -config /etc/korvun/korvun.json
+korvun serve --config /etc/korvun/korvun.json
 ```
+
+> **Legacy form.** The pre-CLI invocation `korvun -config <path>` still works — a
+> retrocompat shim routes it to `serve` unchanged — but `korvun serve --config
+> <path>` is the canonical form and what the docs use from here on. (This is the
+> only place the old form is mentioned.)
 
 The field shape below is a **contract** (ADR-0017 §1): once you write a config,
 the field names and structure are stable. The format is standard-library

@@ -50,7 +50,7 @@ the value and put it in that environment variable:
 
 ```sh
 export KORVUN_ADMIN_TOKEN="a-long-random-secret-you-choose"
-./korvun -config korvun.local.json
+./korvun serve --config korvun.local.json
 ```
 
 > ⚠️ **The admin token is a secret.** Anyone who has it can change how Korvun runs.

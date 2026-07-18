@@ -123,7 +123,7 @@ export TELEGRAM_TOKEN=<your-bot-token>
 ## Step 5 — Run Korvun
 
 ```sh
-./korvun -config korvun.local.json
+./korvun serve --config korvun.local.json
 ```
 
 Korvun loads the config, resolves the env-only token, runs a boot health-check, and
@@ -137,6 +137,35 @@ chat — no cloud involved.
 ---
 
 ## Troubleshooting
+
+### Check your config before running
+
+Validate a config **offline** — structure, enum values, and timeouts, with no
+network and no secrets read:
+
+```sh
+korvun config check korvun.local.json
+```
+
+A clean config prints an `OK` line (exit 0); a malformed or invalid one prints the
+first offending field path (exit 2). Add `--preflight` to also resolve the env-only
+secrets, run the per-brain privacy selector, and reach the channel/providers:
+
+```sh
+korvun config check --preflight korvun.local.json
+```
+
+### Inspect a running Korvun
+
+While Korvun is serving, see its live wiring — brains, the models that survived the
+privacy selector, channels, and drop counts — through the read-only admin API:
+
+```sh
+korvun status
+```
+
+Point it elsewhere with `--addr host:port` (default `127.0.0.1:2112`). If it prints
+`admin API not reachable`, Korvun is not running, or observability is disabled.
 
 ### The first message fails / "Sorry, no answer is available" / `context deadline exceeded`
 

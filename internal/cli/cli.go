@@ -182,7 +182,7 @@ const logo = `
 `
 
 // helpText is the usage screen. It names every subcommand with a one-line
-// description (config/status flagged as upcoming) and points to the docs.
+// description plus a couple of copy-paste examples, and points to the docs.
 const helpText = `korvun — a single Go binary: messaging gateway + multi-model router + multi-brain orchestrator.
 
 Usage:

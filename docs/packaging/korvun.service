@@ -39,7 +39,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/korvun -config /etc/korvun/korvun.json
+ExecStart=/usr/local/bin/korvun serve --config /etc/korvun/korvun.json
 # Secrets are read from the environment by NAME; keep them out of the unit file.
 EnvironmentFile=/etc/korvun/korvun.env
 Restart=on-failure

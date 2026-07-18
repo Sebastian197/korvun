@@ -37,10 +37,11 @@ func (c *cli) parseStyled(fs *flag.FlagSet, args []string) (plain, noColor bool,
 	return plain, noColor, 0, false
 }
 
-// role is a semantic color from KORVUN's fixed palette (ADR-0030). The CLI uses
-// only the two the config-check output needs so far — success and error — mapped
-// to the event palette (sent #22C55E, failed #EF4444). More roles (info/warn) are
-// added where a command's output first needs them, never speculatively.
+// role is a semantic color from KORVUN's fixed palette (ADR-0030), mapped to the
+// event palette: success (sent #22C55E), error (failed #EF4444), and warn (dropped
+// #F59E0B). Roles are added where a command's output first needs one — success/error
+// arrived with config check, warn with the status drop-count line — never
+// speculatively; info is still unused.
 type role struct{ r, g, b uint8 }
 
 var (
