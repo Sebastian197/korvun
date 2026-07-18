@@ -61,10 +61,10 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 The release plan. **The tag is ALWAYS Chano's explicit call** — the copilot prepares
 and proposes, never tags.
 
-- **IN FLIGHT: `v0.2.0` (2026-07-18).** Preparation is pushed (`c9bef1f`: curated notes
-  in `docs/releases/v0.2.0.md` + a docs sweep to post-release truth). Only the tag is
-  missing; it goes with the copilot's prompt after the CI is green. Ships the ADR-0031
-  cold-start fix and the full CLI (ADR-0032), both hardware-validated.
+- **PUBLISHED: `v0.2.0` (2026-07-18).**
+  <https://github.com/Sebastian197/korvun/releases/tag/v0.2.0> — signed release + SBOM
+  on 6 platforms, cosign **Verified OK**. Ships the ADR-0031 cold-start fix and the full
+  CLI (ADR-0032), both hardware-validated (curated notes in `docs/releases/v0.2.0.md`).
 - **NEXT PLANNED: `v0.3.0` — MINOR.** Trigger: **Piece 4 (the Discord channel) COMPLETE
   end to end** — SP1–SP6 closed, the round-trip validated on real hardware (SP6), and
   the bot-setup docs published. Not before.
