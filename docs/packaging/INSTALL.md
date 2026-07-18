@@ -20,7 +20,7 @@ portable.
 ## macOS — full walkthrough (validated on Intel hardware)
 
 A complete, copy-paste path from download to `korvun --version` on macOS, using the
-real `v0.1.0` release. This is the **install-a-release** path (no Go toolchain, no
+real `v0.2.0` release. This is the **install-a-release** path (no Go toolchain, no
 building from source). The generic per-step reference for all platforms follows in
 [§1–§5](#1-download); Linux and Windows walkthroughs come later.
 
@@ -28,9 +28,9 @@ building from source). The generic per-step reference for all platforms follows 
 > `uname -m` → `gh release download` (amd64) → `shasum -c` (`OK`) → *(cosign
 > optional, see §4)* → `tar -xzf` + `chmod +x` → *(Gatekeeper step not needed for
 > the terminal-download path, see §6)* → `./korvun --version` →
-> `korvun v0.1.0 (1676b5371ca7)`.
+> `korvun v0.2.0 (<short-revision>)`.
 
-> The commands below target **`v0.1.0`**. For a newer release, replace the version
+> The commands below target **`v0.2.0`**. For a newer release, replace the version
 > and asset names accordingly.
 
 > **Copy-paste tip:** when you copy a command, do **not** include the shell prompt
@@ -67,7 +67,7 @@ mkdir -p ~/korvun-install && cd ~/korvun-install
 (Apple Silicon):
 
 ```bash
-gh release download v0.1.0 --repo Sebastian197/korvun \
+gh release download v0.2.0 --repo Sebastian197/korvun \
   --pattern 'korvun_0.1.0_darwin_<ARCH>.tar.gz' \
   --pattern 'checksums.txt' \
   --pattern 'checksums.txt.sig' \
@@ -75,11 +75,11 @@ gh release download v0.1.0 --repo Sebastian197/korvun \
 ```
 
 **Or without `gh`, with `curl`** (from the real release,
-<https://github.com/Sebastian197/korvun/releases/tag/v0.1.0>) — again substituting
+<https://github.com/Sebastian197/korvun/releases/tag/v0.2.0>) — again substituting
 `<ARCH>`:
 
 ```bash
-BASE=https://github.com/Sebastian197/korvun/releases/download/v0.1.0
+BASE=https://github.com/Sebastian197/korvun/releases/download/v0.2.0
 curl -fLO "$BASE/korvun_0.1.0_darwin_<ARCH>.tar.gz"
 curl -fLO "$BASE/checksums.txt"
 curl -fLO "$BASE/checksums.txt.sig"
@@ -122,14 +122,14 @@ Install cosign if you want this layer (and if brew cooperates):
 brew install cosign
 ```
 
-Verify — the identity below is the **exact** signer of `v0.1.0` (Korvun's release
+Verify — the identity below is the **exact** signer of `v0.2.0` (Korvun's release
 workflow, read from the real certificate):
 
 ```bash
 cosign verify-blob checksums.txt \
   --signature checksums.txt.sig \
   --certificate checksums.txt.pem \
-  --certificate-identity 'https://github.com/Sebastian197/korvun/.github/workflows/release.yml@refs/tags/v0.1.0' \
+  --certificate-identity 'https://github.com/Sebastian197/korvun/.github/workflows/release.yml@refs/tags/v0.2.0' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 # -> Verified OK
 ```
@@ -182,7 +182,7 @@ confirm — after which macOS remembers your choice.
 
 ```bash
 ./korvun --version
-# -> korvun v0.1.0 (1676b5371ca7)
+# -> korvun v0.2.0 (<short-revision>)
 ```
 
 That exact output is what the validation run produced. Optionally put it on your
@@ -206,7 +206,7 @@ run + message the bot).
 
 > ⚠️ **Not verified on our own hardware.** This section is written **by analogy** to
 > the macOS walkthrough above (which *was* validated on real hardware) using standard
-> POSIX tooling and the real `v0.1.0` asset names. Please report any issue you hit.
+> POSIX tooling and the real `v0.2.0` asset names. Please report any issue you hit.
 
 The install-a-release path on Linux. The config file and the run/message steps are
 identical to macOS — they live in [`../QUICKSTART.md`](../QUICKSTART.md).
@@ -231,7 +231,7 @@ token for `<ARCH>` below (`amd64` or `arm64`).
 
 ```bash
 mkdir -p ~/korvun-install && cd ~/korvun-install
-gh release download v0.1.0 --repo Sebastian197/korvun \
+gh release download v0.2.0 --repo Sebastian197/korvun \
   --pattern 'korvun_0.1.0_linux_<ARCH>.tar.gz' \
   --pattern 'checksums.txt' \
   --pattern 'checksums.txt.sig' \
@@ -241,7 +241,7 @@ gh release download v0.1.0 --repo Sebastian197/korvun \
 **Or with `curl`:**
 
 ```bash
-BASE=https://github.com/Sebastian197/korvun/releases/download/v0.1.0
+BASE=https://github.com/Sebastian197/korvun/releases/download/v0.2.0
 curl -fLO "$BASE/korvun_0.1.0_linux_<ARCH>.tar.gz"
 curl -fLO "$BASE/checksums.txt"
 curl -fLO "$BASE/checksums.txt.sig"
@@ -285,7 +285,7 @@ The archive contains the `korvun` binary plus `LICENSE` and `README.md`.
 
 ```bash
 ./korvun --version
-# -> korvun v0.1.0 (<short-revision>)
+# -> korvun v0.2.0 (<short-revision>)
 sudo install -m755 ./korvun /usr/local/bin/korvun   # optional: put it on PATH
 ```
 
@@ -307,7 +307,7 @@ token by name, and the run/message steps are the same across OSes.
 ## Windows — walkthrough
 
 > ⚠️ **Not verified on our own hardware.** This section is written **by analogy** to
-> the validated macOS walkthrough, using the real `v0.1.0` asset names and standard
+> the validated macOS walkthrough, using the real `v0.2.0` asset names and standard
 > PowerShell tooling. Several Windows-specific steps are marked **TODO-VERIFY** —
 > confirm them on a real Windows machine before treating them as certain. Please
 > report any issue you hit.
@@ -335,7 +335,7 @@ ones are `.tar.gz`), and the binary inside is **`korvun.exe`**.
 
 ```powershell
 mkdir korvun-install; cd korvun-install
-gh release download v0.1.0 --repo Sebastian197/korvun `
+gh release download v0.2.0 --repo Sebastian197/korvun `
   --pattern 'korvun_0.1.0_windows_<ARCH>.zip' `
   --pattern 'checksums.txt' `
   --pattern 'checksums.txt.sig' `
@@ -345,7 +345,7 @@ gh release download v0.1.0 --repo Sebastian197/korvun `
 **Or with `curl.exe`** (bundled with Windows 10/11):
 
 ```powershell
-$BASE = "https://github.com/Sebastian197/korvun/releases/download/v0.1.0"
+$BASE = "https://github.com/Sebastian197/korvun/releases/download/v0.2.0"
 curl.exe -fLO "$BASE/korvun_0.1.0_windows_<ARCH>.zip"
 curl.exe -fLO "$BASE/checksums.txt"
 ```
@@ -405,7 +405,7 @@ Gatekeeper). To run it anyway, the typical flow is: click **More info** →
 
 ```powershell
 .\korvun.exe --version
-# -> korvun v0.1.0 (<short-revision>)
+# -> korvun v0.2.0 (<short-revision>)
 ```
 
 ### 8. Configure, and note the token export in PowerShell
@@ -556,7 +556,7 @@ version until you replace it yourself.
 
 ```bash
 korvun --version
-# -> korvun v0.1.0 (<short-revision>)
+# -> korvun v0.2.0 (<short-revision>)
 ```
 
 ### Update to a newer release

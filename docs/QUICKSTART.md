@@ -48,7 +48,7 @@ ollama pull llama3.2:1b
 ## Step 3 — Create `korvun.local.json`
 
 > The `v0.1.0` release archive does **not** ship an example config, so create this
-> file yourself. (From the next release the archive bundles `korvun.example.json` —
+> file yourself. (From `v0.2.0` the archive bundles `korvun.example.json` —
 > the same minimal config — so you can copy and adapt it instead.) Every field name
 > below is exact — verified against the config parser (`internal/config`). It is the
 > canonical minimal config: one Telegram channel, one brain, one local model.
@@ -192,12 +192,12 @@ ollama run llama3.2:1b   # type a word, get a reply, then /bye
 With the model already warm, the bot answers immediately. It is not a config error
 on your side.
 
-> **Fixed after `v0.1.0`.** On `master` (and the next release) this cold-start path
-> is resolved — ADR-0031 adds an optional boot warmup, a generous per-attempt
-> timeout, and retry with differentiated fallback. Confirmed on the same hardware
-> that first surfaced the issue: the **first cold request completed in ~6s with no
-> timeout**, where `v0.1.0` failed. Once you are on a post-`v0.1.0` build, the manual
-> warm-up above is no longer needed.
+> **Fixed after `v0.1.0`.** On `master` and in `v0.2.0` this cold-start path is
+> resolved — ADR-0031 adds an optional boot warmup, a generous per-attempt timeout,
+> and retry with differentiated fallback. Confirmed on the same hardware that first
+> surfaced the issue: the **first cold request completed in ~6s with no timeout**,
+> where `v0.1.0` failed. Once you are on `v0.2.0` or newer, the manual warm-up above
+> is no longer needed.
 
 ### A `DeleteWebhook` WARN at startup
 

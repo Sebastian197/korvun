@@ -81,7 +81,7 @@ then:
 
 ```sh
 # 1. korvun.example.json — a minimal, valid starting config. It lives in this repo,
-#    and is bundled in the release archive from the next release.
+#    and is bundled in the release archive from v0.2.0 onward.
 korvun config check korvun.example.json      # validate it (offline, no secrets)
 
 # 2. Provide the bot token by environment (never in the config file)
@@ -122,11 +122,12 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.1.0` is published.** `master` additionally carries production error handling
-(ADR-0031 resilience) and the full CLI, both validated on real hardware. Korvun is
-in active, staged construction toward a production beta — see
-[ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md) for
-what is closed and what comes next.
+**`v0.2.0` is the current release.** It ships the ADR-0031 cold-start fix (boot
+warmup + generous per-attempt timeouts + retry) and the full CLI (ADR-0032: serve /
+config check / status / version / help), both validated on real hardware — see
+[the release notes](docs/releases/v0.2.0.md). `master` builds on toward a production
+beta; see [ROADMAP-V1.md](docs/ROADMAP-V1.md) and
+[ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md) for what is closed and what comes next.
 
 ## Contributing
 
