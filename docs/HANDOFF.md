@@ -601,24 +601,29 @@ seam) — each added after a four-axis test + dependency gate.)
 
 ---
 
-## Brand assets (2026-07-12)
+## Brand assets (2026-07-12; unified 2026-07-18)
 
-Korvun's logo was decided on **2026-07-12**: a single **"K terminal"** mark — the
-letter **K** knocked out of the rounded tile, a nod to a shell's `|<`. Sources live
-in **`assets/brand/`**:
+Korvun's logo is the **"K terminal"** mark — the letter **K** knocked out of the
+rounded tile, a nod to a shell's `|<`. Versioned canonical sources in
+**`assets/brand/`**:
 
 - `korvun-logo-hero.svg` — teal `#2BC8B7` → violet `#7A5AF5` gradient (hero
   signature only; ADR-0030 reserves the gradient for identity moments).
-- `korvun-logo-mono-violeta.svg` — monochrome (delivered by Chano).
+- `korvun-logo-mono.svg` — flat **`#7A5AF5`** mark (favicon / single-ink / embeds).
 - `korvun-avatar-512.png` — 512×512 avatar.
-- `README.md` — the full brand note.
+- `README.md` — the brand note (palette + which file for what).
 
-**Open question (Chano's call, NOT to be resolved):** the mono was delivered with
-`fill="#6E56CF"`, different from the identity violet `#7A5AF5` — intentional flat-
-ink violet, or correct it? Kept as delivered.
+**Open question RESOLVED (Chano, 2026-07-18): the mark is unified on the identity
+violet `#7A5AF5`** (ADR-0030). The old mono shipped as `#6E56CF` (off the identity
+violet) and carried an unused `linearGradient` leftover — it was **replaced** by a
+clean `korvun-logo-mono.svg` (`#7A5AF5`, no gradient def); `korvun-logo-mono-violeta.svg`
+removed (`chore(brand)`). The hero SVG was already the canonical source, unchanged.
+The **README.md was rewritten** to a product-level overview with the hero header and
+five real badges (`docs: rewrite README …`).
 
-**Pending:** derive the CLI header ASCII art (`internal/cli`, today a placeholder)
-from this logo; GitHub social preview; upload the avatar (Chano, via web).
+**Pending (Chano, via web):** derive the CLI header ASCII art (`internal/cli`, today
+an honest placeholder) from the mark; GitHub social preview from the hero; upload the
+avatar.
 
 ## Repo-hygiene — adelantado desde Stage 16 (MERGEADO en master)
 
