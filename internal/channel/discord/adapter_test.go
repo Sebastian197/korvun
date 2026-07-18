@@ -76,10 +76,10 @@ func TestNew_invalidMode(t *testing.T) {
 	}
 }
 
-// TestStubs_returnExplicitErrors pins that the not-yet-built paths fail honestly:
-// Send (REST, SP5) and Receive (Gateway, SP3/SP4) return their explicit errors, not
-// silent no-ops or a dead channel.
-func TestStubs_returnExplicitErrors(t *testing.T) {
+// TestSendStub_returnsExplicitError pins that the not-yet-built REST send path (SP5)
+// fails honestly with its explicit error, never a silent no-op. The Gateway receive
+// path is implemented in SP3 and exercised end-to-end in gateway_test.go.
+func TestSendStub_returnsExplicitError(t *testing.T) {
 	t.Setenv(testTokenEnv, "tok")
 	a, err := New(WithTokenEnv(testTokenEnv))
 	if err != nil {
@@ -88,12 +88,5 @@ func TestStubs_returnExplicitErrors(t *testing.T) {
 
 	if err := a.Send(context.Background(), nil); !errors.Is(err, ErrSendNotImplemented) {
 		t.Errorf("Send stub = %v, want ErrSendNotImplemented", err)
-	}
-	ch, err := a.Receive(context.Background())
-	if !errors.Is(err, ErrReceiveNotImplemented) {
-		t.Errorf("Receive stub error = %v, want ErrReceiveNotImplemented", err)
-	}
-	if ch != nil {
-		t.Errorf("Receive stub must return a nil channel alongside its error, got %v", ch)
 	}
 }
