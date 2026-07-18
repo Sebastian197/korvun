@@ -20,7 +20,8 @@ import (
 type messageCreate struct {
 	ID        string         `json:"id"`
 	ChannelID string         `json:"channel_id"`
-	GuildID   string         `json:"guild_id,omitempty"` // absent => DM
+	GuildID   string         `json:"guild_id,omitempty"`   // absent => DM
+	WebhookID string         `json:"webhook_id,omitempty"` // set => posted by a webhook
 	Content   string         `json:"content"`
 	Author    *messageAuthor `json:"author"`
 }
@@ -48,6 +49,7 @@ const (
 	dropNoAuthor                       // no author — cannot attribute the message
 	dropSelf                           // authored by this bot (self id) — loop prevention
 	dropFromBot                        // authored by another bot — loop prevention
+	dropWebhook                        // posted by a webhook (integration/bridge) — loop prevention
 	dropEmptyContent                   // no text content (media-only, out of v1 scope)
 )
 
@@ -66,6 +68,8 @@ func (d dropReason) String() string {
 		return "self"
 	case dropFromBot:
 		return "bot"
+	case dropWebhook:
+		return "webhook"
 	case dropEmptyContent:
 		return "empty_content"
 	default:
@@ -83,11 +87,15 @@ func (d dropReason) String() string {
 // same conversation key — guild_id is not needed); sender = author.id + display name
 // (global_name if set, else username); a single Text part = content.
 //
-// LOOP PREVENTION (copilot decision, a contract not an accident): every message from
-// a bot author (author.bot == true) is dropped, AND every message from this bot's own
-// self id. Discord delivers other bots' messages too, so two Korvun gateways in the
-// same server would otherwise answer each other forever. selfID is a parameter (SP3
-// reads it from the Ready event).
+// LOOP PREVENTION (copilot decision, a contract not an accident): the whole
+// automaton family is dropped — this bot's own self id, every bot author
+// (author.bot == true), AND every webhook-posted message (webhook_id set). Discord
+// delivers other bots' messages too, and webhook messages carry author.bot == false
+// yet are non-human echo sources (integrations/bridges), so two Korvun gateways —
+// or a bridge repeating channel content — would otherwise answer each other forever.
+// selfID is a parameter (SP3 reads it from the Ready event). Note: a HUMAN proxied
+// through a webhook is dropped too; treating proxied humans as real users is
+// explicitly OUT of v1 (a future opt-in if anyone asks for it).
 //
 // Edge validation (channel-edge security rule): a payload that is malformed, has no
 // channel_id, has no author (or an author with no id), or has empty/whitespace-only
@@ -112,6 +120,9 @@ func mapMessageCreate(data []byte, selfID string) (*envelope.Envelope, dropReaso
 	}
 	if m.Author.Bot {
 		return nil, dropFromBot
+	}
+	if m.WebhookID != "" {
+		return nil, dropWebhook
 	}
 	// Empty OR whitespace-only content is a media-only / blank message (out of v1
 	// scope): drop it rather than route blank text to the brain. The kept Envelope

@@ -25,6 +25,7 @@ func TestDropReason_String(t *testing.T) {
 		dropNoAuthor:     "no_author",
 		dropSelf:         "self",
 		dropFromBot:      "bot",
+		dropWebhook:      "webhook",
 		dropEmptyContent: "empty_content",
 		dropReason(99):   "unknown",
 	} {
@@ -104,6 +105,20 @@ func TestMapMessageCreate(t *testing.T) {
 			name: "message from ANOTHER bot is dropped (loop prevention)",
 			json: `{"id":"906","channel_id":"555","content":"other bot says hi","author":{"id":"888","username":"otherbot","bot":true}}`,
 			want: dropFromBot,
+		},
+		{
+			name: "webhook-authored message is dropped (loop prevention: integrations/bridges)",
+			json: `{"id":"906b","channel_id":"555","content":"bridged from elsewhere","webhook_id":"424242","author":{"id":"666","username":"BridgeBot"}}`,
+			want: dropWebhook,
+		},
+		{
+			name:       "a normal message with NO webhook_id still keeps",
+			json:       `{"id":"906c","channel_id":"555","content":"real human text","author":{"id":"222","username":"alice","global_name":"Alice"}}`,
+			want:       keep,
+			convID:     "555",
+			senderID:   "222",
+			senderName: "Alice",
+			text:       "real human text",
 		},
 		{
 			name: "empty content (media-only, out of v1) is dropped",
