@@ -56,49 +56,64 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 
 ---
 
-## Current state (as of session close, 2026-07-12)
+## Current state (as of session close, 2026-07-18)
 
-> **CURRENT (2026-07-12): Piece 3 (CLI) sub-phase 1 DONE and committed
-> (`feat(cli): add subcommand dispatch with serve seam and -config shim`,
-> `7c3742c`).** A new `internal/cli` package owns argv parsing + subcommand
-> dispatch behind a single `Run(args, stdout, stderr) int`, so `cmd/korvun/main`
-> is now a 3-line forwarder (ADR-0017). Landed: `serve` / `version` / `help`
-> dispatch; the **retrocompat `-config` shim** (`korvun -config x.json` boots the
-> SAME path as `korvun serve --config x.json`, **byte-identical** to before);
-> a TTY-gated placeholder logo banner to stderr. `config`/`status` are announced
-> in help but land in later sub-phases; ANSI styling (violet identity, ADR-0030)
-> is integrated per command as its output is born. Serve seam: the pre-CLI main
-> boot body moved verbatim to `internal/cli/serve.go` as `serveMain` (parses
-> `-config` with a local FlagSet, returns an exit code, slog untouched).
-> `make quality` green `-race`, total 93.0%.
+> **CURRENT (2026-07-18): Piece 3 (CLI) sub-phase 2 (SP2) DONE and committed
+> (`feat(cli): serve flag surface behind an injectable boot seam (Piece 3 SP2)`,
+> `9d35220`).** `serve` now has its OWN flag surface, split from the real boot:
+> - **`serveCmd(args) int`** — a pure, unit-testable parse/validate step over the
+>   INJECTED writers (never `os.Stderr` directly). A bad serve flag → usage error
+>   to stderr, **exit 2** (FR-CLI-4); `-h`/`--help` → a query (usage to **stdout,
+>   exit 0**, matching top-level help); the pre-serve **banner** is gated to stderr,
+>   TTY-only, off under `--plain`/`--no-color`/`NO_COLOR` (R1–R3) via a shared
+>   `styleEnabled` helper (`internal/cli/style.go`).
+> - **`bootServe(configPath) int`** — the real supervisor boot behind the
+>   injectable `c.boot` seam; tests assert routing + the resolved config path
+>   WITHOUT booting the app or opening a port. `serve` is NOT restyled — its
+>   structured slog JSON is untouched (FR-STY-8).
+> - **Retrocompat shim NARROWED** from "any leading dash" to the `-config`/
+>   `--config` flag (incl. the `=value` form), so a bare display flag like
+>   `korvun --plain` no longer silently boots a server. The hardware-validated
+>   `korvun -config x.json` invocation still routes to serve byte-compatibly.
 >
-> **Coverage decision (closed, do not reopen):** `internal/cli` ~70% is ACCEPTED
-> for SP1 — the shortfall is entirely the relocated boot glue `serveMain` (still
-> exempt as un-unit-tested entry-point glue, covered by `internal/app` e2e). The
-> master doc's ≥85% bar is for the **core** packages (policy/router/envelope/
-> brain); the dispatch/version/help surface is ~100%. Classified in an **ADR-0017
-> addendum (2026-07-12)** + the design spec's Success Criteria. **SP2** makes
-> `serve` unit-testable and clears `internal/cli` ≥85.
+> `make quality` green `-race` over the WHOLE suite (total **93.0%**);
+> **`internal/cli` 93.0%** (was ~70% — SP2's ≥85 target CLEARED; `serveCmd`
+> 100%, `bootServe` 78.9% = only the clean-stop/reload-closure e2e glue,
+> covered by `internal/app`). Coverage clears via a hermetic `bootServe` boot-fatal
+> test (config loads but a referenced secret is absent → `app.Build`
+> `ErrMissingSecret` at a pure `os.Getenv`, before any dial/bind).
 >
-> **ldflags: PARKED (its own sub-phase).** `.goreleaser.yaml` still targets
-> `-X main.version`; now that `version` lives in `internal/cli`, that must move to
+> **`/review` (high, workflow-backed) run on the SP2 diff → 3 CONFIRMED defects,
+> all FIXED before commit** (4 candidates refuted): (1) the new `--plain`/
+> `--no-color` serve flags widened the shim so `korvun --plain` booted a server →
+> fixed by narrowing the shim to the config flag; (2) `serve -h/--help` folded
+> `flag.ErrHelp` into the exit-2 usage path → fixed by routing `ErrHelp` to stdout
+> exit 0 (buffered flag output split by kind); (3) `help()` gated its banner on raw
+> `isTTY`, ignoring `NO_COLOR` → migrated to `styleEnabled`. Each fix is pinned by a
+> test and smoke-tested on the built binary.
+>
+> **TOOLING committed this session** (`chore(tooling): ...`, `ce6970d`, separate
+> from the CLI): `.gitignore` (adds `graphify-out/`, `.ua/`, `.obsidian/`) and the
+> project operating-rules file (the graphify "consult FIRST" rule). These were the
+> parked local changes Chano had left pending — now landed.
+>
+> **ldflags: STILL PARKED (its own sub-phase).** `.goreleaser.yaml` still targets
+> `-X main.version`; `version` lives in `internal/cli`, so that must move to
 > `-X …/internal/cli.version` — **not touched** here. Impact today: nil (no real
-> release tag pushed; a local build reports `korvun dev (rev)` correctly). Noted
-> in the `version` godoc.
+> release tag pushed; a local build reports `korvun dev (rev)` correctly).
 >
-> **NEXT STEP: Piece 3 sub-phase 2 (SP2) — `serve` gets its own flag surface**
-> with injectable writers (so the serve path becomes unit-testable and
-> `internal/cli` clears ≥85), plus its styling. See the design spec
-> (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), the 5 sub-phases.
+> **NEXT STEP: Piece 3 sub-phase 3 (SP3) — `config check [--preflight]`** (offline
+> `config.Load` + `config.Validate` default; injected online `app.Preflight` seam):
+> valid → exit 0, invalid → exit 2 with the field path, injected preflight failure →
+> exit 1, stdout clean under `--plain`. Style: OK line in `success`, errors in
+> `error` to stderr. See the design spec
+> (`docs/superpowers/specs/2026-07-12-piece-3-cli-design.md`), SP3.
 >
-> **Brand assets added this session** (`chore(brand)`): see the "Brand assets"
-> section below (`assets/brand/`).
+> **NOT pushed** — pushing master is Chano's act. Commits `ce6970d` + `9d35220`
+> are local on master, ready to push.
 >
-> **LOCAL uncommitted changes pending Chano's decision (NOT the CLI piece, left
-> OUT of both commits on purpose — reported, not reverted):** `.gitignore` (adds
-> `graphify-out/`, `.ua/`, `.obsidian/` ignores) and `CLAUDE.md` (adds the
-> graphify "consult FIRST" rule section). These are graphify / understand-anything
-> tooling setup, unrelated to the CLI. Chano decides whether to commit them.
+> **Brand assets** (`chore(brand)`, prior session): see the "Brand assets" section
+> below (`assets/brand/`).
 >
 > **PREVIOUS (2026-07-11): master was at `1f7c18f`** — this session advanced **Piece 2
 > (production error handling)**, the last open V1 criterion ("survives a down provider").
