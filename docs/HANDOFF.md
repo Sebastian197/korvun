@@ -87,33 +87,68 @@ explicit decision.
 
 ## Current state (as of session close, 2026-07-19)
 
-> **CURRENT (2026-07-19): Piece 5 (the desktop app) — IN PROGRESS, ADR phase
-> delivered.** `v0.3.0` shipped earlier today (see Release outlook). What stands:
-> - **Framing APPROVED** (`docs/notes/piece-5-framing.md`, office-hours, fresh
->   2026-07-19 verification: Wails v3 still alpha, v2.13.0 stable; Tauri v2
->   evaluated and declined; two adversarial review rounds, 9/10).
-> - **All 8 `[NC-*]` RESOLVED** — NC-1/2 (zero platform-signing spend in v1,
->   documented Gatekeeper/SmartScreen workarounds), NC-4 (v1 matrix: universal
->   `.dmg` + NSIS AMD64 + Linux `tar.gz` AMD64), NC-8 (embedded first-run
->   template + 3-step onboarding) by Chano; NC-3 (option A: in-process core,
->   sibling binary `cmd/korvun-desktop`, headless byte-for-byte intact), NC-5
->   (`korvun-desktop`, same SemVer tag + same release), NC-6 (Wails bindings as
->   plain testable Go; AssetServer proxy conditioned on the SSE flush gate, else
->   restricted CORS; shell chrome survives core shutdown), NC-7 (OS keychain →
->   own-process env injection before `app.Build`; ADR-0010 §3 env-only intact)
->   by the copilot.
-> - **ADR phase DELIVERED: ADR-0035** (desktop app architecture — codifies all
->   NC resolutions + the R1–R5 risks with mitigations) and **ADR-0036**
->   (dependency `wailsapp/wails/v2` pinned v2.13.0, four-axis test; the §10 Go
->   gate CLOSED: wails v2.13.0's `go.mod` declares `go 1.25.0`, repo Go 1.26.5
->   satisfies it, verified at source). Both **status: proposed** — the copilot
->   accepts them after review. `go.mod` untouched (the dep lands with the first
->   TDD sub-phase, ADR-0034 precedent).
-> - **NEXT STEP: the TDD sub-phase plan**, after the copilot accepts both ADRs.
-> - Note: `design-drafts/` (untracked) holds Chano's desktop UI mockups —
->   deliberately not committed; reference material for the piece.
-> - Parked for a future session close: the understand-anything (`.ua/`) graph
->   needs a `FULL_UPDATE` (45 new Go files since its 2026-07-11 baseline).
+> **CURRENT (2026-07-19, session close): Piece 5 (the desktop app) — IN
+> PROGRESS.** `v0.3.0` shipped this morning (see Release outlook). Exact state:
+> - **Published, CI green (3 OS + CodeQL + Scorecard) through `0f5086a`/`18392f3`:**
+>   the framing (`7727afd`; 8 NCs later resolved), ADR-0035 + ADR-0036 accepted
+>   (`3ef0490`), **SP1** — wails/v2 **v2.13.0** dependency + `korvun-desktop`
+>   skeleton behind the `desktop` tag + the 3 gates (headless `go version -m`
+>   diff IDENTICAL; exact-signature Context7 pass, incl. the `-webview2
+>   download` build-flag precision; **SSE flush gate: streams → the same-origin
+>   proxy stands, CORS fallback discarded** — evidence in
+>   `docs/notes/sp1-sse-gate-spike.md`) (`b1adadb`), **SP2** — the shell
+>   lifecycle Controller (`internal/shell`: LoadConfig/Start/Stop/Status over
+>   the reload supervisor, ephemeral-port copy seam, per-cycle bearer, reap;
+>   **10-cycle tripwire green, goroutines 3→3**; two additive `internal/app`
+>   exports: `AdminAddr`, `WithChannelFactory`) (`0f5086a`), and the
+>   **Dependabot triage** (`18392f3`, `docs/notes/dependabot-triage-2026-07-19.md`).
+> - **Triage settled:** Chano EXECUTED the 13 x/crypto dismissals in the GitHub
+>   UI ("vulnerable code is not actually used", comment referencing the triage
+>   doc); alert #1 (x/net) closes with the bump already committed locally.
+> - **SP3 COMPLETE LOCALLY, NOT pushed, PENDING the copilot's on-disk review**
+>   — 4 commits atop `18392f3`: `8b31700` (x/net → v0.55.0; the **x/sys
+>   v0.45.0 MVS companion moved in the headless binary — gate fired, copilot
+>   reviewed and ACCEPTED**, outcome dated in the triage note), `78a3598` (the
+>   specs `TEMPLATE.md`, closing the dangling reference), `785d7b5` (**ADR-0037**
+>   `zalando/go-keyring` v0.2.8, four-axis passed — stdin-not-argv on macOS
+>   checked in source, no file fallback, no cgo in the untagged lane — + the
+>   SP3 spec), `65a6993` (secret provisioning, TDD: `SecretStore` seam,
+>   env-wins precedence spy-tested, empty-env-counts-as-absent, bearer-collision
+>   guard, cycle hygiene, leak-asserted logs/errors; `internal/shell/keyring`
+>   100% coverage; the real-keychain test rides the `keyring_live` build tag
+>   with an anti-vacuous mocked-guard, validated on this Mac's real keychain).
+>   **ADR-0037 status: proposed.** `make quality` green `-race`, 91.4%.
+> - **NEXT SESSION'S FIRST MOVE:** the copilot's on-disk review of SP3 (code +
+>   ADR-0037) → ADR acceptance → push of the 5 commits (SP3's 4 + this close)
+>   → CI → the SP4 prompt (the asset seam: single embed served both ways, the
+>   same-origin proxy already validated by the SSE gate, shell chrome survives
+>   core shutdown).
+> - **Remaining map of the piece:** SP4 assets → SP5 first run (embedded
+>   template + mandatory admin block) → SP6 the real window (with the design
+>   pieces as reference) → SP7 packaging + desktop CI (remember:
+>   `govulncheck -tags desktop,production` in that lane — the triage's
+>   standing note) → SP8 Chano's hardware validation → the v0.4.0 proposal.
+>
+> **DESIGN TRACK (parallel, Chano + Claude Design):**
+> - `design-drafts/` (gitignored) holds ~48 pieces: Dashboard captures (+
+>   applied touch-ups), the full Builder, Channels + the 3-step Discord
+>   assistant, Activity with its 6 decisions, Settings in 3 themes, the mini
+>   design system (palette `#7A5AF5`/`#2BC8B7`, Geist/Geist Mono, secret and
+>   truncation rules), and the live export "Korvun Desktop (standalone).html".
+> - Pending from Claude Design (final list): 2 Settings corrections (ephemeral
+>   port instead of a fixed `:2112`; auto-generated admin token, not "stored
+>   in the keychain"), the assistant's step 3 in its desktop version (masked
+>   field → keychain), Builder states (unapplied changes / applying / invalid
+>   connection), STOPPED Dashboard, Dashboard with a channel in ERROR,
+>   FIRST-RUN, and the Activity detail columns. Once closed, the copilot
+>   assembles the visual reference pack for SP6.
+>
+> **Standing follow-ups:** the understand-anything (`.ua/`) `FULL_UPDATE`
+> deferred again (2026-07-11 baseline, dozens of new Go files since); the
+> docs-only `18392f3` push's CI not yet reported (check in passing); and the
+> usual parked items (`make build` dirtying `web/builder/dist`, the
+> Windows/BUILDER TODO-VERIFYs, the `origin/feat/user-docs` branch, the
+> builder's nested `go.mod`, the e2e tests on fixed port 2112).
 >
 > **PREVIOUS (2026-07-19): Piece 4 (the Discord channel, ADR-0033 + ADR-0034) —
 > COMPLETE (SP1–SP6).** All sub-phases closed, pushed, and CI-green in an unbroken
