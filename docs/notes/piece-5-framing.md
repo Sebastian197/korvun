@@ -1,5 +1,11 @@
 # Pieza 5 — App de escritorio (encuadre)
 
+> **ACTUALIZACIÓN DE ESTADO (2026-07-19): los 8 `[NC-*]` están RESUELTOS**
+> (NC-1/2/4/8 por Chano; NC-3/5/6/7 por el copiloto) y codificados como
+> decisiones formales en **ADR-0035** (arquitectura de la app de escritorio) y
+> **ADR-0036** (dependencia `wailsapp/wails/v2`). Este documento se conserva
+> como registro del encuadre; las decisiones vigentes viven en los ADRs.
+
 > **Estado: ENCUADRE, pendiente de la revisión del copiloto.** Este documento NO es
 > el ADR y NO autoriza una sola línea de código. Encuadra la app de escritorio para
 > que el copiloto vete las decisiones gordas (framework, forma de la app, alcance de

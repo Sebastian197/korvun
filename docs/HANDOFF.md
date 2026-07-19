@@ -87,7 +87,35 @@ explicit decision.
 
 ## Current state (as of session close, 2026-07-19)
 
-> **CURRENT (2026-07-19): Piece 4 (the Discord channel, ADR-0033 + ADR-0034) —
+> **CURRENT (2026-07-19): Piece 5 (the desktop app) — IN PROGRESS, ADR phase
+> delivered.** `v0.3.0` shipped earlier today (see Release outlook). What stands:
+> - **Framing APPROVED** (`docs/notes/piece-5-framing.md`, office-hours, fresh
+>   2026-07-19 verification: Wails v3 still alpha, v2.13.0 stable; Tauri v2
+>   evaluated and declined; two adversarial review rounds, 9/10).
+> - **All 8 `[NC-*]` RESOLVED** — NC-1/2 (zero platform-signing spend in v1,
+>   documented Gatekeeper/SmartScreen workarounds), NC-4 (v1 matrix: universal
+>   `.dmg` + NSIS AMD64 + Linux `tar.gz` AMD64), NC-8 (embedded first-run
+>   template + 3-step onboarding) by Chano; NC-3 (option A: in-process core,
+>   sibling binary `cmd/korvun-desktop`, headless byte-for-byte intact), NC-5
+>   (`korvun-desktop`, same SemVer tag + same release), NC-6 (Wails bindings as
+>   plain testable Go; AssetServer proxy conditioned on the SSE flush gate, else
+>   restricted CORS; shell chrome survives core shutdown), NC-7 (OS keychain →
+>   own-process env injection before `app.Build`; ADR-0010 §3 env-only intact)
+>   by the copilot.
+> - **ADR phase DELIVERED: ADR-0035** (desktop app architecture — codifies all
+>   NC resolutions + the R1–R5 risks with mitigations) and **ADR-0036**
+>   (dependency `wailsapp/wails/v2` pinned v2.13.0, four-axis test; the §10 Go
+>   gate CLOSED: wails v2.13.0's `go.mod` declares `go 1.25.0`, repo Go 1.26.5
+>   satisfies it, verified at source). Both **status: proposed** — the copilot
+>   accepts them after review. `go.mod` untouched (the dep lands with the first
+>   TDD sub-phase, ADR-0034 precedent).
+> - **NEXT STEP: the TDD sub-phase plan**, after the copilot accepts both ADRs.
+> - Note: `design-drafts/` (untracked) holds Chano's desktop UI mockups —
+>   deliberately not committed; reference material for the piece.
+> - Parked for a future session close: the understand-anything (`.ua/`) graph
+>   needs a `FULL_UPDATE` (45 new Go files since its 2026-07-11 baseline).
+>
+> **PREVIOUS (2026-07-19): Piece 4 (the Discord channel, ADR-0033 + ADR-0034) —
 > COMPLETE (SP1–SP6).** All sub-phases closed, pushed, and CI-green in an unbroken
 > chain through `ab2e1a1` (Quality Gate on the 3 OSes + cross-compile ×6 + CodeQL +
 > Scorecard green at every push), and the **real Discord round-trip PASSED on
