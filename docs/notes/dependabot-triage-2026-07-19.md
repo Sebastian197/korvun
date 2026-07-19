@@ -63,6 +63,13 @@
    headless `go version -m` diff (expected outcome: identical — the headless
    binary does not link x/net — but the check is the rule, not the
    expectation). Natural slot: the first SP3 commit.
+   **Outcome (2026-07-19, SP3 rider):** the diff did NOT come back identical
+   — the bump carries the MVS companion `x/sys v0.44.0 → v0.45.0`, which DOES
+   link in the headless binary (one moved line in `go version -m`). The gate
+   stopped the rider as designed; the copilot reviewed and ACCEPTED the
+   movement (Go-team support module, already linked, companion bump required
+   by x/net@v0.55.0's go.mod, no advisory attached), with `make quality`
+   `-race` over the whole suite as the moved-artifact validation.
 2. **Alerts #2–#14 — dismiss in the GitHub UI** with reason "vulnerable code
    is not actually used": x/crypto sits only in wails' CLI-tooling module
    graph (go-git → ssh); no Korvun artifact links it, confirmed by both
