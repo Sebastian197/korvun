@@ -65,9 +65,11 @@ and proposes, never tags.
   <https://github.com/Sebastian197/korvun/releases/tag/v0.2.0> — signed release + SBOM
   on 6 platforms, cosign **Verified OK**. Ships the ADR-0031 cold-start fix and the full
   CLI (ADR-0032), both hardware-validated (curated notes in `docs/releases/v0.2.0.md`).
-- **NEXT PLANNED: `v0.3.0` — MINOR.** Trigger: **Piece 4 (the Discord channel) COMPLETE
-  end to end** — SP1–SP6 closed, the round-trip validated on real hardware (SP6), and
-  the bot-setup docs published. Not before.
+- **NEXT PLANNED: `v0.3.0` — MINOR. TRIGGER MET (2026-07-19).** The trigger was
+  **Piece 4 (the Discord channel) COMPLETE end to end** — SP1–SP6 closed, the
+  round-trip validated on real hardware (SP6 Half B, Chano's Intel iMac), and the
+  bot-setup docs published. All three conditions now hold, so **the copilot's
+  `v0.3.0` proposal is on the table**; the tag remains Chano's explicit call.
 - **POSSIBLE INTERIM: `v0.2.x` — PATCH.** If, before `v0.3.0`, a bug that `v0.2.0` users
   actually hit is fixed on `master`, cut a `v0.2.1` patch carrying only that fix.
 
@@ -80,12 +82,14 @@ explicit decision.
 
 ---
 
-## Current state (as of session close, 2026-07-18)
+## Current state (as of session close, 2026-07-19)
 
-> **CURRENT (2026-07-18): Piece 4 (the Discord channel, ADR-0033 + ADR-0034) — IN
-> PROGRESS.** Sub-phases SP1–SP5 are closed, pushed, and CI-green in an unbroken chain
-> through `51e0d16` (Quality Gate on the 3 OSes + cross-compile ×6 + CodeQL + Scorecard
-> green at every push). Discord is a NEW adapter behind the unchanged `channel.Channel`
+> **CURRENT (2026-07-19): Piece 4 (the Discord channel, ADR-0033 + ADR-0034) —
+> COMPLETE (SP1–SP6).** All sub-phases closed, pushed, and CI-green in an unbroken
+> chain through `ab2e1a1` (Quality Gate on the 3 OSes + cross-compile ×6 + CodeQL +
+> Scorecard green at every push), and the **real Discord round-trip PASSED on
+> Chano's hardware (SP6 Half B, 2026-07-19)** — validation record below. Discord is
+> Korvun's third channel: a NEW adapter behind the unchanged `channel.Channel`
 > seam; receiving free-form messages is Gateway-WebSocket-only (`coder/websocket`
 > v1.8.15, the 4th direct dep, ADR-0034), sending is plain REST. What landed:
 > - **SP1** — dependency `github.com/coder/websocket@v1.8.15` (ADR-0034) + config
@@ -105,8 +109,9 @@ explicit decision.
 >   {"parse":[]}` (model output can never mass-ping), 2000-char rune-safe split, 429 →
 >   the house `RateLimitError`, the full error grammar (`51e0d16`).
 >
-> **SP6 Half A — COMPLETE, 4 commits LOCAL, NOT pushed** (awaiting the copilot's
-> on-disk review). Local on master atop the pushed `51e0d16`:
+> **SP6 Half A — COMPLETE, PUSHED 2026-07-19** (atop `51e0d16`; the push's CI came
+> back green: Quality Gate 3m41s on the 3 OSes + cross-compile ×6 + sbom, CodeQL
+> 1m48s, Scorecard 24s). The commits:
 > - `4468e71` docs: HANDOFF interim (Piece 4 in-progress).
 > - `d49f1b2` feat(channel): the Discord adapter's Start/Stop lifecycle — refactored to
 >   the Telegram-style model (New creates inbound; Receive returns it; Start launches the
@@ -119,6 +124,7 @@ explicit decision.
 > - `a3a0d09` docs: `docs/DISCORD-SETUP.md` (the bot walkthrough — Developer Portal, the
 >   manual **MESSAGE CONTENT INTENT** step, OAuth2 invite) + the discord block in
 >   `CONFIGURATION.md`.
+> - `ab2e1a1` docs: session-close HANDOFF update (Half A closed locally).
 >
 > `make quality` green `-race` over the whole suite; discord `-race -count=20` stable;
 > coverage discord 89.1% / app 90.5% / prom 88.0% (≥85). `/review` ran (3 reviewers:
@@ -128,20 +134,25 @@ explicit decision.
 > **`t.Cleanup` Shutdown** in the wiring test (leaked goroutines). Secret trace clean (no
 > P0): the token is env-only, never in a struct/log/error — only the env-var name appears.
 >
-> **NEXT SESSION — exact order, NOTHING new before step 1:**
-> 1. **The copilot's on-disk review of Half A**, focused on the Start/Stop refactor over
->    the SP3/SP4 state machine.
-> 2. **Push** the 4 commits (with the copilot's prompt).
-> 3. **CI green** (Quality Gate 3 OSes + cross-compile ×6 + CodeQL + Scorecard).
-> 4. **Half B**: Chano creates his bot following `docs/DISCORD-SETUP.md` (Developer
->    Portal, MESSAGE CONTENT INTENT, invite) and validates a **real Discord round-trip on
->    his hardware**.
-> 5. **Close Piece 4** (stage doc / the CURRENT block flip to CLOSED).
-> 6. **Propose `v0.3.0`** per the Release outlook (the trigger: Piece 4 complete end to
->    end). The tag is always Chano's explicit call.
+> **SP6 Half B — HARDWARE VALIDATION PASSED (2026-07-19, Chano's Intel iMac,
+> macOS 13).** Real round-trip: bot **Korvun#9056** in Chano's server; a human
+> inbound message at 8:07 → the assistant brain's reply (`ollama`/`llama3.2:1b`,
+> local) posted in the same channel, same minute. Confirmed end to end: inbound
+> (Message Content intent operative), routing, outbound, and the anti-loop drop
+> (the bot did not answer itself). **Diagnostic detail from the path:** a
+> pre-validation read-only diagnosis caught that the OAuth2 invitation had never
+> been completed — the bot authenticated (`GET /users/@me` OK) but
+> `GET /users/@me/guilds` came back empty and posting returned **403 Missing
+> Access**; Chano re-ran the Step 4 invite through **Authorize** and the
+> round-trip then passed. The symptom is now recorded in `DISCORD-SETUP.md`'s
+> troubleshooting, and its Step 8 banner flipped from "not yet hardware-verified"
+> to **VERIFIED** — the TODO-VERIFY discipline closed as it should be.
 >
-> **The piece is NOT closed and v0.3.0 is NOT proposed until Half B passes.** TODO-VERIFY
-> discipline holds: nothing in the Discord docs is marked hardware-verified until Half B.
+> **NEXT STEP — propose `v0.3.0`** per the Release outlook: the trigger is MET
+> (Piece 4 complete end to end — SP1–SP6 closed, round-trip validated on hardware,
+> bot-setup docs published). SemVer type: **MINOR** (compatible feature — the
+> Discord channel). The copilot prepares and proposes; **the tag is ALWAYS Chano's
+> explicit call.**
 >
 > **Piece 3 (the CLI, ADR-0032) is CLOSED and PUBLISHED** — `serve` / `config check` /
 > `status` / `version` / `help`, hardware-validated (a full Telegram round-trip plus the

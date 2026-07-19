@@ -119,10 +119,12 @@ automatically if the connection drops. It serves until `Ctrl-C`.
 In a channel the bot can see (or a DM to the bot), send a message. Korvun should route
 it through your brain and reply in the same channel.
 
-> **Not yet hardware-verified.** This walkthrough describes the *expected* round-trip.
-> A real end-to-end Discord round-trip on hardware is validated separately (Piece 4
-> SP6 Half B); until then, treat this section as the intended behaviour, not a
-> confirmed result.
+> **Hardware-verified (2026-07-19).** A real end-to-end Discord round-trip was
+> validated on real hardware (Intel iMac, macOS 13; Piece 4 SP6 Half B): a human
+> message in a guild channel was routed through the brain (Ollama `llama3.2:1b`,
+> local) and the reply was posted in the same channel within the same minute —
+> inbound (Message Content intent), routing, outbound, and the anti-loop drop (the
+> bot never answers itself) all confirmed.
 
 ## Troubleshooting
 
@@ -133,6 +135,12 @@ it through your brain and reply in the same channel.
   `DISCORD_BOT_TOKEN` (or whatever you named it) is not exported in the shell running
   Korvun — redo **Step 6**. (Plain `config check`, without `--preflight`, does not read
   secrets and will not catch this.)
+- **The bot authenticates but is in no server** — `GET /users/@me` works, yet
+  `GET /users/@me/guilds` returns an empty list and posting fails with **403 Missing
+  Access**. The OAuth2 invitation was never completed: the generated URL was opened
+  but the flow did not reach **Authorize** (or the wrong server was picked). Redo
+  **Step 4** end to end — open the generated URL, pick your server, click
+  **Authorize** — then confirm the bot appears in the server's member list.
 - **The bot cannot see a channel / cannot post.** Re-invite with the **View Channels**,
   **Send Messages**, and **Read Message History** permissions (**Step 4**), and make
   sure the channel's permissions allow the bot's role.

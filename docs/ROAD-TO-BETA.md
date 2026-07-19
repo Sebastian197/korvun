@@ -58,15 +58,16 @@ Korvun cumple **los 6 de 6** criterios de "esto ya es V1" del
 **Orden del plan (las 4 piezas son el objetivo de beta de Chano):** Pieza 1 ✅ →
 **Pieza 2 ✅** (errores de producción — cerró el 6º criterio V1; ADR-0031 accepted) →
 **Pieza 3 ✅** (CLI subcomandos, ADR-0032, validada end-to-end en la Mac de Chano
-2026-07-18) → **Pieza 4** (tercer canal, **próximo trabajo**, **opcional** por el doc
-maestro §9) → **Pieza 5** (app Wails, la más pesada). **Secuencial, una a una**,
-cerrando cada una antes de la siguiente. La Pieza 3 **no cerró ningún criterio V1**
-pero fue **antes que 4-5** porque **reescribió la doc de la Pieza 1** a la forma
-canónica `korvun serve --config …`, minimizando el drift. Las Piezas 4 y 5 **no
-cierran criterio** (más alcance) pero Chano las quiere hechas igualmente — objetivo de
-*ejecución*, no de *criterio*. **Pieza 4:** mantener el aviso del doc maestro §9 —
-WhatsApp es "la más traicionera, opcional en beta"; al llegar, valorar WhatsApp
-concreto vs un canal más amable (Discord/Slack) si aporta más con menos riesgo.
+2026-07-18) → **Pieza 4 ✅** (tercer canal — **Discord**, ADR-0033 + ADR-0034,
+round-trip real validado en el hardware de Chano 2026-07-19) → **Pieza 5** (app
+Wails, la más pesada, **próximo trabajo**). **Secuencial, una a una**, cerrando
+cada una antes de la siguiente. La Pieza 3 **no cerró ningún criterio V1** pero fue
+**antes que 4-5** porque **reescribió la doc de la Pieza 1** a la forma canónica
+`korvun serve --config …`, minimizando el drift. Las Piezas 4 y 5 **no cierran
+criterio** (más alcance) pero Chano las quiere hechas igualmente — objetivo de
+*ejecución*, no de *criterio*. **Pieza 4:** el aviso del doc maestro §9 se siguió —
+WhatsApp ("la más traicionera") se descartó a favor de **Discord**, que aportaba
+más con menos riesgo.
 
 ---
 
@@ -320,6 +321,20 @@ sistema que hoy en el Mac de Chano (la re-validación de la sub-fase 5).
 
 ## PIEZA 4 — Un tercer canal (WhatsApp u otro)
 
+> ✅ **COMPLETADA (SP1–SP6, ADR-0033 + ADR-0034) — canal Discord operativo
+> end-to-end, validado en hardware real (iMac Intel de Chano, 2026-07-19).** Se
+> eligió **Discord**, no WhatsApp, siguiendo el aviso del doc maestro §9. Round-trip
+> real: bot `Korvun#9056` en el servidor de Chano — mensaje humano entrante a las
+> 8:07 → respuesta del brain assistant (`ollama`/`llama3.2:1b`, local) publicada en
+> el mismo canal, mismo minuto. Inbound (Message Content intent), routing, outbound
+> y anti-bucle (el bot no se contesta a sí mismo) confirmados. Adaptador nuevo tras
+> el seam `channel.Channel` sin tocarlo: Gateway WebSocket de entrada
+> (`coder/websocket` v1.8.15, ADR-0034, Context7 verificado), REST de salida con
+> `allowed_mentions` a none, supervisor de resume/reconnect, token env-only
+> (ADR-0010), `-race` en toda la suite. Guía de setup en `docs/DISCORD-SETUP.md`
+> (con su round-trip marcado VERIFICADO). **Dispara la propuesta de `v0.3.0`**
+> (Release outlook del HANDOFF).
+
 **PRIORIDAD 4 — DESEABLE, NO beta-crítico.** Ya hay **2 canales** (Telegram +
 Webhook genérico); un tercero es **MÁS ALCANCE, no un requisito de beta**.
 
@@ -335,14 +350,18 @@ contrato, no un cambio de arquitectura.
 
 ### Checklist
 
-- [ ] **Decidir el canal** — WhatsApp (Business Cloud API) **o** una alternativa
-      menos traicionera (Discord/Slack/Signal) si aporta más con menos riesgo.
-- [ ] **ADR del canal** — proveedor, modo (webhook/polling), verificación de firma
-      de entrada, contrato de secreto env-only (ADR-0010), Context7 del SDK/API.
-- [ ] **Adaptador** detrás de `channel.Channel`, con su lifecycle (arranque/paro,
-      `DroppedCount`), TDD como Telegram/Webhook.
-- [ ] **Validación de entrada** en el borde del canal (regla de seguridad del
-      proyecto).
+- [x] **Decidir el canal** — **Discord** (la alternativa menos traicionera que
+      WhatsApp; más valor con menos riesgo, en línea con el doc maestro §9).
+- [x] **ADR del canal** — **ADR-0033** (canal Discord: Gateway de entrada, REST de
+      salida, secreto env-only por ADR-0010) + **ADR-0034** (la dependencia
+      `coder/websocket` v1.8.15, Context7 verificado, 4ª dep directa).
+- [x] **Adaptador** detrás de `channel.Channel` (sin tocar el seam), con su
+      lifecycle Start/Stop, supervisor de resume/reconnect, `DroppedCount` y
+      `ReconnectCount` (métrica `korvun_channel_reconnects_total`), TDD `-race`
+      (discord `-race -count=20` estable, cobertura 89.1%).
+- [x] **Validación de entrada** en el borde del canal — mapping puro
+      `MESSAGE_CREATE` → Envelope + la familia anti-bucle (self / otros bots /
+      webhooks descartados por diseño).
 
 ### ADRs previstos
 
@@ -355,6 +374,13 @@ Un mensaje real entra por el tercer canal, hace el round-trip completo (canal �
 router → brain → política → canal) por el binario real, y su lifecycle
 (arranque/paro limpio, drops contados) pasa `-race`. **No bloquea la beta** si se
 decide dejarlo como Telegram + Webhook.
+
+> **Validado 2026-07-19** exactamente así: round-trip real Discord → router →
+> brain (modelo local) → Discord en el iMac de Chano, con la suite `-race` verde.
+> Nota del camino: el diagnóstico previo detectó la invitación OAuth2 incompleta
+> (guilds vacío + 403 Missing Access); re-invitación de Chano y validación en
+> verde. El síntoma quedó documentado en el troubleshooting de
+> `docs/DISCORD-SETUP.md`.
 
 ---
 
@@ -411,10 +437,11 @@ y el binario headless intacto (la app es una carcasa, no un fork de la lógica).
       documentación.** → **PIEZA 1**.
 - [ ] **Aguanta un proveedor caído sin caerse.** → **PIEZA 2**.
 
-**Próximo paso:** **Pieza 2 EN CURSO** — encuadre + `/plan-eng-review` hechos, F6
-verificado en hardware, **ADR-0031 en borrador** (`status: proposed`); sigue la revisión
-del copiloto → segunda voz de Codex → TDD. Luego Piezas 3 → 4 → 5, una a una (objetivo
-de beta de Chano, 2026-07-11).
+**Próximo paso:** **Piezas 1–4 ✅ cerradas** (la 4 el 2026-07-19: canal Discord
+end-to-end en hardware). Inmediato: **propuesta de `v0.3.0`** (el disparador del
+Release outlook del HANDOFF se ha cumplido; el tag es siempre decisión explícita de
+Chano). Después: **Pieza 5** (app Wails), la última del objetivo de beta de Chano
+(2026-07-11), con su ciclo completo (Context7 de Wails como prerrequisito duro).
 
 ---
 
