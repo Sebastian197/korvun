@@ -65,13 +65,16 @@ and proposes, never tags.
   <https://github.com/Sebastian197/korvun/releases/tag/v0.2.0> — signed release + SBOM
   on 6 platforms, cosign **Verified OK**. Ships the ADR-0031 cold-start fix and the full
   CLI (ADR-0032), both hardware-validated (curated notes in `docs/releases/v0.2.0.md`).
-- **NEXT PLANNED: `v0.3.0` — MINOR. TRIGGER MET (2026-07-19).** The trigger was
-  **Piece 4 (the Discord channel) COMPLETE end to end** — SP1–SP6 closed, the
-  round-trip validated on real hardware (SP6 Half B, Chano's Intel iMac), and the
-  bot-setup docs published. All three conditions now hold, so **the copilot's
-  `v0.3.0` proposal is on the table**; the tag remains Chano's explicit call.
-- **POSSIBLE INTERIM: `v0.2.x` — PATCH.** If, before `v0.3.0`, a bug that `v0.2.0` users
-  actually hit is fixed on `master`, cut a `v0.2.1` patch carrying only that fix.
+- **PUBLISHED: `v0.3.0` (2026-07-19).**
+  <https://github.com/Sebastian197/korvun/releases/tag/v0.3.0> — signed release + SBOM
+  on 6 platforms, cosign **Verified OK**. Ships the Discord channel (ADR-0033 +
+  ADR-0034), the round-trip hardware-validated end to end (curated notes in
+  `docs/releases/v0.3.0.md`).
+- **NEXT PLANNED: `v0.4.0` — MINOR.** Trigger: **Piece 5 (the desktop app) COMPLETE
+  end to end and validated on hardware.** The copilot proposes when the trigger is
+  met; the tag remains Chano's explicit call.
+- **POSSIBLE INTERIM: `v0.3.x` — PATCH.** If, before `v0.4.0`, a bug that `v0.3.0` users
+  actually hit is fixed on `master`, cut a `v0.3.1` patch carrying only that fix.
 
 **Standing policy (Chano, 2026-07-18): the copilot proactively PROPOSES a release when
 the signals light up** — validated user-facing value piling up unreleased on `master`;
