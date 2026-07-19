@@ -81,15 +81,17 @@ func WithBuildOptions(opts ...app.Option) Option {
 type Controller struct {
 	logger    *slog.Logger
 	buildOpts []app.Option
+	secrets   SecretStore // nil → provisioning skipped (SP2 behavior)
 
-	mu       sync.Mutex
-	cfg      *config.Config
-	path     string
-	running  bool
-	tokenEnv string             // env var the shell set this cycle ("" if none)
-	cancel   context.CancelFunc // stops the supervisor's Run
-	done     chan struct{}      // closed when Run returns; runErr is set before
-	runErr   error              // Run's result; read only after <-done
+	mu          sync.Mutex
+	cfg         *config.Config
+	path        string
+	running     bool
+	tokenEnv    string             // env var the shell set this cycle ("" if none)
+	provisioned []string           // secret vars the shell set this cycle (FR-SEC-4)
+	cancel      context.CancelFunc // stops the supervisor's Run
+	done        chan struct{}      // closed when Run returns; runErr is set before
+	runErr      error              // Run's result; read only after <-done
 
 	cur atomic.Pointer[app.App] // current built core, for AdminAddr
 }
@@ -140,6 +142,15 @@ func (c *Controller) Start(ctx context.Context) error {
 		return ErrNoConfig
 	}
 
+	// Secret provisioning from the keychain (ADR-0035 §4, SP3): fill every
+	// config-referenced secret variable ABSENT from the environment, before
+	// anything builds. Env always wins; a store failure aborts the boot.
+	provisioned, provErr := c.provisionSecrets()
+	if provErr != nil {
+		clearProvisioned(provisioned)
+		return provErr
+	}
+
 	// Per-cycle admin bearer (ADR-0035 §4): generated BEFORE the initial
 	// build so the mutation surface's mount-time env read sees it. Always
 	// overwritten — per-cycle generation is the ADR's mandate for the bearer.
@@ -148,9 +159,11 @@ func (c *Controller) Start(ctx context.Context) error {
 		tokenEnv = c.cfg.Admin.TokenEnv
 		token, err := newAdminToken()
 		if err != nil {
+			clearProvisioned(provisioned)
 			return fmt.Errorf("shell: generate admin bearer: %w", err)
 		}
 		if err := os.Setenv(tokenEnv, token); err != nil {
+			clearProvisioned(provisioned)
 			return fmt.Errorf("shell: set admin bearer env %q: %w", tokenEnv, err)
 		}
 	}
@@ -206,17 +219,20 @@ func (c *Controller) Start(ctx context.Context) error {
 	case <-started:
 		c.running = true
 		c.tokenEnv = tokenEnv
+		c.provisioned = provisioned
 		c.cancel = cancel
 		c.done = done
 		return nil
 	case <-done:
 		cancel()
 		c.clearBearer(tokenEnv)
+		clearProvisioned(provisioned)
 		return fmt.Errorf("shell: core boot failed: %w", c.runErr)
 	case <-ctx.Done():
 		cancel()
 		<-done
 		c.clearBearer(tokenEnv)
+		clearProvisioned(provisioned)
 		return fmt.Errorf("shell: start wait cancelled: %w", ctx.Err())
 	}
 }
@@ -246,6 +262,8 @@ func (c *Controller) Stop(ctx context.Context) error {
 	c.done = nil
 	c.clearBearer(c.tokenEnv)
 	c.tokenEnv = ""
+	clearProvisioned(c.provisioned)
+	c.provisioned = nil
 	if err != nil {
 		return fmt.Errorf("shell: core stopped with error: %w", err)
 	}
@@ -290,6 +308,8 @@ func (c *Controller) reapLocked() {
 	c.done = nil
 	c.clearBearer(c.tokenEnv)
 	c.tokenEnv = ""
+	clearProvisioned(c.provisioned)
+	c.provisioned = nil
 }
 
 // appOptions assembles the options every app.Build/app.Preflight call in the
