@@ -1,8 +1,10 @@
 # ADR-0035: Desktop app architecture (Piece 5)
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-19
 > **Deciders:** Sebastián Moreno Saavedra
+>
+> **Accepted 2026-07-19, copilot review passed.**
 >
 > Codifies the resolutions of the 8 `[NC-*]` items from the Piece 5 framing
 > (`docs/notes/piece-5-framing.md`, hardened through two adversarial review

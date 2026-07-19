@@ -1,8 +1,10 @@
 # ADR-0036: Dependency — `wailsapp/wails/v2` (desktop shell framework)
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-19
 > **Deciders:** Sebastián Moreno Saavedra
+>
+> **Accepted 2026-07-19, copilot review passed.**
 >
 > Companion architecture ADR: ADR-0035 (desktop app). `go.mod` is NOT touched
 > by this ADR — the dependency lands with the first TDD sub-phase (`go get` at
