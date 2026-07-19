@@ -176,6 +176,19 @@ func withChannelFactory(f func(b *builder, cc config.ChannelConfig) (Channel, er
 	return func(b *builder) { b.newChannel = f }
 }
 
+// WithChannelFactory replaces the default channel construction (telegram /
+// discord) with f — the withChannelFactory seam exported for embedders' tests:
+// the desktop shell's lifecycle suite (internal/shell) boots a FULL real App
+// hermetically, and the suite-wide no-network discipline (ADR-0034) forbids
+// real channel dials from tests. A nil f keeps the default factory.
+func WithChannelFactory(f func(cc config.ChannelConfig) (Channel, error)) Option {
+	return func(b *builder) {
+		if f != nil {
+			b.newChannel = func(_ *builder, cc config.ChannelConfig) (Channel, error) { return f(cc) }
+		}
+	}
+}
+
 // Build wires cfg into a ready App. Every failure is fatal and named
 // (ADR-0017 §5). On any error after the router is created, the partially-built
 // router is shut down so no worker goroutine is leaked.
@@ -827,6 +840,18 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownChannelType, cc.Type)
 	}
+}
+
+// AdminAddr returns the admin server's effective bound address ("host:port",
+// the real port even when the config asked for :0), or "" when observability
+// is disabled or the server has not been started. It is the desktop shell's
+// status seam (ADR-0035 §§6–7): with the ephemeral-port policy the bound
+// address is state only the running App knows.
+func (a *App) AdminAddr() string {
+	if a.adminServer == nil {
+		return ""
+	}
+	return a.adminServer.Addr()
 }
 
 // Run starts the app (Start) and then serves until ctx is cancelled (Serve). It is
