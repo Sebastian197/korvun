@@ -24,7 +24,8 @@ package main
 
 import (
 	"embed"
-	"log"
+	"log/slog"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -44,6 +45,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("korvun-desktop: window loop failed", "error", err.Error())
+		os.Exit(1)
 	}
 }

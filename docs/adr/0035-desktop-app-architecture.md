@@ -231,6 +231,9 @@ deferred. Revisable in the future **only by Chano's explicit decision**.
   the standard path for non-Store distribution. Revisit only if the TDD
   sub-phase's Context7 pass over the exact `windows.Options` surface
   contradicts it.
+  **Precision (2026-07-19, SP1 Gate 2):** the strategy is a BUILD flag
+  (`wails build -webview2 download`), not a runtime option — `windows.Options`
+  only carries `WebviewBrowserPath` for the fixed-runtime case.
 - **R5 — builder bundle drift** (`make build` regenerating `dist`): inherited
   parked chore; §3(c)'s single-embed rule prevents the desktop app from adding
   a second copy of the problem.
