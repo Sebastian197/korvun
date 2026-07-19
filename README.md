@@ -43,8 +43,10 @@ cost-aware, with opt-in consensus, as policies of one engine:
 
 Everything below is **on `master` today** — no roadmap item is counted as present.
 
-- **Channels** — Telegram (polling) and a generic Webhook channel, behind one
-  normalized message shape (*Envelope*).
+- **Channels** — Telegram (polling), **Discord** (Gateway WebSocket inbound with a
+  resume/reconnect supervisor, REST outbound with mentions blocked by default — see
+  [DISCORD-SETUP.md](docs/DISCORD-SETUP.md)), and a generic Webhook channel, behind
+  one normalized message shape (*Envelope*).
 - **Multi-brain orchestration** — several brains coexist; each coordinates multiple
   models in parallel fan-out or cost-saving sequential fail-over, from config.
 - **Model providers** — local **Ollama** and cloud **Groq**, behind one `Model`
@@ -100,6 +102,7 @@ still works via a retrocompat shim; `korvun serve --config …` is canonical.
 | Guide | What it covers |
 |-------|----------------|
 | [Quickstart](docs/QUICKSTART.md) | Zero to a running bot. |
+| [Discord bot setup](docs/DISCORD-SETUP.md) | Create the bot, the Message Content intent, invite, round-trip. |
 | [Configuration](docs/CONFIGURATION.md) | Every config field, from the schema and ADRs. |
 | [No-code builder](docs/BUILDER.md) | Configure Korvun visually in the browser. |
 | [Install & run as a service](docs/packaging/INSTALL.md) | Download, verify, hardened systemd unit. |
@@ -122,10 +125,11 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.2.0` is the current release.** It ships the ADR-0031 cold-start fix (boot
-warmup + generous per-attempt timeouts + retry) and the full CLI (ADR-0032: serve /
-config check / status / version / help), both validated on real hardware — see
-[the release notes](docs/releases/v0.2.0.md). `master` builds on toward a production
+**`v0.3.0` is the current release.** It ships the Discord channel (ADR-0033 +
+ADR-0034): Gateway WebSocket inbound with a resume/reconnect supervisor, REST
+outbound that can never mass-ping, a complete anti-loop family, and a step-by-step
+bot setup guide — validated end to end on real hardware — see
+[the release notes](docs/releases/v0.3.0.md). `master` builds on toward a production
 beta; see [ROADMAP-V1.md](docs/ROADMAP-V1.md) and
 [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md) for what is closed and what comes next.
 

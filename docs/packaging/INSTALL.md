@@ -20,17 +20,17 @@ portable.
 ## macOS — full walkthrough (validated on Intel hardware)
 
 A complete, copy-paste path from download to `korvun --version` on macOS, using the
-real `v0.2.0` release. This is the **install-a-release** path (no Go toolchain, no
+real `v0.3.0` release. This is the **install-a-release** path (no Go toolchain, no
 building from source). The generic per-step reference for all platforms follows in
 [§1–§5](#1-download); Linux and Windows walkthroughs come later.
 
-> **Validated end to end on real hardware** (iMac, Intel `x86_64`, macOS 13):
-> `uname -m` → `gh release download` (amd64) → `shasum -c` (`OK`) → *(cosign
-> optional, see §4)* → `tar -xzf` + `chmod +x` → *(Gatekeeper step not needed for
-> the terminal-download path, see §6)* → `./korvun --version` →
-> `korvun v0.2.0 (<short-revision>)`.
+> **Validated end to end on real hardware** (iMac, Intel `x86_64`, macOS 13, on
+> the `v0.2.0` release): `uname -m` → `gh release download` (amd64) → `shasum -c`
+> (`OK`) → *(cosign optional, see §4)* → `tar -xzf` + `chmod +x` → *(Gatekeeper
+> step not needed for the terminal-download path, see §6)* → `./korvun --version`
+> → `korvun v0.2.0 (<short-revision>)`. The flow is identical release to release.
 
-> The commands below target **`v0.2.0`**. For a newer release, replace the version
+> The commands below target **`v0.3.0`**. For a newer release, replace the version
 > and asset names accordingly.
 
 > **Copy-paste tip:** when you copy a command, do **not** include the shell prompt
@@ -48,8 +48,8 @@ uname -m
 
 | `uname -m` prints | Your Mac | Use the asset | Arch token |
 |-------------------|----------|---------------|------------|
-| `x86_64` | **Intel** | `korvun_0.1.0_darwin_amd64.tar.gz` | **`amd64`** |
-| `arm64` | **Apple Silicon** (M1/M2/M3/M4) | `korvun_0.1.0_darwin_arm64.tar.gz` | **`arm64`** |
+| `x86_64` | **Intel** | `korvun_0.3.0_darwin_amd64.tar.gz` | **`amd64`** |
+| `arm64` | **Apple Silicon** (M1/M2/M3/M4) | `korvun_0.3.0_darwin_arm64.tar.gz` | **`arm64`** |
 
 Throughout the rest of this walkthrough, **substitute your arch token** wherever you
 see `<ARCH>`: use `amd64` on Intel, `arm64` on Apple Silicon. (The validated run
@@ -67,20 +67,20 @@ mkdir -p ~/korvun-install && cd ~/korvun-install
 (Apple Silicon):
 
 ```bash
-gh release download v0.2.0 --repo Sebastian197/korvun \
-  --pattern 'korvun_0.1.0_darwin_<ARCH>.tar.gz' \
+gh release download v0.3.0 --repo Sebastian197/korvun \
+  --pattern 'korvun_0.3.0_darwin_<ARCH>.tar.gz' \
   --pattern 'checksums.txt' \
   --pattern 'checksums.txt.sig' \
   --pattern 'checksums.txt.pem'
 ```
 
 **Or without `gh`, with `curl`** (from the real release,
-<https://github.com/Sebastian197/korvun/releases/tag/v0.2.0>) — again substituting
+<https://github.com/Sebastian197/korvun/releases/tag/v0.3.0>) — again substituting
 `<ARCH>`:
 
 ```bash
-BASE=https://github.com/Sebastian197/korvun/releases/download/v0.2.0
-curl -fLO "$BASE/korvun_0.1.0_darwin_<ARCH>.tar.gz"
+BASE=https://github.com/Sebastian197/korvun/releases/download/v0.3.0
+curl -fLO "$BASE/korvun_0.3.0_darwin_<ARCH>.tar.gz"
 curl -fLO "$BASE/checksums.txt"
 curl -fLO "$BASE/checksums.txt.sig"
 curl -fLO "$BASE/checksums.txt.pem"
@@ -94,7 +94,7 @@ unless you installed coreutils):
 
 ```bash
 shasum -a 256 -c checksums.txt --ignore-missing
-# -> korvun_0.1.0_darwin_amd64.tar.gz: OK
+# -> korvun_0.3.0_darwin_amd64.tar.gz: OK
 ```
 
 `OK` on your archive line means the download is intact and matches the published
@@ -122,14 +122,14 @@ Install cosign if you want this layer (and if brew cooperates):
 brew install cosign
 ```
 
-Verify — the identity below is the **exact** signer of `v0.2.0` (Korvun's release
-workflow, read from the real certificate):
+Verify — the identity below is the **exact** signer of `v0.3.0` (Korvun's release
+workflow; the same identity pattern was read from the real `v0.2.0` certificate):
 
 ```bash
 cosign verify-blob checksums.txt \
   --signature checksums.txt.sig \
   --certificate checksums.txt.pem \
-  --certificate-identity 'https://github.com/Sebastian197/korvun/.github/workflows/release.yml@refs/tags/v0.2.0' \
+  --certificate-identity 'https://github.com/Sebastian197/korvun/.github/workflows/release.yml@refs/tags/v0.3.0' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 # -> Verified OK
 ```
@@ -153,7 +153,7 @@ built and signed by the trusted GitHub Actions release workflow.
 Replace `<ARCH>` as in §1 (`amd64` on Intel, `arm64` on Apple Silicon):
 
 ```bash
-tar -xzf korvun_0.1.0_darwin_<ARCH>.tar.gz
+tar -xzf korvun_0.3.0_darwin_<ARCH>.tar.gz
 chmod +x korvun
 ```
 
@@ -182,11 +182,11 @@ confirm — after which macOS remembers your choice.
 
 ```bash
 ./korvun --version
-# -> korvun v0.2.0 (<short-revision>)
+# -> korvun v0.3.0 (<short-revision>)
 ```
 
-That exact output is what the validation run produced. Optionally put it on your
-`PATH`:
+The validation run produced exactly this output (at its then-current `v0.2.0`).
+Optionally put it on your `PATH`:
 
 ```bash
 sudo install -m755 ./korvun /usr/local/bin/korvun
@@ -206,7 +206,7 @@ run + message the bot).
 
 > ⚠️ **Not verified on our own hardware.** This section is written **by analogy** to
 > the macOS walkthrough above (which *was* validated on real hardware) using standard
-> POSIX tooling and the real `v0.2.0` asset names. Please report any issue you hit.
+> POSIX tooling and the real `v0.3.0` asset names. Please report any issue you hit.
 
 The install-a-release path on Linux. The config file and the run/message steps are
 identical to macOS — they live in [`../QUICKSTART.md`](../QUICKSTART.md).
@@ -219,8 +219,8 @@ uname -m
 
 | `uname -m` prints | Use the asset | Arch token |
 |-------------------|---------------|------------|
-| `x86_64` | `korvun_0.1.0_linux_amd64.tar.gz` | **`amd64`** |
-| `aarch64` / `arm64` | `korvun_0.1.0_linux_arm64.tar.gz` | **`arm64`** |
+| `x86_64` | `korvun_0.3.0_linux_amd64.tar.gz` | **`amd64`** |
+| `aarch64` / `arm64` | `korvun_0.3.0_linux_arm64.tar.gz` | **`arm64`** |
 
 A 64-bit Raspberry Pi (4/5) reports `aarch64` → use `arm64`. Substitute your arch
 token for `<ARCH>` below (`amd64` or `arm64`).
@@ -231,8 +231,8 @@ token for `<ARCH>` below (`amd64` or `arm64`).
 
 ```bash
 mkdir -p ~/korvun-install && cd ~/korvun-install
-gh release download v0.2.0 --repo Sebastian197/korvun \
-  --pattern 'korvun_0.1.0_linux_<ARCH>.tar.gz' \
+gh release download v0.3.0 --repo Sebastian197/korvun \
+  --pattern 'korvun_0.3.0_linux_<ARCH>.tar.gz' \
   --pattern 'checksums.txt' \
   --pattern 'checksums.txt.sig' \
   --pattern 'checksums.txt.pem'
@@ -241,8 +241,8 @@ gh release download v0.2.0 --repo Sebastian197/korvun \
 **Or with `curl`:**
 
 ```bash
-BASE=https://github.com/Sebastian197/korvun/releases/download/v0.2.0
-curl -fLO "$BASE/korvun_0.1.0_linux_<ARCH>.tar.gz"
+BASE=https://github.com/Sebastian197/korvun/releases/download/v0.3.0
+curl -fLO "$BASE/korvun_0.3.0_linux_<ARCH>.tar.gz"
 curl -fLO "$BASE/checksums.txt"
 curl -fLO "$BASE/checksums.txt.sig"
 curl -fLO "$BASE/checksums.txt.pem"
@@ -254,7 +254,7 @@ Most Linux distros ship `sha256sum` (GNU coreutils):
 
 ```bash
 sha256sum -c checksums.txt --ignore-missing
-# -> korvun_0.1.0_linux_amd64.tar.gz: OK
+# -> korvun_0.3.0_linux_amd64.tar.gz: OK
 ```
 
 `OK` on your archive line means the download is intact. **Do not proceed on
@@ -272,7 +272,7 @@ the checksum in §3 is sufficient to install and run.
 ### 5. Extract
 
 ```bash
-tar -xzf korvun_0.1.0_linux_<ARCH>.tar.gz
+tar -xzf korvun_0.3.0_linux_<ARCH>.tar.gz
 chmod +x korvun
 ```
 
@@ -285,7 +285,7 @@ The archive contains the `korvun` binary plus `LICENSE` and `README.md`.
 
 ```bash
 ./korvun --version
-# -> korvun v0.2.0 (<short-revision>)
+# -> korvun v0.3.0 (<short-revision>)
 sudo install -m755 ./korvun /usr/local/bin/korvun   # optional: put it on PATH
 ```
 
@@ -307,7 +307,7 @@ token by name, and the run/message steps are the same across OSes.
 ## Windows — walkthrough
 
 > ⚠️ **Not verified on our own hardware.** This section is written **by analogy** to
-> the validated macOS walkthrough, using the real `v0.2.0` asset names and standard
+> the validated macOS walkthrough, using the real `v0.3.0` asset names and standard
 > PowerShell tooling. Several Windows-specific steps are marked **TODO-VERIFY** —
 > confirm them on a real Windows machine before treating them as certain. Please
 > report any issue you hit.
@@ -323,8 +323,8 @@ $env:PROCESSOR_ARCHITECTURE
 
 | It prints | Use the asset | Arch token |
 |-----------|---------------|------------|
-| `AMD64` | `korvun_0.1.0_windows_amd64.zip` | **`amd64`** |
-| `ARM64` | `korvun_0.1.0_windows_arm64.zip` | **`arm64`** |
+| `AMD64` | `korvun_0.3.0_windows_amd64.zip` | **`amd64`** |
+| `ARM64` | `korvun_0.3.0_windows_arm64.zip` | **`arm64`** |
 
 Substitute your arch token for `<ARCH>` below. Windows archives are `.zip` (Unix
 ones are `.tar.gz`), and the binary inside is **`korvun.exe`**.
@@ -335,8 +335,8 @@ ones are `.tar.gz`), and the binary inside is **`korvun.exe`**.
 
 ```powershell
 mkdir korvun-install; cd korvun-install
-gh release download v0.2.0 --repo Sebastian197/korvun `
-  --pattern 'korvun_0.1.0_windows_<ARCH>.zip' `
+gh release download v0.3.0 --repo Sebastian197/korvun `
+  --pattern 'korvun_0.3.0_windows_<ARCH>.zip' `
   --pattern 'checksums.txt' `
   --pattern 'checksums.txt.sig' `
   --pattern 'checksums.txt.pem'
@@ -345,8 +345,8 @@ gh release download v0.2.0 --repo Sebastian197/korvun `
 **Or with `curl.exe`** (bundled with Windows 10/11):
 
 ```powershell
-$BASE = "https://github.com/Sebastian197/korvun/releases/download/v0.2.0"
-curl.exe -fLO "$BASE/korvun_0.1.0_windows_<ARCH>.zip"
+$BASE = "https://github.com/Sebastian197/korvun/releases/download/v0.3.0"
+curl.exe -fLO "$BASE/korvun_0.3.0_windows_<ARCH>.zip"
 curl.exe -fLO "$BASE/checksums.txt"
 ```
 
@@ -360,7 +360,7 @@ auto-compare, so compare the printed hash against the matching line in
 `checksums.txt` yourself:
 
 ```powershell
-Get-FileHash .\korvun_0.1.0_windows_<ARCH>.zip -Algorithm SHA256
+Get-FileHash .\korvun_0.3.0_windows_<ARCH>.zip -Algorithm SHA256
 # Compare the Hash column against the line for this file in checksums.txt.
 Get-Content .\checksums.txt | Select-String 'windows_<ARCH>.zip'
 ```
@@ -385,7 +385,7 @@ only installing cosign differs on Windows.
 ### 5. Extract
 
 ```powershell
-Expand-Archive -Path .\korvun_0.1.0_windows_<ARCH>.zip -DestinationPath .
+Expand-Archive -Path .\korvun_0.3.0_windows_<ARCH>.zip -DestinationPath .
 ```
 
 The archive contains `korvun.exe` plus `LICENSE` and `README.md`.
@@ -405,7 +405,7 @@ Gatekeeper). To run it anyway, the typical flow is: click **More info** →
 
 ```powershell
 .\korvun.exe --version
-# -> korvun v0.2.0 (<short-revision>)
+# -> korvun v0.3.0 (<short-revision>)
 ```
 
 ### 8. Configure, and note the token export in PowerShell
@@ -556,7 +556,7 @@ version until you replace it yourself.
 
 ```bash
 korvun --version
-# -> korvun v0.2.0 (<short-revision>)
+# -> korvun v0.3.0 (<short-revision>)
 ```
 
 ### Update to a newer release
