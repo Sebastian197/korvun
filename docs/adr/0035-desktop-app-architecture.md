@@ -78,6 +78,12 @@ already binds the piece to the shared cadence.
   AssetServer supports **streamed/flushed responses** (the SSE live-view must
   not buffer). If it buffers, the fallback is **restricted CORS** on the admin
   API (allow only the Wails origin, loopback bind unchanged).
+  **Gate RESOLVED (2026-07-19, SP1 spike, real app on macOS 13/WKWebView):
+  the AssetServer handler streams flushed SSE incrementally** (EventSource
+  arrivals 34/419/820 ms vs server flushes 0/402/803 ms; fetch streaming
+  reader confirms) — **the proxy path stands; the CORS fallback is not
+  needed.** Windows (WebView2) and Linux (WebKitGTK) get a re-check when
+  their packaging lanes first run.
 - **(c) Shell chrome survives core shutdown** (confirmed requirement): the
   start/stop controls, config picker, and health indicator are served by the
   shell, not by the core's HTTP server — pressing "stop" must never kill the
