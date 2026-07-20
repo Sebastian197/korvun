@@ -46,11 +46,11 @@ jobs:
           echo "::error::Manual dispatch supports dry_run=true only; publish a real release by pushing a v* tag."
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history so the changelog can diff from the previous tag
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -74,7 +74,7 @@ jobs:
       # --snapshot dry-run (builds + signs + attests, publishes nothing). Snapshot
       # still runs the `signs:` block, so keyless cosign is exercised for real.
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
           version: '~> v2'
