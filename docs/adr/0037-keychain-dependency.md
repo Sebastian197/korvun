@@ -1,8 +1,10 @@
 # ADR-0037: Dependency — `zalando/go-keyring` (OS keychain access)
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-19
 > **Deciders:** Sebastián Moreno Saavedra
+>
+> **Accepted 2026-07-25, copilot on-disk review of SP3 passed.**
 >
 > The dependency decision ADR-0035 §4 left open ("the keychain access library
 > is a dependency decision with its own four-axis gate in the TDD sub-phase").
