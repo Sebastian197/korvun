@@ -1,14 +1,27 @@
-# Builder frontend CI (Stage 14 Phase 2b). SEPARATE from the Go pipeline so Node
-# flakiness never gates the quality matrix, the cross-compile x6, or the release
-# (ADR-0029 §6). Path-filtered to web/builder so a Go-only change does not run it.
+# Frontend CI: the builder (Stage 14 Phase 2b) and the desktop chrome (SP6).
+# SEPARATE from the Go pipeline so Node flakiness never gates the quality
+# matrix, the cross-compile x6, or the release (ADR-0029 §6). Path-filtered so
+# a Go-only change does not run it.
 name: Frontend
 
 on:
   push:
     branches: [master]
-    paths: ["web/builder/**", ".github/workflows/frontend.yml"]
+    paths:
+      [
+        "web/builder/**",
+        "cmd/korvun-desktop/frontend/**",
+        "cmd/korvun-desktop/e2e-harness/**",
+        ".github/workflows/frontend.yml",
+      ]
   pull_request:
-    paths: ["web/builder/**", ".github/workflows/frontend.yml"]
+    paths:
+      [
+        "web/builder/**",
+        "cmd/korvun-desktop/frontend/**",
+        "cmd/korvun-desktop/e2e-harness/**",
+        ".github/workflows/frontend.yml",
+      ]
 
 permissions:
   contents: read
@@ -52,4 +65,49 @@ jobs:
       - run: npx playwright install --with-deps chromium
       # Flow + rejections + ECONNREFUSED-during-cutover + axe-core + no-same-origin
       # guard. Separate from the Go pipeline — never gates cross-compile / release.
+      - run: npm run e2e
+
+  chrome:
+    name: chrome (lint · typecheck · test · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cmd/korvun-desktop/frontend
+    steps:
+      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v4 # GitHub-owned, repo major-tag convention
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cmd/korvun-desktop/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  chrome-e2e:
+    name: chrome e2e (Playwright · SP4 proxy + real no-network core)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cmd/korvun-desktop/frontend
+    steps:
+      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v4 # GitHub-owned, repo major-tag convention
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cmd/korvun-desktop/frontend/package-lock.json
+      # The e2e webServer is the Go harness (built chrome + SP4 proxy + the
+      # SP5 channel-less template on a real Controller) — Go is required.
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      # Pre-compile the harness so its cold build (modernc.org/sqlite tree)
+      # never eats into Playwright's webServer timeout on a cache miss.
+      - run: go build -o /dev/null ../e2e-harness
       - run: npm run e2e
