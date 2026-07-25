@@ -75,6 +75,15 @@ web/builder/dist/*
 !web/builder/dist/.gitkeep
 !web/builder/dist/index.html
 
+# Desktop chrome (SP6a): same stub pattern as the builder — the committed
+# placeholder keeps //go:embed all:frontend/dist matching on a clean clone;
+# the real bundle comes from `make desktop-frontend` and is never trusted
+# from git.
+!cmd/korvun-desktop/frontend/dist/
+cmd/korvun-desktop/frontend/dist/*
+!cmd/korvun-desktop/frontend/dist/.gitkeep
+!cmd/korvun-desktop/frontend/dist/index.html
+
 # Obsidian per-machine vault config (Claude Code IDE plugin)
 .obsidian/
 

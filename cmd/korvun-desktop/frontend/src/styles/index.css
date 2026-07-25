@@ -1,0 +1,39 @@
+/* Geist, self-hosted woff2 via @fontsource (SIL OFL; license file in
+   fonts/LICENSES) — zero CDN, ADR-0029 §5. */
+@import '@fontsource/geist-sans/400.css';
+@import '@fontsource/geist-sans/500.css';
+@import '@fontsource/geist-sans/600.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
+@import 'tailwindcss';
+@import './theme.css';
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--win);
+  color: var(--tx1);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Focus ring: violet, token-driven, visible only for keyboard focus. */
+:focus-visible {
+  outline: 2px solid var(--vio);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}

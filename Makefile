@@ -3,13 +3,13 @@ GOLANGCI_LINT := $(GOBIN)/golangci-lint
 GOIMPORTS := $(GOBIN)/goimports
 COVERAGE_THRESHOLD := 85
 
-.PHONY: build test lint cover quality fmt vet frontend-install frontend-build
+.PHONY: build test lint cover quality fmt vet frontend-install frontend-build desktop-frontend-install desktop-frontend
 
 # The builder frontend's node_modules vendors a stray Go package (flatted), which
 # `./...` would otherwise pick up. Exclude it from Go tooling. FOLLOW-UP (by
 # construction): a nested go.mod in web/builder would make root ./... skip it
 # without this filter — see the 2b.1 report.
-GO_PKGS := $(shell go list ./... 2>/dev/null | grep -v '/web/builder/node_modules/')
+GO_PKGS := $(shell go list ./... 2>/dev/null | grep -v '/node_modules/')
 
 # The builder frontend (web/builder) is built to web/builder/dist and embedded via
 # go:embed (ADR-0029 §4). `build` (the shipped binary) rebuilds it FIRST so the
@@ -21,6 +21,16 @@ frontend-install:
 
 frontend-build:
 	cd web/builder && npm run build
+
+# The desktop chrome (cmd/korvun-desktop/frontend, SP6) builds to its own
+# dist/ and is embedded by the DESKTOP binary only (//go:embed
+# all:frontend/dist, ADR-0029 §4 stub pattern). Never part of `build` or
+# `quality` — the headless pipeline stays Node-free.
+desktop-frontend-install:
+	cd cmd/korvun-desktop/frontend && npm ci
+
+desktop-frontend:
+	cd cmd/korvun-desktop/frontend && npm run build
 
 build: frontend-build
 	go build ./cmd/korvun

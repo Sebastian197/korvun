@@ -4,13 +4,13 @@
 //go:build desktop
 
 // Command korvun-desktop is the desktop shell for Korvun (ADR-0035): a native
-// window that will serve the existing builder and operate an in-process core.
+// window serving the chrome (SP6) over the in-process core.
 //
-// SP4 scope: the SP1 skeleton (static page) + the asset seam — the
-// internal/shell Controller's same-origin admin proxy mounted as the
-// AssetServer Handler, so /api/*, /builder/*, /ui/*, /healthz and /metrics
-// resolve against the current core cycle (503 while stopped). The real
-// chrome and its start/stop bindings are SP6.
+// SP6a scope: the built chrome (frontend/dist, //go:embed — the ADR-0029 §4
+// stub pattern keeps a clean clone compiling; `make desktop-frontend` builds
+// the real bundle) + the SP4 same-origin admin proxy as the AssetServer
+// Handler + the internal/shell Desktop bindings (THE LAW: every call
+// bounded). The window chrome itself grows cut by cut (6b/6c).
 //
 // Build (never part of the default suite; the desktop build tag gates this
 // package so the headless ×6 CGO_ENABLED=0 pipeline and the 3-OS quality
@@ -27,6 +27,7 @@ package main
 
 import (
 	"embed"
+	"io/fs"
 	"log/slog"
 	"os"
 
@@ -38,15 +39,30 @@ import (
 	"github.com/Sebastian197/korvun/internal/shell/keyring"
 )
 
-//go:embed all:frontend
-var shellAssets embed.FS
+//go:embed all:frontend/dist
+var chromeAssets embed.FS
+
+// version is stamped by the release build via
+// -ldflags "-X main.version=v…" (ADR-0025 pattern); "dev" otherwise.
+var version = "dev"
 
 func main() {
+	assets, err := fs.Sub(chromeAssets, "frontend/dist")
+	if err != nil {
+		slog.Error("korvun-desktop: chrome assets missing", "error", err.Error())
+		os.Exit(1)
+	}
+
 	ctrl := shell.New(
 		shell.WithLogger(slog.Default()),
 		shell.WithSecretStore(keyring.New()),
 	)
-	err := wails.Run(&options.App{
+	desk := shell.NewDesktop(ctrl,
+		shell.WithDesktopLogger(slog.Default()),
+		shell.WithDesktopVersion(version),
+	)
+
+	err = wails.Run(&options.App{
 		Title:  "Korvun",
 		Width:  1100,
 		Height: 760,
@@ -54,9 +70,10 @@ func main() {
 		// frontend asset named under /api, /builder, /ui, /healthz or
 		// /metrics would silently shadow the proxy — never add one.
 		AssetServer: &assetserver.Options{
-			Assets:  shellAssets,
+			Assets:  assets,
 			Handler: ctrl.ProxyHandler(),
 		},
+		Bind: []interface{}{desk},
 	})
 	if err != nil {
 		slog.Error("korvun-desktop: window loop failed", "error", err.Error())

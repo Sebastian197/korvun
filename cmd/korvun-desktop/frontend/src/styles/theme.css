@@ -1,0 +1,88 @@
+/* Chrome design tokens — the 1:1 CSS mirror of src/design/tokens.ts, both
+   extracted from the design-track standalone source. data-theme on <html>
+   swaps the whole table (light mode is a variable swap, ADR-0030 §2). The
+   gradient is identity-only: ONE primary action per view (scanned).
+   CONSCIOUS DEVIATION (review-ratified, pending design-track sign-off):
+   the mock assigns --tx3/--capt values that fail the AA gate in their own
+   theme (dark #68687C/#54546A on #0F0F16 ≈ 3.5/2.2:1) — the two themes'
+   values are SWAPPED here so both pass; the AA law outranks the mock's
+   literal (ADR-0030 §2). Everything else is byte-faithful. */
+
+:root,
+:root[data-theme='dark'] {
+  --desk: #08080d;
+  --win: #0f0f16;
+  --side: #12121a;
+  --card: #16161f;
+  --card2: #1b1b26;
+  --line: #232330;
+  --line2: #1e1e29;
+  --tx1: #eeeef4;
+  --tx2: #a2a2b5;
+  --tx3: #8d8d9f;
+  --capt: #84849a;
+  --vio: #7a5af5;
+  --vio-t: #a28bff;
+  --vio-s: rgba(122, 90, 245, 0.14);
+  --on-vio: #ffffff;
+  --ok-t: #4cd7c6;
+  --ok-s: rgba(43, 200, 183, 0.12);
+  --warn-t: #e7b45d;
+  --warn-s: rgba(224, 164, 60, 0.14);
+  --err-t: #f17e86;
+  --err-s: rgba(229, 72, 77, 0.14);
+  --off-t: #8a8a9e;
+  --off-s: rgba(140, 140, 160, 0.13);
+  --nav-h: #17171f;
+  --nav-on: #1d1d29;
+  --grad: linear-gradient(120deg, #2bc8b7, #7a5af5);
+  --shadow: 0 30px 90px rgba(0, 0, 0, 0.6), 0 4px 18px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='light'] {
+  --desk: #e8e8ef;
+  --win: #fafafc;
+  --side: #f3f3f7;
+  --card: #ffffff;
+  --card2: #f4f4f8;
+  --line: #e2e2eb;
+  --line2: #ececf3;
+  --tx1: #191922;
+  --tx2: #5b5b70;
+  --tx3: #68687c;
+  --capt: #54546a;
+  --vio: #7a5af5;
+  --vio-t: #6644e8;
+  --vio-s: rgba(122, 90, 245, 0.11);
+  --on-vio: #ffffff;
+  --ok-t: #0e8b7d;
+  --ok-s: rgba(43, 200, 183, 0.15);
+  --warn-t: #96660f;
+  --warn-s: rgba(224, 164, 60, 0.16);
+  --err-t: #c13a42;
+  --err-s: rgba(229, 72, 77, 0.11);
+  --off-t: #75758a;
+  --off-s: rgba(120, 120, 145, 0.12);
+  --nav-h: #efeff5;
+  --nav-on: #e8e8f0;
+  --shadow: 0 30px 80px rgba(25, 25, 55, 0.16), 0 4px 16px rgba(25, 25, 55, 0.08);
+}
+
+/* Motion tokens (ADR-0030 §2): enter / exit easings, micro/base/panel. */
+:root {
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: ease-in;
+  --t-micro: 120ms;
+  --t-base: 180ms;
+  --t-panel: 220ms;
+  --font-sans: 'Geist Sans', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-micro: 0ms;
+    --t-base: 0ms;
+    --t-panel: 0ms;
+  }
+}
