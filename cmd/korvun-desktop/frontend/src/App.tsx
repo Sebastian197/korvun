@@ -49,12 +49,30 @@ export function App(): React.JSX.Element {
       .Version()
       .then(setVersion)
       .catch(() => undefined)
-    // Fresh install → run onboarding until it finishes (ADR-0035 §5). A
-    // false/absent result (existing config, or no bindings) skips it.
-    void d
-      .EnsureDefaultConfig()
-      .then((created) => setOnboarding(created))
-      .catch(() => undefined)
+    // Boot sequence: ensure the default config EXISTS (created=true is the
+    // onboarding trigger, ADR-0035 §5), then LOAD it into the Controller so
+    // the parado hero's Start actually works — without this the shipping app
+    // has no config loaded and Start returns ErrNoConfig (the harness masked
+    // it by loading config itself; review finding). LoadConfig is a
+    // stopped-state op and boot is stopped, so it is safe here.
+    void (async () => {
+      let created = false
+      try {
+        created = await d.EnsureDefaultConfig()
+      } catch {
+        // No bindings / older shell → stay on the normal chrome.
+      }
+      setOnboarding(created)
+      // Load the config so Start works, best-effort and independent of the
+      // onboarding decision above (a LoadConfig failure must not hide the
+      // onboarding a fresh install needs).
+      try {
+        const path = await d.DefaultConfigPath()
+        await d.LoadConfig(path)
+      } catch {
+        // Start will surface its own error if the core cannot boot.
+      }
+    })()
   }, [])
 
   const active = NAV.find((n) => n.id === view)

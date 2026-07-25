@@ -134,6 +134,22 @@ describe('Canales', () => {
     })
   })
 
+  it('degrades honestly when the config is unavailable (no guessed token name)', async () => {
+    const stopped = (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: 'core stopped' }), { status: 503 }),
+      )) as typeof fetch
+    render(
+      <Channels onOpenWizard={() => undefined} onOpenBuilder={() => undefined} fetcher={stopped} />,
+    )
+    // The list still renders from the snapshot, showing only the mode (no
+    // guessed env-var name), and the detail route reads 'sin ruta'.
+    expect(screen.getAllByText('Telegram').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/· TELEGRAM_TOKEN/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Telegram/ }))
+    expect(screen.getByText(/sin ruta/)).toBeInTheDocument()
+  })
+
   it('Quitar canal asks for confirmation and only then mutates', async () => {
     const fetcher = vi.fn(((url: string, init?: RequestInit) => {
       const u = String(url)

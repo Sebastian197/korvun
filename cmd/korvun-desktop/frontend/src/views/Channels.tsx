@@ -6,31 +6,16 @@
 // without an API is painted (FR-WIN-4).
 import { useEffect, useState } from 'react'
 import { IconChannels, IconWarning } from '../components/icons'
-import { channelGlyph } from '../lib/channels'
+import { channelGlyph, channelLabel } from '../lib/channels'
 import {
   fetchConfig,
   mutateConfig,
+  mutateOpts,
   removeChannel,
   type CoreConfig,
-  type MutateOptions,
 } from '../config/mutate'
 import { useSnapshot, type ChannelSummary } from '../snapshot/store'
 import { useCoreState } from '../status/store'
-
-// Build a MutateOptions with only the defined keys (exactOptionalPropertyTypes).
-function mutateOpts(fetcher?: typeof fetch, pollIntervalMs?: number): MutateOptions {
-  const o: MutateOptions = {}
-  if (fetcher !== undefined) o.fetcher = fetcher
-  if (pollIntervalMs !== undefined) o.pollIntervalMs = pollIntervalMs
-  return o
-}
-
-const CHANNEL_LABEL = (type: string): string => type.charAt(0).toUpperCase() + type.slice(1)
-
-const TOKEN_DEFAULT: Record<string, string> = {
-  telegram: 'TELEGRAM_TOKEN',
-  discord: 'DISCORD_BOT_TOKEN',
-}
 
 interface ChannelsProps {
   onOpenWizard: () => void
@@ -76,8 +61,8 @@ export function Channels({
 
   const active = selected ?? channels[0]?.name ?? null
   const activeSummary = channels.find((c) => c.name === active) ?? null
-  const activeCfg = config?.channels.find((c) => c.type === active) ?? null
-  const activeRoute = config?.routes.find((r) => r.channel === active) ?? null
+  const activeCfg = config?.channels.find((c) => c.type === activeSummary?.type) ?? null
+  const activeRoute = config?.routes.find((r) => r.channel === activeSummary?.type) ?? null
 
   const remove = (): void => {
     if (active === null || busy) return
@@ -122,12 +107,15 @@ export function Channels({
                 {channelGlyph(ch.type)}
               </span>
               <span className="chan-row-body">
-                <span className="chan-row-title">{CHANNEL_LABEL(ch.type)}</span>
+                <span className="chan-row-title">{channelLabel(ch.type)}</span>
                 <span className="chan-row-caption mono">
-                  {ch.mode} ·{' '}
-                  {config?.channels.find((c) => c.type === ch.type)?.token_env ??
-                    TOKEN_DEFAULT[ch.type] ??
-                    'sin secreto'}
+                  {ch.mode}
+                  {/* The env-var NAME comes from the real config, never a
+                      guess (FR-WIN-4): until it loads, show only the mode. */}
+                  {(() => {
+                    const tok = config?.channels.find((c) => c.type === ch.type)?.token_env
+                    return tok !== undefined && tok !== '' ? ` · ${tok}` : ''
+                  })()}
                 </span>
               </span>
               <span className={`chan-dot ${running ? 'chan-dot-ok' : ''}`} aria-hidden="true" />
@@ -189,7 +177,7 @@ function ChannelDetail({
           {channelGlyph(summary.type)}
         </span>
         <div className="chan-detail-title">
-          <div className="panel-row-title">{CHANNEL_LABEL(summary.type)}</div>
+          <div className="panel-row-title">{channelLabel(summary.type)}</div>
           <div className="panel-row-caption">
             {summary.type} · {summary.mode}
           </div>
@@ -273,7 +261,7 @@ function ConfirmRemove({
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Quitar canal">
       <div className="modal">
-        <div className="modal-title">¿Quitar {CHANNEL_LABEL(name)}?</div>
+        <div className="modal-title">¿Quitar {channelLabel(name)}?</div>
         <p className="modal-body">
           El canal dejará de recibir y responder mensajes. El token en tu entorno o tu llavero no se
           toca — puedes volver a añadirlo cuando quieras.

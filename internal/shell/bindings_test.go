@@ -288,6 +288,38 @@ func TestDesktop_checkSecretPresence(t *testing.T) {
 	}
 }
 
+// A non-NotFound keychain error surfaces as a wrapped error, and the name is
+// shape-gated so the binding cannot enumerate arbitrary env vars.
+func TestDesktop_checkSecretPresence_errorsAndShapeGate(t *testing.T) {
+	const name = "SHELL_TEST_PRESENCE_TOKEN" //nolint:gosec // an env-var NAME, not a credential
+
+	// A store whose Get fails with a generic error.
+	store := newFakeStore()
+	store.getErr = errors.New("keychain backend unavailable")
+	c := testController()
+	WithSecretStore(store)(c)
+	d := testDesktop(c)
+	if _, err := d.CheckSecretPresence(name); err == nil {
+		t.Fatal("generic keychain error: want a surfaced error, got nil")
+	}
+
+	// Shape gate: a name that is not a channel/model secret variable is
+	// refused before any lookup — no general env-var presence oracle.
+	if _, err := d.CheckSecretPresence("PATH"); err == nil {
+		t.Fatal("non-secret name PATH: want a refusal, got nil")
+	}
+	if _, err := d.CheckSecretPresence("AWS_ACCESS_KEY_ID"); err == nil {
+		t.Fatal("AWS_ACCESS_KEY_ID does not match _(TOKEN|KEY|SECRET)$: want refusal")
+	}
+	// A well-shaped name is accepted (env absent, no store lookup error here).
+	clean := newFakeStore()
+	c2 := testController()
+	WithSecretStore(clean)(c2)
+	if _, err := testDesktop(c2).CheckSecretPresence("SOME_API_KEY"); err != nil {
+		t.Fatalf("well-shaped SOME_API_KEY: want accepted, got %v", err)
+	}
+}
+
 // THE LAW covers the new binding: a wedged keychain Get times out with the
 // named error inside the keychain deadline class — never an unbounded hang.
 func TestDesktop_law_checkSecretPresenceBounded(t *testing.T) {
@@ -296,7 +328,7 @@ func TestDesktop_law_checkSecretPresenceBounded(t *testing.T) {
 	d := testDesktop(c)
 
 	start := time.Now()
-	if _, err := d.CheckSecretPresence("ANY_NAME"); !errors.Is(err, ErrBindingTimeout) {
+	if _, err := d.CheckSecretPresence("ANY_TOKEN"); !errors.Is(err, ErrBindingTimeout) {
 		t.Fatalf("wedged store: want ErrBindingTimeout, got %v", err)
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {

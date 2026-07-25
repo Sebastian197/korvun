@@ -61,6 +61,16 @@ export interface MutateOptions {
   maxPolls?: number
 }
 
+/** Build a MutateOptions with only the defined keys — the two callers (the
+ * wizard's add, Canales' remove) both need this under
+ * exactOptionalPropertyTypes. */
+export function mutateOpts(fetcher?: typeof fetch, pollIntervalMs?: number): MutateOptions {
+  const o: MutateOptions = {}
+  if (fetcher !== undefined) o.fetcher = fetcher
+  if (pollIntervalMs !== undefined) o.pollIntervalMs = pollIntervalMs
+  return o
+}
+
 const TERMINAL = new Set(['succeeded', 'failed', 'rolled-back'])
 
 function sleep(ms: number): Promise<void> {
@@ -111,6 +121,11 @@ export async function mutateConfig(
       if (resp.ok) {
         const state = ((await resp.json()) as { state: string }).state
         if (TERMINAL.has(state)) return { ok: state === 'succeeded', state }
+      } else if (resp.status === 404) {
+        // A stable 404 is the handle being unknown/expired — not the
+        // transient mid-cutover error F4-retry is for; short-circuit rather
+        // than burn the whole poll budget (review finding).
+        return { ok: false, state: 'unknown-handle', detail: 'reload handle not found' }
       }
     } catch {
       // Transient: the admin server is restarting mid-cutover; the handle

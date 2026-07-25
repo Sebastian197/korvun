@@ -908,22 +908,6 @@
   line-height: 1.55;
 }
 
-/* Honest empty state for views that arrive in later cuts. */
-.empty {
-  max-width: 460px;
-  margin: 12vh auto 0;
-  text-align: center;
-  color: var(--tx3);
-  font-size: 13.5px;
-}
-
-.empty .glyph {
-  font-family: var(--font-mono);
-  font-size: 26px;
-  color: var(--capt);
-  margin-bottom: 12px;
-}
-
 /* ---- Canales (SP6c, final-15/16/17) ---- */
 .channels {
   flex: 1;

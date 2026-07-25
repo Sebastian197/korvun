@@ -2,7 +2,7 @@
 // real icons, the brand tile carries the canonical mark, and the sidebar
 // foot carries the status chip.
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 
 interface FakeWindow {
@@ -93,18 +93,26 @@ describe('chrome shell', () => {
     expect(screen.queryByRole('navigation', { name: 'Secciones' })).toBeNull()
   })
 
-  it('an existing install (created=false) shows the normal chrome, no onboarding', async () => {
+  it('an existing install (created=false) shows the normal chrome AND loads the config so Start works', async () => {
+    const loadConfig = vi.fn(() => Promise.resolve())
     ;(window as unknown as FakeWindow).go = {
       shell: {
         Desktop: {
           Version: () => Promise.resolve('v0.4.0'),
           EnsureDefaultConfig: () => Promise.resolve(false),
+          DefaultConfigPath: () => Promise.resolve('/cfg/korvun.json'),
+          LoadConfig: loadConfig,
         },
       },
     }
     render(<App />)
     await waitFor(() => {
       expect(screen.getByTestId('version').textContent).toBe('v0.4.0')
+    })
+    // The boot MUST load the config (otherwise the shipping Start hits
+    // ErrNoConfig — the adversarial-review bug the harness had masked).
+    await waitFor(() => {
+      expect(loadConfig).toHaveBeenCalledWith('/cfg/korvun.json')
     })
     expect(screen.queryByTestId('onboarding')).toBeNull()
     expect(screen.getByRole('navigation', { name: 'Secciones' })).toBeInTheDocument()

@@ -8,36 +8,10 @@
 // CheckSecretPresence (presence, never value) + the terminal fold. Finishing
 // runs the SP5-proven pipe: POST /api/config through the proxy + reload poll.
 import { useState } from 'react'
+import { WizardSteps } from '../components/WizardSteps'
+import { CHANNEL_TYPES, channelGlyph } from '../lib/channels'
 import { desktop } from '../lib/go'
-import { addChannel, mutateConfig, type ChannelConfig, type MutateOptions } from '../config/mutate'
-
-interface ChannelType {
-  id: string
-  label: string
-  mode: string
-  tokenEnv: string
-  blurb: string
-  hasSecret: boolean
-}
-
-const TYPES: ChannelType[] = [
-  {
-    id: 'telegram',
-    label: 'Telegram',
-    mode: 'polling',
-    tokenEnv: 'TELEGRAM_TOKEN',
-    blurb: 'bot con @BotFather · polling',
-    hasSecret: true,
-  },
-  {
-    id: 'discord',
-    label: 'Discord',
-    mode: 'gateway',
-    tokenEnv: 'DISCORD_BOT_TOKEN',
-    blurb: 'bot del Portal de desarrolladores · gateway',
-    hasSecret: true,
-  },
-]
+import { addChannel, mutateConfig, mutateOpts, type ChannelConfig } from '../config/mutate'
 
 type KsState = 'idle' | 'saving' | 'done'
 type PreState = 'idle' | 'checking' | 'ok' | 'fail'
@@ -66,16 +40,18 @@ export function ChannelWizard({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const chosen = TYPES.find((t) => t.id === typeId) ?? null
+  const chosen = CHANNEL_TYPES.find((t) => t.id === typeId) ?? null
 
   const saveSecret = (): void => {
-    const d = desktop()
     if (!chosen || secret === '' || ks === 'saving') return
+    const d = desktop()
     if (!d) {
-      // No bindings (plain browser): the keychain step is inert but the flow
-      // proceeds — the harness bridge provides SetSecret in e2e.
-      setKs('done')
+      // No bindings (plain browser / the e2e harness installs its own): the
+      // keychain step cannot store anything, so stay honest — the flow does
+      // not claim a secret was persisted. In the packaged Wails app the
+      // binding is always present; this path is dev/harness-only.
       setSecret('')
+      setError('Sin llavero en este entorno — exporta la variable en tu terminal.')
       return
     }
     setKs('saving')
@@ -85,9 +61,14 @@ export function ChannelWizard({
         setKs('done')
         setSecret('') // drop the value from state the instant it is stored
       })
-      .catch((e: unknown) => {
+      .catch(() => {
+        // Generic message: the OS keyring backend's error strings are outside
+        // the audited boundary — never render them (project rule: nothing
+        // secret-adjacent in an error message). Detail is logged Go-side.
         setKs('idle')
-        setError(e instanceof Error ? e.message : String(e))
+        setError(
+          'No se pudo guardar en el llavero. Inténtalo de nuevo o exporta la variable en tu terminal.',
+        )
       })
   }
 
@@ -114,10 +95,7 @@ export function ChannelWizard({
     setSubmitting(true)
     setError('')
     const ch: ChannelConfig = { type: chosen.id, mode: chosen.mode, token_env: chosen.tokenEnv }
-    const opts: MutateOptions = {}
-    if (fetcher !== undefined) opts.fetcher = fetcher
-    if (pollIntervalMs !== undefined) opts.pollIntervalMs = pollIntervalMs
-    void mutateConfig((c) => addChannel(c, ch), opts)
+    void mutateConfig((c) => addChannel(c, ch), mutateOpts(fetcher, pollIntervalMs))
       .then((res) => {
         if (res.ok) onDone()
         else setError(`No se pudo conectar el canal (${res.state}).`)
@@ -136,13 +114,7 @@ export function ChannelWizard({
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Añadir un canal">
       <div className="modal modal-wide" data-testid="channel-wizard">
-        <div className="wiz-steps">
-          <span className={`wiz-step ${step === 1 ? 'wiz-step-on' : ''}`}>1 · Canal</span>
-          <span className="wiz-sep" />
-          <span className={`wiz-step ${step === 2 ? 'wiz-step-on' : ''}`}>2 · Preparar</span>
-          <span className="wiz-sep" />
-          <span className={`wiz-step ${step === 3 ? 'wiz-step-on' : ''}`}>3 · El token</span>
-        </div>
+        <WizardSteps step={step} labels={['Canal', 'Preparar', 'El token']} />
 
         <div className="wiz-body">
           {step === 1 && (
@@ -150,7 +122,7 @@ export function ChannelWizard({
               <div className="wiz-heading">¿Qué canal quieres conectar?</div>
               <div className="wiz-caption">Podrás añadir más cuando quieras.</div>
               <div className="wiz-type-list">
-                {TYPES.map((t) => {
+                {CHANNEL_TYPES.map((t) => {
                   const taken = existingTypes.includes(t.id)
                   return (
                     <button
@@ -161,7 +133,7 @@ export function ChannelWizard({
                       onClick={() => setTypeId(t.id)}
                     >
                       <span className="chan-tile" aria-hidden="true">
-                        {t.label.slice(0, 2).toUpperCase()}
+                        {channelGlyph(t.id)}
                       </span>
                       <span className="wiz-type-body">
                         <span className="wiz-type-title">{t.label}</span>

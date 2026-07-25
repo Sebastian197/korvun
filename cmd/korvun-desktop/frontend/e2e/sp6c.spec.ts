@@ -20,9 +20,13 @@ async function post(page: Page, path: string, body?: unknown): Promise<void> {
   if (resp.status() >= 400) throw new Error(`${path} -> ${resp.status()}: ${await resp.text()}`)
 }
 
-test.beforeAll(async ({ request }) => {
+// Each test (and each Playwright retry) starts from the known one-telegram
+// config — no test-body cleanup that a mid-flight failure would skip (review
+// finding). reset-config stops the core and restores the pristine config.
+test.beforeEach(async ({ request }) => {
   await request.post(`${BASE}/__test/model`, { data: { mode: 'ok' } })
   await request.post(`${BASE}/__test/channel`, { data: { send: 'ok' } })
+  await request.post(`${BASE}/__test/reset-config`, { data: [] })
 })
 
 test('Canales: lista con salud real + detalle honesto', async ({ page }) => {
@@ -84,18 +88,10 @@ test('El asistente en 3 pasos: llavero + Comprobar entorno + POST + reload', asy
   await expect(page.getByRole('dialog')).toBeHidden({ timeout: 15000 })
   await expect(page.getByText('Discord').first()).toBeVisible({ timeout: 15000 })
 
-  // The secret value never reached localStorage.
+  // The secret value never reached localStorage. Cleanup is beforeEach's job
+  // (reset-config), so a failure here never pollutes the next test/retry.
   const ls = await page.evaluate(() => JSON.stringify(localStorage))
   expect(ls).not.toContain('e2e-discord-token-value')
-
-  // Back to zero for the next test: remove discord.
-  await page
-    .getByRole('button', { name: /Discord/ })
-    .first()
-    .click()
-  await page.getByRole('button', { name: /Quitar canal/ }).click()
-  await page.getByRole('button', { name: /Sí, quitar/ }).click()
-  await expect(page.getByText('Discord').first()).toBeHidden({ timeout: 15000 })
 })
 
 test('Builder: iframe same-origin a /builder/ con el core en marcha', async ({ page }) => {
@@ -143,8 +139,4 @@ test('Incidencia de evento: "Entendido" despeja el banner', async ({ page }) => 
   await page.getByRole('button', { name: 'Entendido' }).click()
   await expect(page.getByText('El gateway está en marcha')).toBeVisible()
   await expect(page.getByText('En marcha — incidencia')).toBeHidden()
-  await post(page, '/__test/channel', { send: 'ok' })
-  // Leave the harness stopped-clean for reuse.
-  await page.getByRole('button', { name: /Detener/ }).click()
-  await expect(page.getByText('El gateway está detenido')).toBeVisible({ timeout: 15000 })
 })

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -226,11 +227,23 @@ type SecretPresence struct {
 	InKeychain bool `json:"inKeychain"`
 }
 
+// secretNamePattern bounds CheckSecretPresence to plausible channel/model
+// secret variable NAMES (upper snake case, ending in _TOKEN/_KEY/_SECRET) so
+// the binding cannot be turned into a general env-var presence oracle over
+// AWS_*, GITHUB_TOKEN, etc. under a hypothetical XSS (review finding). It is
+// a shape gate, not an allowlist of specific vars — the wizard suggests names
+// the user can edit, so an exact list would be wrong.
+var secretNamePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*_(TOKEN|KEY|SECRET)$`)
+
 // CheckSecretPresence resolves whether the named variable is present in the
 // ENVIRONMENT and/or the OS keychain — the wizard's "Comprobar entorno · sin
 // leer su valor" (SP6c). Keychain deadline class: a Secret Service unlock
-// prompt is a legitimate slow path.
+// prompt is a legitimate slow path. The name is shape-gated so this cannot
+// enumerate arbitrary environment variables.
 func (d *Desktop) CheckSecretPresence(name string) (SecretPresence, error) {
+	if !secretNamePattern.MatchString(name) {
+		return SecretPresence{}, fmt.Errorf("shell: %q is not a channel/model secret variable name", name)
+	}
 	return bounded(d, "check secret presence", d.deadlines.keychain, func() (SecretPresence, error) {
 		p := SecretPresence{InEnv: os.Getenv(name) != ""}
 		inKeychain, err := d.ctrl.SecretInKeychain(name)

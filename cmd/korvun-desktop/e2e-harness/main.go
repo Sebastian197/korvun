@@ -326,23 +326,16 @@ func run() error {
 		return fmt.Errorf("harness XDG_CONFIG_HOME: %w", err)
 	}
 
+	cfgPath, err := shell.DefaultConfigPath()
+	if err != nil {
+		return fmt.Errorf("resolve default config path: %w", err)
+	}
 	if !*fresh {
 		// Non-fresh: write the harness config (scripted channel + fake model)
 		// AT the default path so the chrome's EnsureDefaultConfig sees it
 		// exists (created=false → no onboarding), then load it.
-		cfgPath, err := shell.DefaultConfigPath()
-		if err != nil {
-			return fmt.Errorf("resolve default config path: %w", err)
-		}
-		if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
-			return fmt.Errorf("mkdir config dir: %w", err)
-		}
-		cfgBytes, err := json.MarshalIndent(harnessConfig(fm.url), "", "  ")
-		if err != nil {
-			return fmt.Errorf("marshal config: %w", err)
-		}
-		if err := os.WriteFile(cfgPath, cfgBytes, 0o600); err != nil {
-			return fmt.Errorf("write config: %w", err)
+		if err := writeScriptedConfig(cfgPath, fm.url); err != nil {
+			return err
 		}
 		if err := ctrl.LoadConfig(cfgPath); err != nil {
 			return fmt.Errorf("load config: %w", err)
@@ -357,7 +350,10 @@ func run() error {
 		cancel()
 	}
 
-	testAPI := testControl{desk: desk, ctrl: ctrl, model: fm, channels: channels, chanMu: &chanMu, listenAddr: *addr}
+	testAPI := testControl{
+		desk: desk, ctrl: ctrl, model: fm, channels: channels, chanMu: &chanMu,
+		listenAddr: *addr, cfgPath: cfgPath, modelURL: fm.url, fresh: *fresh,
+	}
 	proxy := ctrl.ProxyHandler()
 	files := http.FileServer(http.Dir(*dist))
 	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -412,6 +408,22 @@ func run() error {
 // defaultChannel is the scripted channel harnessConfig registers.
 const defaultChannel = "telegram"
 
+// writeScriptedConfig writes the one-telegram harness config (pointed at the
+// fake model) to path, creating the parent dir.
+func writeScriptedConfig(path, modelURL string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("mkdir config dir: %w", err)
+	}
+	cfgBytes, err := json.MarshalIndent(harnessConfig(modelURL), "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, cfgBytes, 0o600); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	return nil
+}
+
 // testControl is the /__test/ surface (see the package comment).
 type testControl struct {
 	desk       *shell.Desktop
@@ -420,6 +432,9 @@ type testControl struct {
 	channels   map[string]*fakeChannel
 	chanMu     *sync.Mutex
 	listenAddr string
+	cfgPath    string
+	modelURL   string
+	fresh      bool
 }
 
 // lookupChannel resolves a scripted channel by name ("" → the default one).
@@ -460,6 +475,10 @@ func (tc testControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tc.channelMode(w, r)
 	case r.URL.Path == "/__test/core-exit":
 		tc.coreExit(w)
+	case r.URL.Path == "/__test/reset-config":
+		tc.resetConfig(w)
+	case r.URL.Path == "/__test/fresh-reset":
+		tc.freshReset(w)
 	default:
 		http.Error(w, "unknown test endpoint", http.StatusNotFound)
 	}
@@ -540,6 +559,47 @@ func (tc testControl) coreExit(w http.ResponseWriter) {
 	defer cancel()
 	if err := tc.ctrl.Stop(ctx); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// resetConfig restores the ONE-telegram scripted config (non-fresh harness):
+// stop the core if running, re-write the pristine config at the default path
+// (a prior test's reload may have persisted a mutated one), and reload it —
+// so each serial test and each Playwright retry starts from a known state,
+// not the leftover of a test that failed mid-flight (review finding).
+func (tc testControl) resetConfig(w http.ResponseWriter) {
+	if tc.fresh {
+		http.Error(w, "reset-config is for the non-fresh harness", http.StatusBadRequest)
+		return
+	}
+	if tc.ctrl.Status().Running {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		_ = tc.ctrl.Stop(ctx)
+		cancel()
+	}
+	if err := writeScriptedConfig(tc.cfgPath, tc.modelURL); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := tc.ctrl.LoadConfig(tc.cfgPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// freshReset deletes the config at the default path (fresh harness) so the
+// chrome's next EnsureDefaultConfig returns created=true again — making the
+// onboarding re-establishable per Playwright attempt (review finding).
+func (tc testControl) freshReset(w http.ResponseWriter) {
+	if !tc.fresh {
+		http.Error(w, "fresh-reset is for the fresh harness", http.StatusBadRequest)
+		return
+	}
+	if err := os.Remove(tc.cfgPath); err != nil && !os.IsNotExist(err) {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

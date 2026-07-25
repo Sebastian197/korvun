@@ -57,6 +57,19 @@ describe('addChannel / removeChannel transforms', () => {
     expect(next.routes).toHaveLength(0)
     expect(BASE.channels).toHaveLength(1)
   })
+
+  it('addChannel with no brains appends a route-less channel (inert, valid to POST)', () => {
+    const next = addChannel(
+      { ...BASE, brains: [], routes: [] },
+      {
+        type: 'discord',
+        mode: 'gateway',
+        token_env: 'DISCORD_BOT_TOKEN',
+      },
+    )
+    expect(next.channels).toHaveLength(2)
+    expect(next.routes).toHaveLength(0) // no brain to wire to
+  })
 })
 
 describe('mutateConfig pipe', () => {
@@ -126,6 +139,29 @@ describe('mutateConfig pipe', () => {
     })
     expect(res.ok).toBe(false)
     expect(res.state).toBe('timeout')
+  })
+
+  it('a rolled-back reload resolves ok:false with that terminal state', async () => {
+    const fetcher = scriptedFetch({ pollStates: ['pending', 'rolled-back'] })
+    const res = await mutateConfig((c) => c, { fetcher, pollIntervalMs: 0 })
+    expect(res.ok).toBe(false)
+    expect(res.state).toBe('rolled-back')
+  })
+
+  it('a 404 on the reload handle short-circuits instead of burning the budget', async () => {
+    const fetcher = ((url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u === '/api/config' && (init?.method ?? 'GET') === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify(BASE), { status: 200 }))
+      }
+      if (u === '/api/config') {
+        return Promise.resolve(new Response(JSON.stringify({ handle: 'h1' }), { status: 202 }))
+      }
+      return Promise.resolve(new Response('unknown handle', { status: 404 }))
+    }) as unknown as typeof fetch
+    const res = await mutateConfig((c) => c, { fetcher, pollIntervalMs: 0, maxPolls: 60 })
+    expect(res.ok).toBe(false)
+    expect(res.state).toBe('unknown-handle')
   })
 
   it('a GET failure short-circuits before any POST', async () => {

@@ -71,14 +71,43 @@ describe('ChannelWizard step 3 — keychain', () => {
     expect(screen.getByText(/¿Qué canal quieres conectar/)).toBeInTheDocument()
   })
 
-  it('with no bindings the keychain step is inert but the flow proceeds', () => {
+  it('with no bindings the keychain step is HONEST (no fake success)', () => {
     render(<ChannelWizard existingTypes={[]} onClose={() => undefined} onDone={() => undefined} />)
     fireEvent.click(screen.getByRole('button', { name: /Discord/ }))
     fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
     fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
     fireEvent.change(screen.getByPlaceholderText(/una sola vez/), { target: { value: 'v' } })
     fireEvent.click(screen.getByRole('button', { name: /Guardar en el llavero/ }))
-    expect(screen.getByText(/guardado en el llavero/)).toBeInTheDocument()
+    // No bindings → never claim it was stored (security review finding).
+    expect(screen.queryByText(/guardado en el llavero/)).toBeNull()
+    expect(screen.getByRole('alert')).toHaveTextContent(/Sin llavero en este entorno/)
+  })
+
+  it('a rejected SetSecret paints a GENERIC error and lets the field be retried', async () => {
+    ;(window as unknown as FakeWindow).go = {
+      shell: {
+        Desktop: { SetSecret: () => Promise.reject(new Error('keychain locked: /Users/x')) },
+      },
+    }
+    render(
+      <ChannelWizard
+        existingTypes={['telegram']}
+        onClose={() => undefined}
+        onDone={() => undefined}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Discord/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
+    const secret = 'top-secret-token'
+    fireEvent.change(screen.getByPlaceholderText(/una sola vez/), { target: { value: secret } })
+    fireEvent.click(screen.getByRole('button', { name: /Guardar en el llavero/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/No se pudo guardar en el llavero/)
+    })
+    // The raw backend error is NEVER shown, and the field is editable again.
+    expect(screen.queryByText(/keychain locked/)).toBeNull()
+    expect(screen.getByPlaceholderText(/una sola vez/)).toBeInTheDocument()
   })
 
   it('SetSecret is called with the pasted value; the value leaves no DOM/storage trace', async () => {
