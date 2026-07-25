@@ -92,6 +92,20 @@ func TestRun_zeroChannels_everythingElseAlive(t *testing.T) {
 		t.Fatalf("GET /builder/ = %d, want 200 (builder not mounted)", resp.StatusCode)
 	}
 
+	// The brains are alive alongside the empty channel list.
+	brResp, err := http.Get(base + "/api/brains") //nolint:noctx // loopback test URL
+	if err != nil {
+		t.Fatalf("GET /api/brains: %v", err)
+	}
+	brBody, err := io.ReadAll(brResp.Body)
+	_ = brResp.Body.Close()
+	if err != nil {
+		t.Fatalf("read /api/brains: %v", err)
+	}
+	if brResp.StatusCode != http.StatusOK || !strings.Contains(string(brBody), `"default"`) {
+		t.Fatalf("GET /api/brains = %d %q, want 200 naming the default brain", brResp.StatusCode, brBody)
+	}
+
 	// The status surface is honest: zero channels, not an error.
 	chResp, err := http.Get(base + "/api/channels") //nolint:noctx // loopback test URL
 	if err != nil {
