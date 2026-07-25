@@ -66,13 +66,14 @@ frontend/dist/
 dist/
 
 # Desktop packaging output (SP7, private-pass lesson 2026-07-25). The compiled
-# binary / .app / installer land in build/bin/ (the Wails output convention,
-# verified at source: `wails build` writes build/bin/<App>.app). Ignore ONLY
-# the output subtree — a `wails build` adoption keeps committed scaffold under
-# build/ itself (appicon, darwin/Info.plist + entitlements, windows/installer
-# .nsi), which a blanket build/ ignore would wrongly drop. The recipe pins its
-# output to build/bin/ regardless of the packaging path chosen in the SP7 spec.
-build/bin/
+# binary / .app / installer / .dmg land in build/bin/ (the Wails output
+# convention, verified at source: `wails build` writes <projectdir>/build/bin/).
+# Ignore ONLY the output subtree — the committed scaffold lives under build/
+# itself (appicon, darwin/Info.plist + entitlements, windows/installer .nsi),
+# which a blanket build/ ignore would wrongly drop. `**/` so it matches the real
+# project dir cmd/korvun-desktop/build/bin/ (where main.go lives, so wails builds
+# there) as well as any root-level build/bin/.
+**/build/bin/
 
 # Builder frontend (ADR-0029, Stage 14 Phase 2b). The real Vite build is
 # regenerated fresh (CI never trusts a committed one, §6), but the committed
@@ -95,6 +96,13 @@ cmd/korvun-desktop/frontend/dist/*
 
 # Obsidian per-machine vault config (Claude Code IDE plugin)
 .obsidian/
+
+# Wails runtime JS (frontend/wailsjs/runtime), copied into the frontend by
+# `wails build` REGARDLESS of -skipbindings — that flag gates only the generated
+# BINDINGS, not the runtime copy (verified on disk after `make desktop`, SP7).
+# The Korvun chrome never imports it (it talks to the core via the SP4 fetch
+# proxy, not Wails bindings), so it is a pure build artifact — never committed.
+cmd/korvun-desktop/frontend/wailsjs/
 
 # graphify knowledge-graph build artifacts (regenerated on commit to master)
 graphify-out/

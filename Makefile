@@ -3,7 +3,7 @@ GOLANGCI_LINT := $(GOBIN)/golangci-lint
 GOIMPORTS := $(GOBIN)/goimports
 COVERAGE_THRESHOLD := 85
 
-.PHONY: build test lint cover quality fmt vet frontend-install frontend-build desktop-frontend-install desktop-frontend
+.PHONY: build test lint cover quality fmt vet frontend-install frontend-build desktop-frontend-install desktop-frontend desktop dmg
 
 # The builder frontend's node_modules vendors a stray Go package (flatted), which
 # `./...` would otherwise pick up. Exclude it from Go tooling. FOLLOW-UP (by
@@ -34,6 +34,67 @@ desktop-frontend:
 
 build: frontend-build
 	go build ./cmd/korvun
+
+# --- SP7: desktop packaging (local reproducible recipe, cut 7a) ------------------
+# The deterministic recipe (spec §1b), law from the private-pass re-bake lesson:
+# ALWAYS rebuild BOTH frontends fresh, then the binary — never trust a cached or
+# working-tree dist. Wails runs in cmd/korvun-desktop (where main.go + wails.json
+# + build/ live); output lands in cmd/korvun-desktop/build/bin (gitignored).
+WAILS := $(GOBIN)/wails
+# Honest local version stamped into main.version via ldflags (goodbye "dev").
+# git describe --tags --always --dirty; 7b passes the exact clean tag.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# CFBundleShortVersionString / the installer resource want a clean X.Y.Z, not a
+# git-describe string — take the NEAREST tag, v-stripped (spec §1h: productVersion
+# from the tag). Stamped into wails.json for the build, then restored.
+PRODUCT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo 0.0.0)
+# macOS 13 / Xcode CLT need UTType made explicit (SP1 empirical); the ×6 headless
+# lane is unaffected (it never imports Wails). Non-Darwin hosts set neither.
+ifeq ($(shell uname -s),Darwin)
+DESKTOP_PLATFORM ?= darwin/universal
+DESKTOP_CGO_LDFLAGS := -framework UniformTypeIdentifiers
+else
+DESKTOP_PLATFORM ?= linux/amd64
+DESKTOP_CGO_LDFLAGS :=
+endif
+
+# One recipe shell with a `trap ... EXIT` so the working-tree restore ALWAYS
+# runs — even if a frontend build or `wails build` fails midway. Otherwise a
+# partial failure would leave the freshly-built (gitignored) web/builder/dist on
+# disk, and the NEXT headless `go build ./cmd/korvun` would silently go:embed it
+# instead of the committed stub, breaking the headless byte-identity that is
+# SP7's engraved law (review 7a #1). The trap restores both dist stubs + the
+# tag-stamped wails.json and drops the ignored build outputs.
+desktop:
+	@set -e; \
+	wjbak=$$(mktemp); cp cmd/korvun-desktop/wails.json "$$wjbak"; \
+	restore() { \
+		git checkout -- web/builder/dist cmd/korvun-desktop/frontend/dist; \
+		git clean -fdX web/builder/dist cmd/korvun-desktop/frontend/dist >/dev/null; \
+		cp "$$wjbak" cmd/korvun-desktop/wails.json; rm -f "$$wjbak"; \
+	}; \
+	trap restore EXIT; \
+	echo "[desktop] (a) builder frontend — fresh (ADR-0029 §6)"; \
+	( cd web/builder && npm ci && npm run build ); \
+	echo "[desktop] (b) chrome frontend — fresh"; \
+	( cd cmd/korvun-desktop/frontend && npm ci && npm run build ); \
+	echo "[desktop] stamp wails.json productVersion=$(PRODUCT_VERSION)"; \
+	perl -0pi -e 's/"productVersion":\s*"[^"]*"/"productVersion": "$(PRODUCT_VERSION)"/' cmd/korvun-desktop/wails.json; \
+	echo "[desktop] (c) wails build — universal, -s (own go:embed), -skipbindings, -clean"; \
+	( cd cmd/korvun-desktop && CGO_LDFLAGS="$(DESKTOP_CGO_LDFLAGS)" $(WAILS) build \
+		-s -skipbindings -clean -platform $(DESKTOP_PLATFORM) \
+		-tags desktop,production -ldflags "-X main.version=$(VERSION)" ); \
+	echo "Built cmd/korvun-desktop/build/bin/Korvun.app ($(VERSION), bundle $(PRODUCT_VERSION))"
+
+# Wrap the universal .app into a distributable .dmg (macOS built-in hdiutil,
+# zero external tool). Named to the NC-2 scheme. `dmg` depends on `desktop`, so
+# run `make dmg` alone — `make desktop dmg` would rebuild everything twice.
+dmg: desktop
+	hdiutil create -volname Korvun \
+		-srcfolder cmd/korvun-desktop/build/bin/Korvun.app \
+		-ov -format UDZO \
+		cmd/korvun-desktop/build/bin/korvun-desktop_$(VERSION)_darwin_universal.dmg
+	@echo "Wrapped cmd/korvun-desktop/build/bin/korvun-desktop_$(VERSION)_darwin_universal.dmg"
 
 test:
 	go test -race $(GO_PKGS)

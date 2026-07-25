@@ -27,6 +27,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -47,6 +48,14 @@ var chromeAssets embed.FS
 var version = "dev"
 
 func main() {
+	// Non-GUI identity path (SP7 §1g): a packaged bundle answers `--version`
+	// without opening a window, so CI and the packaging recipe can prove the
+	// build was version-stamped (goodbye "dev") on a headless runner.
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v" || os.Args[1] == "version") {
+		fmt.Println("korvun-desktop", version)
+		return
+	}
+
 	assets, err := fs.Sub(chromeAssets, "frontend/dist")
 	if err != nil {
 		slog.Error("korvun-desktop: chrome assets missing", "error", err.Error())
