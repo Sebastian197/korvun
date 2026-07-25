@@ -21,6 +21,8 @@ export interface DesktopBindings {
   SetSecret(name: string, value: string): Promise<void>
   DeleteSecret(name: string): Promise<void>
   CheckOllama(baseURL: string): Promise<{ reachable: boolean; detail: string }>
+  /** PRESENCE only (SP6c) — never a value: {inEnv, inKeychain}. */
+  CheckSecretPresence(name: string): Promise<{ inEnv: boolean; inKeychain: boolean }>
   Version(): Promise<string>
 }
 

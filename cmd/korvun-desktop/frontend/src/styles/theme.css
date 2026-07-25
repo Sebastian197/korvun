@@ -42,6 +42,7 @@
   --nav-on: #1d1d29;
   --grad: linear-gradient(120deg, #2bc8b7, #7a5af5);
   --shadow: 0 30px 90px rgba(0, 0, 0, 0.6), 0 4px 18px rgba(0, 0, 0, 0.4);
+  --scrim: rgba(8, 8, 13, 0.6);
 }
 
 :root[data-theme='light'] {
@@ -71,6 +72,7 @@
   --nav-h: #efeff5;
   --nav-on: #e8e8f0;
   --shadow: 0 30px 80px rgba(25, 25, 55, 0.16), 0 4px 16px rgba(25, 25, 55, 0.08);
+  --scrim: rgba(25, 25, 55, 0.32);
 }
 
 /* Motion tokens (ADR-0030 §2): enter / exit easings, micro/base/panel. */

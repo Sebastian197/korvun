@@ -55,9 +55,9 @@ describe('chrome shell', () => {
     expect(screen.getByTestId('healthz-badge')).toBeInTheDocument()
   })
 
-  it('navigating to a future view shows its honest empty state', () => {
+  it('navigating to Canales renders the real channels view', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Canales' }))
-    expect(screen.getByText(/Canales estará disponible/)).toBeInTheDocument()
+    expect(screen.getByTestId('canales')).toBeInTheDocument()
   })
 })

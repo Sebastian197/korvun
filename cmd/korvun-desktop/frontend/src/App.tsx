@@ -1,7 +1,8 @@
-// The chrome shell (SP6a, completed through SP6b): sidebar with the design's
-// nav + brand mark + status chip, the per-view header (title + /healthz), and
-// the real views — Home lands in 6b; the wizard/onboarding/builder embed are
-// 6c. Theme control lives in Ajustes (FR-WIN-5).
+// The chrome shell (SP6a → SP6c): sidebar with the design's nav + brand mark
+// + status chip, the per-view header, and the real views — Home, Canales (+
+// the channel wizard overlay), Activity, the Builder same-origin iframe, and
+// Settings. On a fresh install (EnsureDefaultConfig created=true) the whole
+// chrome is replaced by the onboarding until it finishes.
 import { useEffect, useState } from 'react'
 import './App.css'
 import { BrandMark } from './components/BrandMark'
@@ -9,8 +10,13 @@ import { HealthzBadge } from './components/HealthzBadge'
 import { StatusChip } from './components/StatusChip'
 import { IconActivity, IconBuilder, IconChannels, IconHome, IconSettings } from './components/icons'
 import { desktop } from './lib/go'
+import { useSnapshot } from './snapshot/store'
 import { Activity } from './views/Activity'
+import { BuilderEmbed } from './views/BuilderEmbed'
+import { Channels } from './views/Channels'
+import { ChannelWizard } from './views/ChannelWizard'
 import { Home } from './views/Home'
+import { Onboarding } from './views/Onboarding'
 import { Settings } from './views/Settings'
 
 type View = 'inicio' | 'builder' | 'canales' | 'actividad' | 'ajustes'
@@ -29,29 +35,34 @@ const NAV: ReadonlyArray<{
   { id: 'ajustes', label: 'Ajustes', icon: IconSettings },
 ]
 
-function Empty({ label }: { label: string }): React.JSX.Element {
-  return (
-    <div className="empty">
-      <div className="glyph" aria-hidden="true">
-        |&lt;
-      </div>
-      <p>{label} estará disponible próximamente.</p>
-    </div>
-  )
-}
-
 export function App(): React.JSX.Element {
   const [view, setView] = useState<View>('inicio')
   const [version, setVersion] = useState('dev')
+  const [onboarding, setOnboarding] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const snapshot = useSnapshot()
 
   useEffect(() => {
-    void desktop()
-      ?.Version()
+    const d = desktop()
+    if (!d) return
+    void d
+      .Version()
       .then(setVersion)
+      .catch(() => undefined)
+    // Fresh install → run onboarding until it finishes (ADR-0035 §5). A
+    // false/absent result (existing config, or no bindings) skips it.
+    void d
+      .EnsureDefaultConfig()
+      .then((created) => setOnboarding(created))
       .catch(() => undefined)
   }, [])
 
   const active = NAV.find((n) => n.id === view)
+  const existingTypes = (snapshot.channels ?? []).map((c) => c.type)
+
+  if (onboarding) {
+    return <Onboarding onFinished={() => setOnboarding(false)} />
+  }
 
   return (
     <div className="layout">
@@ -93,11 +104,24 @@ export function App(): React.JSX.Element {
           <HealthzBadge />
         </header>
         {view === 'inicio' && <Home />}
-        {view === 'builder' && <Empty label="El builder" />}
-        {view === 'canales' && <Empty label="Canales" />}
+        {view === 'builder' && <BuilderEmbed />}
+        {view === 'canales' && (
+          <Channels
+            onOpenWizard={() => setWizardOpen(true)}
+            onOpenBuilder={() => setView('builder')}
+          />
+        )}
         {view === 'actividad' && <Activity />}
         {view === 'ajustes' && <Settings version={version} />}
       </main>
+
+      {wizardOpen && (
+        <ChannelWizard
+          existingTypes={existingTypes}
+          onClose={() => setWizardOpen(false)}
+          onDone={() => setWizardOpen(false)}
+        />
+      )}
     </div>
   )
 }
