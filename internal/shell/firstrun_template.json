@@ -1,0 +1,32 @@
+{
+  "channels": [],
+  "brains": [
+    {
+      "name": "default",
+      "sensitivity": "private",
+      "policy": {
+        "kind": "priority",
+        "order": [
+          "ollama"
+        ]
+      },
+      "dispatch": "fanout",
+      "models": [
+        {
+          "provider": "ollama",
+          "model_id": "llama3.2:1b",
+          "locality": "local",
+          "base_url": "http://localhost:11434",
+          "api_key_env": ""
+        }
+      ]
+    }
+  ],
+  "routes": [],
+  "observability": {
+    "enabled": true
+  },
+  "admin": {
+    "token_env": "KORVUN_ADMIN_TOKEN"
+  }
+}
