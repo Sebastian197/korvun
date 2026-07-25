@@ -2,7 +2,10 @@ name: Quality Gate
 
 on:
   push:
-    branches: [master]
+    # "ensayo" is the rehearsal branch (Chano, 2026-07-25): every code batch
+    # runs the full gate there BEFORE advancing master. Analysis workflows
+    # (CodeQL, Scorecard) stay master-only — they are not the test door.
+    branches: [master, ensayo]
   pull_request:
     branches: [master]
 

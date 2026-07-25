@@ -6,7 +6,8 @@ name: Frontend
 
 on:
   push:
-    branches: [master]
+    # master + the "ensayo" rehearsal branch (see quality.yml's note).
+    branches: [master, ensayo]
     paths:
       [
         "web/builder/**",
