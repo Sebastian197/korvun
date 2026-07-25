@@ -113,12 +113,22 @@ env-var NAMES are ever painted, never a value.
   Linux Secret Service unlock prompt is a legitimate slow path, its own
   class, not a "state read"; CheckOllama 3 s; state reads 5 s).
   Post-timeout semantics are spec'd, not accidental: a timed-out call's
-  goroutine still completes against the Controller (an abandoned Start
-  may finish starting the core AFTER the UI error — the status store's
-  next poll reconciles the truth), its terminal result is logged, and
-  the store serializes lifecycle calls (one in flight) so timed-out
-  goroutines cannot pile on the mutex. Enforced where testable: in the
-  plain-Go struct with `-race` tests; Wails glue stays a pass-through.
+  goroutine still completes against the Controller and its terminal
+  result is logged; the ctx handed to the Controller carries the SAME
+  deadline as the select (amended at 6a implementation, review-ratified:
+  an abandoned Start therefore reaches the Controller with an expired
+  ctx and is torn down rather than surprise-starting the core later —
+  strictly safer; the status store's next poll reconciles whatever
+  truth results), and the surface serializes lifecycle calls (one in
+  flight — the busy gate holds until the abandoned call truly lands) so
+  timed-out goroutines cannot pile on the mutex. Enforced where
+  testable: in the plain-Go struct with `-race` tests; Wails glue stays
+  a pass-through. Accepted threat model, recorded: `Bind` exposes the
+  whole surface to the page — under a hypothetical XSS, `LoadConfig` is
+  a path oracle, `SetSecret`/`DeleteSecret` write/delete Korvun's own
+  keychain entries, and `CheckOllama` is a loopback-class GET probe; no
+  binding READS a secret and the bearer never crosses into the DOM,
+  which is the boundary that matters (ADR-0035 §4).
 - **FR-WIN-3 Chrome-native vs proxied:** Home / Channels / Activity /
   Settings / onboarding are CHROME views talking to `/api/*`, `/healthz`
   via the SP4 proxy (fetch with relative URLs; the 503 two-body contract
