@@ -1,9 +1,12 @@
-// The chrome shell (SP6a): sidebar + navigation + theme swap + dynamic
-// logo/version, and the MINIMAL stopped Home (hero + wired Start) — the rest
-// of the views are honest empty states until their cut (6b/6c) lands them.
+// The chrome shell (SP6a, completed through SP6b): sidebar with the design's
+// nav + brand mark + status chip, the per-view header (title + /healthz), and
+// the real views — Home lands in 6b; the wizard/onboarding/builder embed are
+// 6c. Theme control lives in Ajustes (FR-WIN-5).
 import { useEffect, useState } from 'react'
 import './App.css'
 import { BrandMark } from './components/BrandMark'
+import { HealthzBadge } from './components/HealthzBadge'
+import { StatusChip } from './components/StatusChip'
 import {
   IconActivity,
   IconBuilder,
@@ -12,8 +15,7 @@ import {
   IconSettings,
 } from './components/icons'
 import { desktop } from './lib/go'
-import { useCoreState } from './status/store'
-import { applyTheme, storedTheme, type ThemeChoice } from './theme'
+import { Home } from './views/Home'
 
 type View = 'inicio' | 'builder' | 'canales' | 'actividad' | 'ajustes'
 
@@ -31,58 +33,6 @@ const NAV: ReadonlyArray<{
   { id: 'ajustes', label: 'Ajustes', icon: IconSettings },
 ]
 
-function HomeParado(): React.JSX.Element {
-  // THE LAW's frontend half (FR-WIN-2): one lifecycle call in flight — the
-  // button disables while Start runs, and a named error (timeout, busy,
-  // boot failure) is painted, never an unhandled rejection.
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const start = (): void => {
-    const d = desktop()
-    if (!d || busy) return
-    setBusy(true)
-    setError('')
-    d.Start()
-      .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => setBusy(false))
-  }
-  return (
-    <div className="hero" data-testid="home-parado">
-      <span className="hero-badge">
-        <span className="dot" aria-hidden="true" />
-        Gateway detenido
-      </span>
-      <h2>Korvun está listo</h2>
-      <p>
-        El núcleo está parado. Arráncalo para servir tus canales y modelos; la
-        ventana sigue viva aunque lo detengas.
-      </p>
-      <button type="button" className="btn-primary" onClick={start} disabled={busy}>
-        {busy ? 'Iniciando…' : 'Iniciar Korvun'}
-      </button>
-      {error !== '' && (
-        <p className="hero-error" role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function HomeMarcha(): React.JSX.Element {
-  return (
-    <div className="empty" data-testid="home-marcha-minimo">
-      <span className="pill-running">
-        <span className="dot" aria-hidden="true" />
-        En marcha
-      </span>
-      <p>El panel completo de Inicio llega en el siguiente corte.</p>
-    </div>
-  )
-}
-
 function Empty({ label }: { label: string }): React.JSX.Element {
   return (
     <div className="empty">
@@ -96,13 +46,7 @@ function Empty({ label }: { label: string }): React.JSX.Element {
 
 export function App(): React.JSX.Element {
   const [view, setView] = useState<View>('inicio')
-  const [theme, setTheme] = useState<ThemeChoice>(() => storedTheme())
   const [version, setVersion] = useState('dev')
-  const core = useCoreState()
-
-  useEffect(() => {
-    applyTheme(theme)
-  }, [theme])
 
   useEffect(() => {
     void desktop()
@@ -111,9 +55,7 @@ export function App(): React.JSX.Element {
       .catch(() => undefined)
   }, [])
 
-  const toggleTheme = (): void => {
-    setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
-  }
+  const active = NAV.find((n) => n.id === view)
 
   return (
     <div className="layout">
@@ -146,22 +88,18 @@ export function App(): React.JSX.Element {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            data-testid="theme-toggle"
-          >
-            {theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}
-          </button>
+          <StatusChip />
         </div>
       </aside>
       <main className="main">
-        {view === 'inicio' &&
-          (core === 'running' ? <HomeMarcha /> : <HomeParado />)}
+        <header className="main-head">
+          <h1 className="view-title">{active?.label ?? 'Inicio'}</h1>
+          <HealthzBadge />
+        </header>
+        {view === 'inicio' && <Home />}
+        {view === 'builder' && <Empty label="El builder" />}
         {view === 'canales' && <Empty label="Canales" />}
         {view === 'actividad' && <Empty label="Actividad" />}
-        {view === 'builder' && <Empty label="El builder" />}
         {view === 'ajustes' && <Empty label="Ajustes" />}
       </main>
     </div>

@@ -1,5 +1,6 @@
-// Shell smoke: navigation renders every section, the stopped Home carries
-// the single gradient action, and the theme toggle swaps data-theme.
+// Shell smoke: navigation renders every section in the design order with
+// real icons, the brand tile carries the canonical mark, and the sidebar
+// foot carries the status chip.
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
@@ -45,16 +46,13 @@ describe('chrome shell', () => {
   it('the stopped Home shows the hero with the one primary action', () => {
     render(<App />)
     expect(screen.getByTestId('home-parado')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Iniciar Korvun' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Iniciar/ })).toBeInTheDocument()
   })
 
-  it('the theme toggle swaps data-theme on the document element', () => {
+  it('the sidebar foot carries the status chip and the header the healthz badge', () => {
     render(<App />)
-    expect(document.documentElement.dataset.theme).toBe('dark')
-    fireEvent.click(screen.getByTestId('theme-toggle'))
-    expect(document.documentElement.dataset.theme).toBe('light')
-    fireEvent.click(screen.getByTestId('theme-toggle'))
-    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(screen.getByTestId('status-chip')).toBeInTheDocument()
+    expect(screen.getByTestId('healthz-badge')).toBeInTheDocument()
   })
 
   it('navigating to a future view shows its honest empty state', () => {

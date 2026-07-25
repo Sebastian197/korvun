@@ -2,9 +2,19 @@
 // Inside the real window, Wails injects window.go.shell.Desktop; in the e2e
 // harness (a plain browser) it is absent and every accessor degrades honestly
 // — the chrome renders, actions that need the shell are inert.
+/** shell.Status as Wails marshals it (Go field names, no json tags). */
+export interface ShellStatus {
+  Running: boolean
+  ConfigPath: string
+  AdminAddr: string
+  /** NAME of the admin-bearer env var — never a value (ADR-0035 §4). */
+  TokenEnv: string
+}
+
 export interface DesktopBindings {
   Start(): Promise<void>
   Stop(): Promise<void>
+  Status(): Promise<ShellStatus>
   LoadConfig(path: string): Promise<void>
   DefaultConfigPath(): Promise<string>
   EnsureDefaultConfig(): Promise<boolean>

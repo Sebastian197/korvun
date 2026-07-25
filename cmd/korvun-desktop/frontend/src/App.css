@@ -79,62 +79,116 @@
 
 .sidebar-foot {
   margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 0 8px;
+  padding: 0 2px;
 }
 
-.theme-toggle {
+/* Sidebar-foot status chip (design 02-sidebar / final-3). */
+.status-chip {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 9px;
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.status-chip-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--tx3);
-  font-size: 12.5px;
-  padding: 8px 2px;
-  border-radius: 8px;
-  transition: color var(--t-micro) var(--ease-enter);
 }
 
-.theme-toggle:hover {
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--tx3);
+}
+
+.chip-dot-ok {
+  background: var(--ok-t);
+  animation: kv-pulse 2.4s ease-in-out infinite;
+}
+
+.chip-label {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--tx1);
+}
+
+.chip-port {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--tx3);
+}
+
+.chip-config {
+  font-size: 10.5px;
+  color: var(--tx3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+@keyframes kv-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--ok-s);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
 }
 
 .main {
   overflow: auto;
-  padding: 28px 32px;
+  padding: 24px 28px 26px;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
 }
 
 .view-title {
   font-size: 19px;
   font-weight: 600;
   color: var(--tx1);
-  margin: 0 0 4px;
+  margin: 0;
 }
 
-.view-caption {
-  font-size: 13px;
+.healthz {
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--tx3);
-  margin: 0 0 24px;
 }
 
-/* Home · parado — the stopped hero (final-1): calm card, ONE gradient action. */
-.hero {
-  max-width: 520px;
-  margin: 9vh auto 0;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 40px 36px;
-  text-align: center;
-  box-shadow: var(--shadow);
-  animation: hero-in var(--t-panel) var(--ease-enter);
+.healthz-ok {
+  color: var(--ok-t);
 }
 
-@keyframes hero-in {
+/* Home — hero strip (design final-1 / 01-dashboard / incidencia). */
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: view-in var(--t-panel) var(--ease-enter);
+}
+
+@keyframes view-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -142,48 +196,101 @@
   }
 }
 
-.hero-badge {
-  display: inline-flex;
+.hero-strip {
+  display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 16px;
+  padding: 17px 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+}
+
+.hero-strip-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.tone-ok .hero-strip-icon {
+  background: var(--ok-s);
+  color: var(--ok-t);
+}
+
+.tone-warn .hero-strip-icon {
+  background: var(--warn-s);
+  color: var(--warn-t);
+  animation: kv-pulse 2.4s ease-in-out infinite;
+}
+
+.tone-err .hero-strip-icon {
+  background: var(--err-s);
+  color: var(--err-t);
+}
+
+.tone-off .hero-strip-icon {
   background: var(--off-s);
   color: var(--off-t);
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 999px;
-  padding: 5px 12px;
-  margin-bottom: 18px;
 }
 
-.hero-badge .dot {
-  width: 7px;
-  height: 7px;
+.dot-pulse {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--off-t);
+  background: var(--ok-t);
+  animation: kv-pulse 2.4s ease-in-out infinite;
 }
 
-.hero h2 {
-  font-size: 22px;
+.hero-strip-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.hero-strip-title {
+  font-size: 16px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--tx1);
-  margin: 0 0 8px;
 }
 
-.hero p {
-  font-size: 13.5px;
+.hero-strip-caption {
+  font-size: 12.5px;
   color: var(--tx2);
-  line-height: 1.55;
-  margin: 0 0 26px;
+  margin-top: 3px;
+}
+
+.tone-warn .hero-strip-caption {
+  color: var(--warn-t);
+}
+
+.tone-err .hero-strip-caption {
+  color: var(--err-t);
+}
+
+.hero-strip-error {
+  margin-top: 8px;
+  background: var(--err-s);
+  color: var(--err-t);
+  font-size: 12px;
+  border-radius: 7px;
+  padding: 7px 10px;
 }
 
 .btn-primary {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   background: var(--grad);
   color: var(--on-vio);
   font-weight: 600;
-  font-size: 14px;
-  padding: 11px 26px;
+  font-size: 13.5px;
+  height: 40px;
+  padding: 0 22px;
   border-radius: 9px;
+  flex: none;
   transition: transform var(--t-micro) var(--ease-enter), filter var(--t-micro) var(--ease-enter);
 }
 
@@ -202,13 +309,265 @@
   transform: none;
 }
 
-.hero-error {
-  margin-top: 16px;
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  color: var(--tx1);
+  font-size: 13px;
+  font-weight: 500;
+  flex: none;
+  transition: background var(--t-micro) var(--ease-enter);
+}
+
+.btn-secondary:hover {
+  background: var(--nav-on);
+}
+
+.btn-secondary:disabled {
+  color: var(--tx3);
+  cursor: default;
+}
+
+/* Metric cards (design 05/06/07 details), window-scoped data only. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 15px 18px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tx2);
+}
+
+.card-big {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx1);
+}
+
+.card-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.card-caption {
+  font-size: 11.5px;
+  color: var(--tx3);
+}
+
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 34px;
+}
+
+.spark-bar {
+  width: 5px;
+  border-radius: 2px;
+  background: var(--ok-t);
+}
+
+/* Channel / brain panels (design 01-dashboard bottom half). */
+.panels {
+  display: grid;
+  grid-template-columns: 1.22fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  overflow: hidden;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line2);
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx1);
+}
+
+.panel-count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--tx3);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.panel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line2);
+}
+
+.panel-row:last-child {
+  border-bottom: none;
+}
+
+.panel-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-row-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx1);
+}
+
+.panel-row-caption {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tx3);
+  margin-top: 2px;
+}
+
+.chan-tile {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--vio-s);
+  color: var(--vio-t);
+  flex: none;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  flex: none;
+  white-space: nowrap;
+}
+
+.pill-ok {
+  background: var(--ok-s);
+  color: var(--ok-t);
+}
+
+.pill-warn {
+  background: var(--warn-s);
+  color: var(--warn-t);
+}
+
+.pill-err {
   background: var(--err-s);
   color: var(--err-t);
+}
+
+.pill-off {
+  background: var(--off-s);
+  color: var(--off-t);
+}
+
+.pill-vio {
+  background: var(--vio-s);
+  color: var(--vio-t);
+}
+
+.brain-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.brain-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12.5px;
-  border-radius: 8px;
-  padding: 9px 12px;
+  color: var(--tx1);
+  padding: 2px 0;
+}
+
+.brain-model .mono {
+  font-size: 12px;
+}
+
+.brain-provider {
+  color: var(--tx3);
+  font-size: 11.5px;
+}
+
+.dot-ok {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok-t);
+  flex: none;
+}
+
+/* Stopped Home with last-session data: dimmed, honest, labeled. */
+.home-stale {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  opacity: 0.45;
+  transition: opacity var(--t-base) var(--ease-exit);
+}
+
+.stale-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--tx3);
+}
+
+.home-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--tx3);
+  margin: 10px 2px 0;
 }
 
 /* Honest empty state for views that arrive in later cuts. */
@@ -225,16 +584,4 @@
   font-size: 26px;
   color: var(--capt);
   margin-bottom: 12px;
-}
-
-.pill-running {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--ok-s);
-  color: var(--ok-t);
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 999px;
-  padding: 5px 12px;
 }
