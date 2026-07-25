@@ -902,6 +902,12 @@ func (a *App) Start(ctx context.Context) error {
 	// hung model never delays the service coming up, and a first message arriving
 	// mid-warmup is already covered by the generous per-attempt timeout.
 	a.startWarmup(ctx)
+	if len(a.channels) == 0 {
+		// NC-1 (SP5, option B): a channel-less boot is valid — the desktop
+		// first-run shape — but the operator must learn WHY the gateway is
+		// deaf, loudly, on every such start.
+		a.logger.Warn("no channels configured — add one via the builder")
+	}
 	a.logger.Info("korvun is serving; send your bot a message")
 	return nil
 }

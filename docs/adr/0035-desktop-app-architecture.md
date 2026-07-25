@@ -147,6 +147,11 @@ mount. The embedded template therefore ADDS an `admin` block whose
 "builder takes over" flow reachable at all (found in review; the raw
 `edge.json` copy would have shipped a builder-less desktop).
 
+**Amendment (2026-07-25, NC-1 of the SP5 spec, option B):** the first-run
+template is CHANNEL-LESS, which requires zero-channels validity in the core —
+`config.Validate` now accepts an empty channel list (each present channel
+stays strictly validated), and a channel-less boot warns loudly.
+
 ### 6. Packaging matrix v1 (NC-4, Chano 2026-07-19)
 
 | OS | v1 artifact | Deferred to v1.x of the piece |

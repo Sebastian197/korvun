@@ -123,9 +123,11 @@ func TestValidate_fieldErrors(t *testing.T) {
 		wantField string // a substring the error message must name
 	}{
 		{
-			name:      "no channels",
+			// NC-1 (SP5, option B): zero channels is VALID, but a route can
+			// then reference nothing — the dangling-route rule catches it.
+			name:      "zero channels with a route: the route dangles",
 			json:      `{"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[{"channel":"telegram","brain":"d"}]}`,
-			wantField: "channels",
+			wantField: "routes[0].channel",
 		},
 		{
 			name:      "unknown channel type",
@@ -280,6 +282,23 @@ func TestValidate_fieldErrors(t *testing.T) {
 				t.Errorf("error %q does not name the offending field %q", err.Error(), tt.wantField)
 			}
 		})
+	}
+}
+
+// TestValidate_zeroChannelsZeroRoutes_valid pins the NC-1 resolution (SP5,
+// option B, 2026-07-25): a config with ZERO channels and ZERO routes is
+// VALID — the desktop first-run template boots channel-less and the builder
+// adds the first channel (ADR-0035 §5). Every channel that IS present keeps
+// the full strict validation (the table above is the proof).
+func TestValidate_zeroChannelsZeroRoutes_valid(t *testing.T) {
+	t.Parallel()
+	raw := `{"channels":[],"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}],"routes":[]}`
+	cfg, err := config.Load(writeConfig(t, raw))
+	if err != nil {
+		t.Fatalf("Load on a zero-channel zero-route config: %v, want nil", err)
+	}
+	if len(cfg.Channels) != 0 || len(cfg.Routes) != 0 {
+		t.Fatalf("loaded %d channels / %d routes, want 0 / 0", len(cfg.Channels), len(cfg.Routes))
 	}
 }
 

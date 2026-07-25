@@ -311,10 +311,12 @@ func (c *Config) validateAdmin() error {
 	return nil
 }
 
+// validateChannels checks every channel that IS present, strictly. ZERO
+// channels is a VALID state (NC-1 of the SP5 spec, option B, 2026-07-25): the
+// desktop first-run template boots channel-less — admin server, builder and
+// brains alive — and the builder adds the first channel (ADR-0035 §5). The
+// boot warns loudly about it (internal/app.Start).
 func (c *Config) validateChannels() (map[string]bool, error) {
-	if len(c.Channels) == 0 {
-		return nil, fmt.Errorf("%w: channels: at least one channel is required", ErrInvalidConfig)
-	}
 	names := make(map[string]bool, len(c.Channels))
 	for i, ch := range c.Channels {
 		// The transport mode is TYPE-AWARE: each channel type wires exactly one
@@ -481,8 +483,12 @@ func validateModels(brainIdx int, models []ModelConfig) error {
 	return nil
 }
 
+// validateRoutes keeps the strict rule for channel-bearing configs: with at
+// least one channel, at least one route is still required (a deaf channel is
+// a misconfiguration). The relaxation is scoped to the CHANNEL-LESS state
+// (NC-1, option B): zero channels + zero routes is the valid first-run shape.
 func (c *Config) validateRoutes(channelNames, brainNames map[string]bool) error {
-	if len(c.Routes) == 0 {
+	if len(c.Routes) == 0 && len(c.Channels) > 0 {
 		return fmt.Errorf("%w: routes: at least one route is required", ErrInvalidConfig)
 	}
 	for i, r := range c.Routes {
