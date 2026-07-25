@@ -88,6 +88,7 @@ type Controller struct {
 	path        string
 	running     bool
 	tokenEnv    string             // env var the shell set this cycle ("" if none)
+	bearer      string             // the cycle's admin token value, for proxy injection ("" if none)
 	provisioned []string           // secret vars the shell set this cycle (FR-SEC-4)
 	cancel      context.CancelFunc // stops the supervisor's Run
 	done        chan struct{}      // closed when Run returns; runErr is set before
@@ -154,14 +155,15 @@ func (c *Controller) Start(ctx context.Context) error {
 	// Per-cycle admin bearer (ADR-0035 §4): generated BEFORE the initial
 	// build so the mutation surface's mount-time env read sees it. Always
 	// overwritten — per-cycle generation is the ADR's mandate for the bearer.
-	tokenEnv := ""
+	tokenEnv, token := "", ""
 	if c.cfg.Admin != nil && c.cfg.Admin.TokenEnv != "" {
 		tokenEnv = c.cfg.Admin.TokenEnv
-		token, err := newAdminToken()
+		t, err := newAdminToken()
 		if err != nil {
 			clearProvisioned(provisioned)
 			return fmt.Errorf("shell: generate admin bearer: %w", err)
 		}
+		token = t
 		if err := os.Setenv(tokenEnv, token); err != nil {
 			clearProvisioned(provisioned)
 			return fmt.Errorf("shell: set admin bearer env %q: %w", tokenEnv, err)
@@ -219,6 +221,7 @@ func (c *Controller) Start(ctx context.Context) error {
 	case <-started:
 		c.running = true
 		c.tokenEnv = tokenEnv
+		c.bearer = token
 		c.provisioned = provisioned
 		c.cancel = cancel
 		c.done = done
@@ -262,6 +265,7 @@ func (c *Controller) Stop(ctx context.Context) error {
 	c.done = nil
 	c.clearBearer(c.tokenEnv)
 	c.tokenEnv = ""
+	c.bearer = ""
 	clearProvisioned(c.provisioned)
 	c.provisioned = nil
 	if err != nil {
@@ -308,6 +312,7 @@ func (c *Controller) reapLocked() {
 	c.done = nil
 	c.clearBearer(c.tokenEnv)
 	c.tokenEnv = ""
+	c.bearer = ""
 	clearProvisioned(c.provisioned)
 	c.provisioned = nil
 }
