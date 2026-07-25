@@ -1,0 +1,16 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Korvun",
+  "outputfilename": "Korvun",
+  "frontend:install": "echo '[korvun] frontend deps are handled by `make desktop` (SP7 spec §1b) — skipped'",
+  "frontend:build": "echo '[korvun] frontend build is handled by `make desktop` (SP7 spec §1b) — skipped'",
+  "wailsjsdir": "./frontend",
+  "version": "2",
+  "info": {
+    "companyName": "Sebastián Moreno Saavedra",
+    "productName": "Korvun",
+    "productVersion": "0.0.0",
+    "copyright": "Copyright 2026 Sebastián Moreno Saavedra",
+    "comments": "Korvun Desktop — self-hosted messaging gateway + multi-model router"
+  }
+}

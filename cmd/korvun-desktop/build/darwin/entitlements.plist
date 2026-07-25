@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Placeholder entitlements for the Korvun Desktop macOS bundle (SP7 7a).
+
+  v1 ships UNSIGNED for platform identity (ADR-0035 §7, NC-1/2: zero paid Apple
+  signing; user trust rides the free cosign chain + the Gatekeeper right-click
+  workaround). This file is therefore NOT consumed by the v1 `wails build` /
+  hdiutil recipe — it exists as the committed seam for a FUTURE hardened-runtime
+  codesign / notarization step (`codesign --entitlements …`), whenever Chano
+  decides to add it. An empty dict grants no special entitlements; keys such as
+  com.apple.security.cs.allow-jit would be added HERE at that point, verified
+  against Apple's docs, not from memory.
+-->
+<plist version="1.0">
+    <dict>
+    </dict>
+</plist>
