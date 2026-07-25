@@ -8,6 +8,9 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  // ONE worker: every spec shares the single harness core (its lifecycle IS
+  // the state under test) — parallel files would fight over it.
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: 'list',
@@ -24,5 +27,14 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      // The viewport must ride INSIDE the project use: the Desktop Chrome
+      // device spread carries its own 1280x720 and would silently override
+      // the top-level 1440x900 screenshot contract (found in 6b: the 6a
+      // captures shipped 1280x720 because of exactly this).
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+    },
+  ],
 })
