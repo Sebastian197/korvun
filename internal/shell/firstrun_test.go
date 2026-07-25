@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -60,8 +61,13 @@ func TestEnsureDefaultConfig_createsWhenAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat config dir: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o700 {
-		t.Fatalf("config dir perm = %o, want 0700", perm)
+	if runtime.GOOS != "windows" {
+		// On Windows a directory's Mode().Perm() is always 0777 — real
+		// permissions ride ACLs, out of this test's scope. The rest of the
+		// test (creation, report, byte fidelity) still runs there.
+		if perm := info.Mode().Perm(); perm != 0o700 {
+			t.Fatalf("config dir perm = %o, want 0700", perm)
+		}
 	}
 }
 
@@ -168,17 +174,35 @@ func TestEnsureDefaultConfig_statFailure(t *testing.T) {
 	}
 }
 
-// DefaultConfigPath propagates an unresolvable user config dir (empty HOME).
+// DefaultConfigPath propagates an unresolvable user config dir. What
+// os.UserConfigDir consults differs per OS, so the test empties the right
+// variables on EACH platform (darwin: HOME; linux: XDG_CONFIG_HOME and HOME;
+// windows: AppData) — the meaning is identical on all three: with no
+// environment to resolve from, the error must surface, never a bogus path.
 func TestDefaultConfigPath_noHome(t *testing.T) {
-	t.Setenv("HOME", "")
+	switch runtime.GOOS {
+	case "darwin":
+		t.Setenv("HOME", "")
+	case "windows":
+		t.Setenv("AppData", "")
+	default: // linux and the rest of the unix family
+		t.Setenv("XDG_CONFIG_HOME", "")
+		t.Setenv("HOME", "")
+	}
 	if _, err := DefaultConfigPath(); err == nil {
-		t.Fatal("DefaultConfigPath with no HOME: want error, got nil")
+		t.Fatal("DefaultConfigPath with no user-config environment: want error, got nil")
 	}
 }
 
 // AS-5: an unwritable destination fails loud, names the path, and leaves no
 // partial file behind (atomicity).
 func TestEnsureDefaultConfig_unwritableDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// A directory's read-only bit does not block creating files inside
+		// it on Windows; forcing the denial would need an ACL, which is not
+		// unit-test material.
+		t.Skip("windows: chmod on a directory cannot force the write failure")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: permission bits do not bite")
 	}
