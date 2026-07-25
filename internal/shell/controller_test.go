@@ -571,6 +571,24 @@ func TestReload_pristinePersistAndAddrRotation(t *testing.T) {
 	}
 }
 
+// TestStatus_reportsAdminTokenEnvName pins the Settings surface's contract
+// (SP6b, FR-WIN-5): Status carries the NAME of the admin token env var —
+// never any value — so the chrome's security row can say which variable the
+// shell rotates. Empty before LoadConfig.
+func TestStatus_reportsAdminTokenEnvName(t *testing.T) {
+	c := testController()
+	if got := c.Status().TokenEnv; got != "" {
+		t.Fatalf("TokenEnv before LoadConfig = %q, want empty", got)
+	}
+	path := writeCfg(t, minimalCfg("http://127.0.0.1:1"))
+	if err := c.LoadConfig(path); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := c.Status().TokenEnv; got != adminTokenEnv {
+		t.Fatalf("TokenEnv after LoadConfig = %q, want %q", got, adminTokenEnv)
+	}
+}
+
 // TestStatus_reapsDeadCore is the reap contract (white-box): a run goroutine
 // that exited on its own must fold into a stopped state on the next Status,
 // with the bearer cleared, instead of reading Running=true forever.

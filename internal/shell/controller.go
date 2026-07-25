@@ -51,6 +51,11 @@ type Status struct {
 	// ("" when stopped) — the real ephemeral port, state only the running
 	// core knows.
 	AdminAddr string
+	// TokenEnv is the NAME of the admin-bearer env var the shell rotates
+	// each cycle ("" when no config is loaded or the config has no admin
+	// block). A name only, never a value (ADR-0035 §4) — the chrome's
+	// Settings security row paints it.
+	TokenEnv string
 }
 
 // Option configures New.
@@ -280,6 +285,9 @@ func (c *Controller) Status() Status {
 	defer c.mu.Unlock()
 	c.reapLocked()
 	st := Status{Running: c.running, ConfigPath: c.path}
+	if c.cfg != nil && c.cfg.Admin != nil {
+		st.TokenEnv = c.cfg.Admin.TokenEnv
+	}
 	if c.running {
 		if a := c.cur.Load(); a != nil {
 			st.AdminAddr = a.AdminAddr()

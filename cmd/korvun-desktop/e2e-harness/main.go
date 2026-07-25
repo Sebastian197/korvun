@@ -2,32 +2,74 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Command e2e-harness serves the BUILT desktop chrome and the SP4 same-origin
-// admin proxy from one loopback origin, over a REAL no-network core (the SP5
-// channel-less first-run template), mirroring the Wails AssetServer semantics
-// — assets first, handler on miss — so Playwright drives the real pipeline
-// without a WebView (SP6 spec: the per-cut screenshot medium; the native
-// WKWebView ride is SP8's hardware validation). Plain Go, no Wails import:
-// it compiles in the default suite on every OS.
+// admin proxy from one loopback origin, over a REAL no-network core,
+// mirroring the Wails AssetServer semantics — assets first, handler on miss —
+// so Playwright drives the real pipeline without a WebView (SP6 spec: the
+// per-cut screenshot medium; the native WKWebView ride is SP8's hardware
+// validation). Plain Go, no Wails import: it compiles in the default suite on
+// every OS.
 //
-// Usage: e2e-harness [-addr 127.0.0.1:43117] [-dist cmd/korvun-desktop/frontend/dist]
+// SP6b additions, all under /__test/ (test-control surface, loopback-only by
+// construction — the harness binds loopback):
+//
+//   - POST /__test/bindings/<Method> — the REAL shell.Desktop binding surface
+//     over HTTP, mirroring Wails' generated JS (args as a JSON array, Go
+//     error → {"error": ...} → Promise rejection). Playwright installs a
+//     window.go.shell.Desktop shim on top, so the chrome exercises the same
+//     THE-LAW-bounded surface the native window binds.
+//   - POST /__test/inject {"text": ...} — feeds a real inbound Envelope into
+//     the scripted fake channel; the message then rides the REAL router,
+//     brain, and SSE bus (nothing is mocked past the transport edge).
+//   - POST /__test/model {"mode": "ok"|"down"} — flips the in-harness fake
+//     model endpoint. NOTE: a down model does NOT fail the handle — ADR-0031
+//     degrades model failures to a fallback reply (still reply_sent); the
+//     toggle exists for CheckOllama-style probes.
+//   - POST /__test/channel {"send": "ok"|"fail"} — makes the scripted
+//     channel's Send fail, the honest provocation of a real message_dropped
+//     frame (router funnel: a failed Send is a message that did not complete
+//     its path), which is one of FR-WIN-4's incident triggers.
+//   - POST /__test/core-exit — stops the core WITHOUT going through the UI's
+//     binding surface: from the chrome's point of view the core vanished out
+//     from under it, exactly what the reap-driven incident state must catch.
+//
+// The core the harness boots carries ONE scripted telegram channel (the fake
+// transport above; its token env var is set in-process to a dummy — no real
+// secret, no network) and the template's private ollama brain pointed at the
+// in-harness fake model endpoint.
+//
+// Usage: e2e-harness [-addr 127.0.0.1:43117] [-dist cmd/korvun-desktop/frontend/dist] [-start=false]
 package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/app"
+	"github.com/Sebastian197/korvun/internal/channel"
+	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/conversation"
+	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/Sebastian197/korvun/internal/shell"
 )
+
+// harnessTokenEnv is the dummy secret var the scripted channel references —
+// set in-process to satisfy the core's env pre-check, never a real secret.
+const harnessTokenEnv = "KORVUN_HARNESS_TELEGRAM_TOKEN" //nolint:gosec // an env-var NAME, not a credential
 
 func main() {
 	if err := run(); err != nil {
@@ -36,30 +78,214 @@ func main() {
 	}
 }
 
+// fakeChannel is the scripted no-network transport (the shell test suite's
+// pattern): Receive hands the router a real inbound stream the /__test/inject
+// endpoint feeds.
+type fakeChannel struct {
+	name     string
+	inbound  chan *envelope.Envelope
+	sendFail atomic.Bool
+	mu       sync.Mutex
+	stopped  bool
+}
+
+func newFakeChannel(name string) *fakeChannel {
+	return &fakeChannel{name: name, inbound: make(chan *envelope.Envelope)}
+}
+
+func (f *fakeChannel) Name() string               { return f.name }
+func (f *fakeChannel) Manifest() channel.Manifest { return channel.Manifest{Text: true} }
+func (f *fakeChannel) Send(context.Context, *envelope.Envelope) error {
+	if f.sendFail.Load() {
+		return errors.New("send failed (harness scripted outage)")
+	}
+	return nil
+}
+func (f *fakeChannel) Receive(context.Context) (<-chan *envelope.Envelope, error) {
+	return f.inbound, nil
+}
+func (f *fakeChannel) Start(context.Context) error { return nil }
+func (f *fakeChannel) Stop(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.stopped {
+		f.stopped = true
+		close(f.inbound)
+	}
+	return nil
+}
+
+// inject feeds one inbound envelope, bounded so a stopped core (no pump
+// consuming) answers honestly instead of hanging the control endpoint.
+func (f *fakeChannel) inject(text string) error {
+	f.mu.Lock()
+	stopped := f.stopped
+	ch := f.inbound
+	f.mu.Unlock()
+	if stopped {
+		return errors.New("channel stopped")
+	}
+	e := envelope.New(f.name, envelope.Inbound, envelope.Participant{ID: "u1", Name: "Harness"})
+	e.AddText(text)
+	e.Meta[conversation.MetaConversationID] = "harness-conv"
+	select {
+	case ch <- e:
+		return nil
+	case <-time.After(2 * time.Second):
+		return errors.New("no consumer (core stopped?)")
+	}
+}
+
+// memSecrets is the harness keychain double — the real OS keychain must never
+// be touched from a test tool.
+type memSecrets struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+func (s *memSecrets) Get(name string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.m[name]
+	if !ok {
+		return "", shell.ErrSecretNotFound
+	}
+	return v, nil
+}
+
+func (s *memSecrets) Set(name, value string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.m == nil {
+		s.m = map[string]string{}
+	}
+	s.m[name] = value
+	return nil
+}
+
+func (s *memSecrets) Delete(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, name)
+	return nil
+}
+
+// fakeModel is the toggleable in-harness model endpoint: ok → a real chat
+// completion; down → 500, so the brain's handle genuinely fails.
+type fakeModel struct {
+	down atomic.Bool
+	srv  *http.Server
+	url  string
+}
+
+func newFakeModel() (*fakeModel, error) {
+	fm := &fakeModel{}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, fmt.Errorf("fake model listen: %w", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/chat", func(w http.ResponseWriter, _ *http.Request) {
+		if fm.down.Load() {
+			http.Error(w, "model down (harness)", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"message":{"role":"assistant","content":"Respuesta del asistente (harness)."},"done":true}`)
+	})
+	mux.HandleFunc("/api/tags", func(w http.ResponseWriter, _ *http.Request) {
+		if fm.down.Load() {
+			http.Error(w, "model down (harness)", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"models":[]}`)
+	})
+	fm.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	fm.url = "http://" + ln.Addr().String()
+	go func() { _ = fm.srv.Serve(ln) }()
+	return fm, nil
+}
+
+// harnessConfig is the channel-ful variant of the SP5 template: one scripted
+// telegram channel + the template's private ollama brain pointed at the fake
+// model endpoint.
+func harnessConfig(modelURL string) *config.Config {
+	return &config.Config{
+		Channels: []config.ChannelConfig{{Type: "telegram", Mode: "polling", TokenEnv: harnessTokenEnv}},
+		Brains: []config.BrainConfig{{
+			Name:        "asistente",
+			Sensitivity: "private",
+			Policy:      config.PolicyConfig{Kind: "priority", Order: []string{"ollama"}},
+			Models: []config.ModelConfig{
+				{Provider: "ollama", ModelID: "llama3.2:1b", Locality: "local", BaseURL: modelURL},
+			},
+		}},
+		Routes:        []config.RouteConfig{{Channel: "telegram", Brain: "asistente"}},
+		Admin:         &config.AdminConfig{TokenEnv: "KORVUN_ADMIN_TOKEN"},
+		Observability: &config.ObservabilityConfig{Enabled: boolPtr(true)},
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
 // run keeps every deferred cleanup on the exit path (no os.Exit skipping the
 // temp-dir removal).
 func run() error {
 	addr := flag.String("addr", "127.0.0.1:43117", "loopback address to serve on")
 	dist := flag.String("dist", filepath.Join("cmd", "korvun-desktop", "frontend", "dist"),
 		"path to the built chrome bundle")
-	autostart := flag.Bool("start", true, "start the core (template first-run) on boot")
+	autostart := flag.Bool("start", true, "start the core on boot")
 	flag.Parse()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-	ctrl := shell.New(shell.WithLogger(logger))
+	if err := os.Setenv(harnessTokenEnv, "harness-dummy"); err != nil {
+		return fmt.Errorf("set dummy channel token: %w", err)
+	}
+
+	fm, err := newFakeModel()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = fm.srv.Close() }()
+
+	// The scripted channel registry: the factory records what the core
+	// builds so /__test/inject can reach the live instance of the CURRENT
+	// cycle (a restart builds a fresh one).
+	var chanMu sync.Mutex
+	channels := map[string]*fakeChannel{}
+	factory := app.WithChannelFactory(func(cc config.ChannelConfig) (app.Channel, error) {
+		fc := newFakeChannel(cc.Type)
+		chanMu.Lock()
+		channels[cc.Type] = fc
+		chanMu.Unlock()
+		return fc, nil
+	})
+
+	ctrl := shell.New(
+		shell.WithLogger(logger),
+		shell.WithBuildOptions(factory),
+		shell.WithSecretStore(&memSecrets{}),
+	)
+	desk := shell.NewDesktop(ctrl, shell.WithDesktopLogger(logger))
+
+	dir, err := os.MkdirTemp("", "korvun-harness-*")
+	if err != nil {
+		return fmt.Errorf("temp dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	cfgPath := filepath.Join(dir, "korvun.json")
+	cfgBytes, err := json.MarshalIndent(harnessConfig(fm.url), "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.WriteFile(cfgPath, cfgBytes, 0o600); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	if err := ctrl.LoadConfig(cfgPath); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
 	if *autostart {
-		dir, err := os.MkdirTemp("", "korvun-harness-*")
-		if err != nil {
-			return fmt.Errorf("temp dir: %w", err)
-		}
-		defer func() { _ = os.RemoveAll(dir) }()
-		cfgPath := filepath.Join(dir, "korvun.json")
-		if _, err := shell.EnsureDefaultConfig(cfgPath); err != nil {
-			return fmt.Errorf("ensure config: %w", err)
-		}
-		if err := ctrl.LoadConfig(cfgPath); err != nil {
-			return fmt.Errorf("load config: %w", err)
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		if err := ctrl.Start(ctx); err != nil {
 			cancel()
@@ -68,9 +294,14 @@ func run() error {
 		cancel()
 	}
 
+	testAPI := testControl{desk: desk, ctrl: ctrl, model: fm, channels: channels, chanMu: &chanMu}
 	proxy := ctrl.ProxyHandler()
 	files := http.FileServer(http.Dir(*dist))
 	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/__test/") {
+			testAPI.ServeHTTP(w, r)
+			return
+		}
 		// Assets first, handler on miss — the AssetServer's semantics. The
 		// chrome is a single-page app: "/" is index.html; anything that is
 		// not a real file under dist/ falls through to the proxy. The path
@@ -113,4 +344,195 @@ func run() error {
 		_ = ctrl.Stop(stopCtx)
 	}
 	return nil
+}
+
+// testControl is the /__test/ surface (see the package comment).
+type testControl struct {
+	desk     *shell.Desktop
+	ctrl     *shell.Controller
+	model    *fakeModel
+	channels map[string]*fakeChannel
+	chanMu   *sync.Mutex
+}
+
+func (tc testControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/__test/bindings/"):
+		tc.bindings(w, r, strings.TrimPrefix(r.URL.Path, "/__test/bindings/"))
+	case r.URL.Path == "/__test/inject":
+		tc.injectMessage(w, r)
+	case r.URL.Path == "/__test/model":
+		tc.modelMode(w, r)
+	case r.URL.Path == "/__test/channel":
+		tc.channelMode(w, r)
+	case r.URL.Path == "/__test/core-exit":
+		tc.coreExit(w)
+	default:
+		http.Error(w, "unknown test endpoint", http.StatusNotFound)
+	}
+}
+
+func (tc testControl) injectMessage(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Channel string `json:"channel"`
+		Text    string `json:"text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if body.Channel == "" {
+		body.Channel = "telegram"
+	}
+	tc.chanMu.Lock()
+	fc := tc.channels[body.Channel]
+	tc.chanMu.Unlock()
+	if fc == nil {
+		http.Error(w, "no such scripted channel", http.StatusConflict)
+		return
+	}
+	if err := fc.inject(body.Text); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (tc testControl) modelMode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Mode string `json:"mode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	switch body.Mode {
+	case "ok":
+		tc.model.down.Store(false)
+	case "down":
+		tc.model.down.Store(true)
+	default:
+		http.Error(w, `mode must be "ok" or "down"`, http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (tc testControl) channelMode(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Channel string `json:"channel"`
+		Send    string `json:"send"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if body.Channel == "" {
+		body.Channel = "telegram"
+	}
+	tc.chanMu.Lock()
+	fc := tc.channels[body.Channel]
+	tc.chanMu.Unlock()
+	if fc == nil {
+		http.Error(w, "no such scripted channel", http.StatusConflict)
+		return
+	}
+	switch body.Send {
+	case "ok":
+		fc.sendFail.Store(false)
+	case "fail":
+		fc.sendFail.Store(true)
+	default:
+		http.Error(w, `send must be "ok" or "fail"`, http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// coreExit stops the core WITHOUT the UI's binding surface — the chrome's
+// next poll sees the flip with no user action, the reap-shaped signal the
+// incident state must catch (FR-WIN-4's honest trigger).
+func (tc testControl) coreExit(w http.ResponseWriter) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := tc.ctrl.Stop(ctx); err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// bindings dispatches one Desktop method call, Wails-like: args as a JSON
+// array, reply {"result": ...} or {"error": "..."} — the Playwright shim
+// turns the latter into a Promise rejection, exactly like a Go error through
+// the generated Wails bindings.
+func (tc testControl) bindings(w http.ResponseWriter, r *http.Request, method string) {
+	var args []json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+		http.Error(w, "args must be a JSON array: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	str := func(i int) (string, error) {
+		if i >= len(args) {
+			return "", fmt.Errorf("missing arg %d", i)
+		}
+		var s string
+		if err := json.Unmarshal(args[i], &s); err != nil {
+			return "", fmt.Errorf("arg %d: %w", i, err)
+		}
+		return s, nil
+	}
+
+	var result any
+	var callErr error
+	switch method {
+	case "Start":
+		callErr = tc.desk.Start()
+	case "Stop":
+		callErr = tc.desk.Stop()
+	case "Status":
+		result, callErr = tc.desk.Status()
+	case "Version":
+		result = tc.desk.Version()
+	case "LoadConfig":
+		var p string
+		if p, callErr = str(0); callErr == nil {
+			callErr = tc.desk.LoadConfig(p)
+		}
+	case "DefaultConfigPath":
+		result, callErr = tc.desk.DefaultConfigPath()
+	case "EnsureDefaultConfig":
+		result, callErr = tc.desk.EnsureDefaultConfig()
+	case "SetSecret":
+		var name, value string
+		if name, callErr = str(0); callErr == nil {
+			if value, callErr = str(1); callErr == nil {
+				callErr = tc.desk.SetSecret(name, value)
+			}
+		}
+	case "DeleteSecret":
+		var name string
+		if name, callErr = str(0); callErr == nil {
+			callErr = tc.desk.DeleteSecret(name)
+		}
+	case "CheckOllama":
+		var base string
+		if base, callErr = str(0); callErr == nil {
+			result = tc.desk.CheckOllama(base)
+		}
+	default:
+		http.Error(w, "unknown binding "+method, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if callErr != nil {
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": callErr.Error()})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"result": result})
 }
