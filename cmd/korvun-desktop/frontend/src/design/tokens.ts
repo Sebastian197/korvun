@@ -17,6 +17,13 @@
 // ≈ 3.5/2.2:1 on --win) — the themes' values are SWAPPED here so both
 // pass. The AA law outranks the mock's literal (ADR-0030 §2); every other
 // value is byte-faithful to the source.
+//
+// SECOND CONSCIOUS DEVIATION (SP6b, same ratified principle, flagged for the
+// design track): status tokens carry 11 px text in pills, so they must clear
+// the AA TEXT floor (4.5:1) on their tinted pill surfaces — what axe-core
+// enforces in e2e. Darkened/lightened MINIMALLY, same hue: light okT
+// #0E8B7D→#0B7568, light warnT #96660F→#8F610E, light offT #75758A→#6A6A80,
+// dark offT #8A8A9E→#8F8FA4. Everything else stays byte-faithful.
 
 export interface ChromeTheme {
   /** Window/backdrop ramp. */
@@ -66,7 +73,7 @@ export const dark: ChromeTheme = {
   okT: '#4CD7C6',
   warnT: '#E7B45D',
   errT: '#F17E86',
-  offT: '#8A8A9E',
+  offT: '#8F8FA4',
   navH: '#17171F',
   navOn: '#1D1D29',
 }
@@ -86,10 +93,10 @@ export const light: ChromeTheme = {
   vioT: '#6644E8',
   vio: '#7A5AF5',
   onVio: '#FFFFFF',
-  okT: '#0E8B7D',
-  warnT: '#96660F',
+  okT: '#0B7568',
+  warnT: '#8F610E',
   errT: '#C13A42',
-  offT: '#75758A',
+  offT: '#6A6A80',
   navH: '#EFEFF5',
   navOn: '#E8E8F0',
 }
@@ -99,6 +106,40 @@ export const themes = { dark, light } as const
 /** The identity gradient — ONE primary action per view (its own scan). */
 export const IDENTITY_GRADIENT = 'linear-gradient(120deg,#2BC8B7,#7A5AF5)'
 export const TEAL = '#2BC8B7'
+
+/** Status/violet tinted pill surfaces as [r, g, b, alpha] — the -s variables
+ * in theme.css mirror these (rgba over the card). Pills carry 11 px TEXT, so
+ * the paired *T token must clear the AA text floor over the COMPOSITE of the
+ * tint on card (the wcag gate computes it). */
+export type Tint = readonly [number, number, number, number]
+
+export const tints: Record<'dark' | 'light', Record<'ok' | 'warn' | 'err' | 'off' | 'vio', Tint>> = {
+  dark: {
+    ok: [43, 200, 183, 0.12],
+    warn: [224, 164, 60, 0.14],
+    err: [229, 72, 77, 0.14],
+    off: [140, 140, 160, 0.13],
+    vio: [122, 90, 245, 0.14],
+  },
+  light: {
+    ok: [43, 200, 183, 0.15],
+    warn: [224, 164, 60, 0.16],
+    err: [229, 72, 77, 0.11],
+    off: [120, 120, 145, 0.12],
+    vio: [122, 90, 245, 0.11],
+  },
+}
+
+/** Composite an rgba tint over an opaque `#rrggbb` base. */
+export function composite(tint: Tint, baseHex: string): string {
+  const h = baseHex.replace('#', '')
+  const base = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
+  const [r, g, b, a] = tint
+  const mix = (c: number, bc: number): number => Math.round(c * a + bc * (1 - a))
+  return `#${[mix(r, base[0] ?? 0), mix(g, base[1] ?? 0), mix(b, base[2] ?? 0)]
+    .map((c) => c.toString(16).padStart(2, '0'))
+    .join('')}`
+}
 
 // ---- WCAG contrast math (sRGB, WCAG 2.x relative luminance) ----
 

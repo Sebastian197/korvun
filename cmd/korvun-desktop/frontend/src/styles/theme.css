@@ -7,7 +7,11 @@
    that fail the AA gate in their own theme (dark #68687C/#54546A on #0F0F16
    ≈ 3.5/2.2:1) — the two themes' values are SWAPPED here so both pass; the
    AA law outranks the mock's literal (ADR-0030 §2). Everything else is
-   byte-faithful. */
+   byte-faithful.
+   SECOND CONSCIOUS DEVIATION (SP6b, same principle, flagged for the design
+   track): status *-t tokens carry 11px pill text, so they hold the AA TEXT
+   floor on their -s tinted surfaces (axe-enforced in e2e) — light ok/warn/off
+   and dark off nudged minimally, same hue; see tokens.ts. */
 
 :root,
 :root[data-theme='dark'] {
@@ -32,7 +36,7 @@
   --warn-s: rgba(224, 164, 60, 0.14);
   --err-t: #f17e86;
   --err-s: rgba(229, 72, 77, 0.14);
-  --off-t: #8a8a9e;
+  --off-t: #8f8fa4;
   --off-s: rgba(140, 140, 160, 0.13);
   --nav-h: #17171f;
   --nav-on: #1d1d29;
@@ -56,13 +60,13 @@
   --vio-t: #6644e8;
   --vio-s: rgba(122, 90, 245, 0.11);
   --on-vio: #ffffff;
-  --ok-t: #0e8b7d;
+  --ok-t: #0b7568;
   --ok-s: rgba(43, 200, 183, 0.15);
-  --warn-t: #96660f;
+  --warn-t: #8f610e;
   --warn-s: rgba(224, 164, 60, 0.16);
   --err-t: #c13a42;
   --err-s: rgba(229, 72, 77, 0.11);
-  --off-t: #75758a;
+  --off-t: #6a6a80;
   --off-s: rgba(120, 120, 145, 0.12);
   --nav-h: #efeff5;
   --nav-on: #e8e8f0;
