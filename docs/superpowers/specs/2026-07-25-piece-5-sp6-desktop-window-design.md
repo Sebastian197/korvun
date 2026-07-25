@@ -1,8 +1,13 @@
 # Piece 5 SP6 — the real window (desktop chrome): Design Spec + cut plan
 
-> **Status:** draft — awaiting the copilot's review. NO window implementation
-> exists yet; this document and the cut plan are this assignment's whole
-> deliverable (two-stage mandate).
+> **Status:** approved — copilot review passed (2026-07-25). The cut plan
+> stands as written; implementation proceeds cut by cut behind the
+> screenshot gates. NC-1 RESOLVED by the copilot as option (a):
+> `frame-ancestors 'self'` in the core builderui — ONE small commit with
+> its test, scheduled as THE FIRST commit of cut 6c (6a/6b do not touch
+> it). Ratified flags: per-cut screenshots via Playwright/Chromium
+> (native WKWebView captures ride SP8), and the Activity v1 reset
+> (metadata-only feed — ADR-0024 rules).
 > Governing ADRs: ADR-0035 §§3(a) (bindings as plain Go, thin Wails
 > adapter), 3(b) (same-origin proxy — the SP4 contract in
 > `2026-07-25-piece-5-sp4-asset-proxy-design.md` is law), 3(c) (chrome
