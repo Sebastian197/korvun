@@ -1,6 +1,8 @@
 # Piece 5 SP5 — first run (default-config provisioning): Design Spec
 
-> **Status:** draft — **BLOCKED on NC-1** (do not proceed to TDD).
+> **Status:** approved for TDD (SP5). NC-1 RESOLVED 2026-07-25 by the
+> copilot as OPTION B (lineage: NC-8 / ADR-0035 §5) — zero channels is a
+> valid core state; see the resolved section at the end.
 > Governing ADRs: ADR-0035 §5 (first run: embedded template derived from
 > `configs/edge.json`, with the MANDATORY `admin` block — the review P1 —
 > so the builder can take over), §4 (bearer: `token_env` names the
@@ -50,22 +52,25 @@ Out of scope, deferred: the 3-step onboarding UI and any visual flow
   one brain `default` (`sensitivity: private`, priority policy) over
   `ollama`/`llama3.2:1b` at `http://localhost:11434`; storage left to the
   core's default path resolution. NO secret value anywhere in the file,
-  ever — only env-var NAMES. **The channel block is BLOCKED on NC-1.**
+  ever — only env-var NAMES. **NC-1 resolved: the template is
+  CHANNEL-LESS** (`channels: []`, `routes: []`) — valid by the core's
+  zero-channels relaxation; onboarding/builder adds the first real
+  channel. The template bytes are authored in `WriteConfigAtomic`'s
+  canonical form (`json.MarshalIndent(cfg, "", "  ")`), so what lands on
+  disk is byte-identical to the embed (FR-FIRST-4 pins it).
 - **FR-FIRST-4 Fidelity round-trip** — the embedded template, written to
   disk and read back, passes `config.Load` (which runs `Validate`)
   byte-for-byte as embedded. If the core's schema ever moves, this test
   breaks first.
 - **FR-FIRST-5 The template BOOTS** — end-to-end: write the template to a
   temp dir, `LoadConfig` + `Start` on the real Controller (the SP2/SP3/SP4
-  no-network pattern), assert core up, builder mounted (the admin block
-  doing its job: `GET /api/config` 200 through the SP4 proxy or with the
-  cycle bearer), clean `Stop`. **BLOCKED on NC-1** — see below: with
-  today's core, no channel-bearing template can boot without a real
-  secret.
+  no-network pattern; channel-less, so no channel fake is even needed),
+  assert core up, builder mounted (the admin block doing its job:
+  `GET /api/config` 200 through the SP4 proxy, which also exercises the
+  bearer injection), clean `Stop`. Boots BY CONSTRUCTION after NC-1: zero
+  channels means no secret is needed on first launch.
 
 ## Acceptance scenarios (Given / When / Then)
-
-Drafted, to be finalized after NC-1 is resolved:
 
 - **AS-1** Given an empty temp config dir, When `EnsureDefaultConfig`,
   Then the file exists at the default path, the report is "created", the
@@ -79,8 +84,8 @@ Drafted, to be finalized after NC-1 is resolved:
   observability.
 - **AS-4** Given the template written to a temp dir, When
   `LoadConfig` + `Start` + `Stop` on the real Controller, Then the core
-  confirms Start, the builder/mutation surface is mounted, and Stop is
-  clean. *(Blocked on NC-1.)*
+  confirms Start, the builder/mutation surface is mounted
+  (`GET /api/config` 200 through the SP4 proxy), and Stop is clean.
 - **AS-5** Given a read-only parent directory (or an unwritable path),
   When `EnsureDefaultConfig`, Then a wrapped error names the path and no
   partial file is left behind (atomicity).
@@ -109,11 +114,20 @@ Drafted, to be finalized after NC-1 is resolved:
   provisioning only; when Start happens (and what gates it) is SP6's
   onboarding flow.
 
-## `[NEEDS CLARIFICATION]`
+## `[NEEDS CLARIFICATION]` — none open
 
-- **NC-1 — the zero-channels / starter-channel question. BLOCKS FR-FIRST-3
-  channel block, FR-FIRST-5, AS-4, and all TDD.** The evidence, read from
-  the code (not from memory):
+**NC-1 — RESOLVED 2026-07-25 by the copilot: OPTION B** (lineage: NC-8 /
+ADR-0035 §5; ADR amended the same day). Exact scope of the resolution, as
+decided: `validateChannels` accepts an empty list while every PRESENT
+channel keeps full strict validation; zero routes is valid only in the
+channel-less state (≥1 channel still requires ≥1 route); a channel-less
+boot WARNS ("no channels configured — add one via the builder") with
+everything else alive — admin server, builder, brains, honest status,
+clean shutdown — pinned by `-race` tests in `internal/config` and
+`internal/app` (core commit of this sub-phase). The template is therefore
+channel-less and boots by construction.
+
+The original blocking evidence, preserved for the record:
   1. `config.Validate` REJECTS zero channels —
      `internal/config/config.go:315-316`: `if len(c.Channels) == 0 {
      return nil, fmt.Errorf("%w: channels: at least one channel is
@@ -137,7 +151,7 @@ Drafted, to be finalized after NC-1 is resolved:
      boot without a real channel secret already provisioned — a
      first-launch double-click has none by definition.
 
-  Options for the decision (each names its blast radius):
+  Options that were on the table (B was chosen):
   - **(A) Wire `webhook` as a first-class starter channel type**: core
     validator enum + per-type `token_env` optionality + app factory case
     + minimal config surface for it. Most faithful to the original SP5
@@ -158,6 +172,5 @@ Drafted, to be finalized after NC-1 is resolved:
     a scope change to this instruction, so it needs your explicit call
     too.
 
-  Per CLAUDE.md and the SP5 instruction ("relajar el validador del core
-  es decisión que quiero ver antes"): STOPPED here. No tests, no
-  implementation, until NC-1 is resolved.
+  Resolution trail: TDD stopped at this NC on 2026-07-25 as instructed;
+  the copilot resolved OPTION B the same day and TDD resumed.
