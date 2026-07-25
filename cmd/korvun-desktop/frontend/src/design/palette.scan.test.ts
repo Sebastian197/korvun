@@ -1,9 +1,14 @@
 // Fidelity scans (SP6 spec FR-WIN-8), cheap and biting:
 //  1. NO hardcoded color (hex/rgb/hsl) anywhere in src/ outside the token
-//     table — colors live in tokens (and their theme.css mirror), nowhere
-//     else.
-//  2. The identity GRADIENT appears at most ONCE per view source — the
-//     design law "one gradient primary action per view", executable.
+//     table and the brand source — colors live in tokens (their theme.css
+//     mirror) and in the canonical BrandMark copy, nowhere else.
+//  2. The identity GRADIENT law, PER VIEW (6a review rider d — the test says
+//     what the law says): each view source (src/views/*.tsx, and App.tsx
+//     while it still hosts a view) may carry at most ONE gradient-bearing
+//     marker (`btn-primary` / `--grad` / `IDENTITY_GRADIENT`); every other
+//     non-allowlisted file carries NONE, and in CSS `--grad` may be
+//     REFERENCED only by the sanctioned utility selectors below. The brand
+//     tile is the identity moment and lives inside BrandMark (allowlisted).
 // Sources are read from DISK (a Vite `?raw` import of CSS comes back EMPTY
 // under the Tailwind plugin — found in review), so CSS is genuinely scanned.
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -11,7 +16,11 @@ import { join, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const SRC = join(__dirname, '..')
-const TOKEN_FILES = ['tokens.ts', 'theme.css']
+// tokens.ts + theme.css ARE the token table; BrandMark.tsx is the byte-faithful
+// copy of assets/brand/korvun-logo-hero.svg (the brand source of truth).
+const TOKEN_FILES = ['tokens.ts', 'theme.css', 'components/BrandMark.tsx']
+// The only CSS selectors allowed to reference the identity gradient.
+const GRADIENT_UTILITIES = ['.btn-primary']
 
 function walk(dir: string): string[] {
   const out: string[] = []
@@ -56,11 +65,32 @@ describe('palette fidelity', () => {
     expect(offenders, offenders.join('\n')).toEqual([])
   })
 
-  it('the identity gradient appears at most once per view source', () => {
+  it('the identity gradient appears at most once PER VIEW, nowhere else', () => {
     for (const [name, body] of sources) {
       if (isTokenFile(name)) continue
-      const count = (body.match(/--grad|IDENTITY_GRADIENT/g) ?? []).length
-      expect(count, `${name} uses the gradient ${count} times`).toBeLessThanOrEqual(1)
+      if (name.endsWith('.css')) continue // CSS is held to the selector law below
+      const count = (body.match(/btn-primary|--grad|IDENTITY_GRADIENT/g) ?? []).length
+      const isView = name.startsWith('views/') || name === 'App.tsx'
+      const max = isView ? 1 : 0
+      expect(
+        count,
+        `${name} uses the gradient ${count} times (allowed ${max})`,
+      ).toBeLessThanOrEqual(max)
+    }
+  })
+
+  it('in CSS, --grad is referenced only by the sanctioned utility selectors', () => {
+    for (const [name, body] of sources) {
+      if (isTokenFile(name) || !name.endsWith('.css')) continue
+      // Split into rule blocks and attribute every var(--grad) use to its selector.
+      for (const block of body.split('}')) {
+        if (!block.includes('var(--grad)')) continue
+        const selector = (block.split('{')[0] ?? '').trim()
+        expect(
+          GRADIENT_UTILITIES.some((u) => selector === u),
+          `${name}: selector "${selector}" uses var(--grad) — only ${GRADIENT_UTILITIES.join(', ')} may`,
+        ).toBe(true)
+      }
     }
   })
 })

@@ -3,18 +3,32 @@
 // of the views are honest empty states until their cut (6b/6c) lands them.
 import { useEffect, useState } from 'react'
 import './App.css'
+import { BrandMark } from './components/BrandMark'
+import {
+  IconActivity,
+  IconBuilder,
+  IconChannels,
+  IconHome,
+  IconSettings,
+} from './components/icons'
 import { desktop } from './lib/go'
 import { useCoreState } from './status/store'
 import { applyTheme, storedTheme, type ThemeChoice } from './theme'
 
-type View = 'inicio' | 'canales' | 'actividad' | 'builder' | 'ajustes'
+type View = 'inicio' | 'builder' | 'canales' | 'actividad' | 'ajustes'
 
-const NAV: ReadonlyArray<{ id: View; label: string }> = [
-  { id: 'inicio', label: 'Inicio' },
-  { id: 'canales', label: 'Canales' },
-  { id: 'actividad', label: 'Actividad' },
-  { id: 'builder', label: 'Builder' },
-  { id: 'ajustes', label: 'Ajustes' },
+// Design order (6a review rider a): Builder second, exactly as the sidebar
+// mock paints it.
+const NAV: ReadonlyArray<{
+  id: View
+  label: string
+  icon: (p: { size?: number }) => React.JSX.Element
+}> = [
+  { id: 'inicio', label: 'Inicio', icon: IconHome },
+  { id: 'builder', label: 'Builder', icon: IconBuilder },
+  { id: 'canales', label: 'Canales', icon: IconChannels },
+  { id: 'actividad', label: 'Actividad', icon: IconActivity },
+  { id: 'ajustes', label: 'Ajustes', icon: IconSettings },
 ]
 
 function HomeParado(): React.JSX.Element {
@@ -105,8 +119,8 @@ export function App(): React.JSX.Element {
     <div className="layout">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-tile" aria-hidden="true">
-            K
+          <span className="brand-tile" data-testid="brand-tile">
+            <BrandMark size={34} />
           </span>
           <div>
             <div className="brand-name">Korvun</div>
@@ -124,7 +138,9 @@ export function App(): React.JSX.Element {
               aria-current={view === item.id ? 'page' : undefined}
               onClick={() => setView(item.id)}
             >
-              <span className="nav-dot" aria-hidden="true" />
+              <span className="nav-icon" aria-hidden="true">
+                <item.icon />
+              </span>
               {item.label}
             </button>
           ))}

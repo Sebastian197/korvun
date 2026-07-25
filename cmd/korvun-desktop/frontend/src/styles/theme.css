@@ -2,11 +2,12 @@
    extracted from the design-track standalone source. data-theme on <html>
    swaps the whole table (light mode is a variable swap, ADR-0030 §2). The
    gradient is identity-only: ONE primary action per view (scanned).
-   CONSCIOUS DEVIATION (review-ratified, pending design-track sign-off):
-   the mock assigns --tx3/--capt values that fail the AA gate in their own
-   theme (dark #68687C/#54546A on #0F0F16 ≈ 3.5/2.2:1) — the two themes'
-   values are SWAPPED here so both pass; the AA law outranks the mock's
-   literal (ADR-0030 §2). Everything else is byte-faithful. */
+   CONSCIOUS DEVIATION — RATIFIED (copilot, 2026-07-25; the design-track
+   notice is the copilot's to deliver): the mock assigns --tx3/--capt values
+   that fail the AA gate in their own theme (dark #68687C/#54546A on #0F0F16
+   ≈ 3.5/2.2:1) — the two themes' values are SWAPPED here so both pass; the
+   AA law outranks the mock's literal (ADR-0030 §2). Everything else is
+   byte-faithful. */
 
 :root,
 :root[data-theme='dark'] {

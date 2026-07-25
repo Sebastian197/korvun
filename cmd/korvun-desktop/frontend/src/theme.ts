@@ -15,7 +15,22 @@ export function storedTheme(): ThemeChoice {
 
 function effective(choice: ThemeChoice): 'dark' | 'light' {
   if (choice !== 'system') return choice
+  if (typeof window.matchMedia !== 'function') return 'dark'
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
+// While the choice is 'system' the chrome FOLLOWS the OS live (6a review
+// rider d): one change listener on prefers-color-scheme, detached the moment
+// an explicit choice takes over.
+let systemMql: MediaQueryList | null = null
+let systemListener: (() => void) | null = null
+
+function detachSystemListener(): void {
+  if (systemMql && systemListener) {
+    systemMql.removeEventListener('change', systemListener)
+  }
+  systemMql = null
+  systemListener = null
 }
 
 export function applyTheme(choice: ThemeChoice): void {
@@ -24,6 +39,14 @@ export function applyTheme(choice: ThemeChoice): void {
   } catch {
     // A restricted WebView storage must never blank the app; the theme
     // simply won't persist across launches.
+  }
+  detachSystemListener()
+  if (choice === 'system' && typeof window.matchMedia === 'function') {
+    systemMql = window.matchMedia('(prefers-color-scheme: light)')
+    systemListener = () => {
+      document.documentElement.dataset.theme = effective('system')
+    }
+    systemMql.addEventListener('change', systemListener)
   }
   document.documentElement.dataset.theme = effective(choice)
 }

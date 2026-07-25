@@ -11,11 +11,12 @@
 // surfaces, held to the 3:1 UI floor; the text tiers and violet-as-text hold
 // the 4.5:1 AA floor.
 //
-// CONSCIOUS DEVIATION (review-ratified, pending design-track sign-off): the
-// mock's literal --tx3/--capt assignments fail the AA gate in their own
-// theme (dark #68687C/#54546A ≈ 3.5/2.2:1 on --win) — the themes' values
-// are SWAPPED here so both pass. The AA law outranks the mock's literal
-// (ADR-0030 §2); every other value is byte-faithful to the source.
+// CONSCIOUS DEVIATION — RATIFIED (copilot, 2026-07-25; the design-track
+// notice is the copilot's to deliver): the mock's literal --tx3/--capt
+// assignments fail the AA gate in their own theme (dark #68687C/#54546A
+// ≈ 3.5/2.2:1 on --win) — the themes' values are SWAPPED here so both
+// pass. The AA law outranks the mock's literal (ADR-0030 §2); every other
+// value is byte-faithful to the source.
 
 export interface ChromeTheme {
   /** Window/backdrop ramp. */

@@ -26,15 +26,8 @@
 .brand-tile {
   width: 34px;
   height: 34px;
-  border-radius: 9px;
-  background: var(--card2);
-  border: 1px solid var(--line);
   display: grid;
   place-items: center;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 17px;
-  color: var(--vio-t);
 }
 
 .brand-name {
@@ -74,16 +67,14 @@
   font-weight: 500;
 }
 
-.nav-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--tx3);
+.nav-icon {
+  display: inline-flex;
+  color: var(--tx3);
   flex: none;
 }
 
-.nav-item[aria-current='page'] .nav-dot {
-  background: var(--vio);
+.nav-item[aria-current='page'] .nav-icon {
+  color: var(--vio-t);
 }
 
 .sidebar-foot {
