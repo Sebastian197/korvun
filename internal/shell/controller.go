@@ -88,16 +88,24 @@ type Controller struct {
 	buildOpts []app.Option
 	secrets   SecretStore // nil → provisioning skipped (SP2 behavior)
 
-	mu          sync.Mutex
-	cfg         *config.Config
-	path        string
-	running     bool
-	tokenEnv    string             // env var the shell set this cycle ("" if none)
-	bearer      string             // the cycle's admin token value, for proxy injection ("" if none)
-	provisioned []string           // secret vars the shell set this cycle (FR-SEC-4)
-	cancel      context.CancelFunc // stops the supervisor's Run
-	done        chan struct{}      // closed when Run returns; runErr is set before
-	runErr      error              // Run's result; read only after <-done
+	mu       sync.Mutex
+	cfg      *config.Config
+	path     string
+	running  bool
+	tokenEnv string // env var the shell set this cycle ("" if none)
+	bearer   string // the cycle's admin token value, for proxy injection ("" if none)
+
+	// provMu guards provisioned. The supervisor's build/preflight seams
+	// re-provision reload secrets from a goroutine that does NOT hold mu
+	// (F1), so the accumulator needs its own lock; mu→provMu is the only
+	// nesting order (Start/Stop take mu then provMu; the seams take provMu
+	// alone), so there is no cycle.
+	provMu      sync.Mutex
+	provisioned []string // secret vars the shell set this cycle (FR-SEC-4)
+
+	cancel context.CancelFunc // stops the supervisor's Run
+	done   chan struct{}      // closed when Run returns; runErr is set before
+	runErr error              // Run's result; read only after <-done
 
 	cur atomic.Pointer[app.App] // current built core, for AdminAddr
 }
@@ -182,7 +190,35 @@ func (c *Controller) Start(ctx context.Context) error {
 	var sup *supervisor.Supervisor
 	started := make(chan struct{})
 	var once sync.Once
+	// bearerEnv is the per-cycle bearer variable name, captured for the seams
+	// so their reload provisioning excludes it (the initial provisioning above
+	// used c.cfg's Admin block). It is stable for the whole cycle.
+	bearerEnv := tokenEnv
+	// reprovision fills any keychain-only secret the (reload) config references
+	// before app.Build/app.Preflight reads the environment (F1). It runs on the
+	// initial boot too, where it is a no-op (Start already provisioned above).
+	// Hygiene model: a var this closure sets is cleared immediately if the
+	// provisioning STEP itself errors (bad keychain Get / bearer collision);
+	// otherwise it is accumulated and cleared at CYCLE END (Stop/reap). A
+	// reload that provisions a secret and is then rejected DOWNSTREAM (a later
+	// preflight/build failure, or a cutover rollback) therefore leaves that var
+	// exported until the cycle ends — bounded, never persisted to disk, and the
+	// same trust boundary as a successful provision (the shell owning the
+	// value in its own process env). The seam cannot do better: the cutover's
+	// success is the supervisor's decision AFTER build returns, invisible here.
+	reprovision := func(cfg *config.Config) error {
+		newly, err := c.provisionSecretsFor(withEphemeralAdmin(cfg), bearerEnv)
+		if err != nil {
+			clearProvisioned(newly) // partial provision from THIS step: undo it
+			return err
+		}
+		c.addProvisioned(newly)
+		return nil
+	}
 	build := func(cfg *config.Config) (supervisor.App, error) {
+		if err := reprovision(cfg); err != nil {
+			return nil, err
+		}
 		a, err := app.Build(withEphemeralAdmin(cfg), c.appOptions(sup)...)
 		if err != nil {
 			return nil, err
@@ -194,6 +230,9 @@ func (c *Controller) Start(ctx context.Context) error {
 		return &notifyingApp{App: a, onStarted: func() { once.Do(func() { close(started) }) }}, nil
 	}
 	preflight := func(cfg *config.Config) error {
+		if err := reprovision(cfg); err != nil {
+			return err
+		}
 		return app.Preflight(withEphemeralAdmin(cfg), c.appOptions(sup)...)
 	}
 	path := c.path
@@ -227,7 +266,9 @@ func (c *Controller) Start(ctx context.Context) error {
 		c.running = true
 		c.tokenEnv = tokenEnv
 		c.bearer = token
-		c.provisioned = provisioned
+		// Record the initial config's provisioned names (the seams' initial
+		// reprovision was a no-op; reload seams add to this under provMu).
+		c.addProvisioned(provisioned)
 		c.cancel = cancel
 		c.done = done
 		return nil
@@ -271,8 +312,7 @@ func (c *Controller) Stop(ctx context.Context) error {
 	c.clearBearer(c.tokenEnv)
 	c.tokenEnv = ""
 	c.bearer = ""
-	clearProvisioned(c.provisioned)
-	c.provisioned = nil
+	clearProvisioned(c.takeProvisioned())
 	if err != nil {
 		return fmt.Errorf("shell: core stopped with error: %w", err)
 	}
@@ -321,8 +361,7 @@ func (c *Controller) reapLocked() {
 	c.clearBearer(c.tokenEnv)
 	c.tokenEnv = ""
 	c.bearer = ""
-	clearProvisioned(c.provisioned)
-	c.provisioned = nil
+	clearProvisioned(c.takeProvisioned())
 }
 
 // appOptions assembles the options every app.Build/app.Preflight call in the
@@ -339,6 +378,39 @@ func (c *Controller) clearBearer(tokenEnv string) {
 	if tokenEnv != "" {
 		_ = os.Unsetenv(tokenEnv)
 	}
+}
+
+// addProvisioned appends names the shell set this cycle (dedup on already
+// tracked), under provMu — the reload seams call it off the mutex-holding
+// path (F1).
+func (c *Controller) addProvisioned(names []string) {
+	if len(names) == 0 {
+		return
+	}
+	c.provMu.Lock()
+	defer c.provMu.Unlock()
+	for _, n := range names {
+		seen := false
+		for _, e := range c.provisioned {
+			if e == n {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			c.provisioned = append(c.provisioned, n)
+		}
+	}
+}
+
+// takeProvisioned returns and clears every provisioned name, under provMu —
+// the cycle-end hygiene the caller feeds to clearProvisioned.
+func (c *Controller) takeProvisioned() []string {
+	c.provMu.Lock()
+	defer c.provMu.Unlock()
+	names := c.provisioned
+	c.provisioned = nil
+	return names
 }
 
 // newAdminToken returns 32 crypto/rand bytes hex-encoded — the per-cycle

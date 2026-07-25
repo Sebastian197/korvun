@@ -293,6 +293,15 @@ func run() error {
 	var chanMu sync.Mutex
 	channels := map[string]*fakeChannel{}
 	factory := app.WithChannelFactory(func(cc config.ChannelConfig) (app.Channel, error) {
+		// Mirror the REAL factory's secret pre-check (app.Build:
+		// os.Getenv(cc.TokenEnv) == "" -> ErrMissingSecret). Without this the
+		// harness bypassed the check and the SP6c wizard e2e never exercised
+		// keychain provisioning — the F1 gap. Now the wizard e2e is a genuine
+		// regression test: adding a channel whose secret lives only in the
+		// keychain double only connects because the reload seam re-provisions it.
+		if cc.TokenEnv != "" && os.Getenv(cc.TokenEnv) == "" {
+			return nil, fmt.Errorf("%w: %q", app.ErrMissingSecret, cc.TokenEnv)
+		}
 		fc := newFakeChannel(cc.Type)
 		chanMu.Lock()
 		channels[cc.Type] = fc

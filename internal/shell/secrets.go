@@ -102,29 +102,41 @@ func (c *Controller) SecretInKeychain(name string) (bool, error) {
 	return true, nil
 }
 
-// provisionSecrets (mu held, called by Start BEFORE app.Build) fills each
-// config-referenced secret variable that is ABSENT from the environment from
-// the keychain. The sacred precedence (ADR-0035 §4): a variable already in
-// the environment wins and the store is not even consulted for it. "Present"
-// means NON-EMPTY — a set-but-empty variable counts as absent, matching the
-// core's own missing-secret semantics (os.Getenv == "" → ErrMissingSecret),
-// so an inherited `X=` from a profile cannot defeat a keychain that could
-// satisfy it. A store miss is skipped silently (the boot then fails with
-// ErrMissingSecret naming the variable); any other store failure aborts,
-// naming the VARIABLE — never a value. A config that reuses the admin
-// bearer's variable as a channel/model secret is rejected loudly: the
-// bearer's per-cycle Setenv would silently clobber it. It returns the names
-// it set, for cycle-end hygiene.
+// provisionSecrets (mu held, called by Start BEFORE the supervisor) provisions
+// the INITIAL config's secrets against the admin bearer variable in c.cfg.
 func (c *Controller) provisionSecrets() ([]string, error) {
-	if c.secrets == nil {
-		return nil, nil
-	}
 	bearerEnv := ""
-	if c.cfg.Admin != nil {
+	if c.cfg != nil && c.cfg.Admin != nil {
 		bearerEnv = c.cfg.Admin.TokenEnv
 	}
+	return c.provisionSecretsFor(c.cfg, bearerEnv)
+}
+
+// provisionSecretsFor fills each secret variable that CFG references and that
+// is ABSENT from the environment, from the keychain. The sacred precedence
+// (ADR-0035 §4): a variable already in the environment wins and the store is
+// not even consulted for it. "Present" means NON-EMPTY — a set-but-empty
+// variable counts as absent, matching the core's own missing-secret semantics
+// (os.Getenv == "" → ErrMissingSecret), so an inherited `X=` from a profile
+// cannot defeat a keychain that could satisfy it. A store miss is skipped
+// silently (the boot/reload then fails with ErrMissingSecret naming the
+// variable); any other store failure aborts, naming the VARIABLE — never a
+// value. A config that reuses the admin bearer's variable (bearerEnv) as a
+// channel/model secret is rejected loudly: the bearer's per-cycle Setenv
+// would silently clobber it. It returns the names it set, for cycle-end
+// hygiene.
+//
+// F1 (hardware pass, 2026-07-25): this MUST also run in the supervisor's
+// build/preflight seam on EVERY reload, not only at Start — a hot reload that
+// adds a channel whose secret lives only in the keychain would otherwise
+// build against an environment missing that variable and roll back to
+// "failed". The nil-store short-circuit keeps the SP2 (no-store) behavior.
+func (c *Controller) provisionSecretsFor(cfg *config.Config, bearerEnv string) ([]string, error) {
+	if c.secrets == nil || cfg == nil {
+		return nil, nil
+	}
 	var provisioned []string
-	for _, name := range SecretEnvNames(c.cfg) {
+	for _, name := range SecretEnvNames(cfg) {
 		if name == bearerEnv {
 			return provisioned, fmt.Errorf(
 				"shell: config reuses the admin bearer variable %q as a channel/model secret — rename one of them", name)
