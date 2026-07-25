@@ -62,6 +62,25 @@ describe('ChannelWizard step 3 — keychain', () => {
     fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
   }
 
+  it('Atrás steps back through the flow', () => {
+    render(<ChannelWizard existingTypes={[]} onClose={() => undefined} onDone={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: /Discord/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
+    expect(screen.getByText(/El bot, por su nombre/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Atrás/ }))
+    expect(screen.getByText(/¿Qué canal quieres conectar/)).toBeInTheDocument()
+  })
+
+  it('with no bindings the keychain step is inert but the flow proceeds', () => {
+    render(<ChannelWizard existingTypes={[]} onClose={() => undefined} onDone={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: /Discord/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
+    fireEvent.change(screen.getByPlaceholderText(/una sola vez/), { target: { value: 'v' } })
+    fireEvent.click(screen.getByRole('button', { name: /Guardar en el llavero/ }))
+    expect(screen.getByText(/guardado en el llavero/)).toBeInTheDocument()
+  })
+
   it('SetSecret is called with the pasted value; the value leaves no DOM/storage trace', async () => {
     const setSecret = vi.fn(() => Promise.resolve())
     ;(window as unknown as FakeWindow).go = { shell: { Desktop: { SetSecret: setSecret } } }
@@ -104,6 +123,43 @@ describe('ChannelWizard step 3 — keychain', () => {
       expect(check).toHaveBeenCalledWith('DISCORD_BOT_TOKEN')
     })
     expect(await screen.findByText(/detectada/)).toBeInTheDocument()
+  })
+
+  it('a failed reload paints the error and does not report done', async () => {
+    ;(window as unknown as FakeWindow).go = {
+      shell: { Desktop: { SetSecret: () => Promise.resolve() } },
+    }
+    const failFetch = ((url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u === '/api/config' && (init?.method ?? 'GET') === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify(CONFIG), { status: 200 }))
+      }
+      if (u === '/api/config') {
+        return Promise.resolve(new Response(JSON.stringify({ handle: 'h1' }), { status: 202 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ state: 'failed' }), { status: 200 }))
+    }) as unknown as typeof fetch
+    const onDone = vi.fn()
+    render(
+      <ChannelWizard
+        existingTypes={['telegram']}
+        onClose={() => undefined}
+        onDone={onDone}
+        fetcher={failFetch}
+        pollIntervalMs={0}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Discord/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
+    fireEvent.change(screen.getByPlaceholderText(/una sola vez/), { target: { value: 'v' } })
+    fireEvent.click(screen.getByRole('button', { name: /Guardar en el llavero/ }))
+    await screen.findByText(/guardado en el llavero/)
+    fireEvent.click(screen.getByRole('button', { name: /Conectar canal/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/No se pudo conectar/)
+    })
+    expect(onDone).not.toHaveBeenCalled()
   })
 
   it('completing the wizard POSTs the new channel and reports done', async () => {

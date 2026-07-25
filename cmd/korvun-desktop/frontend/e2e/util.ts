@@ -6,6 +6,12 @@ import type { Page } from '@playwright/test'
 export const HARNESS_ADDR = '127.0.0.1:43117'
 export const BASE = `http://${HARNESS_ADDR}`
 
+/** A SECOND harness in fresh-install mode (no config loaded) for the SP6c
+ * onboarding e2e — created=true is real there. Its own port so it never
+ * collides with the running-core harness above. */
+export const FRESH_ADDR = '127.0.0.1:43118'
+export const FRESH_BASE = `http://${FRESH_ADDR}`
+
 /** Screenshot destination: design-drafts/, the copilot's review inbox. */
 export const SHOT = (name: string): string => `../../../design-drafts/${name}`
 

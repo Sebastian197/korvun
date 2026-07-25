@@ -313,19 +313,30 @@ func run() error {
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	if *fresh {
-		// Fresh-install mode: the default-config path must resolve INSIDE the
-		// temp dir (os.UserConfigDir reads HOME on darwin, XDG_CONFIG_HOME on
-		// linux) so EnsureDefaultConfig provisions a REAL first run without
-		// ever touching the developer's or the runner's actual config.
-		if err := os.Setenv("HOME", dir); err != nil {
-			return fmt.Errorf("fresh HOME: %w", err)
+	// ALWAYS isolate the default-config location into the temp dir
+	// (os.UserConfigDir reads HOME on darwin, XDG_CONFIG_HOME on linux). The
+	// chrome calls EnsureDefaultConfig(DefaultConfigPath) on mount; without
+	// isolation it would hit the developer's or runner's REAL path — creating
+	// a config on a clean HOME and wrongly triggering onboarding over the
+	// running-core harness.
+	if err := os.Setenv("HOME", dir); err != nil {
+		return fmt.Errorf("harness HOME: %w", err)
+	}
+	if err := os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config")); err != nil {
+		return fmt.Errorf("harness XDG_CONFIG_HOME: %w", err)
+	}
+
+	if !*fresh {
+		// Non-fresh: write the harness config (scripted channel + fake model)
+		// AT the default path so the chrome's EnsureDefaultConfig sees it
+		// exists (created=false → no onboarding), then load it.
+		cfgPath, err := shell.DefaultConfigPath()
+		if err != nil {
+			return fmt.Errorf("resolve default config path: %w", err)
 		}
-		if err := os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config")); err != nil {
-			return fmt.Errorf("fresh XDG_CONFIG_HOME: %w", err)
+		if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
+			return fmt.Errorf("mkdir config dir: %w", err)
 		}
-	} else {
-		cfgPath := filepath.Join(dir, "korvun.json")
 		cfgBytes, err := json.MarshalIndent(harnessConfig(fm.url), "", "  ")
 		if err != nil {
 			return fmt.Errorf("marshal config: %w", err)

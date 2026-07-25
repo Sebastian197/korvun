@@ -1,9 +1,17 @@
 // Shell smoke: navigation renders every section in the design order with
 // real icons, the brand tile carries the canonical mark, and the sidebar
 // foot carries the status chip.
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import { App } from './App'
+
+interface FakeWindow {
+  go?: { shell?: { Desktop?: Record<string, unknown> } }
+}
+
+afterEach(() => {
+  delete (window as unknown as FakeWindow).go
+})
 
 describe('chrome shell', () => {
   it('renders the sidebar with all five sections and the version row', () => {
@@ -59,5 +67,46 @@ describe('chrome shell', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'Canales' }))
     expect(screen.getByTestId('canales')).toBeInTheDocument()
+  })
+
+  it('Añadir canal opens the wizard overlay from Canales', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Canales' }))
+    fireEvent.click(screen.getByRole('button', { name: /Añadir canal/ }))
+    expect(screen.getByRole('dialog', { name: 'Añadir un canal' })).toBeInTheDocument()
+  })
+
+  it('a fresh install (EnsureDefaultConfig created=true) replaces the chrome with onboarding', async () => {
+    ;(window as unknown as FakeWindow).go = {
+      shell: {
+        Desktop: {
+          Version: () => Promise.resolve('v0.4.0'),
+          EnsureDefaultConfig: () => Promise.resolve(true),
+        },
+      },
+    }
+    render(<App />)
+    await waitFor(() => {
+      expect(screen.getByTestId('onboarding')).toBeInTheDocument()
+    })
+    // The dashboard nav is not shown during onboarding.
+    expect(screen.queryByRole('navigation', { name: 'Secciones' })).toBeNull()
+  })
+
+  it('an existing install (created=false) shows the normal chrome, no onboarding', async () => {
+    ;(window as unknown as FakeWindow).go = {
+      shell: {
+        Desktop: {
+          Version: () => Promise.resolve('v0.4.0'),
+          EnsureDefaultConfig: () => Promise.resolve(false),
+        },
+      },
+    }
+    render(<App />)
+    await waitFor(() => {
+      expect(screen.getByTestId('version').textContent).toBe('v0.4.0')
+    })
+    expect(screen.queryByTestId('onboarding')).toBeNull()
+    expect(screen.getByRole('navigation', { name: 'Secciones' })).toBeInTheDocument()
   })
 })

@@ -107,6 +107,33 @@ describe('Canales', () => {
     expect(onOpenWizard).toHaveBeenCalled()
   })
 
+  it('a failed removal keeps the channel and paints the error', async () => {
+    const fetcher = ((url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u === '/api/config' && (init?.method ?? 'GET') === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify(CONFIG), { status: 200 }))
+      }
+      if (u === '/api/config') {
+        return Promise.resolve(new Response(JSON.stringify({ handle: 'h1' }), { status: 202 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify({ state: 'failed' }), { status: 200 }))
+    }) as unknown as typeof fetch
+    render(
+      <Channels
+        onOpenWizard={() => undefined}
+        onOpenBuilder={() => undefined}
+        fetcher={fetcher}
+        pollIntervalMs={0}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Discord/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Quitar canal/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Sí, quitar/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/No se pudo quitar/)
+    })
+  })
+
   it('Quitar canal asks for confirmation and only then mutates', async () => {
     const fetcher = vi.fn(((url: string, init?: RequestInit) => {
       const u = String(url)

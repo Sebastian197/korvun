@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
-import { BASE, HARNESS_ADDR } from './e2e/util'
+import { BASE, FRESH_ADDR, FRESH_BASE, HARNESS_ADDR } from './e2e/util'
 
 // E2E for the desktop chrome (SP6). The webServer is the Go harness: built
 // chrome + the SP4 proxy + a REAL no-network core carrying one scripted
@@ -21,15 +21,25 @@ export default defineConfig({
     trace: 'on-first-retry',
     viewport: { width: 1440, height: 900 },
   },
-  webServer: {
-    // -start=false: the suite opens on the STOPPED chrome — the parado
-    // hero must come from the real 503 contract, not a mock; tests that
-    // need a running core start it through the bindings bridge.
-    command: `go run ../e2e-harness -addr ${HARNESS_ADDR} -dist ./dist -start=false`,
-    url: `${BASE}/`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      // -start=false: the suite opens on the STOPPED chrome — the parado
+      // hero must come from the real 503 contract, not a mock; tests that
+      // need a running core start it through the bindings bridge.
+      command: `go run ../e2e-harness -addr ${HARNESS_ADDR} -dist ./dist -start=false`,
+      url: `${BASE}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      // The fresh-install harness (SP6c onboarding): no config loaded, so
+      // EnsureDefaultConfig's created=true is real.
+      command: `go run ../e2e-harness -addr ${FRESH_ADDR} -dist ./dist -fresh`,
+      url: `${FRESH_BASE}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
   projects: [
     {
       name: 'chromium',

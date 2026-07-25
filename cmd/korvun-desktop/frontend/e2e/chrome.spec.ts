@@ -29,7 +29,7 @@ test('the stopped chrome: real 503 contract → parado hero, same-origin only', 
   })
 })
 
-test('sidebar navigation: five sections in design order, active state, honest empty views', async ({
+test('sidebar navigation: five sections in design order, active state, real views', async ({
   page,
 }) => {
   await page.goto('/')
@@ -45,7 +45,9 @@ test('sidebar navigation: five sections in design order, active state, honest em
     'Ajustes',
   ])
   await page.getByRole('button', { name: 'Canales' }).click()
-  await expect(page.getByText(/Canales estará disponible/)).toBeVisible()
+  // Canales is a real view (SP6c); stopped, its snapshot is empty → the
+  // honest "no channels yet" state, never a placeholder.
+  await expect(page.getByTestId('canales')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Canales' })).toHaveAttribute(
     'aria-current',
     'page',

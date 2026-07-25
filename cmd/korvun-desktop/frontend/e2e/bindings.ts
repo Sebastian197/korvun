@@ -29,6 +29,7 @@ export async function installBindings(page: Page): Promise<void> {
           SetSecret: (n: string, v: string) => call('SetSecret', [n, v]),
           DeleteSecret: (n: string) => call('DeleteSecret', [n]),
           CheckOllama: (b: string) => call('CheckOllama', [b]),
+          CheckSecretPresence: (n: string) => call('CheckSecretPresence', [n]),
         },
       },
     }

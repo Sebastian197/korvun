@@ -5,7 +5,7 @@
 // mid-cutover (the SP5-proven pipe, F4). No secret ever crosses this path:
 // the config carries only env-var NAMES.
 import { describe, expect, it } from 'vitest'
-import { addChannel, mutateConfig, removeChannel, type CoreConfig } from './mutate'
+import { addChannel, fetchConfig, mutateConfig, removeChannel, type CoreConfig } from './mutate'
 
 const BASE: CoreConfig = {
   channels: [{ type: 'telegram', mode: 'polling', token_env: 'TELEGRAM_TOKEN' }],
@@ -126,5 +126,31 @@ describe('mutateConfig pipe', () => {
     })
     expect(res.ok).toBe(false)
     expect(res.state).toBe('timeout')
+  })
+
+  it('a GET failure short-circuits before any POST', async () => {
+    const fetcher = (() => Promise.resolve(new Response('nope', { status: 503 }))) as typeof fetch
+    const res = await mutateConfig((c) => c, { fetcher, pollIntervalMs: 0 })
+    expect(res.ok).toBe(false)
+    expect(res.state).toBe('get-failed')
+  })
+})
+
+describe('fetchConfig', () => {
+  it('returns the config on 200', async () => {
+    const fetcher = (() =>
+      Promise.resolve(new Response(JSON.stringify(BASE), { status: 200 }))) as typeof fetch
+    expect(await fetchConfig(fetcher)).toEqual(BASE)
+  })
+
+  it('returns null on a non-ok response', async () => {
+    const fetcher = (() =>
+      Promise.resolve(new Response('stopped', { status: 503 }))) as typeof fetch
+    expect(await fetchConfig(fetcher)).toBeNull()
+  })
+
+  it('returns null on a transport error, never throws', async () => {
+    const fetcher = (() => Promise.reject(new Error('down'))) as typeof fetch
+    expect(await fetchConfig(fetcher)).toBeNull()
   })
 })
