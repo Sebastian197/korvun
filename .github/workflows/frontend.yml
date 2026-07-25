@@ -83,7 +83,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm test
+      # Coverage (v8) instead of a bare run — the report surfaces untested
+      # chrome code in the job log (6a review rider).
+      - run: npm run coverage
       - run: npm run build
 
   chrome-e2e:
@@ -105,6 +107,14 @@ jobs:
         with:
           go-version-file: go.mod
       - run: npm ci
+      # Cache the Playwright browser bundle keyed on the pinned
+      # @playwright/test version (6a review rider): on a hit the install
+      # step below skips the ~100 MB Chromium download and only installs
+      # the OS deps. actions/cache v6.1.0 verified at source 2026-07-25.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('cmd/korvun-desktop/frontend/package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       # Pre-compile the harness so its cold build (modernc.org/sqlite tree)
