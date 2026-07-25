@@ -87,11 +87,57 @@ explicit decision.
 
 ## Current state (as of session close, 2026-07-25)
 
-> **CURRENT (2026-07-25, session close): Piece 5 (the desktop app) — IN
-> PROGRESS, SP6b (Inicio completo + Ajustes + Actividad) COMPLETE LOCALLY,
-> NOT pushed, PENDING the copilot's screenshot review.**
+> **CURRENT (2026-07-25, session close): Piece 5 (the desktop app) — SP6c
+> (the LAST cut of SP6) COMPLETE LOCALLY, NOT pushed, PENDING the copilot's
+> screenshot review.** SP6a is MERGED+CI-green; SP6b is MERGED+CI-green
+> (pushed with the ensayo ritual: `06ce362..89f47bd`, then the live-view
+> flake cure + workflows `8ef8b78`/`bac6969`). SP6c sits on top,
+> **unpushed**, awaiting the copilot's side-by-side.
 >
 > **Copilot resolutions RECORDED this session (2026-07-25):**
+> - **SP6b cut APPROVED** — captures reviewed side-by-side, passed.
+> - **Incident amendment RATIFIED (spec §FR-WIN-4):** EVENT incidents
+>   (message_dropped/handle_failed) gain an "Entendido" dismiss (they are
+>   occurrences); the REAP incident stays sticky until a clean Start (a
+>   dead core is a live condition). Executed in `ec9ee92`.
+> - **NC-1 EXECUTED as option (a):** `web/builder/embed.go` now emits
+>   `frame-ancestors 'self'` (test-pinned) — the builder is framable
+>   same-origin. First commit of 6c (`e8ec76d`).
+>
+> **SP6c — COMPLETE LOCALLY (5 commits atop `bac6969`, NO push):**
+> - `e8ec76d` fix(builderui): frame-ancestors 'self' (NC-1 a) + spec notes
+>   (NC-1 executed, incident amendment, "Mostrar en carpeta" no-v1:
+>   Context7-verified the Wails v2 runtime has BrowserOpenURL→browser only,
+>   no reveal-in-folder).
+> - `ec9ee92` feat: 6b riders — hourES (one 24h es-ES clock app-wide) +
+>   the "Entendido" dismiss (feed incidents only; reap never offers it).
+> - `fc5c8f3` feat(shell): CheckSecretPresence(name)→{inEnv,inKeychain}
+>   under THE LAW (presence only, value dropped on the spot; TDD -race with
+>   a wedged-store timeout probe) + harness `-fresh` mode (isolated
+>   HOME/XDG so EnsureDefaultConfig created=true is real).
+> - `534b92a` feat(desktop): the SP6c UI — config/mutate pipe (GET→POST
+>   /api/config→poll reload through the SP4 proxy, F4-retry), Canales
+>   (list + detail + Quitar with confirmation), the 3-step ChannelWizard
+>   (type→variable→keychain SetSecret + Comprobar entorno; secret proven
+>   absent from DOM/localStorage), Onboarding (created=true gate),
+>   BuilderEmbed (same-origin iframe / honest stopped state), all wired in
+>   App.
+> - `c8b4d01` test(desktop): SP6c e2e (wizard end-to-end + keychain double
+>   + POST/reload; builder iframe; Entendido; axe) + a 2nd fresh-install
+>   harness for onboarding; unit coverage lifted to the 88% functions gate.
+> - **The 7 captures (1440×900, real states) in `design-drafts/`:**
+>   sp6c-canales-lista/detalle, sp6c-wizard-paso1, sp6c-wizard-paso3-llavero,
+>   sp6c-onboarding, sp6c-builder, sp6c-incidencia-entendido.
+> - Restrictions held: `go.mod` unchanged; headless byte-intact; the core
+>   API untouched EXCEPT the approved commit-0 CSP line; the only new
+>   binding is CheckSecretPresence under THE LAW. `make quality` green
+>   `-race` (91.2%); vitest 177; Playwright 17/17; `go test -race -count=5`
+>   on internal/shell + web/builder green.
+> - **NEXT:** copilot screenshot review of 6c → push (ensayo ritual) →
+>   then SP6 is COMPLETE end-to-end in software; SP7 (packaging + desktop
+>   CI) and SP8 (hardware validation) remain before the v0.4.0 proposal.
+>
+> **PREVIOUS resolutions (kept for the record):**
 > - **SP6a cut APPROVED** — screenshots reviewed side-by-side against the
 >   designs, passed. Its fidelity riders were folded as the FIRST commit of
 >   6b (see below).
