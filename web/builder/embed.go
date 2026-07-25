@@ -23,7 +23,11 @@ var distFS embed.FS
 // any external script/style/font/image/connect BY CONSTRUCTION. This is the real
 // no-CDN gate (ADR-0029 §5, not a text-grep) and it shrinks the XSS surface that
 // makes the in-memory bearer defensible (ADR-0030 §6).
-const csp = "default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+// frame-ancestors 'self' (SP6 NC-1, resolved (a) 2026-07-25): the desktop chrome
+// mounts the builder in a SAME-origin iframe through the SP4 proxy; 'self' keeps
+// every cross-origin ancestor blocked while allowing exactly that one embedding —
+// the only 'self' ancestor is the origin the bearer gate already trusts.
+const csp = "default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
 
 // Handler serves the embedded builder SPA with the CSP header. Mount it with
 // http.StripPrefix("/builder", ...) at the pattern "GET /builder/". Callers mount it

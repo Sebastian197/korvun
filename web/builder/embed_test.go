@@ -26,6 +26,12 @@ func TestHandler_servesIndexWithCSP(t *testing.T) {
 	if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "default-src 'self'") {
 		t.Errorf("CSP header = %q, want it to contain default-src 'self'", got)
 	}
+	// SP6 NC-1, resolved (a): the desktop chrome frames the builder from the
+	// SAME origin ('self'); every cross-origin ancestor stays blocked. 'none'
+	// would block even the same-origin iframe the chrome mounts.
+	if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "frame-ancestors 'self'") {
+		t.Errorf("CSP header = %q, want frame-ancestors 'self' (NC-1 option a)", got)
+	}
 	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
 		t.Errorf("Content-Type = %q, want text/html", ct)
 	}

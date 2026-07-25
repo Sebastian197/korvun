@@ -181,6 +181,15 @@ env-var NAMES are ever painted, never a value.
     unexpectedly" without inventing a cause) or `HandleFailed` /
     `MessageDropped` events in the SSE feed (their `channel` field is
     real and is shown); never a per-channel status table.
+    **AMENDED (copilot, 2026-07-25):** EVENT incidents (dropped/failed
+    frames) are occurrences, not conditions — the banner gains an
+    "Entendido" dismiss; the REAP incident stays sticky until a clean
+    Start (a dead core IS a live condition).
+  - *"Mostrar en carpeta" (final-3's config row)* — Context7-verified
+    2026-07-25: the Wails v2 runtime exposes `BrowserOpenURL` (default
+    BROWSER, sanitized URL) and no reveal-in-folder surface; a cheap,
+    cross-platform, verified path does not exist → no-v1 (the row shows
+    the path with tooltip truncation, no dead button).
   - *The wizard's token pre-check state and the memory ON/OFF toggle*
     (`wizPre`, `tgMem` in the mock) — no API behind either → not
     rendered in v1.
@@ -367,7 +376,9 @@ carries its concrete subset)
   that one response header for `/builder/` (amends the SP4 contract),
   **(c)** no iframe — a detached builder view losing the persistent
   sidebar (a design regression). Your call before 6c; 6a/6b do not
-  depend on it.
+  depend on it. **EXECUTED (2026-07-25, first commit of 6c):** option
+  (a) landed — `web/builder/embed.go` emits `frame-ancestors 'self'`,
+  test-pinned.
 
 Everything else resolves inside ADR-0035/0029/0030 + the design-track
 law + the addendum. Two folded decisions are additionally flagged for
