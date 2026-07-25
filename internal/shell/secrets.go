@@ -83,6 +83,25 @@ func (c *Controller) DeleteSecret(name string) error {
 	return c.secrets.Delete(name)
 }
 
+// SecretInKeychain reports whether the keychain holds an entry named name —
+// PRESENCE only (SP6c wizard's "Comprobar entorno"). The seam's Get reads
+// the value internally; it is dropped on this line and never crosses the
+// boundary, is never logged, and never reaches a caller. No store configured
+// reads as not-present (the honest answer, not an error); a miss is false;
+// any other store failure surfaces as an error.
+func (c *Controller) SecretInKeychain(name string) (bool, error) {
+	if c.secrets == nil {
+		return false, nil
+	}
+	if _, err := c.secrets.Get(name); err != nil {
+		if errors.Is(err, ErrSecretNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("shell: keychain presence check for %q: %w", name, err)
+	}
+	return true, nil
+}
+
 // provisionSecrets (mu held, called by Start BEFORE app.Build) fills each
 // config-referenced secret variable that is ABSENT from the environment from
 // the keychain. The sacred precedence (ADR-0035 §4): a variable already in

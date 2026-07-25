@@ -263,6 +263,10 @@ func run() error {
 	dist := flag.String("dist", filepath.Join("cmd", "korvun-desktop", "frontend", "dist"),
 		"path to the built chrome bundle")
 	autostart := flag.Bool("start", true, "start the core on boot")
+	fresh := flag.Bool("fresh", false,
+		"fresh-install mode (SP6c onboarding e2e): HOME/XDG_CONFIG_HOME point at a "+
+			"temp dir and NO config is written or loaded — EnsureDefaultConfig's "+
+			"created=true is real, so the onboarding runs for real")
 	flag.Parse()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
@@ -308,18 +312,32 @@ func run() error {
 		return fmt.Errorf("temp dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	cfgPath := filepath.Join(dir, "korvun.json")
-	cfgBytes, err := json.MarshalIndent(harnessConfig(fm.url), "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
+
+	if *fresh {
+		// Fresh-install mode: the default-config path must resolve INSIDE the
+		// temp dir (os.UserConfigDir reads HOME on darwin, XDG_CONFIG_HOME on
+		// linux) so EnsureDefaultConfig provisions a REAL first run without
+		// ever touching the developer's or the runner's actual config.
+		if err := os.Setenv("HOME", dir); err != nil {
+			return fmt.Errorf("fresh HOME: %w", err)
+		}
+		if err := os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config")); err != nil {
+			return fmt.Errorf("fresh XDG_CONFIG_HOME: %w", err)
+		}
+	} else {
+		cfgPath := filepath.Join(dir, "korvun.json")
+		cfgBytes, err := json.MarshalIndent(harnessConfig(fm.url), "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal config: %w", err)
+		}
+		if err := os.WriteFile(cfgPath, cfgBytes, 0o600); err != nil {
+			return fmt.Errorf("write config: %w", err)
+		}
+		if err := ctrl.LoadConfig(cfgPath); err != nil {
+			return fmt.Errorf("load config: %w", err)
+		}
 	}
-	if err := os.WriteFile(cfgPath, cfgBytes, 0o600); err != nil {
-		return fmt.Errorf("write config: %w", err)
-	}
-	if err := ctrl.LoadConfig(cfgPath); err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-	if *autostart {
+	if *autostart && !*fresh {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		if err := ctrl.Start(ctx); err != nil {
 			cancel()
@@ -573,6 +591,11 @@ func (tc testControl) bindings(w http.ResponseWriter, r *http.Request, method st
 		var base string
 		if base, callErr = str(0); callErr == nil {
 			result = tc.desk.CheckOllama(base)
+		}
+	case "CheckSecretPresence":
+		var name string
+		if name, callErr = str(0); callErr == nil {
+			result, callErr = tc.desk.CheckSecretPresence(name)
 		}
 	default:
 		http.Error(w, "unknown binding "+method, http.StatusNotFound)

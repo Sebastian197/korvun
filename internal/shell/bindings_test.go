@@ -244,3 +244,62 @@ func TestDesktop_version(t *testing.T) {
 		t.Fatalf("Version = %q, want v9.9.9", v)
 	}
 }
+
+// blockingStore wedges Get forever — the LAW probe for the presence check.
+type blockingStore struct{ fakeStore }
+
+func (b *blockingStore) Get(string) (string, error) {
+	select {} // never returns
+}
+
+// CheckSecretPresence (SP6c, wizard step 3): PRESENCE only — env and
+// keychain booleans, never a value in the result, and LAW-bounded.
+func TestDesktop_checkSecretPresence(t *testing.T) {
+	const name = "SHELL_TEST_PRESENCE_TOKEN" //nolint:gosec // an env-var NAME, not a credential
+
+	store := newFakeStore()
+	c := testController()
+	WithSecretStore(store)(c)
+	d := testDesktop(c)
+
+	p, err := d.CheckSecretPresence(name)
+	if err != nil {
+		t.Fatalf("CheckSecretPresence (absent everywhere): %v", err)
+	}
+	if p.InEnv || p.InKeychain {
+		t.Fatalf("absent everywhere: got %+v, want both false", p)
+	}
+
+	t.Setenv(name, "some-value")
+	if p, _ = d.CheckSecretPresence(name); !p.InEnv {
+		t.Fatalf("env var set: got %+v, want InEnv true", p)
+	}
+
+	store.data[name] = "keychain-value"
+	p, err = d.CheckSecretPresence(name)
+	if err != nil || !p.InKeychain {
+		t.Fatalf("keychain entry present: got %+v err=%v, want InKeychain true", p, err)
+	}
+
+	// No store configured: not-in-keychain is the honest answer, not an error.
+	bare := testDesktop(testController())
+	if p, err = bare.CheckSecretPresence(name); err != nil || p.InKeychain {
+		t.Fatalf("no store: got %+v err=%v, want InKeychain false, nil error", p, err)
+	}
+}
+
+// THE LAW covers the new binding: a wedged keychain Get times out with the
+// named error inside the keychain deadline class — never an unbounded hang.
+func TestDesktop_law_checkSecretPresenceBounded(t *testing.T) {
+	c := testController()
+	WithSecretStore(&blockingStore{})(c)
+	d := testDesktop(c)
+
+	start := time.Now()
+	if _, err := d.CheckSecretPresence("ANY_NAME"); !errors.Is(err, ErrBindingTimeout) {
+		t.Fatalf("wedged store: want ErrBindingTimeout, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("presence check took %s — the keychain deadline did not bite", elapsed)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -215,6 +216,30 @@ func (d *Desktop) DeleteSecret(name string) error {
 		return struct{}{}, d.ctrl.DeleteSecret(name)
 	})
 	return err
+}
+
+// SecretPresence is CheckSecretPresence's outcome: PRESENCE booleans only —
+// no field can carry a value, by construction (the ADR-0024 frame's
+// discipline applied to secrets).
+type SecretPresence struct {
+	InEnv      bool `json:"inEnv"`
+	InKeychain bool `json:"inKeychain"`
+}
+
+// CheckSecretPresence resolves whether the named variable is present in the
+// ENVIRONMENT and/or the OS keychain — the wizard's "Comprobar entorno · sin
+// leer su valor" (SP6c). Keychain deadline class: a Secret Service unlock
+// prompt is a legitimate slow path.
+func (d *Desktop) CheckSecretPresence(name string) (SecretPresence, error) {
+	return bounded(d, "check secret presence", d.deadlines.keychain, func() (SecretPresence, error) {
+		p := SecretPresence{InEnv: os.Getenv(name) != ""}
+		inKeychain, err := d.ctrl.SecretInKeychain(name)
+		if err != nil {
+			return SecretPresence{}, err
+		}
+		p.InKeychain = inKeychain
+		return p, nil
+	})
 }
 
 // OllamaCheck is CheckOllama's outcome: reachability is a RESULT the
