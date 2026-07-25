@@ -36,7 +36,7 @@ jobs:
         working-directory: web/builder
     steps:
       - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v4 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
         with:
           node-version: "22"
           cache: npm
@@ -57,7 +57,7 @@ jobs:
         working-directory: web/builder
     steps:
       - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v4 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
         with:
           node-version: "22"
           cache: npm
@@ -76,7 +76,7 @@ jobs:
         working-directory: cmd/korvun-desktop/frontend
     steps:
       - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v4 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
         with:
           node-version: "22"
           cache: npm
@@ -99,7 +99,7 @@ jobs:
         working-directory: cmd/korvun-desktop/frontend
     steps:
       - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v4 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
         with:
           node-version: "22"
           cache: npm
