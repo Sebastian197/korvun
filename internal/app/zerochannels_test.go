@@ -82,14 +82,11 @@ func TestRun_zeroChannels_everythingElseAlive(t *testing.T) {
 	}
 	base := "http://" + a.adminServer.Addr()
 
-	// The builder is mounted: the admin block did its job despite zero channels.
-	resp, err := http.Get(base + "/builder/") //nolint:noctx // loopback test URL
-	if err != nil {
-		t.Fatalf("GET /builder/: %v", err)
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /builder/ = %d, want 200 (builder not mounted)", resp.StatusCode)
+	// The builder is mounted: the admin block did its job despite zero
+	// channels. getEventually: same transport-noise tolerance as the other
+	// idempotent surface probes.
+	if code, _ := getEventually(t, base+"/builder/"); code != http.StatusOK {
+		t.Fatalf("GET /builder/ = %d, want 200 (builder not mounted)", code)
 	}
 
 	// The brains are alive alongside the empty channel list.

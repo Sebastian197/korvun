@@ -206,16 +206,17 @@ func TestControlAPI_endToEnd_coexistsAndLeaksNoSecrets(t *testing.T) {
 		t.Fatal("admin server never became healthy")
 	}
 
-	// All four routes live on the same server.
+	// All four routes live on the same server. getEventually, not tryGet:
+	// single-shot probes on a loaded runner flake as code 0 (transport).
 	for _, path := range []string{"/healthz", "/metrics", "/api/brains", "/api/channels"} {
-		if code, _ := tryGet(base() + path); code != 200 {
+		if code, _ := getEventually(t, base()+path); code != 200 {
 			t.Errorf("GET %s = %d, want 200", path, code)
 		}
 	}
 
 	// The /api responses are valid JSON and leak no secret value nor env-var name.
 	for _, path := range []string{"/api/brains", "/api/channels"} {
-		code, body := tryGet(base() + path)
+		code, body := getEventually(t, base()+path)
 		if code != 200 {
 			t.Fatalf("GET %s = %d", path, code)
 		}

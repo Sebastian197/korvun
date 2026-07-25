@@ -158,12 +158,14 @@ func TestLiveView_endToEnd_inboundProducesSSEEvent(t *testing.T) {
 	}
 
 	// Existing surfaces intact, plus the new /ui and the bus drop metric.
+	// getEventually, not tryGet: readiness held for /healthz, but each probe
+	// still needs transport-noise tolerance on a loaded runner.
 	for _, path := range []string{"/healthz", "/metrics", "/api/brains", "/api/channels", "/ui/"} {
-		if code, _ := tryGet(base() + path); code != 200 {
+		if code, _ := getEventually(t, base()+path); code != 200 {
 			t.Errorf("GET %s = %d, want 200", path, code)
 		}
 	}
-	if _, body := tryGet(base() + "/metrics"); !strings.Contains(body, "korvun_bus_events_dropped_total") {
+	if _, body := getEventually(t, base()+"/metrics"); !strings.Contains(body, "korvun_bus_events_dropped_total") {
 		t.Error("/metrics missing korvun_bus_events_dropped_total")
 	}
 

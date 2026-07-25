@@ -137,3 +137,21 @@ func tryGet(url string) (int, string) {
 	b, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(b)
 }
+
+// getEventually is the readiness-tolerant probe for IDEMPOTENT GETs: tryGet's
+// 200 ms budget reads any transient transport hiccup on a loaded runner as
+// code 0, so single-shot assertions flake (the 89f47bd ubuntu failure:
+// "GET /ui/ = 0"). This polls until a REAL HTTP status arrives or the
+// deadline passes; the caller then asserts on that status — the assertion
+// stays real, only the transport noise is absorbed.
+func getEventually(t *testing.T, url string) (int, string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		code, body := tryGet(url)
+		if code != 0 || !time.Now().Before(deadline) {
+			return code, body
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
