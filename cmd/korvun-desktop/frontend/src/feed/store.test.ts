@@ -2,7 +2,8 @@
 // window-scoped counters Home paints (FR-WIN-4: "desde que se abrió la
 // ventana", never presented as an all-time total) plus the Activity rows.
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getFeed, ingestFrame, minuteSeries, resetFeedForTests } from './store'
+import { pollOnce } from '../status/store'
+import { getFeed, ingestFrame, minuteSeries, resetFeedForTests, startFeed } from './store'
 
 function frame(type: string, extra: Record<string, string> = {}): string {
   return JSON.stringify({ type, timestamp: '2026-07-25T10:00:00Z', ...extra })
@@ -43,6 +44,42 @@ describe('feed store', () => {
     ingestFrame(JSON.stringify({ nada: true }))
     expect(getFeed().counters.received).toBe(0)
     expect(getFeed().frames).toEqual([])
+  })
+
+  it('the SSE lifecycle follows the core: open on running, live on open, closed on stop', async () => {
+    const instances: FakeES[] = []
+    class FakeES {
+      url: string
+      onopen: (() => void) | null = null
+      onmessage: ((ev: { data: string }) => void) | null = null
+      onerror: (() => void) | null = null
+      closed = false
+      constructor(url: string) {
+        this.url = url
+        instances.push(this)
+      }
+      close(): void {
+        this.closed = true
+      }
+    }
+    await pollOnce((() => Promise.resolve(new Response('ok'))) as typeof fetch)
+    startFeed((url) => new FakeES(url) as unknown as EventSource)
+    expect(instances.length).toBe(1)
+    expect(instances[0]?.url).toBe('/api/events')
+    instances[0]?.onopen?.()
+    expect(getFeed().live).toBe(true)
+    instances[0]?.onmessage?.({ data: frame('reply_sent') })
+    expect(getFeed().counters.replied).toBe(1)
+    await pollOnce(
+      (() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ error: 'core stopped' }), { status: 503 }),
+        )) as typeof fetch,
+    )
+    expect(instances[0]?.closed).toBe(true)
+    expect(getFeed().live).toBe(false)
+    // The window-scoped data SURVIVES the stop — only the stream closes.
+    expect(getFeed().counters.replied).toBe(1)
   })
 
   it('minuteSeries buckets replies per minute for the sparkline', () => {

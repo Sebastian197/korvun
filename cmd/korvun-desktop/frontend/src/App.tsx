@@ -15,6 +15,7 @@ import {
   IconSettings,
 } from './components/icons'
 import { desktop } from './lib/go'
+import { Activity } from './views/Activity'
 import { Home } from './views/Home'
 import { Settings } from './views/Settings'
 
@@ -100,7 +101,7 @@ export function App(): React.JSX.Element {
         {view === 'inicio' && <Home />}
         {view === 'builder' && <Empty label="El builder" />}
         {view === 'canales' && <Empty label="Canales" />}
-        {view === 'actividad' && <Empty label="Actividad" />}
+        {view === 'actividad' && <Activity />}
         {view === 'ajustes' && <Settings version={version} />}
       </main>
     </div>
