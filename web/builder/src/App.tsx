@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getBrains, getChannels, getConfig, type BrainSummary, type ChannelSummary } from './api.ts'
+import { cleartextRisk } from './cleartext.ts'
 import type { Config } from './config/schema.ts'
 import { ConfigEditor } from './ConfigEditor.tsx'
 import './App.css'
@@ -8,15 +9,6 @@ import './App.css'
 // open) and — once the operator pastes the admin bearer — the raw config
 // (/api/config, gated). READ-ONLY: no edit forms yet (that is 2b.2). The point of
 // this cut is "the builder loads and shows the live state, wearing Korvun's face."
-
-// Non-loopback + non-https means a pasted bearer would cross the network in the
-// clear (ADR-0028 F10). We WARN — we do not pretend to block (ADR-0030 §6): the
-// server does not enforce it and a JS check is not a security control.
-function cleartextRisk(): boolean {
-  const { protocol, hostname } = window.location
-  if (protocol === 'https:') return false
-  return hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== '[::1]'
-}
 
 const EVENTS = [
   { key: 'received', label: 'received' },
