@@ -82,6 +82,23 @@ func TestStatus_table(t *testing.T) {
 	}
 }
 
+// TestStatus_zeroChannels_printsHonestHint pins the NC-1 companion: against a
+// channel-less gateway (the desktop first-run state) the CHANNELS section
+// says so explicitly instead of rendering a bare header over nothing.
+func TestStatus_zeroChannels_printsHonestHint(t *testing.T) {
+	addr := newAdminServer(t, testBrainsJSON, "[]", http.StatusOK)
+	c, stdout, stderr, _ := newTestCLI(0)
+
+	got := c.run([]string{"status", "--addr", addr, "--plain"})
+
+	if got != 0 {
+		t.Fatalf("exit = %d, want 0; stderr=%q", got, stderr.String())
+	}
+	if out := stdout.String(); !strings.Contains(out, "(none — add one via the builder)") {
+		t.Errorf("zero-channel status missing the honest hint; got:\n%s", out)
+	}
+}
+
 // TestStatus_addrWithScheme pins that a scheme-qualified --addr (a natural habit,
 // since addresses are usually URLs) still reaches the admin API instead of building
 // a malformed http://http://… base and misreporting a live server as unreachable.

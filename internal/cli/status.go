@@ -166,6 +166,11 @@ func (c *cli) renderStatus(addr string, brains []controlapi.BrainSummary, channe
 		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", ch.Type, ch.Mode, ch.Name, dropped)
 	}
 	_ = tw.Flush()
+	if len(channels) == 0 {
+		// NC-1 (SP5, option B): a channel-less gateway is a valid state; the
+		// table must say so, not render a bare header over nothing.
+		_, _ = fmt.Fprintln(c.stdout, "(none — add one via the builder)")
+	}
 
 	if totalDropped > 0 {
 		_, _ = fmt.Fprintf(c.stdout, "\n%s  %d message(s) dropped across channels\n",
