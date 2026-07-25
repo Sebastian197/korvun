@@ -85,10 +85,72 @@ explicit decision.
 
 ---
 
-## Current state (as of session close, 2026-07-19)
+## Current state (as of session close, 2026-07-25)
 
-> **CURRENT (2026-07-19, session close): Piece 5 (the desktop app) — IN
-> PROGRESS.** `v0.3.0` shipped this morning (see Release outlook). Exact state:
+> **CURRENT (2026-07-25, session close): Piece 5 (the desktop app) — IN
+> PROGRESS, SP6b (Inicio completo + Ajustes + Actividad) COMPLETE LOCALLY,
+> NOT pushed, PENDING the copilot's screenshot review.**
+>
+> **Copilot resolutions RECORDED this session (2026-07-25):**
+> - **SP6a cut APPROVED** — screenshots reviewed side-by-side against the
+>   designs, passed. Its fidelity riders were folded as the FIRST commit of
+>   6b (see below).
+> - **tx3/capt AA deviation RATIFIED** — the AA law outranks the mock's
+>   literal; the design-track notice is the copilot's to deliver. The token
+>   comments now read RATIFIED (2026-07-25).
+>
+> **State on master since the 2026-07-19 block below:** SP4 (asset seam +
+> same-origin proxy), SP5 (first run: template + `EnsureDefaultConfig`),
+> the SP6 spec (approved 2026-07-25, NC-1 resolved as (a) for 6c), and
+> **SP6a** (chrome foundations: tokens + AA gate + scans, shell/nav, status
+> store, Desktop bindings under THE LAW, e2e harness + screenshot pipeline;
+> commits `e7943c1`, `ba48ca5`, `8ba332c`, `cc7b68b`, `67cfeb8`) are all
+> MERGED and CI-green.
+>
+> **SP6b — COMPLETE LOCALLY (8 commits atop `67cfeb8`, NO push yet):**
+> - `06ce362` fidelity riders (design nav order Inicio/Builder/Canales/
+>   Actividad/Ajustes, real sidebar icons from the standalone mock, the
+>   canonical brand-gradient K tile, per-VIEW gradient scan law, live
+>   system-theme listener, @vitest/coverage-v8 4.1.9).
+> - `6190f86` ci(frontend): chrome coverage in the job log + Playwright
+>   browser cache (actions/cache@v6, verified at source).
+> - `99f9fe2` shell.Status.TokenEnv (env-var NAME only) + the harness
+>   /__test/ control surface: REAL Desktop bindings over HTTP, scripted
+>   channel injection into the real pipeline, toggleable fake model,
+>   scripted Send outage (honest message_dropped), core-exit (reap signal).
+> - `09caddb` Inicio completo: feed/incident/snapshot/shell stores (TDD),
+>   hero strip marcha/incidencia-ámbar/salida-inesperada-roja/parado,
+>   window-scoped cards ("desde que se abrió la ventana"; Reconexiones is
+>   spec'd no-v1 and NOT painted), Canales/Cerebros panels, sidebar status
+>   chip, /healthz badge.
+> - `c0fd228` Ajustes v1: tema Oscuro/Claro/Sistema, config path, autostart
+>   (korvun.chrome.autostart = auto-Start del core), dirección efectiva +
+>   Copiar, token row con SOLO el nombre de la variable; lo sin API no se
+>   pinta.
+> - `a5a0b0c` Actividad v1: metadata feed (ADR-0024), filtros tipo/canal,
+>   En vivo/Conectando…/Pausado, estado vacío del diseño.
+> - `b8ab96d` status tokens al suelo AA de TEXTO sobre sus pastillas (axe
+>   lo exigía): light okT/warnT/offT + dark offT ajustados MÍNIMAMENTE —
+>   SEGUNDA desviación consciente del literal del mock, mismo principio
+>   ratificado, PENDIENTE de aviso al design track (lo carga el copiloto).
+> - `b2c960e` e2e SP6b: AS-1/AS-2/AS-6 reales sobre el harness, axe-core
+>   wcag2a/aa en las 4 vistas, workers=1, viewport 1440×900 fijado DENTRO
+>   del proyecto Playwright (el spread de Desktop Chrome lo pisaba — las
+>   capturas 6a salieron 1280×720 por eso), y las 7 capturas del corte.
+> - Las 7 capturas (1440×900, estados provocados de verdad) están en
+>   `design-drafts/`: sp6b-inicio-{marcha,parado,incidencia}.png,
+>   sp6b-ajustes-{oscuro,claro}.png, sp6b-actividad-{feed,vacia}.png.
+>   Los sp6a-*.png se regeneran con el chrome 6b (contenido nuevo).
+> - `make quality` verde `-race` (92,5 % total); vitest 123; Playwright
+>   11/11; go.mod intacto; headless intacto (solo internal/shell + harness
+>   + frontend tocados).
+> - **NEXT:** copilot screenshot review (capturas al chat vía Chano,
+>   lado-a-lado contra final-1/incidencia/final-3 y las de Actividad) →
+>   push → CI → SP6c (primer commit: frame-ancestors 'self' en builderui,
+>   NC-1 opción (a); luego wizard + onboarding + builder iframe + e2e
+>   completo).
+>
+> **PREVIOUS (2026-07-19, session close): Piece 5 — SP1-SP3.** `v0.3.0` shipped this morning (see Release outlook). Exact state:
 > - **Published, CI green (3 OS + CodeQL + Scorecard) through `0f5086a`/`18392f3`:**
 >   the framing (`7727afd`; 8 NCs later resolved), ADR-0035 + ADR-0036 accepted
 >   (`3ef0490`), **SP1** — wails/v2 **v2.13.0** dependency + `korvun-desktop`
