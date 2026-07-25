@@ -94,7 +94,10 @@ func Open(path string) (*SqliteStore, error) {
 		return nil, fmt.Errorf("sqlite: resolve path %q: %w", path, err)
 	}
 	if dir := filepath.Dir(abs); dir != "" {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
+		// 0o700: config + DB + conversation memory are one person's data
+		// (aligned 2026-07-25 with the shell's first-run dir; an existing
+		// directory keeps its mode — MkdirAll never chmods retroactively).
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, fmt.Errorf("sqlite: create data dir %q: %w", dir, err)
 		}
 	}

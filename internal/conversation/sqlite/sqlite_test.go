@@ -44,6 +44,50 @@ func TestOpen_BootstrapsAndAccepts(t *testing.T) {
 	}
 }
 
+// TestOpen_createsDataDirPrivate pins the data-dir permission alignment
+// (copilot decision, 2026-07-25): config + DB + conversation memory are one
+// person's data, so a dir Open CREATES is 0o700 — the same mode the shell's
+// first-run provisioning uses for the shared <UserConfigDir>/korvun dir. An
+// EXISTING directory keeps its mode (MkdirAll never chmods retroactively).
+func TestOpen_createsDataDirPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Mode().Perm() of a directory is always 0777 on Windows — real
+		// permissions ride ACLs, out of this test's scope.
+		t.Skip("windows: directory permission bits are not meaningful")
+	}
+	dir := filepath.Join(t.TempDir(), "korvun-data")
+	s, err := sqlite.Open(filepath.Join(dir, "korvun.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat created data dir: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o700 {
+		t.Fatalf("created data dir perm = %o, want 0700", perm)
+	}
+
+	// An existing dir is never re-moded: pre-create one wider, reopen there.
+	wider := filepath.Join(t.TempDir(), "existing")
+	if err := os.Mkdir(wider, 0o755); err != nil { //nolint:gosec // deliberately wider, to prove no retro-chmod
+		t.Fatalf("pre-create dir: %v", err)
+	}
+	s2, err := sqlite.Open(filepath.Join(wider, "korvun.db"))
+	if err != nil {
+		t.Fatalf("Open in existing dir: %v", err)
+	}
+	t.Cleanup(func() { _ = s2.Close() })
+	info, err = os.Stat(wider)
+	if err != nil {
+		t.Fatalf("stat existing dir: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o755 {
+		t.Fatalf("existing dir perm changed to %o — Open must never chmod retroactively", perm)
+	}
+}
+
 func TestOpen_ReopenExistingFileSucceeds(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "korvun.db")
 	s1, err := sqlite.Open(path)
