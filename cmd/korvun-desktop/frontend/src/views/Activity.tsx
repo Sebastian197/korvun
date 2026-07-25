@@ -8,6 +8,7 @@ import { IconActivity } from '../components/icons'
 import type { FeedFrame } from '../feed/frame'
 import { useFeed } from '../feed/store'
 import { channelGlyph } from '../lib/channels'
+import { hourES } from '../lib/time'
 import { useCoreState } from '../status/store'
 
 const TYPE_LABEL: Record<string, string> = {
@@ -24,11 +25,6 @@ const TYPE_FILTERS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'message_dropped', label: 'Descartados' },
   { id: 'handle_failed', label: 'Fallos' },
 ]
-
-function hourOf(ts: string): string {
-  const d = new Date(ts)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('es-ES', { hour12: false })
-}
 
 function dirOf(direction?: string): string {
   if (direction === 'inbound') return 'in'
@@ -47,7 +43,7 @@ function rowChip(f: FeedFrame): React.JSX.Element {
 function Row({ f }: { f: FeedFrame }): React.JSX.Element {
   return (
     <div className="act-row">
-      <span className="act-hour mono">{hourOf(f.timestamp)}</span>
+      <span className="act-hour mono">{hourES(f.timestamp)}</span>
       <span className="chan-tile act-tile" aria-hidden="true">
         {channelGlyph(f.channel)}
       </span>

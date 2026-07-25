@@ -41,6 +41,13 @@ export function clearUserStop(): void {
   userStopPending = false
 }
 
+/** "Entendido" (spec amendment, copilot 2026-07-25): EVENT incidents are
+ * occurrences, not conditions — dismissible. A reap is a LIVE condition (the
+ * core is dead) and can never be dismissed; only a clean Start clears it. */
+export function dismissIncident(): void {
+  if (current?.kind === 'feed') set(null)
+}
+
 /** Core-state transition sink (the status store drives it). */
 export function notifyCoreTransition(prev: CoreState, next: CoreState): void {
   if (next === 'running') {

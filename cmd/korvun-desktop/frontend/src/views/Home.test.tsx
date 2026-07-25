@@ -122,6 +122,18 @@ describe('Home marcha', () => {
     expect(screen.getByText('llama3.2:1b')).toBeInTheDocument()
   })
 
+  it("'Entendido' dismisses the event banner; a reap never offers it", async () => {
+    ingestFrame(frame('message_dropped', { channel: 'telegram' }))
+    render(<Home />)
+    expect(screen.getByText('En marcha — incidencia')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Entendido' }))
+    expect(screen.getByText('El gateway está en marcha')).toBeInTheDocument()
+    // The reap variant: no Entendido — only a clean Start clears it.
+    await seedCore('stopped')
+    render(<Home />)
+    expect(screen.queryByRole('button', { name: 'Entendido' })).toBeNull()
+  })
+
   it('a failure frame flips the hero to the honest incident banner', () => {
     ingestFrame(frame('message_dropped', { channel: 'telegram' }))
     render(<Home />)

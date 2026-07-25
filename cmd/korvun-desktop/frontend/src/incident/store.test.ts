@@ -5,6 +5,7 @@
 // A clean Start clears it (AS-6).
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  dismissIncident,
   getIncident,
   markUserStop,
   notifyCoreTransition,
@@ -52,6 +53,23 @@ describe('incident store', () => {
     notifyCoreTransition('unknown', 'stopped')
     notifyCoreTransition('stopped', 'unreachable')
     expect(getIncident()).toBeNull()
+  })
+
+  it("'Entendido' dismisses an EVENT incident (an occurrence, not a condition)", () => {
+    notifyFailureFrame({
+      type: 'message_dropped',
+      channel: 'telegram',
+      timestamp: '2026-07-25T10:00:00Z',
+    })
+    expect(getIncident()).not.toBeNull()
+    dismissIncident()
+    expect(getIncident()).toBeNull()
+  })
+
+  it("'Entendido' can NEVER dismiss a reap — a dead core is a live condition", () => {
+    notifyCoreTransition('running', 'stopped')
+    dismissIncident()
+    expect(getIncident()).toMatchObject({ kind: 'reap' })
   })
 
   it('a transient blip (running → unknown/unreachable) is NOT a reap', () => {

@@ -7,9 +7,15 @@ import { useState } from 'react'
 import { IconActivity, IconChannels, IconPlay, IconStop, IconWarning } from '../components/icons'
 import { channelGlyph } from '../lib/channels'
 import { desktop } from '../lib/go'
-import { agoSeconds } from '../lib/time'
+import { agoSeconds, hourES } from '../lib/time'
 import { minuteSeries, SPARK_MINUTES, useFeed } from '../feed/store'
-import { clearUserStop, markUserStop, useIncident, type Incident } from '../incident/store'
+import {
+  clearUserStop,
+  dismissIncident,
+  markUserStop,
+  useIncident,
+  type Incident,
+} from '../incident/store'
 import { useSnapshot, type BrainSummary, type ChannelSummary } from '../snapshot/store'
 import { useCoreState, useLastOkAt } from '../status/store'
 
@@ -60,7 +66,7 @@ function StopButton({ busy, onClick }: { busy: boolean; onClick: () => void }): 
 
 function feedIncidentCaption(inc: Extract<Incident, { kind: 'feed' }>): string {
   const what = inc.frameType === 'message_dropped' ? 'Mensaje descartado' : 'Fallo al responder'
-  const hora = new Date(inc.at).toLocaleTimeString()
+  const hora = hourES(inc.at)
   return `${what} en ${inc.channel} · ${hora} — el detalle vive en Actividad`
 }
 
@@ -117,6 +123,14 @@ function Hero(): React.JSX.Element {
           </div>
         )}
       </div>
+      {incident?.kind === 'feed' && (
+        // EVENT incidents are occurrences, not conditions (spec amendment):
+        // "Entendido" acknowledges and clears the banner. A reap never gets
+        // this button — a dead core is a live condition.
+        <button type="button" className="btn-small" onClick={dismissIncident}>
+          Entendido
+        </button>
+      )}
       {running ? (
         <StopButton busy={busy} onClick={stop} />
       ) : (

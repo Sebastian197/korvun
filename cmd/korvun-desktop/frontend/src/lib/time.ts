@@ -8,3 +8,10 @@ export function agoSeconds(fromMs: number | null): string {
   if (s < 60) return `hace ${s} s`
   return `hace ${Math.floor(s / 60)} min`
 }
+
+/** Wall-clock hour, 24h es-ES (6b review rider a: the WHOLE app speaks
+ * 24h — banner and Actividad had drifted apart); '—' when unparseable. */
+export function hourES(ts: string): string {
+  const d = new Date(ts)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('es-ES', { hour12: false })
+}
