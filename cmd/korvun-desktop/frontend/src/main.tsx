@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/index.css'
 import { App } from './App.tsx'
+import { runAutostart } from './autostart'
 import { startFeed } from './feed/store'
 import { startSnapshot } from './snapshot/store'
 import { startShellPolling } from './status/shell'
@@ -13,6 +14,7 @@ startPolling()
 startShellPolling()
 startFeed()
 startSnapshot()
+void runAutostart()
 
 const root = document.getElementById('root')
 if (!root) throw new Error('root element missing')

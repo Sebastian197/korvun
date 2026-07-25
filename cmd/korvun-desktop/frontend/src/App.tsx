@@ -16,6 +16,7 @@ import {
 } from './components/icons'
 import { desktop } from './lib/go'
 import { Home } from './views/Home'
+import { Settings } from './views/Settings'
 
 type View = 'inicio' | 'builder' | 'canales' | 'actividad' | 'ajustes'
 
@@ -100,7 +101,7 @@ export function App(): React.JSX.Element {
         {view === 'builder' && <Empty label="El builder" />}
         {view === 'canales' && <Empty label="Canales" />}
         {view === 'actividad' && <Empty label="Actividad" />}
-        {view === 'ajustes' && <Empty label="Ajustes" />}
+        {view === 'ajustes' && <Settings version={version} />}
       </main>
     </div>
   )
