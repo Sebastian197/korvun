@@ -80,3 +80,35 @@
    `govulncheck -tags desktop,production ./cmd/korvun-desktop` in CI (the
    untagged CI run cannot see desktop reachability) — candidate for the
    packaging sub-phase's workflow.
+
+## Appendix — 2026-07-25: the two npm alerts (#15, #16) — VERDICT: build/lint toolchain only, BUMPED
+
+> **Scope:** Dependabot alerts #15 (`brace-expansion` < 1.1.16, high, DoS via
+> exponential-time expansion) and #16 (`postcss` <= 8.5.17, high, path
+> traversal via `sourceMappingURL` auto-loading), both surfaced 2026-07-25 on
+> the `web/builder` npm tree. Fixed in this commit (SP5 rider).
+
+**Evidence (npm ls, 2026-07-25):**
+
+- `brace-expansion@1.1.15` entered ONLY via `eslint@9.39.4 → minimatch@3.1.5`
+  — the LINT toolchain, a devDependency. Never bundled, never in the runtime.
+- `postcss@8.5.16` entered ONLY via `vite@8.1.3` — the BUILD-time bundler.
+  PostCSS processes CSS during `vite build`; nothing of it ships in
+  `web/builder/dist`, and the advisory's vector (auto-loading a hostile
+  source map while processing untrusted CSS) does not exist at Korvun's
+  runtime. Exposure for both is developer-machine/CI build time only.
+
+**Fix (this commit):** `npm update brace-expansion postcss` — both moved
+within their declared semver ranges, no manifest change needed
+(`package-lock.json` only): `brace-expansion 1.1.15 → 1.1.16` (and the
+sibling 5.x copy 5.0.7 → 5.0.8), `postcss 8.5.16 → 8.5.23` (>= 8.5.18).
+Validation: `vite build` regenerated `web/builder/dist` cleanly; vitest
+**60/60 passed**; Playwright e2e **6/6 passed**.
+
+**Known-remaining (NOT in these alerts' scope, reported for a future call):**
+`npm audit` flags a SECOND brace-expansion advisory (GHSA-mh99-v99m-4gvg,
+OOM via unbounded expansion, affects <= 5.0.7 including all 1.x) reachable
+through `eslint 9`'s `minimatch@3.x` pin, whose only fix is the
+**eslint@10 major bump** (breaking). Same lint-only exposure as #15 (never
+runtime); left as a conscious pending chore for its own decision, not
+silently folded into this rider.
