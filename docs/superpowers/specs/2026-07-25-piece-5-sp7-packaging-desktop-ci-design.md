@@ -1,7 +1,10 @@
 # Piece 5 — SP7: packaging + desktop CI — Design Spec
 
 > **Status:** draft (awaiting copilot review — TWO-TIME delivery: this is the
-> spec + cut plan ONLY; zero implementation lands with it).
+> spec + cut plan ONLY; zero implementation lands with it). **All clarifications
+> resolved 2026-07-25:** NC-1 (name) + NC-2 (artifact scheme) copilot-confirmed;
+> NC-3 (release window) resolved by Chano — CLOSE via draft-until-complete (§1e),
+> a bounded exception to "headless untouched" (visibility flag only).
 > **Governing ADRs:** ADR-0035 §2 (release cadence NC-5), §6 (packaging matrix
 > NC-4 + ephemeral-port policy), §7 (signing NC-1/2), §8-of-framing (closure
 > criteria); ADR-0036 (`wailsapp/wails/v2@v2.13.0` — capability includes
@@ -13,10 +16,13 @@
 > `Info`/`frontend:*` fields, `darwin/universal`, `-nsis`, `-webview2`,
 > `-s`; the `actions/setup-node` Node-24 fact is source-verified at the v5.0.0
 > release notes. No fact here is from memory. **Inherited as law:** the
-> headless `cmd/korvun` artifact and its GoReleaser ×6 pipeline stay
-> byte-for-byte unaffected (ADR-0035 consequence; proven by a `go version -m`
-> diff), and the env-only secret contract is untouched (this sub-phase adds no
-> secret surface).
+> headless `cmd/korvun` **binary** stays byte-for-byte unaffected (ADR-0035
+> consequence; proven by a `go version -m` + compiled-bytes diff). The only
+> headless-pipeline change is a **Chano-authorized, bounded exception**
+> (2026-07-25): `.goreleaser.yaml` `release.draft: false → true`, a
+> release-VISIBILITY flag that closes the NC-3 window (§1e) — the compiled bytes,
+> checksums, SBOM, and signing are all unchanged. The env-only secret contract is
+> untouched (this sub-phase adds no secret surface).
 
 ## Goal
 
@@ -116,8 +122,8 @@ lane runs `make desktop` from a clean checkout every time.
 
 | OS | Recipe | Output | v1 artifact |
 |---|---|---|---|
-| **macOS** | `wails build -platform darwin/universal -clean -s …` → `build/bin/Korvun.app` (universal via wails' internal lipo), then `hdiutil create` wrapping the `.app` | universal `.app` → `.dmg` | **`Korvun-<ver>-universal.dmg`** |
-| **Windows AMD64** | `wails build -platform windows/amd64 -nsis -webview2 download -s …` | NSIS installer (`build/bin/…-installer.exe`) | **`Korvun-<ver>-amd64-installer.exe`** |
+| **macOS** | `wails build -platform darwin/universal -clean -s …` → `build/bin/Korvun.app` (universal via wails' internal lipo), then `hdiutil create` wrapping the `.app` | universal `.app` → `.dmg` | **`korvun-desktop_<ver>_darwin_universal.dmg`** |
+| **Windows AMD64** | `wails build -platform windows/amd64 -nsis -webview2 download -s …` | NSIS installer (`build/bin/…-installer.exe`) | **`korvun-desktop_<ver>_windows_amd64-installer.exe`** |
 
 > **NSIS silent-failure guard (source-verified, review #2):** `wails build
 > -nsis` calls `GenerateNSISInstaller`, which — verified at
@@ -128,7 +134,7 @@ lane runs `make desktop` from a clean checkout every time.
 > (install NSIS if not preinstalled) and (b) **assert the installer file exists
 > before `gh release upload`** — never rely on `wails build` to fail. This is
 > the Windows twin of the Linux build-deps step.
-| **Linux AMD64** | `wails build -platform linux/amd64 -s …` → bare binary, then `tar czf` bundling the binary + a `korvun-desktop.desktop` launcher | `tar.gz` | **`korvun-desktop-<ver>-linux-amd64.tar.gz`** |
+| **Linux AMD64** | `wails build -platform linux/amd64 -s …` → bare binary, then `tar czf` bundling the binary + a `korvun-desktop.desktop` launcher | `tar.gz` | **`korvun-desktop_<ver>_linux_amd64.tar.gz`** |
 
 Universal is achieved by wails' `darwin/universal` platform (dual-arch compile +
 lipo, verified — no hand `lipo`). All desktop builds run on **native runners**
@@ -152,7 +158,7 @@ v1** — Windows/Linux ARM64 desktop, `.deb`, AppImage stay deferred (ADR-0035 �
   **one-line comment correction** there (7b or a rider) — a doc-hygiene fix, NOT
   a functional retarget (there is nothing functional left parked).
 
-## Release integration (§1e) — same tag, same GitHub release, headless untouched
+## Release integration (§1e) — same tag, same GitHub release, draft-until-complete
 
 **One SemVer tag, one GitHub release, two artifact families.** A **new
 `release-desktop.yml`** workflow, `on: push: tags`, mirrors the headless trigger
@@ -164,25 +170,38 @@ signs per §1f, and **uploads to the tag's release** with `gh release upload
 runners than GoReleaser's ubuntu job, so a cross-runner handoff is needed
 regardless, and `gh release upload` is the simpler seam).
 
-**Ordering / race:** GoReleaser (headless) `release.yml` **creates** the release
-for the tag. The desktop jobs must not race it. Folded design: the desktop jobs
-**wait for the release to exist** (a bounded `gh release view <tag>` poll, or a
-`workflow_run`/`needs`-style gate if both live in one workflow) before
-`gh release upload`. **The headless pipeline is edited zero lines** — the
-desktop workflow is purely additive; the ×6 cross-compile + CodeQL + Scorecard +
-GoReleaser jobs are untouched (proven by their diff being empty).
+### Draft-until-complete (NC-3 RESOLVED — Chano, 2026-07-25: CLOSE the window)
 
-> **Partial-published-release window (review #3, genuinely open — see
-> `[NEEDS CLARIFICATION]` 3):** GoReleaser publishes **non-draft, immediately**
-> (`.goreleaser.yaml`: `release.draft: false`, `prerelease: auto`) at the END of
-> the headless run. The desktop native-runner jobs (two `npm ci` + `wails build`
-> + package + sign) then take **minutes more**, so the release is **public and
-> downloadable with only the headless artifacts** during that window. Closing it
-> cleanly (headless → `draft: true`, a shared finalize step publishing once both
-> families have uploaded) **would edit `.goreleaser.yaml`** — in direct tension
-> with the "headless untouched" law. This is Chano's call, not a surface one;
-> it is raised as `[NEEDS CLARIFICATION]` 3 and blocks the 7b release-integration
-> design (7a is unaffected).
+The partial-published-release window is **closed**: the release is **born a
+draft** and goes public **only when BOTH artifact families are up**.
+
+1. **Headless GoReleaser** flips to **`release.draft: true`** in
+   `.goreleaser.yaml` — it creates the release as a **draft** (invisible to the
+   public) and uploads the headless family into it.
+2. **Desktop matrix** builds/packages/signs on the 3 native runners and
+   `gh release upload`s the 3 artifacts + their cosign signatures into that same
+   draft (the desktop jobs `gh release view <tag>` poll until the draft exists —
+   still needed so upload never precedes creation).
+3. **Finalizer step** (desktop lane, after all uploads succeed):
+   `gh release edit <tag> --draft=false` — the single publish moment, fired only
+   once all 3 desktop artifacts **and** their signatures are confirmed present.
+
+**Bounded exception to "headless untouched" (Chano-authorized, 2026-07-25).** The
+ONLY headless change is `release.draft: false → true` — a **release-visibility**
+flag. The **headless binary and every build step stay byte-for-byte identical**
+(the `-X internal/cli.version` ldflags, the ×6 `CGO_ENABLED=0` compile, the
+checksums, the SBOM, the cosign signing are all unchanged); `go version -m` on
+the headless artifact and the compiled bytes are unaffected. The law's intent —
+never alter what the headless USERS receive — is fully preserved; only WHEN the
+release becomes visible moves.
+
+**Failure mode (documented, by design):** if the **desktop lane goes red** (any
+OS build/package/sign/upload fails, or the finalizer does not run), the release
+**stays a draft — invisible to the public** — until the lane is fixed and re-run,
+or **Chano manually decides** (`gh release edit --draft=false`, or delete the
+draft). A broken desktop build can therefore never expose a half-populated public
+release; the worst case is a delayed, still-invisible release. The headless
+family sits complete inside the draft the whole time.
 
 ## Signing (§1f) — 0€, cosign for everything, same chain as headless
 
@@ -254,27 +273,31 @@ universal cross is verified feasible in 7a, not assumed).
 ### 7b — CI on native runners + release integration
 
 **Deliverable:** `release-desktop.yml` (native-runner matrix, §1e) building +
-signing + uploading the 3 artifacts to the tag's release; the `govulncheck
+signing + uploading the 3 artifacts to the tag's **draft** release, then the
+**finalizer** (`gh release edit <tag> --draft=false`) once all 3 + signatures are
+up; the one-line **`release.draft: true`** flip in `.goreleaser.yaml` (the
+Chano-authorized bounded exception, §1e); the `govulncheck
 -tags desktop,production` + smoke lane (§1g); the Linux build-deps step **and
 the Windows `makensis` install + installer-exists assertion** (§1c review #2);
 the cosign `v2.6.3` pin (§1f review #4); the stale-comment correction in
-`internal/cli/cli.go` (§1d). **Gated on `[NEEDS CLARIFICATION]` 3** (the
-partial-published-release window — the release-integration shape depends on its
-resolution). **Verifications:** a
+`internal/cli/cli.go` (§1d). **NC-3 resolved (§1e) — 7b is unblocked.** **Verifications:** a
 `workflow_dispatch` `--snapshot`/dry-run proves the matrix builds all 3 artifacts
 and the cosign keyless signing is GREEN **before any real tag** (mirrors the
-Stage-16 Phase-A dry-run discipline); the headless `release.yml` diff is empty
-(untouched); pinned Action SHAs re-verified at source before landing (repo
-convention); `make quality` green. **No real tag is pushed** — the tag stays
-Chano's explicit call (release-outlook law).
+Stage-16 Phase-A dry-run discipline); **the headless BINARY stays byte-identical
+across the `release.draft` flip** (`go version -m` + a compiled-bytes diff — the
+only `.goreleaser.yaml` change is the visibility flag, §1e); pinned Action SHAs
+re-verified at source before landing (repo convention); `make quality` green.
+**No real tag is pushed** — the tag stays Chano's explicit call (release-outlook
+law).
 
 ## Success criteria
 
 - The 3 v1 artifacts (§1c) are produced by `make desktop` + the workflow, on
   native runners, cosign-signed on the free chain.
-- **Headless binary + its ×6 pipeline byte-for-byte unaffected**, proven by a
-  `go version -m` diff and an empty `release.yml`/`.goreleaser.yaml`-behavior
-  diff.
+- **Headless binary byte-for-byte unaffected**, proven by a `go version -m` diff
+  + a compiled-bytes diff. The ONLY headless-pipeline change is the
+  Chano-authorized `release.draft: false → true` visibility flag (§1e); the ×6
+  `CGO_ENABLED=0` compile, checksums, SBOM, and cosign signing are untouched.
 - `govulncheck -tags desktop,production ./cmd/korvun-desktop` runs in the desktop
   lane and is green (or its findings triaged).
 - `make quality` green with `-race` over the WHOLE suite at each cut's close.
@@ -288,9 +311,12 @@ Chano's explicit call (release-outlook law).
    bought the packaging capability; hand-rolling it is the rejected back-door.
 2. **`.dmg` via `hdiutil` (built-in), not `create-dmg`** — zero external runner
    tool; styling is cosmetic and not v1.
-3. **`gh release upload` to the tag's release, not GoReleaser `extra_files`** —
-   cross-runner artifacts need a handoff regardless; `gh` is the simpler seam and
-   keeps the headless pipeline untouched.
+3. **`gh release upload` to the tag's DRAFT release + a `--draft=false`
+   finalizer, not GoReleaser `extra_files`** — cross-runner artifacts need a
+   handoff regardless; `gh` is the simpler seam. The release is born a draft
+   (headless `release.draft: true`) and published only when both families are up
+   (§1e, NC-3 resolved) — the sole headless change is the visibility flag, the
+   binary stays byte-identical.
 4. **`-s` skip-frontend + Korvun's own `go:embed`** — the two-frontend model
    cannot ride wails' single-`frontend/` hook; determinism lives in `make
    desktop`, and `wails.json:frontend:build` is neutered so a bare `wails build`
@@ -303,32 +329,27 @@ Chano's explicit call (release-outlook law).
 7. **Honest smoke:** Linux `xvfb` GUI smoke + a non-GUI identity probe on all 3;
    **no** hosted macOS/Windows GUI-launch claim — real GUI validation is SP8.
 
-## `[NEEDS CLARIFICATION]`
+## Clarifications — all resolved (nothing blocks TDD/implementation)
 
-ADR-0035/0036 already fixed the hard forks (matrix, signing policy, release
-cadence, in-process form, WebView2 strategy), and every surface call above is
-folded with a rationale the review can veto. Points 1–2 are flagged for the
-copilot's explicit **confirmation** (not blocking — each has a folded default);
-**point 3 is genuinely open and blocks the 7b release-integration design** (7a is
-unblocked and can proceed once the spec is approved).
+ADR-0035/0036 fixed the hard forks (matrix, signing policy, release cadence,
+in-process form, WebView2 strategy). The three points once open are now closed —
+**7a and 7b are both unblocked**:
 
-1. **App/product name string** — the spec uses **`Korvun`** as
-   `Info.productName` / the `.app` name / the artifact prefix. If a different
-   display name or bundle id (`com.…`) is wanted, it is a one-line `wails.json`
-   change. Default folded: `Korvun`, bundle id `com.korvun.desktop`.
-2. **Desktop artifact naming scheme** — folded as
-   `Korvun-<ver>-universal.dmg` / `Korvun-<ver>-amd64-installer.exe` /
-   `korvun-desktop-<ver>-linux-amd64.tar.gz`. If Chano wants these aligned to the
-   headless GoReleaser naming (`korvun_<ver>_<os>_<arch>.…`), it is a formatting
-   choice in the workflow, decided before 7b lands.
-3. **The partial-published-release window (§1e, review #3) — BLOCKING for 7b.**
-   GoReleaser publishes the headless release **non-draft, immediately**; the
-   desktop artifacts land minutes later, leaving a window where the public
-   release has only the headless family. Closing it cleanly needs the headless
-   release to go `draft: true` + a shared finalize step — which **edits
-   `.goreleaser.yaml`**, against the "headless untouched" law. **Only Chano can
-   decide** whether that law bends here, or whether the incomplete-release window
-   is consciously accepted (recommended default: **accept the window** — a
-   tag/release is soft and the desktop artifacts self-heal it within minutes,
-   keeping headless byte-untouched; but this is his call). Blocks the 7b workflow
-   shape, not 7a.
+1. **App/product name — CONFIRMED (copilot, 2026-07-25):** `Info.productName` =
+   **`Korvun`**, bundle id **`com.korvun.desktop`**.
+2. **Desktop artifact naming — CONFIRMED (copilot, 2026-07-25):** aligned to the
+   headless GoReleaser scheme —
+   **`korvun-desktop_<ver>_<os>_<arch>…`**:
+   `korvun-desktop_<ver>_darwin_universal.dmg`,
+   `korvun-desktop_<ver>_windows_amd64-installer.exe`,
+   `korvun-desktop_<ver>_linux_amd64.tar.gz` (§1c updated to match).
+3. **The partial-published-release window — RESOLVED (Chano, 2026-07-25): CLOSE
+   the window** via **draft-until-complete** (§1e). The release is born a draft
+   (`.goreleaser.yaml`: `release.draft: true`) and is published
+   (`gh release edit <tag> --draft=false`) only once **both** artifact families +
+   the desktop signatures are up. This is a **Chano-authorized, bounded exception
+   to "headless untouched"**: the only headless change is the release-visibility
+   flag; the headless **binary and every build step stay byte-identical**.
+   Failure mode documented (§1e): a red desktop lane leaves the release an
+   invisible draft until fixed or Chano's manual call — a broken build can never
+   expose a half-populated public release.
