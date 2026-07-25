@@ -7,13 +7,7 @@ import './App.css'
 import { BrandMark } from './components/BrandMark'
 import { HealthzBadge } from './components/HealthzBadge'
 import { StatusChip } from './components/StatusChip'
-import {
-  IconActivity,
-  IconBuilder,
-  IconChannels,
-  IconHome,
-  IconSettings,
-} from './components/icons'
+import { IconActivity, IconBuilder, IconChannels, IconHome, IconSettings } from './components/icons'
 import { desktop } from './lib/go'
 import { Activity } from './views/Activity'
 import { Home } from './views/Home'

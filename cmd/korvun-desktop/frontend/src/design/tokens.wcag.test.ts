@@ -11,7 +11,9 @@ import { AA_TEXT, composite, contrast, themes, tints } from './tokens'
 
 const SURFACES = ['win', 'side', 'card', 'card2'] as const
 const TEXT_TIERS = ['tx1', 'tx2', 'tx3', 'capt', 'vioT'] as const
-const STATUS: ReadonlyArray<readonly ['okT' | 'warnT' | 'errT' | 'offT' | 'vioT', 'ok' | 'warn' | 'err' | 'off' | 'vio']> = [
+const STATUS: ReadonlyArray<
+  readonly ['okT' | 'warnT' | 'errT' | 'offT' | 'vioT', 'ok' | 'warn' | 'err' | 'off' | 'vio']
+> = [
   ['okT', 'ok'],
   ['warnT', 'warn'],
   ['errT', 'err'],

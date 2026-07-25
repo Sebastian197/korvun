@@ -12,7 +12,10 @@ function Svg({
   size = 16,
   strokeWidth = 1.75,
   children,
-}: IconProps & { strokeWidth?: number; children: React.ReactNode }): JSX.Element {
+}: IconProps & {
+  strokeWidth?: number
+  children: React.ReactNode
+}): JSX.Element {
   return (
     <svg
       viewBox="0 0 24 24"

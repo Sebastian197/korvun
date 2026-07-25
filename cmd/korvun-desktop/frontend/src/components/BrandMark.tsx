@@ -10,14 +10,16 @@ import type { JSX } from 'react'
 
 export function BrandMark({ size = 34 }: { size?: number }): JSX.Element {
   return (
-    <svg
-      viewBox="0 0 64 64"
-      style={{ width: size, height: size }}
-      role="img"
-      aria-label="Korvun"
-    >
+    <svg viewBox="0 0 64 64" style={{ width: size, height: size }} role="img" aria-label="Korvun">
       <defs>
-        <linearGradient id="kv-brand-g" gradientUnits="userSpaceOnUse" x1="6" y1="6" x2="58" y2="58">
+        <linearGradient
+          id="kv-brand-g"
+          gradientUnits="userSpaceOnUse"
+          x1="6"
+          y1="6"
+          x2="58"
+          y2="58"
+        >
           <stop offset="0" stopColor="#2BC8B7" />
           <stop offset="1" stopColor="#7A5AF5" />
         </linearGradient>

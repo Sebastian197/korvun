@@ -32,6 +32,9 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**'],
       exclude: ['src/**/*.{test,spec}.{ts,tsx}', 'src/test.setup.ts'],
+      // A report nobody reads is not a gate (review finding): floors sit
+      // just under the SP6b baseline (88/77/93/91) and only ratchet up.
+      thresholds: { statements: 85, branches: 72, functions: 88, lines: 88 },
     },
   },
 })

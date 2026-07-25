@@ -113,7 +113,10 @@ export const TEAL = '#2BC8B7'
  * tint on card (the wcag gate computes it). */
 export type Tint = readonly [number, number, number, number]
 
-export const tints: Record<'dark' | 'light', Record<'ok' | 'warn' | 'err' | 'off' | 'vio', Tint>> = {
+export const tints: Record<
+  'dark' | 'light',
+  Record<'ok' | 'warn' | 'err' | 'off' | 'vio', Tint>
+> = {
   dark: {
     ok: [43, 200, 183, 0.12],
     warn: [224, 164, 60, 0.14],
@@ -165,7 +168,7 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05)
 }
 
-/** AA floor for normal text. */
+/** AA floor for normal text — the one floor the chrome's gate enforces (the
+ * SP6b hardening moved status tokens here; a separate 3:1 UI floor had no
+ * remaining consumer and was removed as dead). */
 export const AA_TEXT = 4.5
-/** Non-text (UI component / graphical) contrast floor. */
-export const UI_MIN = 3.0

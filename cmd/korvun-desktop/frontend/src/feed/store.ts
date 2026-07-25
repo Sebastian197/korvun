@@ -11,6 +11,8 @@ import { parseFrame, type FeedFrame } from './frame'
 export const MAX_FRAMES = 250
 const MAX_REPLY_TIMES = 1000
 const RETRY_MS = 3000
+/** The sparkline's trailing window (design: 14 bars = 14 minutes). */
+export const SPARK_MINUTES = 14
 
 export interface FeedCounters {
   received: number
@@ -33,6 +35,7 @@ export interface FeedState {
 
 let state: FeedState = emptyState()
 let replyTimes: number[] = []
+let nextSeq = 1
 const listeners = new Set<() => void>()
 
 function emptyState(): FeedState {
@@ -53,6 +56,7 @@ function emit(): void {
 export function ingestFrame(data: string): void {
   const f = parseFrame(data)
   if (f === null) return
+  f.seq = nextSeq++ // stable identity for React keys (a prepend must not remount the list)
   const counters = { ...state.counters }
   switch (f.type) {
     case 'message_received':
@@ -76,7 +80,9 @@ export function ingestFrame(data: string): void {
     if (!Number.isNaN(t)) {
       lastReplyAt = t
       replyTimes.push(t)
-      if (replyTimes.length > MAX_REPLY_TIMES) replyTimes = replyTimes.slice(-MAX_REPLY_TIMES)
+      // Hysteresis: prune only at 2x the cap so steady state is amortized
+      // O(1), not an O(cap) copy per reply (review finding).
+      if (replyTimes.length > 2 * MAX_REPLY_TIMES) replyTimes = replyTimes.slice(-MAX_REPLY_TIMES)
     }
   }
   const channels =
@@ -113,6 +119,7 @@ let es: EventSource | null = null
 let retryTimer: ReturnType<typeof setTimeout> | undefined
 let factory: ESFactory | null = null
 let started = false
+let unsubscribeCore: (() => void) | null = null
 
 function setLive(live: boolean): void {
   if (state.live === live) return
@@ -163,10 +170,8 @@ function reconcile(): void {
 export function startFeed(f?: ESFactory): void {
   if (started) return
   started = true
-  factory =
-    f ??
-    (typeof EventSource !== 'undefined' ? (url: string) => new EventSource(url) : null)
-  subscribeCore(reconcile)
+  factory = f ?? (typeof EventSource !== 'undefined' ? (url: string) => new EventSource(url) : null)
+  unsubscribeCore = subscribeCore(reconcile)
   reconcile()
 }
 
@@ -176,8 +181,13 @@ export function getFeed(): FeedState {
 
 export function resetFeedForTests(): void {
   close()
+  // Detach the core-store listener too — otherwise every re-start stacks a
+  // stale reconciler on the shared core store (review finding).
+  unsubscribeCore?.()
+  unsubscribeCore = null
   state = emptyState()
   replyTimes = []
+  nextSeq = 1
   factory = null
   started = false
 }

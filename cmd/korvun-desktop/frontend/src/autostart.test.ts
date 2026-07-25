@@ -22,7 +22,9 @@ describe('autostart', () => {
 
   it('runAutostart starts the core only when enabled and bound', async () => {
     const start = vi.fn(() => Promise.resolve())
-    ;(window as unknown as FakeWindow).go = { shell: { Desktop: { Start: start } } }
+    ;(window as unknown as FakeWindow).go = {
+      shell: { Desktop: { Start: start } },
+    }
     await runAutostart()
     expect(start).not.toHaveBeenCalled()
     setAutostart(true)
@@ -33,7 +35,9 @@ describe('autostart', () => {
   it('a Start rejection is swallowed — the status poll reconciles the truth', async () => {
     setAutostart(true)
     ;(window as unknown as FakeWindow).go = {
-      shell: { Desktop: { Start: () => Promise.reject(new Error('already running')) } },
+      shell: {
+        Desktop: { Start: () => Promise.reject(new Error('already running')) },
+      },
     }
     await expect(runAutostart()).resolves.toBeUndefined()
   })

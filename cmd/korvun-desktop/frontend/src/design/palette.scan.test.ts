@@ -33,14 +33,16 @@ function walk(dir: string): string[] {
 }
 
 function rel(p: string): string {
-  return p.slice(SRC.length + 1).split(sep).join('/')
+  return p
+    .slice(SRC.length + 1)
+    .split(sep)
+    .join('/')
 }
 
 const sources = walk(SRC)
   .map((p) => [rel(p), readFileSync(p, 'utf8')] as const)
   .filter(
-    ([name]) =>
-      !name.includes('.test.') && !name.includes('.spec.') && name !== 'test.setup.ts',
+    ([name]) => !name.includes('.test.') && !name.includes('.spec.') && name !== 'test.setup.ts',
   )
 
 function isTokenFile(name: string): boolean {

@@ -62,4 +62,21 @@ describe('snapshot store', () => {
     expect(s.brains).toBeNull()
     expect(s.stale).toBe(true)
   })
+
+  it('the lifecycle follows the core: data goes stale (but survives) on stop', async () => {
+    await pollSnapshotOnce(okFetch())
+    expect(getSnapshot().stale).toBe(false)
+    const { startSnapshot } = await import('./store')
+    const { pollOnce } = await import('../status/store')
+    startSnapshot()
+    await pollOnce((() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: 'core stopped' }), {
+          status: 503,
+        }),
+      )) as typeof fetch)
+    const s = getSnapshot()
+    expect(s.stale).toBe(true) // reconcile marked it on the transition
+    expect(s.channels).toEqual(CHANNELS) // …but the last session's data survives
+  })
 })

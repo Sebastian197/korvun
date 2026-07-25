@@ -4,25 +4,14 @@
 //  incidencia  the FR-WIN-4 honest triggers only (reap-shaped exit, or a
 //              failure frame with its real channel), recovering on Start.
 import { useState } from 'react'
-import {
-  IconActivity,
-  IconChannels,
-  IconPlay,
-  IconStop,
-  IconWarning,
-} from '../components/icons'
+import { IconActivity, IconChannels, IconPlay, IconStop, IconWarning } from '../components/icons'
+import { channelGlyph } from '../lib/channels'
 import { desktop } from '../lib/go'
-import { minuteSeries, useFeed } from '../feed/store'
-import { markUserStop, useIncident, type Incident } from '../incident/store'
+import { agoSeconds } from '../lib/time'
+import { minuteSeries, SPARK_MINUTES, useFeed } from '../feed/store'
+import { clearUserStop, markUserStop, useIncident, type Incident } from '../incident/store'
 import { useSnapshot, type BrainSummary, type ChannelSummary } from '../snapshot/store'
 import { useCoreState, useLastOkAt } from '../status/store'
-
-function agoSeconds(fromMs: number | null): string {
-  if (fromMs === null) return ''
-  const s = Math.max(0, Math.round((Date.now() - fromMs) / 1000))
-  if (s < 60) return `hace ${s} s`
-  return `hace ${Math.floor(s / 60)} min`
-}
 
 function useLifecycleAction(): {
   busy: boolean
@@ -33,15 +22,19 @@ function useLifecycleAction(): {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const call = (op: 'Start' | 'Stop'): void => {
-    // The intent is marked at the CLICK: a stop the user asked for is never
-    // an incident, whether or not the binding round-trip succeeds.
-    if (op === 'Stop') markUserStop()
     const d = desktop()
     if (!d || busy) return
+    // Intent is marked only when a Stop is actually DISPATCHED, and unmarked
+    // if the binding rejects — otherwise a no-op or failed Stop would arm a
+    // sticky flag that swallows the next real unexpected exit (review).
+    if (op === 'Stop') markUserStop()
     setBusy(true)
     setError('')
     d[op]()
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => {
+        if (op === 'Stop') clearUserStop()
+        setError(e instanceof Error ? e.message : String(e))
+      })
       .finally(() => setBusy(false))
   }
   return { busy, error, start: () => call('Start'), stop: () => call('Stop') }
@@ -133,6 +126,11 @@ function Hero(): React.JSX.Element {
   )
 }
 
+// Bar geometry from the design's sparkline: a visible floor plus the scaled
+// range, current minute emphasized.
+const SPARK_BAR_MIN_PX = 4
+const SPARK_BAR_RANGE_PX = 22
+
 function Sparkline({ series }: { series: number[] }): React.JSX.Element {
   const max = Math.max(1, ...series)
   return (
@@ -143,7 +141,7 @@ function Sparkline({ series }: { series: number[] }): React.JSX.Element {
           key={i}
           className="spark-bar"
           style={{
-            height: 4 + Math.round((v / max) * 22),
+            height: SPARK_BAR_MIN_PX + Math.round((v / max) * SPARK_BAR_RANGE_PX),
             opacity: i === series.length - 1 ? 0.95 : 0.35,
           }}
         />
@@ -159,7 +157,8 @@ function Cards(): React.JSX.Element {
     feed.counters.dropped === 0
       ? 'ninguno desde que se abrió la ventana'
       : 'desde que se abrió la ventana'
-  const lastReply = feed.lastReplyAt === null ? 'aún ninguno' : `último ${agoSeconds(feed.lastReplyAt)}`
+  const lastReply =
+    feed.lastReplyAt === null ? 'aún ninguno' : `último ${agoSeconds(feed.lastReplyAt)}`
   return (
     <div className="cards">
       <div className="card" data-testid="card-recibidos">
@@ -171,7 +170,7 @@ function Cards(): React.JSX.Element {
         <div className="card-title">Mensajes procesados</div>
         <div className="card-row">
           <div className="card-big">{feed.counters.replied}</div>
-          <Sparkline series={minuteSeries(Date.now(), 14)} />
+          <Sparkline series={minuteSeries(Date.now(), SPARK_MINUTES)} />
         </div>
         <div className="card-caption">desde que se abrió la ventana · {lastReply}</div>
       </div>
@@ -183,8 +182,6 @@ function Cards(): React.JSX.Element {
     </div>
   )
 }
-
-const CHANNEL_GLYPH: Record<string, string> = { telegram: 'TG', discord: 'DC' }
 
 function ChannelRow({
   ch,
@@ -209,7 +206,7 @@ function ChannelRow({
   return (
     <div className="panel-row">
       <span className="chan-tile" aria-hidden="true">
-        {CHANNEL_GLYPH[ch.type] ?? ch.type.slice(0, 2).toUpperCase()}
+        {channelGlyph(ch.type)}
       </span>
       <div className="panel-row-body">
         <div className="panel-row-title">{label}</div>
@@ -235,9 +232,7 @@ function BrainRow({ brain }: { brain: BrainSummary }): React.JSX.Element {
       <div className="panel-row-body">
         <div className="brain-head">
           <span className="panel-row-title">{brain.name}</span>
-          <span
-            className={`pill ${brain.sensitivity === 'private' ? 'pill-vio' : 'pill-ok'}`}
-          >
+          <span className={`pill ${brain.sensitivity === 'private' ? 'pill-vio' : 'pill-ok'}`}>
             {SENSITIVITY_ES[brain.sensitivity] ?? brain.sensitivity}
           </span>
           <span className="pill pill-off">{brain.dispatch}</span>
@@ -274,12 +269,7 @@ function Panels(): React.JSX.Element {
           <div className="panel-empty">Sin canales configurados</div>
         ) : (
           channels.map((ch) => (
-            <ChannelRow
-              key={ch.name}
-              ch={ch}
-              running={running}
-              incidentChannel={incidentChannel}
-            />
+            <ChannelRow key={ch.name} ch={ch} running={running} incidentChannel={incidentChannel} />
           ))
         )}
       </section>
@@ -302,8 +292,7 @@ export function Home(): React.JSX.Element {
   const core = useCoreState()
   const snapshot = useSnapshot()
   const running = core === 'running'
-  const hasLastData =
-    (snapshot.channels?.length ?? 0) > 0 || (snapshot.brains?.length ?? 0) > 0
+  const hasLastData = (snapshot.channels?.length ?? 0) > 0 || (snapshot.brains?.length ?? 0) > 0
 
   return (
     <div className="home" data-testid={running ? 'home-marcha' : 'home-parado'}>
@@ -311,7 +300,16 @@ export function Home(): React.JSX.Element {
       {running ? (
         <>
           <Cards />
-          <Panels />
+          {/* Until the FIRST fresh poll of this cycle answers, the retained
+              snapshot is still last session's — dim it, never sell it as
+              live (review finding). */}
+          {snapshot.stale ? (
+            <div className="home-stale">
+              <Panels />
+            </div>
+          ) : (
+            <Panels />
+          )}
         </>
       ) : (
         hasLastData && (
@@ -327,8 +325,8 @@ export function Home(): React.JSX.Element {
       )}
       {!running && !hasLastData && (
         <p className="home-hint">
-          <IconChannels size={13} /> Arranca el gateway para ver canales, cerebros y el
-          feed en vivo.
+          <IconChannels size={13} /> Arranca el gateway para ver canales, cerebros y el feed en
+          vivo.
         </p>
       )}
     </div>

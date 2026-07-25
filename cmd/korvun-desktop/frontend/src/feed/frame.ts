@@ -7,6 +7,9 @@ export interface FeedFrame {
   timestamp: string
   envelope_id?: string
   direction?: string
+  /** Client-side monotonic ingest sequence — the stable React key (never on
+   * the wire; the store assigns it). */
+  seq?: number
 }
 
 /** Parse one SSE data payload; null when it is not a well-formed frame. */

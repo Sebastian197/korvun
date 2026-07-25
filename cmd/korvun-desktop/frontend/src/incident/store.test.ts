@@ -53,4 +53,14 @@ describe('incident store', () => {
     notifyCoreTransition('stopped', 'unreachable')
     expect(getIncident()).toBeNull()
   })
+
+  it('a transient blip (running → unknown/unreachable) is NOT a reap', () => {
+    // 'unknown' is transport noise and 'unreachable' is a mid-cutover state;
+    // only the definitive 503 'core stopped' reading may raise the red
+    // banner — a false "se detuvo inesperadamente" would invent a cause.
+    notifyCoreTransition('running', 'unknown')
+    expect(getIncident()).toBeNull()
+    notifyCoreTransition('running', 'unreachable')
+    expect(getIncident()).toBeNull()
+  })
 })

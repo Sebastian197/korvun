@@ -1,6 +1,7 @@
 // The header's /healthz caption (design: top-right, mono): OK + freshness
 // while running, an honest "sin respuesta" when the proxy answers 503, and
 // a dash while nothing is known yet.
+import { agoSeconds } from '../lib/time'
 import { useCoreState, useLastOkAt } from '../status/store'
 
 export function HealthzBadge(): React.JSX.Element {
@@ -9,8 +10,7 @@ export function HealthzBadge(): React.JSX.Element {
   let text = '/healthz · —'
   let ok = false
   if (core === 'running') {
-    const s = lastOk === null ? 0 : Math.max(0, Math.round((Date.now() - lastOk) / 1000))
-    text = `/healthz · OK · hace ${s} s`
+    text = `/healthz · OK · ${agoSeconds(lastOk) || 'hace 0 s'}`
     ok = true
   } else if (core === 'stopped' || core === 'unreachable') {
     text = '/healthz · sin respuesta'

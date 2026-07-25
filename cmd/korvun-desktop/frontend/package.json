@@ -11,7 +11,9 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "e2e": "playwright test",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "react": "19.2.7",

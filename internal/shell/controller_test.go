@@ -587,6 +587,17 @@ func TestStatus_reportsAdminTokenEnvName(t *testing.T) {
 	if got := c.Status().TokenEnv; got != adminTokenEnv {
 		t.Fatalf("TokenEnv after LoadConfig = %q, want %q", got, adminTokenEnv)
 	}
+	// The admin block is OPTIONAL (config.validateAdmin): a config without
+	// one must read as an empty name, never a nil dereference.
+	noAdmin := minimalCfg("http://127.0.0.1:1")
+	noAdmin.Admin = nil
+	c2 := testController()
+	if err := c2.LoadConfig(writeCfg(t, noAdmin)); err != nil {
+		t.Fatalf("LoadConfig (no admin block): %v", err)
+	}
+	if got := c2.Status().TokenEnv; got != "" {
+		t.Fatalf("TokenEnv with no admin block = %q, want empty", got)
+	}
 }
 
 // TestStatus_reapsDeadCore is the reap contract (white-box): a run goroutine

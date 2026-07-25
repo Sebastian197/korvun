@@ -2,7 +2,7 @@
 // pinned here so a body drift breaks the chrome loudly in CI, not silently in
 // the window.
 import { describe, expect, it } from 'vitest'
-import { pollOnce } from './store'
+import { getLastOkAt, pollOnce, subscribeCore } from './store'
 
 function fakeFetch(status: number, body: unknown): typeof fetch {
   return (() =>
@@ -36,5 +36,24 @@ describe('status store classification', () => {
 
   it('an off-contract 503 body → unknown, never a guessed state', async () => {
     expect(await pollOnce(fakeFetch(503, { error: 'something else' }))).toBe('unknown')
+  })
+
+  it('a healthy poll stamps lastOkAt; a 503 leaves it untouched', async () => {
+    const before = Date.now()
+    await pollOnce((() => Promise.resolve(new Response('ok'))) as typeof fetch)
+    const stamped = getLastOkAt()
+    expect(stamped).not.toBeNull()
+    expect(stamped ?? 0).toBeGreaterThanOrEqual(before)
+    await pollOnce(fakeFetch(503, { error: 'core stopped' }))
+    expect(getLastOkAt()).toBe(stamped)
+  })
+
+  it('every healthy tick notifies listeners ONCE, even without a state change', async () => {
+    await pollOnce((() => Promise.resolve(new Response('ok'))) as typeof fetch)
+    let fired = 0
+    const unsub = subscribeCore(() => fired++)
+    await pollOnce((() => Promise.resolve(new Response('ok'))) as typeof fetch)
+    unsub()
+    expect(fired).toBe(1) // the "hace Xs" tick — exactly one, never double
   })
 })

@@ -1,13 +1,10 @@
 // Home's three states (FR-WIN-6) against seeded stores — the same stores the
 // window feeds from, no view-level mocks.
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ingestFrame, resetFeedForTests } from '../feed/store'
-import {
-  getIncident,
-  notifyCoreTransition,
-  resetIncidentForTests,
-} from '../incident/store'
+import { getIncident, notifyCoreTransition, resetIncidentForTests } from '../incident/store'
 import { pollSnapshotOnce, resetSnapshotForTests } from '../snapshot/store'
 import { pollOnce } from '../status/store'
 import { Home } from './Home'
@@ -15,7 +12,9 @@ import { Home } from './Home'
 function healthz(status: number, body?: unknown): typeof fetch {
   return (() =>
     Promise.resolve(
-      new Response(body === undefined ? 'ok' : JSON.stringify(body), { status }),
+      new Response(body === undefined ? 'ok' : JSON.stringify(body), {
+        status,
+      }),
     )) as typeof fetch
 }
 
@@ -43,13 +42,26 @@ const SNAPSHOT_FETCH = ((url: string) => {
 }) as unknown as typeof fetch
 
 function frame(type: string, extra: Record<string, string> = {}): string {
-  return JSON.stringify({ type, timestamp: new Date().toISOString(), ...extra })
+  return JSON.stringify({
+    type,
+    timestamp: new Date().toISOString(),
+    ...extra,
+  })
+}
+
+interface FakeWindow {
+  go?: { shell?: { Desktop?: unknown } }
+}
+
+function installLifecycle(bindings: Record<string, () => Promise<unknown>>): void {
+  ;(window as unknown as FakeWindow).go = { shell: { Desktop: bindings } }
 }
 
 beforeEach(async () => {
   resetFeedForTests()
   resetIncidentForTests()
   resetSnapshotForTests()
+  delete (window as unknown as FakeWindow).go
   await seedCore('stopped')
   resetIncidentForTests() // the seeding transition itself is not under test
 })
@@ -98,9 +110,7 @@ describe('Home marcha', () => {
     expect(screen.getByTestId('card-recibidos')).toHaveTextContent('1')
     expect(screen.getByTestId('card-procesados')).toHaveTextContent('2')
     expect(screen.getByTestId('card-descartados')).toHaveTextContent('0')
-    expect(
-      screen.getAllByText(/desde que se abrió la ventana/).length,
-    ).toBeGreaterThanOrEqual(3)
+    expect(screen.getAllByText(/desde que se abrió la ventana/).length).toBeGreaterThanOrEqual(3)
   })
 
   it('panels list channels and brains from the control API', () => {
@@ -119,11 +129,63 @@ describe('Home marcha', () => {
     expect(screen.getByText(/Mensaje descartado en telegram/)).toBeInTheDocument()
   })
 
-  it('Detener marks the stop as user-intended (no reap incident afterwards)', () => {
+  it('a DISPATCHED Detener marks the stop as user-intended (no reap incident)', async () => {
+    installLifecycle({ Stop: () => Promise.resolve() })
     render(<Home />)
     fireEvent.click(screen.getByRole('button', { name: /Detener/ }))
+    await act(() => Promise.resolve())
     notifyCoreTransition('running', 'stopped')
     expect(getIncident()).toBeNull()
+  })
+
+  it('a Detener click with NO bindings never arms the flag — a later exit is still a reap', () => {
+    render(<Home />)
+    fireEvent.click(screen.getByRole('button', { name: /Detener/ })) // no-op: no bindings
+    notifyCoreTransition('running', 'stopped')
+    expect(getIncident()).toMatchObject({ kind: 'reap' })
+  })
+
+  it('a REJECTED Stop unarms the flag — the next unexpected exit still reads as reap', async () => {
+    installLifecycle({
+      Stop: () => Promise.reject(new Error('binding timeout')),
+    })
+    render(<Home />)
+    fireEvent.click(screen.getByRole('button', { name: /Detener/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('binding timeout')
+    })
+    notifyCoreTransition('running', 'stopped')
+    expect(getIncident()).toMatchObject({ kind: 'reap' })
+  })
+
+  it('a rejected Start paints the named error and re-enables the action (FR-WIN-2)', async () => {
+    await seedCore('stopped')
+    resetIncidentForTests()
+    installLifecycle({
+      Start: () => Promise.reject(new Error('shell: core boot failed')),
+    })
+    render(<Home />)
+    fireEvent.click(screen.getByRole('button', { name: /Iniciar/ }))
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('core boot failed')
+    })
+    expect(screen.getByRole('button', { name: /Iniciar/ })).toBeEnabled()
+  })
+
+  it('the action disables while the lifecycle call is in flight (busy gate)', async () => {
+    await seedCore('stopped')
+    resetIncidentForTests()
+    let release: () => void = () => undefined
+    installLifecycle({
+      Start: () => new Promise<void>((resolve) => (release = resolve)),
+    })
+    render(<Home />)
+    fireEvent.click(screen.getByRole('button', { name: /Iniciando|Iniciar/ }))
+    expect(screen.getByRole('button', { name: /Iniciando/ })).toBeDisabled()
+    release()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Iniciar/ })).toBeEnabled()
+    })
   })
 })
 

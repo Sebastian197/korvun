@@ -83,8 +83,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      # Coverage (v8) instead of a bare run — the report surfaces untested
-      # chrome code in the job log (6a review rider).
+      - run: npm run format:check
+      # Coverage (v8) with thresholds instead of a bare run — untested chrome
+      # code fails the job, not just the reader (6a review rider + SP6b
+      # review hardening).
       - run: npm run coverage
       - run: npm run build
 

@@ -39,12 +39,10 @@ async function seedRunning(): Promise<void> {
 async function seedStopped(): Promise<void> {
   installBindings({ ...RUNNING, Running: false, AdminAddr: '' })
   await pollShellOnce()
-  await pollOnce(
-    (() =>
-      Promise.resolve(
-        new Response(JSON.stringify({ error: 'core stopped' }), { status: 503 }),
-      )) as typeof fetch,
-  )
+  await pollOnce((() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ error: 'core stopped' }), { status: 503 }),
+    )) as typeof fetch)
 }
 
 beforeEach(() => {
@@ -96,7 +94,9 @@ describe('Ajustes · gateway', () => {
 
   it('the autostart toggle persists korvun.chrome.autostart', () => {
     render(<Settings version="dev" />)
-    const toggle = screen.getByRole('switch', { name: /Iniciar con la aplicación/ })
+    const toggle = screen.getByRole('switch', {
+      name: /Iniciar con la aplicación/,
+    })
     expect(toggle).toHaveAttribute('aria-checked', 'false')
     fireEvent.click(toggle)
     expect(toggle).toHaveAttribute('aria-checked', 'true')

@@ -36,15 +36,21 @@ export async function pollOnce(fetcher: typeof fetch = fetch): Promise<CoreState
   try {
     const resp = await fetcher('/healthz', { cache: 'no-store' })
     if (resp.ok) {
+      const changed = current !== 'running'
       lastOkAt = Date.now()
       set('running')
-      // lastOkAt moved even when the state did not — the header caption
-      // ("hace Xs") re-renders on every healthy tick.
-      for (const l of listeners) l()
+      if (!changed) {
+        // lastOkAt moved though the state did not — one notify so the
+        // header's "hace Xs" ticks (set() already notified on a change;
+        // never both — review finding).
+        for (const l of listeners) l()
+      }
       return current
     }
     if (resp.status === 503) {
-      const body = (await resp.json().catch(() => null)) as { error?: string } | null
+      const body = (await resp.json().catch(() => null)) as {
+        error?: string
+      } | null
       if (body?.error === 'core stopped') set('stopped')
       else if (body?.error === 'core unreachable') set('unreachable')
       else set('unknown')

@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { IconActivity } from '../components/icons'
 import type { FeedFrame } from '../feed/frame'
 import { useFeed } from '../feed/store'
+import { channelGlyph } from '../lib/channels'
 import { useCoreState } from '../status/store'
 
 const TYPE_LABEL: Record<string, string> = {
@@ -23,8 +24,6 @@ const TYPE_FILTERS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'message_dropped', label: 'Descartados' },
   { id: 'handle_failed', label: 'Fallos' },
 ]
-
-const TILE: Record<string, string> = { telegram: 'TG', discord: 'DC' }
 
 function hourOf(ts: string): string {
   const d = new Date(ts)
@@ -50,7 +49,7 @@ function Row({ f }: { f: FeedFrame }): React.JSX.Element {
     <div className="act-row">
       <span className="act-hour mono">{hourOf(f.timestamp)}</span>
       <span className="chan-tile act-tile" aria-hidden="true">
-        {TILE[f.channel ?? ''] ?? (f.channel ?? '??').slice(0, 2).toUpperCase()}
+        {channelGlyph(f.channel)}
       </span>
       <span className="act-event">
         {TYPE_LABEL[f.type] ?? f.type}
@@ -71,8 +70,7 @@ export function Activity(): React.JSX.Element {
   const [type, setType] = useState('all')
 
   const rows = feed.frames.filter(
-    (f) =>
-      (channel === 'all' || f.channel === channel) && (type === 'all' || f.type === type),
+    (f) => (channel === 'all' || f.channel === channel) && (type === 'all' || f.type === type),
   )
 
   let liveText = 'Pausado — gateway detenido'
@@ -130,8 +128,8 @@ export function Activity(): React.JSX.Element {
             </div>
             <div className="act-empty-title">Sin actividad todavía</div>
             <div className="act-empty-caption">
-              Cuando fluyan mensajes, aquí verás cada mensaje y su camino por el gateway —
-              solo metadatos, nunca el contenido.
+              Cuando fluyan mensajes, aquí verás cada mensaje y su camino por el gateway — solo
+              metadatos, nunca el contenido.
             </div>
           </div>
         ) : (
@@ -143,8 +141,10 @@ export function Activity(): React.JSX.Element {
               <span>DESTINO</span>
               <span className="act-dir">DIR</span>
             </div>
-            {rows.map((f, i) => (
-              <Row key={`${f.envelope_id ?? ''}·${f.timestamp}·${f.type}·${String(i)}`} f={f} />
+            {rows.map((f) => (
+              // seq is the store's monotonic ingest id — a prepend mounts ONE
+              // new row instead of remounting the whole list (review finding).
+              <Row key={f.seq ?? f.timestamp} f={f} />
             ))}
           </>
         )}

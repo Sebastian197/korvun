@@ -3,22 +3,13 @@
 // screenshot set (regenerated on every run; the 6b set lives in
 // sp6b.spec.ts). The theme control moved into Ajustes in 6b (FR-WIN-5).
 import { expect, test } from '@playwright/test'
+import { HARNESS_ADDR, SHOT, settleFonts } from './util'
 
-const SHOT = (name: string): string => `../../../design-drafts/${name}`
-
-// Screenshots wait for the embedded Geist faces so a cold run never captures
-// the fallback font.
-async function settleFonts(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => document.fonts.ready.then(() => undefined))
-}
-
-test('the stopped chrome: real 503 contract → parado hero, same-origin only', async ({
-  page,
-}) => {
+test('the stopped chrome: real 503 contract → parado hero, same-origin only', async ({ page }) => {
   const external: string[] = []
   page.on('request', (req) => {
     const url = new URL(req.url())
-    if (url.host !== '127.0.0.1:43117') external.push(req.url())
+    if (url.host !== HARNESS_ADDR) external.push(req.url())
   })
 
   await page.goto('/')
@@ -32,7 +23,10 @@ test('the stopped chrome: real 503 contract → parado hero, same-origin only', 
   expect(external, `external requests: ${external.join(', ')}`).toEqual([])
 
   await settleFonts(page)
-  await page.screenshot({ path: SHOT('sp6a-inicio-parado-minimo.png'), animations: 'disabled' })
+  await page.screenshot({
+    path: SHOT('sp6a-inicio-parado-minimo.png'),
+    animations: 'disabled',
+  })
 })
 
 test('sidebar navigation: five sections in design order, active state, honest empty views', async ({
@@ -57,7 +51,10 @@ test('sidebar navigation: five sections in design order, active state, honest em
     'page',
   )
   await settleFonts(page)
-  await page.screenshot({ path: SHOT('sp6a-shell-navegacion.png'), animations: 'disabled' })
+  await page.screenshot({
+    path: SHOT('sp6a-shell-navegacion.png'),
+    animations: 'disabled',
+  })
 })
 
 test('theme swap (Ajustes): light theme persists and repaints the token table', async ({
@@ -72,5 +69,8 @@ test('theme swap (Ajustes): light theme persists and repaints the token table', 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   await expect(page.getByTestId('home-parado')).toBeVisible()
   await settleFonts(page)
-  await page.screenshot({ path: SHOT('sp6a-tema-claro.png'), animations: 'disabled' })
+  await page.screenshot({
+    path: SHOT('sp6a-tema-claro.png'),
+    animations: 'disabled',
+  })
 })

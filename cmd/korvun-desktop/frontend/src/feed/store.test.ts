@@ -1,9 +1,38 @@
 // The live-feed store: ingests ADR-0024 metadata frames and derives the
 // window-scoped counters Home paints (FR-WIN-4: "desde que se abrió la
 // ventana", never presented as an all-time total) plus the Activity rows.
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { pollOnce } from '../status/store'
 import { getFeed, ingestFrame, minuteSeries, resetFeedForTests, startFeed } from './store'
+
+class FakeES {
+  static instances: FakeES[] = []
+  url: string
+  onopen: (() => void) | null = null
+  onmessage: ((ev: { data: string }) => void) | null = null
+  onerror: (() => void) | null = null
+  closed = false
+  constructor(url: string) {
+    this.url = url
+    FakeES.instances.push(this)
+  }
+  close(): void {
+    this.closed = true
+  }
+}
+
+const esFactory = (url: string): EventSource => new FakeES(url) as unknown as EventSource
+
+function okFetch(): typeof fetch {
+  return (() => Promise.resolve(new Response('ok'))) as typeof fetch
+}
+
+function stoppedFetch(): typeof fetch {
+  return (() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ error: 'core stopped' }), { status: 503 }),
+    )) as typeof fetch
+}
 
 function frame(type: string, extra: Record<string, string> = {}): string {
   return JSON.stringify({ type, timestamp: '2026-07-25T10:00:00Z', ...extra })
@@ -11,6 +40,11 @@ function frame(type: string, extra: Record<string, string> = {}): string {
 
 beforeEach(() => {
   resetFeedForTests()
+  FakeES.instances = []
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('feed store', () => {
@@ -20,7 +54,12 @@ describe('feed store', () => {
     ingestFrame(frame('reply_sent', { channel: 'telegram' }))
     ingestFrame(frame('message_dropped', { channel: 'telegram' }))
     ingestFrame(frame('handle_failed', { channel: 'telegram' }))
-    expect(getFeed().counters).toEqual({ received: 1, replied: 2, dropped: 1, failed: 1 })
+    expect(getFeed().counters).toEqual({
+      received: 1,
+      replied: 2,
+      dropped: 1,
+      failed: 1,
+    })
   })
 
   it('keeps frames newest-first and caps the buffer', () => {
@@ -47,39 +86,43 @@ describe('feed store', () => {
   })
 
   it('the SSE lifecycle follows the core: open on running, live on open, closed on stop', async () => {
-    const instances: FakeES[] = []
-    class FakeES {
-      url: string
-      onopen: (() => void) | null = null
-      onmessage: ((ev: { data: string }) => void) | null = null
-      onerror: (() => void) | null = null
-      closed = false
-      constructor(url: string) {
-        this.url = url
-        instances.push(this)
-      }
-      close(): void {
-        this.closed = true
-      }
-    }
-    await pollOnce((() => Promise.resolve(new Response('ok'))) as typeof fetch)
-    startFeed((url) => new FakeES(url) as unknown as EventSource)
-    expect(instances.length).toBe(1)
-    expect(instances[0]?.url).toBe('/api/events')
-    instances[0]?.onopen?.()
+    await pollOnce(okFetch())
+    startFeed(esFactory)
+    expect(FakeES.instances.length).toBe(1)
+    expect(FakeES.instances[0]?.url).toBe('/api/events')
+    FakeES.instances[0]?.onopen?.()
     expect(getFeed().live).toBe(true)
-    instances[0]?.onmessage?.({ data: frame('reply_sent') })
+    FakeES.instances[0]?.onmessage?.({ data: frame('reply_sent') })
     expect(getFeed().counters.replied).toBe(1)
-    await pollOnce(
-      (() =>
-        Promise.resolve(
-          new Response(JSON.stringify({ error: 'core stopped' }), { status: 503 }),
-        )) as typeof fetch,
-    )
-    expect(instances[0]?.closed).toBe(true)
+    await pollOnce(stoppedFetch())
+    expect(FakeES.instances[0]?.closed).toBe(true)
     expect(getFeed().live).toBe(false)
     // The window-scoped data SURVIVES the stop — only the stream closes.
     expect(getFeed().counters.replied).toBe(1)
+  })
+
+  it('a stream error retries after RETRY_MS while the core still runs', async () => {
+    await pollOnce(okFetch())
+    vi.useFakeTimers()
+    startFeed(esFactory)
+    FakeES.instances[0]?.onopen?.()
+    FakeES.instances[0]?.onerror?.()
+    expect(getFeed().live).toBe(false)
+    expect(FakeES.instances.length).toBe(1)
+    vi.advanceTimersByTime(3000)
+    expect(FakeES.instances.length).toBe(2) // reconnected
+  })
+
+  it('a stream error does NOT reconnect once the core stopped', async () => {
+    await pollOnce(okFetch())
+    vi.useFakeTimers()
+    startFeed(esFactory)
+    FakeES.instances[0]?.onerror?.()
+    vi.useRealTimers()
+    await pollOnce(stoppedFetch())
+    vi.useFakeTimers()
+    vi.advanceTimersByTime(10_000)
+    expect(FakeES.instances.length).toBe(1) // no second instance
   })
 
   it('minuteSeries buckets replies per minute for the sparkline', () => {

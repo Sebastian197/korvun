@@ -48,13 +48,20 @@ describe('shell status store', () => {
       shell: {
         Desktop: {
           Status: () =>
-            Promise.resolve({ Running: false, ConfigPath: '/a.json', AdminAddr: '', TokenEnv: '' }),
+            Promise.resolve({
+              Running: false,
+              ConfigPath: '/a.json',
+              AdminAddr: '',
+              TokenEnv: '',
+            }),
         },
       },
     }
     await pollShellOnce()
     win.go = {
-      shell: { Desktop: { Status: () => Promise.reject(new Error('binding timeout')) } },
+      shell: {
+        Desktop: { Status: () => Promise.reject(new Error('binding timeout')) },
+      },
     }
     await pollShellOnce()
     expect(getShellStatus()?.ConfigPath).toBe('/a.json')

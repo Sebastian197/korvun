@@ -28,9 +28,17 @@ function set(next: Incident | null): void {
   for (const l of listeners) l()
 }
 
-/** Home's Detener calls this BEFORE Stop — the flip that follows is expected. */
+/** Home's Detener calls this right before DISPATCHING Stop — the flip that
+ * follows is expected. Only a dispatched Stop may mark intent (a no-op click
+ * must never arm the flag — review finding). */
 export function markUserStop(): void {
   userStopPending = true
+}
+
+/** A Stop that never landed (binding rejection) must not leave the flag
+ * armed — the next real unexpected exit would be swallowed as intended. */
+export function clearUserStop(): void {
+  userStopPending = false
 }
 
 /** Core-state transition sink (the status store drives it). */
@@ -40,7 +48,11 @@ export function notifyCoreTransition(prev: CoreState, next: CoreState): void {
     set(null)
     return
   }
-  if (prev !== 'running') return
+  // Only the DEFINITIVE stop reading raises the reap incident: 'unknown'
+  // (transport blip) and 'unreachable' (mid-cutover) are transient states a
+  // poll later self-heals — a false red banner would be an invented cause
+  // (review finding).
+  if (prev !== 'running' || next !== 'stopped') return
   if (userStopPending) {
     userStopPending = false
     return

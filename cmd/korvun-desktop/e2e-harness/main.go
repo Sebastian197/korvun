@@ -117,22 +117,32 @@ func (f *fakeChannel) Stop(context.Context) error {
 
 // inject feeds one inbound envelope, bounded so a stopped core (no pump
 // consuming) answers honestly instead of hanging the control endpoint.
+// Every send attempt happens UNDER the mutex and non-blocking: Stop also
+// closes the channel under the same mutex, so a send can never race the
+// close (the TOCTOU the review caught — a lost race would panic the whole
+// harness mid-suite, not 409).
 func (f *fakeChannel) inject(text string) error {
-	f.mu.Lock()
-	stopped := f.stopped
-	ch := f.inbound
-	f.mu.Unlock()
-	if stopped {
-		return errors.New("channel stopped")
-	}
 	e := envelope.New(f.name, envelope.Inbound, envelope.Participant{ID: "u1", Name: "Harness"})
 	e.AddText(text)
 	e.Meta[conversation.MetaConversationID] = "harness-conv"
-	select {
-	case ch <- e:
-		return nil
-	case <-time.After(2 * time.Second):
-		return errors.New("no consumer (core stopped?)")
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		f.mu.Lock()
+		if f.stopped {
+			f.mu.Unlock()
+			return errors.New("channel stopped")
+		}
+		select {
+		case f.inbound <- e:
+			f.mu.Unlock()
+			return nil
+		default:
+		}
+		f.mu.Unlock()
+		if time.Now().After(deadline) {
+			return errors.New("no consumer (core stopped?)")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -212,7 +222,7 @@ func newFakeModel() (*fakeModel, error) {
 // model endpoint.
 func harnessConfig(modelURL string) *config.Config {
 	return &config.Config{
-		Channels: []config.ChannelConfig{{Type: "telegram", Mode: "polling", TokenEnv: harnessTokenEnv}},
+		Channels: []config.ChannelConfig{{Type: defaultChannel, Mode: "polling", TokenEnv: harnessTokenEnv}},
 		Brains: []config.BrainConfig{{
 			Name:        "asistente",
 			Sensitivity: "private",
@@ -229,6 +239,23 @@ func harnessConfig(modelURL string) *config.Config {
 
 func boolPtr(b bool) *bool { return &b }
 
+// requireLoopback refuses any bind address whose host is not a loopback IP
+// (or "localhost"), making the harness's loopback guarantee real.
+func requireLoopback(addr string) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("invalid -addr %q: %w", addr, err)
+	}
+	if host == "localhost" {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return fmt.Errorf("refusing to bind %q: the harness serves a test-control surface and a bearer-injecting proxy, loopback only", addr)
+	}
+	return nil
+}
+
 // run keeps every deferred cleanup on the exit path (no os.Exit skipping the
 // temp-dir removal).
 func run() error {
@@ -238,6 +265,13 @@ func run() error {
 	autostart := flag.Bool("start", true, "start the core on boot")
 	flag.Parse()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	// "Loopback-only" is ENFORCED, not a flag default (review finding): the
+	// /__test/ surface drives the core and the proxy injects the admin
+	// bearer — neither may ever face a network.
+	if err := requireLoopback(*addr); err != nil {
+		return err
+	}
 
 	if err := os.Setenv(harnessTokenEnv, "harness-dummy"); err != nil {
 		return fmt.Errorf("set dummy channel token: %w", err)
@@ -294,7 +328,7 @@ func run() error {
 		cancel()
 	}
 
-	testAPI := testControl{desk: desk, ctrl: ctrl, model: fm, channels: channels, chanMu: &chanMu}
+	testAPI := testControl{desk: desk, ctrl: ctrl, model: fm, channels: channels, chanMu: &chanMu, listenAddr: *addr}
 	proxy := ctrl.ProxyHandler()
 	files := http.FileServer(http.Dir(*dist))
 	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -346,18 +380,44 @@ func run() error {
 	return nil
 }
 
+// defaultChannel is the scripted channel harnessConfig registers.
+const defaultChannel = "telegram"
+
 // testControl is the /__test/ surface (see the package comment).
 type testControl struct {
-	desk     *shell.Desktop
-	ctrl     *shell.Controller
-	model    *fakeModel
-	channels map[string]*fakeChannel
-	chanMu   *sync.Mutex
+	desk       *shell.Desktop
+	ctrl       *shell.Controller
+	model      *fakeModel
+	channels   map[string]*fakeChannel
+	chanMu     *sync.Mutex
+	listenAddr string
+}
+
+// lookupChannel resolves a scripted channel by name ("" → the default one).
+func (tc testControl) lookupChannel(name string) *fakeChannel {
+	if name == "" {
+		name = defaultChannel
+	}
+	tc.chanMu.Lock()
+	defer tc.chanMu.Unlock()
+	return tc.channels[name]
 }
 
 func (tc testControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	// Same-machine browser CSRF hardening (review finding): a cross-origin
+	// "simple request" from a random page in a local browser can POST to
+	// loopback, but it cannot set application/json without a preflight the
+	// harness never answers, and its Host would be the rebound name.
+	if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		return
+	}
+	if r.Host != tc.listenAddr {
+		http.Error(w, "wrong Host for the test-control surface", http.StatusForbidden)
 		return
 	}
 	switch {
@@ -385,12 +445,7 @@ func (tc testControl) injectMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if body.Channel == "" {
-		body.Channel = "telegram"
-	}
-	tc.chanMu.Lock()
-	fc := tc.channels[body.Channel]
-	tc.chanMu.Unlock()
+	fc := tc.lookupChannel(body.Channel)
 	if fc == nil {
 		http.Error(w, "no such scripted channel", http.StatusConflict)
 		return
@@ -431,12 +486,7 @@ func (tc testControl) channelMode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if body.Channel == "" {
-		body.Channel = "telegram"
-	}
-	tc.chanMu.Lock()
-	fc := tc.channels[body.Channel]
-	tc.chanMu.Unlock()
+	fc := tc.lookupChannel(body.Channel)
 	if fc == nil {
 		http.Error(w, "no such scripted channel", http.StatusConflict)
 		return

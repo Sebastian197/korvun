@@ -17,12 +17,10 @@ function frame(
 }
 
 async function seedStopped(): Promise<void> {
-  await pollOnce(
-    (() =>
-      Promise.resolve(
-        new Response(JSON.stringify({ error: 'core stopped' }), { status: 503 }),
-      )) as typeof fetch,
-  )
+  await pollOnce((() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ error: 'core stopped' }), { status: 503 }),
+    )) as typeof fetch)
 }
 
 beforeEach(async () => {

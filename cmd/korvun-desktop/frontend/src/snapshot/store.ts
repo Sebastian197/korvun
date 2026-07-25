@@ -67,6 +67,7 @@ export async function pollSnapshotOnce(fetcher: typeof fetch = fetch): Promise<v
 
 let timer: ReturnType<typeof setInterval> | undefined
 let started = false
+let unsubscribeCore: (() => void) | null = null
 
 function reconcile(): void {
   if (getCoreState() === 'running') {
@@ -87,7 +88,7 @@ function reconcile(): void {
 export function startSnapshot(): void {
   if (started) return
   started = true
-  subscribeCore(reconcile)
+  unsubscribeCore = subscribeCore(reconcile)
   reconcile()
 }
 
@@ -96,6 +97,9 @@ export function getSnapshot(): Snapshot {
 }
 
 export function resetSnapshotForTests(): void {
+  // Detach the core-store listener (same leak class as the feed store).
+  unsubscribeCore?.()
+  unsubscribeCore = null
   state = { channels: null, brains: null, stale: true }
   if (timer !== undefined) {
     clearInterval(timer)
