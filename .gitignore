@@ -65,6 +65,15 @@ frontend/dist/
 # GoReleaser build output (ADR-0025, Stage 15)
 dist/
 
+# Desktop packaging output (SP7, private-pass lesson 2026-07-25). The compiled
+# binary / .app / installer land in build/bin/ (the Wails output convention,
+# verified at source: `wails build` writes build/bin/<App>.app). Ignore ONLY
+# the output subtree — a `wails build` adoption keeps committed scaffold under
+# build/ itself (appicon, darwin/Info.plist + entitlements, windows/installer
+# .nsi), which a blanket build/ ignore would wrongly drop. The recipe pins its
+# output to build/bin/ regardless of the packaging path chosen in the SP7 spec.
+build/bin/
+
 # Builder frontend (ADR-0029, Stage 14 Phase 2b). The real Vite build is
 # regenerated fresh (CI never trusts a committed one, §6), but the committed
 # placeholder must survive the global dist/ ignore above so //go:embed dist matches
