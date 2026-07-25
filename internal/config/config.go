@@ -255,7 +255,10 @@ func Load(path string) (*Config, error) {
 // Validate enforces the schema invariants, returning the first violation as an
 // error wrapping ErrInvalidConfig with the offending field path. It checks
 // structure and enum membership only; semantic wiring (resolving secrets,
-// reaching providers) happens in internal/app.
+// reaching providers) happens in internal/app. One normalization rides it
+// (NC-1 companion): a valid config never carries nil Channels/Routes — an
+// OMITTED key must behave, re-serve, and re-persist exactly like an empty
+// list ("channels": null through GET /api/config would crash the builder).
 func (c *Config) Validate() error {
 	// Note: Storage is intentionally NOT validated here. storage.path is resolved
 	// and checked at boot (internal/app openStore, which returns a named fatal
@@ -275,7 +278,16 @@ func (c *Config) Validate() error {
 	if err := c.validateAdmin(); err != nil {
 		return err
 	}
-	return c.validateRoutes(channelNames, brainNames)
+	if err := c.validateRoutes(channelNames, brainNames); err != nil {
+		return err
+	}
+	if c.Channels == nil {
+		c.Channels = []ChannelConfig{}
+	}
+	if c.Routes == nil {
+		c.Routes = []RouteConfig{}
+	}
+	return nil
 }
 
 // validateTimeouts checks the top-level resilience durations (ADR-0031). A

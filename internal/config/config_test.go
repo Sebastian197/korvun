@@ -4,6 +4,7 @@
 package config_test
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -299,6 +300,29 @@ func TestValidate_zeroChannelsZeroRoutes_valid(t *testing.T) {
 	}
 	if len(cfg.Channels) != 0 || len(cfg.Routes) != 0 {
 		t.Fatalf("loaded %d channels / %d routes, want 0 / 0", len(cfg.Channels), len(cfg.Routes))
+	}
+}
+
+// TestValidate_omittedChannelsAndRoutesNormalize pins the NC-1 companion
+// normalization: a config that OMITS the channels/routes keys entirely is
+// valid AND loads as empty (non-nil) slices, so it re-marshals as [] — never
+// as null through GET /api/config or WriteConfigAtomic.
+func TestValidate_omittedChannelsAndRoutesNormalize(t *testing.T) {
+	t.Parallel()
+	raw := `{"brains":[{"name":"d","sensitivity":"public","policy":{"kind":"priority"},"models":[{"provider":"ollama","model_id":"m","locality":"local"}]}]}`
+	cfg, err := config.Load(writeConfig(t, raw))
+	if err != nil {
+		t.Fatalf("Load with omitted channels/routes keys: %v, want nil", err)
+	}
+	if cfg.Channels == nil || cfg.Routes == nil {
+		t.Fatalf("Channels/Routes = %v/%v, want non-nil empty slices", cfg.Channels, cfg.Routes)
+	}
+	out, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("re-marshal: %v", err)
+	}
+	if !strings.Contains(string(out), `"channels":[]`) || !strings.Contains(string(out), `"routes":[]`) {
+		t.Fatalf("re-marshal = %s, want channels/routes as [] (never null)", out)
 	}
 }
 
