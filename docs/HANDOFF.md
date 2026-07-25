@@ -87,55 +87,91 @@ explicit decision.
 
 ## Current state (as of session close, 2026-07-25)
 
-> **CURRENT (2026-07-25, session close): Piece 5 (the desktop app) — SP6c
-> (the LAST cut of SP6) COMPLETE LOCALLY, NOT pushed, PENDING the copilot's
-> screenshot review.** SP6a is MERGED+CI-green; SP6b is MERGED+CI-green
-> (pushed with the ensayo ritual: `06ce362..89f47bd`, then the live-view
-> flake cure + workflows `8ef8b78`/`bac6969`). SP6c sits on top,
-> **unpushed**, awaiting the copilot's side-by-side.
+> **CURRENT (2026-07-25, session close): Piece 5 (the desktop app) — SP6
+> COMPLETE + the hardware-pass fixes + SP7 first-time all PUBLISHED (double
+> green); SP7 cut 7a done LOCALLY and copilot-approved, one master publish
+> away.** Verified first-hand at close: `origin/master` = **`a097522`**;
+> local `master` = `origin/ensayo` = **`9e72d82`** (2 commits ahead of
+> master); `git status` clean.
 >
-> **Copilot resolutions RECORDED this session (2026-07-25):**
-> - **SP6b cut APPROVED** — captures reviewed side-by-side, passed.
-> - **Incident amendment RATIFIED (spec §FR-WIN-4):** EVENT incidents
->   (message_dropped/handle_failed) gain an "Entendido" dismiss (they are
->   occurrences); the REAP incident stays sticky until a clean Start (a
->   dead core is a live condition). Executed in `ec9ee92`.
-> - **NC-1 EXECUTED as option (a):** `web/builder/embed.go` now emits
->   `frame-ancestors 'self'` (test-pinned) — the builder is framable
->   same-origin. First commit of 6c (`e8ec76d`).
+> **PUBLISHED on `master` (a097522), each pushed with the ensayo ritual +
+> the master hard gate both green:**
+> - **SP6 COMPLETE end-to-end in software** — 6a foundations (tokens/AA/shell/
+>   status store/Desktop bindings under THE LAW/e2e harness) · 6b
+>   Inicio+Ajustes+Actividad · 6c Canales + the 3-step keychain assistant +
+>   onboarding + the same-origin embedded builder. All captures approved
+>   side-by-side by the copilot.
+> - **Hardware-pass findings (private pass, real binary):** **F1** — hot config
+>   reload now RE-PROVISIONS keychain secrets in the supervisor's build seam
+>   (a channel whose secret lives only in the OS keychain connects on a live
+>   reload) + the e2e-harness bypass that hid it is closed. **F3** — the
+>   ADR-0028 TLS cleartext warning is silenced inside the Wails desktop WebView
+>   (the `wails:` scheme / `wails.localhost` host, source-verified) while a real
+>   browser still warns. **F2** closed as BENIGN at the wails source (the
+>   "Blocked request from not main frame" is the injected runtime's binding
+>   message in the iframe, not an asset block; the builder uses the fetch proxy,
+>   unaffected).
+> - **SP7 FIRST-TIME — spec approved** (`docs/superpowers/specs/2026-07-25-
+>   piece-5-sp7-packaging-desktop-ci-design.md`): **`wails build` adopted** over
+>   hand-rolled packaging (ADR-0036 already bought the .app/NSIS/universal
+>   capability). Clarifications: **NC-1** name `Korvun` / bundle id
+>   `com.korvun.desktop`; **NC-2** artifact scheme
+>   `korvun-desktop_<ver>_<os>_<arch>`; **NC-3** (Chano's call) =
+>   **DRAFT-UNTIL-COMPLETE** — the release is born a draft and published only
+>   when BOTH artifact families + signatures are up, a bounded exception to
+>   "headless untouched" (visibility flag only), with the failure mode recorded
+>   (a red desktop lane leaves the release an invisible draft). Plus the two
+>   riders: `.gitignore build/bin/`, `actions/setup-node@v4→v5` (Node 24).
 >
-> **SP6c — COMPLETE LOCALLY (5 commits atop `bac6969`, NO push):**
-> - `e8ec76d` fix(builderui): frame-ancestors 'self' (NC-1 a) + spec notes
->   (NC-1 executed, incident amendment, "Mostrar en carpeta" no-v1:
->   Context7-verified the Wails v2 runtime has BrowserOpenURL→browser only,
->   no reveal-in-folder).
-> - `ec9ee92` feat: 6b riders — hourES (one 24h es-ES clock app-wide) +
->   the "Entendido" dismiss (feed incidents only; reap never offers it).
-> - `fc5c8f3` feat(shell): CheckSecretPresence(name)→{inEnv,inKeychain}
->   under THE LAW (presence only, value dropped on the spot; TDD -race with
->   a wedged-store timeout probe) + harness `-fresh` mode (isolated
->   HOME/XDG so EnsureDefaultConfig created=true is real).
-> - `534b92a` feat(desktop): the SP6c UI — config/mutate pipe (GET→POST
->   /api/config→poll reload through the SP4 proxy, F4-retry), Canales
->   (list + detail + Quitar with confirmation), the 3-step ChannelWizard
->   (type→variable→keychain SetSecret + Comprobar entorno; secret proven
->   absent from DOM/localStorage), Onboarding (created=true gate),
->   BuilderEmbed (same-origin iframe / honest stopped state), all wired in
->   App.
-> - `c8b4d01` test(desktop): SP6c e2e (wizard end-to-end + keychain double
->   + POST/reload; builder iframe; Entendido; axe) + a 2nd fresh-install
->   harness for onboarding; unit coverage lifted to the 88% functions gate.
-> - **The 7 captures (1440×900, real states) in `design-drafts/`:**
->   sp6c-canales-lista/detalle, sp6c-wizard-paso1, sp6c-wizard-paso3-llavero,
->   sp6c-onboarding, sp6c-builder, sp6c-incidencia-entendido.
-> - Restrictions held: `go.mod` unchanged; headless byte-intact; the core
->   API untouched EXCEPT the approved commit-0 CSP line; the only new
->   binding is CheckSecretPresence under THE LAW. `make quality` green
->   `-race` (91.2%); vitest 177; Playwright 17/17; `go test -race -count=5`
->   on internal/shell + web/builder green.
-> - **NEXT:** copilot screenshot review of 6c → push (ensayo ritual) →
->   then SP6 is COMPLETE end-to-end in software; SP7 (packaging + desktop
->   CI) and SP8 (hardware validation) remain before the v0.4.0 proposal.
+> **LOCAL, copilot-APPROVED, one publish from master — SP7 cut 7a
+> (local reproducible packaging):** 2 commits atop a097522 —
+> - `3db8be0` feat(desktop): SP7 7a — the Wails scaffold in
+>   `cmd/korvun-desktop/` (wails.json with the frontend hooks NEUTRALIZED,
+>   `build/` with the brand appicon, Info.plist `com.korvun.desktop`, the NSIS
+>   template).
+> - `9e72d82` feat(desktop): SP7 7a — the `make desktop`/`dmg` recipe (BOTH
+>   frontends rebuilt fresh always, `wails build -s -skipbindings`, version by
+>   `git describe`, a `trap`-guarded restore that GUARANTEES the headless
+>   binary stays byte-identical) + the `--version` non-GUI path.
+> - **The 6 cut verifications GREEN** (evidence in the session report): the
+>   universal `Korvun.app` (lipo x86_64+arm64), the mountable `.dmg`, the
+>   re-bake gate (real builder embedded, 0 "builder not built"), `--version`
+>   reports the git-describe, headless byte-identical, `make quality` green
+>   `-race`. **The ensayo rehearsal of 7a already ran GREEN this session**
+>   (Quality Gate 10/10 on `origin/ensayo` = 9e72d82; Frontend correctly did
+>   NOT fire — no `web/builder`/`frontend`/`e2e-harness` paths touched). **Only
+>   the `git push origin HEAD:master` + the master hard gate remain.**
+>
+> **VALIDATED ON HARDWARE (Chano's report, today, TWICE):** a full
+> Telegram↔llama3.2 round-trip through the REAL `Korvun.app` — double-click,
+> icon, ZERO terminal, token from the keychain — INCLUDING the hot channel
+> addition after the F1 fix. **SP8 rehearsed with total success.**
+>
+> **NEXT SESSION'S FIRST MOVE:** the ensayo ritual of the 7a batch + this
+> HANDOFF close (the copilot already approved 7a — only publishing remains) →
+> then the GO for 7b.
+>
+> **REMAINING MAP:** **7b** (`release-desktop.yml` on native runners with
+> draft-until-complete, `govulncheck -tags desktop,production`, cosign pinned
+> `v2.6.3`, the `makensis` silent-failure guard, the WebKitGTK Linux deps via
+> `wails doctor`, the one-line stale-comment fix in `internal/cli/cli.go`, and
+> the FULL dry-run with NO real tag — the tag is sacred and Chano's) → **SP8
+> formal** (the artifact DOWNLOADED from a test release; Gatekeeper/SmartScreen
+> screenshots for the install guide) → **the v0.4.0 proposal** (Chano
+> approves).
+>
+> **POST-PIECE-5 (Chano's decision, recorded):** the WEBHOOK channel →
+> the BUILDER-CANVAS (the mockups as the blueprint) → the universal model gate.
+>
+> **COMFORTABLE PENDINGS:** the Ollama LaunchAgent ("butler": clean up ~860MB
+> across 4 leftovers + a `com.ollama.serve.plist`; prompt delivered; the
+> official app needs macOS 14 and the iMac is Ventura); the `.ua/` FULL_UPDATE
+> still deferred; the usual historical parked items.
+>
+> **PERMANENT MECHANISMS in force:** report-as-a-file
+> (`design-drafts/claude-code-report.md` + "reporte listo" to Chano); the ensayo
+> rehearsal before every code batch; a per-commit file inventory; `-count=5` on
+> touched Go packages; the copilot's first-hand verification at every transition.
 >
 > **PREVIOUS resolutions (kept for the record):**
 > - **SP6a cut APPROVED** — screenshots reviewed side-by-side against the
