@@ -1,0 +1,343 @@
+# Desktop release lane (SP7 7b, spec §1c/§1e/§1f/§1g). Native-runner matrix —
+# cgo forbids the headless ×6 cross-compile — building the 3 v1 desktop
+# artifacts (universal .dmg, NSIS installer, linux tar.gz), vuln-checking them
+# with the tags users actually download (`-tags desktop,production`), smoking
+# them honestly (non-GUI probe everywhere; GUI only under xvfb on Linux — hosted
+# macOS/Windows GUI claims are NOT made, that is SP8 on hardware), and
+# integrating with the DRAFT release the headless GoReleaser creates
+# (draft-until-complete, NC-3): each job uploads into the draft, and the
+# finalizer publishes (`--draft=false`) only once both families + signatures
+# are confirmed present. A red lane leaves the release an invisible draft.
+#
+# A manual `workflow_dispatch` is a DRY-RUN (mirrors release.yml): same builds,
+# packaging, asserts and REAL keyless cosign signing, but artifacts travel as
+# workflow artifacts and NO release is touched, NO tag consumed. Tags are
+# pushed BY HAND and are always Chano's explicit decision.
+name: Release Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-run only (build + package + sign as workflow artifacts; no release touched, no tag consumed). Must stay true — a real desktop release runs off a pushed v* tag.'
+        type: boolean
+        default: true
+
+# Least privilege (Scorecard Token-Permissions): read-only by default; the jobs
+# below elevate exactly what they need.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      # All three OSes always report (a red macOS must not mask a red Windows);
+      # the finalizer's `needs` still gates publishing on all three being green.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            family: darwin_universal
+          - os: windows-latest
+            family: windows_amd64
+          - os: ubuntu-latest
+            family: linux_amd64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # tag mode: `gh release upload` into the draft (dry-run never touches releases)
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # A manual dispatch is dry-run only: a real, published release must come
+      # from a pushed v* tag (same guard as the headless release.yml).
+      - name: Guard — dispatch must be a dry-run
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run != true
+        shell: bash
+        run: |
+          echo "::error::Manual dispatch supports dry_run=true only; publish a real release by pushing a v* tag."
+          exit 1
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history + tags: git describe (dry-run VERSION) and the Makefile's PRODUCT_VERSION need them
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime
+        with:
+          node-version: "22"
+
+      # wails' own apt requirements, read at the source
+      # (wails/v2@v2.13.0/internal/system/packagemanager/apt.go): libgtk-3-dev,
+      # libwebkit2gtk (4.1 on ubuntu-24.04 — 4.0 no longer exists there, hence
+      # the webkit2_41 build tag the Makefile adds on Linux), build-essential,
+      # pkg-config. xvfb is for the §1g GUI smoke (the only honest hosted one).
+      - name: OS deps (Linux — GTK/WebKitGTK + xvfb)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config xvfb
+
+      # windows-2025 (windows-latest) preinstalls NEITHER GNU make NOR NSIS
+      # (verified at actions/runner-images Windows2025-Readme, 2026-07-26), so
+      # the job installs both via the preinstalled Chocolatey. The NSIS install
+      # dir is appended to PATH defensively — choco's shim normally suffices,
+      # but `wails build -nsis` exits 0 WITHOUT an installer if makensis is not
+      # found (source-verified nsis_installer.go:53-56), so we also hard-verify
+      # makensis in the next step rather than trust any green.
+      - name: OS deps (Windows — GNU make + NSIS)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          choco install -y make nsis
+          echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
+
+      - name: Verify make + makensis on PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          command -v make
+          make --version | head -1
+          command -v makensis
+          makensis -VERSION
+          echo
+
+      # Build-time CLI only — NEVER a go.mod dependency (GoReleaser precedent;
+      # ADR-0036 pins the library, this pins the matching CLI).
+      - name: Install wails CLI v2.13.0
+        shell: bash
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.13.0
+
+      # Tag push: VERSION is the tag itself (vX.Y.Z), so the desktop stamp
+      # matches the headless `korvun vX.Y.Z`. Dry-run: git describe, clearly a
+      # non-release string. Artifact FILENAMES strip the leading v to match the
+      # headless GoReleaser naming (korvun_0.3.0_… precedent, NC-2) — the
+      # Makefile derives that itself (ARTIFACT_VERSION).
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="$GITHUB_REF_NAME"
+          else
+            VERSION="$(git describe --tags --always)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "artifact_version=${VERSION#v}" >> "$GITHUB_OUTPUT"
+          echo "Resolved VERSION=$VERSION"
+
+      # The deterministic recipe (§1b): BOTH frontends fresh, then the binary;
+      # `make dmg` on macOS chains desktop→dmg in one run. CI never trusts the
+      # working tree — this is a clean checkout every time.
+      - name: Build (make desktop / make dmg)
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            make dmg VERSION="${{ steps.ver.outputs.version }}"
+          else
+            make desktop VERSION="${{ steps.ver.outputs.version }}"
+          fi
+
+      # wails -nsis exits 0 with NO installer when makensis is missing — assert
+      # the file exists, then rename to the NC-2 scheme.
+      - name: Package (Windows — assert installer, rename to scheme)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          src="cmd/korvun-desktop/build/bin/Korvun-amd64-installer.exe"
+          if [ ! -f "$src" ]; then
+            echo "::error::NSIS installer not produced (wails green does NOT imply an installer — makensis guard)"
+            ls -la cmd/korvun-desktop/build/bin/ || true
+            exit 1
+          fi
+          mv "$src" "cmd/korvun-desktop/build/bin/korvun-desktop_${{ steps.ver.outputs.artifact_version }}_windows_amd64-installer.exe"
+
+      - name: Package (Linux — tar.gz with binary + .desktop launcher)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          stage="$(mktemp -d)"
+          cp cmd/korvun-desktop/build/bin/Korvun "$stage/korvun-desktop"
+          cp cmd/korvun-desktop/build/linux/korvun-desktop.desktop "$stage/"
+          tar -C "$stage" -czf "cmd/korvun-desktop/build/bin/korvun-desktop_${{ steps.ver.outputs.artifact_version }}_linux_amd64.tar.gz" \
+            korvun-desktop korvun-desktop.desktop
+
+      # The Dependabot-triage standing note: the untagged CI govulncheck cannot
+      # see desktop reachability (x/net et al. link only under these tags on
+      # this GOOS). Tags mirror the shipped build exactly (Linux adds
+      # webkit2_41, as the Makefile does).
+      - name: govulncheck (desktop tags, native GOOS)
+        shell: bash
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          TAGS="desktop,production"
+          if [ "${{ runner.os }}" = "Linux" ]; then TAGS="desktop,production,webkit2_41"; fi
+          "$(go env GOPATH)/bin/govulncheck" -tags "$TAGS" ./cmd/korvun-desktop
+
+      # §1g non-GUI probe, all 3 OSes: the packaged binary must report the
+      # stamped version ("goodbye dev") without opening a window.
+      - name: Smoke — non-GUI identity probe
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            macOS)   BIN="cmd/korvun-desktop/build/bin/Korvun.app/Contents/MacOS/Korvun" ;;
+            Windows) BIN="cmd/korvun-desktop/build/bin/Korvun.exe" ;;
+            Linux)   BIN="cmd/korvun-desktop/build/bin/Korvun" ;;
+          esac
+          out="$("$BIN" --version)"
+          echo "probe: $out"
+          echo "$out" | grep -F "${{ steps.ver.outputs.version }}"
+          if echo "$out" | grep -qw "dev"; then
+            echo "::error::binary still reports dev — version stamp missing"
+            exit 1
+          fi
+
+      # §1g GUI smoke — Linux ONLY, under a virtual display. Hosted
+      # macOS/Windows runners give no reliable headless webview validation, so
+      # NO GUI claim is made there: true end-to-end GUI validation is SP8 on
+      # Chano's hardware. Alive after 10s = GTK/WebKitGTK boot did not crash.
+      - name: Smoke — GUI under xvfb (Linux only)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          xvfb-run -a bash -c '
+            cmd/korvun-desktop/build/bin/Korvun &
+            pid=$!
+            sleep 10
+            kill -0 "$pid"
+            kill "$pid" 2>/dev/null || true
+          '
+
+      - name: Assert artifact exists
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            macOS)   ART="cmd/korvun-desktop/build/bin/korvun-desktop_${{ steps.ver.outputs.artifact_version }}_darwin_universal.dmg" ;;
+            Windows) ART="cmd/korvun-desktop/build/bin/korvun-desktop_${{ steps.ver.outputs.artifact_version }}_windows_amd64-installer.exe" ;;
+            Linux)   ART="cmd/korvun-desktop/build/bin/korvun-desktop_${{ steps.ver.outputs.artifact_version }}_linux_amd64.tar.gz" ;;
+          esac
+          ls -l "$ART"
+          echo "ART=$ART" >> "$GITHUB_ENV"
+
+      # TAG MODE: the headless GoReleaser job creates the DRAFT release; poll
+      # until it exists (upload must never precede creation), then upload into
+      # it. The release stays a draft — publishing is the finalizer's alone.
+      - name: Upload to the tag's draft release (tag push only)
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          for i in $(seq 1 60); do
+            if gh release view "$TAG" >/dev/null 2>&1; then break; fi
+            echo "draft release for $TAG not created yet (attempt $i/60) — waiting 30s"
+            sleep 30
+          done
+          gh release view "$TAG" >/dev/null
+          gh release upload "$TAG" "$ART" --clobber
+
+      # DRY-RUN MODE: artifacts travel between jobs as workflow artifacts; no
+      # release is touched.
+      - name: Upload workflow artifact (dry-run only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7 # GitHub-owned, repo major-tag convention
+        with:
+          name: desktop-${{ matrix.family }}
+          path: cmd/korvun-desktop/build/bin/korvun-desktop_*
+          if-no-files-found: error
+
+  # One signed manifest covers all 3 artifacts (decision #6, mirrors the
+  # headless checksums.txt chain), and — tag mode only — the SINGLE publish
+  # moment: --draft=false fires only after all 6 desktop files are confirmed
+  # present in the draft. If this job never runs (a red build job), the release
+  # stays an invisible draft: the documented failure mode, by design.
+  finalize:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # tag mode: upload the manifest + publish the release
+      id-token: write # keyless cosign: mint the OIDC token to sign checksums-desktop.txt
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # Same pin pair as the headless release.yml: installer SHA v4.1.2, cosign
+      # BINARY v2.6.3 — cosign v3 defaults to --new-bundle-format and drops the
+      # classic --output-signature/--output-certificate this chain relies on.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v2.6.3
+
+      - name: Download desktop artifacts from the draft (tag push only)
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          mkdir -p dist-desktop
+          gh release download "$GITHUB_REF_NAME" -p 'korvun-desktop_*' -D dist-desktop
+          ls -l dist-desktop
+
+      - name: Download desktop artifacts (dry-run only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@v8 # GitHub-owned, repo major-tag convention
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: dist-desktop
+
+      # REAL keyless signing in BOTH modes (the dry-run proves the Fulcio/Rekor
+      # path exactly like the headless Stage-16 dry-run did), plus an immediate
+      # verify-blob against this workflow's identity — the signature must be
+      # provably good before anything is published.
+      - name: Checksums + keyless cosign sign-blob + verify
+        shell: bash
+        run: |
+          cd dist-desktop
+          ls -l
+          sha256sum korvun-desktop_* > checksums-desktop.txt
+          cat checksums-desktop.txt
+          cosign sign-blob --yes \
+            --output-certificate checksums-desktop.txt.pem \
+            --output-signature checksums-desktop.txt.sig \
+            checksums-desktop.txt
+          cosign verify-blob checksums-desktop.txt \
+            --signature checksums-desktop.txt.sig \
+            --certificate checksums-desktop.txt.pem \
+            --certificate-identity-regexp "https://github.com/$GH_REPO/.*" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+      - name: Upload manifest + publish the release (tag push only)
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          gh release upload "$TAG" \
+            dist-desktop/checksums-desktop.txt \
+            dist-desktop/checksums-desktop.txt.sig \
+            dist-desktop/checksums-desktop.txt.pem \
+            --clobber
+          # All 6 desktop-family files must be present in the draft before the
+          # visibility flip — the draft-until-complete contract (§1e).
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          for f in \
+            "korvun-desktop_${TAG#v}_darwin_universal.dmg" \
+            "korvun-desktop_${TAG#v}_windows_amd64-installer.exe" \
+            "korvun-desktop_${TAG#v}_linux_amd64.tar.gz" \
+            checksums-desktop.txt checksums-desktop.txt.sig checksums-desktop.txt.pem; do
+            echo "$assets" | grep -Fxq "$f" || { echo "::error::asset missing from draft: $f"; exit 1; }
+          done
+          gh release edit "$TAG" --draft=false
+          echo "Release $TAG published (draft-until-complete satisfied)."
+
+      - name: Persist signed manifest (dry-run only)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7 # GitHub-owned, repo major-tag convention
+        with:
+          name: desktop-checksums-signed
+          path: dist-desktop/checksums-desktop.txt*
+          if-no-files-found: error

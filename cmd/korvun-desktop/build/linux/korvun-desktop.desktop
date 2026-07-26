@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Korvun
+Comment=Self-hosted messaging gateway, multi-model router and multi-brain orchestrator
+Exec=korvun-desktop
+Icon=korvun-desktop
+Terminal=false
+Categories=Network;Utility;
