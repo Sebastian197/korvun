@@ -12,22 +12,26 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Sebastian197/korvun/internal/channel"
+	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
 )
 
 // FieldMapping configures which JSON fields in the incoming payload map to
 // Envelope fields.
 type FieldMapping struct {
-	SenderID   string `json:"sender_id"`
-	SenderName string `json:"sender_name"`
-	Text       string `json:"text"`
-	MediaURL   string `json:"media_url"`
-	MediaType  string `json:"media_type"`
+	SenderID       string `json:"sender_id"`
+	SenderName     string `json:"sender_name"`
+	Text           string `json:"text"`
+	MediaURL       string `json:"media_url"`
+	MediaType      string `json:"media_type"`
+	ConversationID string `json:"conversation_id"`
 }
 
 // Adapter is a generic webhook channel that converts JSON payloads to/from
@@ -40,19 +44,26 @@ type Adapter struct {
 	inbound     chan *envelope.Envelope
 	client      *http.Client
 
-	// SP2 lifecycle (ADR-0038 §2). Zero-valued and unused for a Stage-2 adapter
-	// built via New(); populated and driven only through NewWithOptions +
+	// SP2/SP4 lifecycle (ADR-0038 §§2,5). Zero-valued and unused for a Stage-2
+	// adapter built via New(); populated and driven only through NewWithOptions +
 	// Start/Stop/BoundAddr in lifecycle.go. New(), InboundHandler() and Send() are
 	// unaffected by these fields — the outbound URL keeps its single home in the
 	// existing outboundURL field above (NewWithOptions copies opts.OutboundURL there).
+	//
+	// mu is a RWMutex so many inbound handlers enqueue concurrently under RLock while
+	// Stop takes the exclusive Lock to flip closed and close(inbound) — the enqueue vs
+	// close exclusion that keeps a non-blocking send from racing the channel close
+	// (SP4). closed guards against a send after close; dropped counts saturation drops.
 	bind          string
 	path          string
 	secret        string
 	outboundToken string
-	mu            sync.Mutex
+	mu            sync.RWMutex
 	server        *http.Server
 	boundAddr     string
 	started       bool
+	closed        bool
+	dropped       atomic.Uint64
 	stopOnce      sync.Once
 }
 
@@ -160,10 +171,39 @@ func (a *Adapter) InboundHandler() http.Handler {
 			return
 		}
 
-		a.inbound <- env
-		w.WriteHeader(http.StatusOK)
+		a.enqueue(w, r, env)
 	})
 }
+
+// enqueue delivers env to the inbound channel WITHOUT blocking the HTTP goroutine
+// (ADR-0038 §5): on success it answers 200; on a full buffer it counts the drop and
+// answers 503 (retryable); while the adapter is shutting down it answers 503 too. It
+// holds the read lock so it excludes Stop's exclusive close (a non-blocking send on a
+// closed channel would still panic — the RLock/Lock pair is what prevents that race).
+// A drop is logged with the channel, reason and remote address only — never the
+// payload.
+func (a *Adapter) enqueue(w http.ResponseWriter, r *http.Request, env *envelope.Envelope) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.closed {
+		http.Error(w, "shutting down", http.StatusServiceUnavailable)
+		return
+	}
+	select {
+	case a.inbound <- env:
+		w.WriteHeader(http.StatusOK)
+	default:
+		a.dropped.Add(1)
+		slog.Default().WarnContext(r.Context(),
+			"webhook: dropped inbound message",
+			"channel", a.name, "reason", "buffer_full", "remote_addr", r.RemoteAddr)
+		http.Error(w, "inbound buffer full", http.StatusServiceUnavailable)
+	}
+}
+
+// DroppedCount returns the cumulative number of inbound Envelopes dropped on a full
+// buffer (ADR-0038 §5), the house drop seam registered as a pull metric.
+func (a *Adapter) DroppedCount() uint64 { return a.dropped.Load() }
 
 func (a *Adapter) payloadToEnvelope(fields map[string]string) (*envelope.Envelope, error) {
 	senderID := fields[a.mapping.SenderID]
@@ -177,6 +217,15 @@ func (a *Adapter) payloadToEnvelope(fields map[string]string) (*envelope.Envelop
 	}
 
 	env := envelope.New(a.name, envelope.Inbound, sender)
+
+	// Conversation identity (ADR-0038 FR-MAP-1): the mapped conversation field if
+	// present, else the sender ID. The key is NEVER empty — a Stage-2 adapter whose
+	// mapping has no ConversationID reads fields[""] == "" and falls back the same way.
+	cid := fields[a.mapping.ConversationID]
+	if cid == "" {
+		cid = senderID
+	}
+	env.Meta[conversation.MetaConversationID] = cid
 
 	text := fields[a.mapping.Text]
 	mediaURL := fields[a.mapping.MediaURL]
@@ -211,6 +260,15 @@ func (a *Adapter) envelopeToPayload(env *envelope.Envelope) map[string]string {
 		case envelope.Image, envelope.Audio, envelope.Video, envelope.File:
 			payload[a.mapping.MediaURL] = p.Source
 			payload[a.mapping.MediaType] = p.MIMEType
+		}
+	}
+
+	// Echo the conversation identity outbound (ADR-0038 FR-MAP-1) only when the
+	// mapping declares a field for it AND the envelope carries a non-empty key —
+	// never write an empty "" key into the payload.
+	if a.mapping.ConversationID != "" {
+		if cid := env.Meta[conversation.MetaConversationID]; cid != "" {
+			payload[a.mapping.ConversationID] = cid
 		}
 	}
 

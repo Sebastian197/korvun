@@ -102,9 +102,9 @@ func (a *Adapter) Start(ctx context.Context) error {
 	// OUTSIDE the gate — a secret-free liveness probe (ADR-0038 §2).
 	mux.Handle(a.effectivePath(), a.authGate(a.InboundHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		a.mu.Lock()
+		a.mu.RLock()
 		running := a.started
-		a.mu.Unlock()
+		a.mu.RUnlock()
 		if !running {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -156,14 +156,22 @@ func (a *Adapter) Stop(ctx context.Context) error {
 			"channel", a.name, "error", err.Error())
 	}
 
+	// Close the inbound channel under the EXCLUSIVE write lock (SP4): enqueue holds
+	// the RLock while doing its non-blocking send, so taking Lock here waits for every
+	// in-flight enqueue to finish before flipping closed and closing the channel — a
+	// send on a closed channel would panic even inside a select, and this RLock/Lock
+	// exclusion is what rules that race out. Closed exactly once (sync.Once).
+	a.mu.Lock()
+	a.closed = true
 	a.stopOnce.Do(func() { close(a.inbound) })
+	a.mu.Unlock()
 	return nil
 }
 
 // BoundAddr returns the real address the server bound to (host:port, the actual port
 // even under an ephemeral :0 bind), or "" until a successful Start (ADR-0038 §2).
 func (a *Adapter) BoundAddr() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	return a.boundAddr
 }
