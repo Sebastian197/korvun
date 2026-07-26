@@ -386,6 +386,13 @@ decide dejarlo como Telegram + Webhook.
 
 ## PIEZA 5 — App de escritorio Wails
 
+> ✅ **COMPLETADA (SP1–SP8, ADR-0035 + ADR-0036) — Korvun Desktop
+> publicado en `v0.4.0` (2026-07-26): dmg universal macOS + instalador
+> NSIS Windows + tar.gz Linux, firmados con cosign,
+> draft-until-complete. Validada en hardware real (iMac Intel de
+> Chano): round-trip Telegram↔llama3.2:1b con la `Korvun.app` real —
+> doble clic, token del llavero, cero terminal.**
+
 **PRIORIDAD 5 — la más pesada y la menos crítica.** La **maquinaria de empaquetado
 ya está** (Stage 15 cerrado: GoReleaser, ×6 binarios, checksums, SBOM, systemd).
 Lo que falta es la **app nativa Wails en sí**: empaquetar el frontend + el binario
@@ -397,14 +404,16 @@ superficie. **Requiere Context7 para Wails** antes de programar contra él.
 
 ### Checklist
 
-- [ ] **ADR de Wails** — versión, cómo embebe el frontend del builder ya existente
+- [x] **ADR de Wails** — versión, cómo embebe el frontend del builder ya existente
       (reusar `web/builder`, no reescribir), cómo convive con el binario headless
       (misma lógica, otra carcasa), impacto en `go.mod` / build (Context7 primero).
-- [ ] **Shell de escritorio** — ventana nativa que sirve el builder + arranca/
+- [x] **Shell de escritorio** — ventana nativa que sirve el builder + arranca/
       supervisa el runtime de Korvun embebido.
-- [ ] **Empaquetado por SO** — `.app` (macOS), instalador Windows, binario Linux;
+- [x] **Empaquetado por SO** — `.app` (macOS), instalador Windows, binario Linux;
       encajar con o extender el pipeline GoReleaser existente.
-- [ ] **Firma/notarización** por SO si se distribuye (macOS notarization, etc.).
+- [x] **Firma/notarización** por SO si se distribuye (macOS notarization, etc.)
+      (resuelto ADR-0035 §7: sin firma de pago; cosign + Rekor cubren integridad y
+      transparencia).
 
 ### ADRs previstos
 
@@ -518,11 +527,11 @@ escribir una sola línea.
 - [ ] **Un cerebro conserva contexto entre conversaciones con memoria mínima, y la
       memoria respeta la política de privacidad.**
 
-**Próximo paso:** **Piezas 1–4 ✅ cerradas** (la 4 el 2026-07-19: canal Discord
-end-to-end en hardware). Inmediato: **propuesta de `v0.3.0`** (el disparador del
-Release outlook del HANDOFF se ha cumplido; el tag es siempre decisión explícita de
-Chano). Después: **Pieza 5** (app Wails), la última del objetivo de beta de Chano
-(2026-07-11), con su ciclo completo (Context7 de Wails como prerrequisito duro).
+**Próximo paso:** **Piezas 1–5 ✅ cerradas** (la 5 el 2026-07-26:
+`v0.4.0` publicada con Korvun Desktop). Siguiente en la cola: **canal
+WEBHOOK** → **Builder-lienzo** → las piezas de la ampliación de
+alcance (arriba). La puerta universal de modelos sigue en cola,
+reordenable por Chano.
 
 ---
 
