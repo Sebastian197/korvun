@@ -321,14 +321,21 @@ jobs:
             dist-desktop/checksums-desktop.txt.sig \
             dist-desktop/checksums-desktop.txt.pem \
             --clobber
-          # All 6 desktop-family files must be present in the draft before the
-          # visibility flip — the draft-until-complete contract (§1e).
+          # BOTH families must be present in the draft before the visibility
+          # flip — the draft-until-complete contract (§1e). The 6 desktop files
+          # AND the headless signed manifest: GoReleaser uploads
+          # checksums.txt{,.sig,.pem} at the END of its chain, so their presence
+          # stands in for "the headless family finished uploading". Guards the
+          # window where GoReleaser dies mid-upload and the desktop lane would
+          # otherwise publish a release with a half-populated headless family
+          # (copilot P2).
           assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
           for f in \
             "korvun-desktop_${TAG#v}_darwin_universal.dmg" \
             "korvun-desktop_${TAG#v}_windows_amd64-installer.exe" \
             "korvun-desktop_${TAG#v}_linux_amd64.tar.gz" \
-            checksums-desktop.txt checksums-desktop.txt.sig checksums-desktop.txt.pem; do
+            checksums-desktop.txt checksums-desktop.txt.sig checksums-desktop.txt.pem \
+            checksums.txt checksums.txt.sig checksums.txt.pem; do
             echo "$assets" | grep -Fxq "$f" || { echo "::error::asset missing from draft: $f"; exit 1; }
           done
           gh release edit "$TAG" --draft=false
