@@ -35,12 +35,10 @@ import (
 // version is the build version of the korvun binary: "dev" for a local build, or
 // the SemVer tag injected at release time via -ldflags "-X <pkg>.version=vX.Y.Z".
 //
-// NOTE (sub-phase follow-up, reported in the green review): Stage 15's
-// .goreleaser.yaml still targets `main.version`. Now that the version subcommand
-// lives here, that ldflags target must move to
-// `github.com/Sebastian197/korvun/internal/cli.version` — a separate sub-phase
-// (it edits .goreleaser.yaml). Until then a release build reports "dev"; no real
-// release tag has been pushed yet, so nothing shipped regresses.
+// The ldflags retarget announced when the version subcommand moved here is DONE:
+// .goreleaser.yaml targets `github.com/Sebastian197/korvun/internal/cli.version`
+// (v0.2.0, 2026-07-18) — released binaries report the real tag, not "dev". The
+// desktop binary keeps its own `main.version` in cmd/korvun-desktop (SP7 §1d).
 var version = "dev"
 
 // cli holds the output writers plus the injectable seams a test overrides: isTTY
