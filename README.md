@@ -18,6 +18,13 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License: Apache-2.0"></a>
 </p>
 
+<p align="center">
+  <img src="docs/assets/readme/desktop-hero.png" width="880"
+       alt="Korvun Desktop on macOS: the Inicio screen with the gateway running, message counters for the current window, and the Channels and Brains panels.">
+</p>
+
+<p align="center"><sub>Korvun Desktop — the same core, in a native window. <a href="#korvun-desktop">Downloads ↓</a></sub></p>
+
 ---
 
 ## What is Korvun?
@@ -76,7 +83,27 @@ Everything below is **on `master` today** — no roadmap item is counted as pres
   korvun help                                  # usage
   ```
 
+## Korvun Desktop
+
+Since **v0.4.0** the same core also ships as a native desktop app. The full Go
+gateway runs **in-process** — one binary, one version, one release — behind a
+native window: first-run onboarding, an assistant that stores every secret in your
+OS keychain, and the visual builder embedded. Double-click, no terminal. The
+headless binary is unchanged and is still the way to run Korvun on a server.
+
+| <img src="docs/assets/readme/desktop-activity.png" width="264" alt="Activity feed with expandable decision badges for each routed message."> | <img src="docs/assets/readme/desktop-keychain.png" width="264" alt="Setup assistant, step 3: the bot token is stored in the system keychain and only the variable name is shown."> | <img src="docs/assets/readme/desktop-channels.png" width="264" alt="Channels list with a Telegram channel in polling mode, healthy, routed to the asistente brain."> |
+|:--:|:--:|:--:|
+| **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
+
+**Download v0.4.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+
+<sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
+
 ## Quick start
+
+> **Prefer a window to a terminal?** [Korvun Desktop](#korvun-desktop) is the same
+> gateway with a UI — download, double-click, done. The steps below are the headless
+> path, still the way to run Korvun on a server.
 
 Grab a signed binary from [releases](https://github.com/Sebastian197/korvun/releases),
 then:
@@ -106,6 +133,7 @@ still works via a retrocompat shim; `korvun serve --config …` is canonical.
 | [Configuration](docs/CONFIGURATION.md) | Every config field, from the schema and ADRs. |
 | [No-code builder](docs/BUILDER.md) | Configure Korvun visually in the browser. |
 | [Install & run as a service](docs/packaging/INSTALL.md) | Download, verify, hardened systemd unit. |
+| [Korvun Desktop](docs/packaging/INSTALL.md#korvun-desktop-the-native-app) | The native app: download, first launch on each OS, verify the desktop artifacts. |
 | [Architecture Decision Records](docs/adr/) | Why each piece is built the way it is (incl. [ADR-0032](docs/adr/0032-cli-interface-contract.md), the CLI contract). |
 | [Stage closure docs](docs/stages/) | What is closed, stage by stage. |
 
@@ -125,11 +153,12 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.3.0` is the current release.** It ships the Discord channel (ADR-0033 +
-ADR-0034): Gateway WebSocket inbound with a resume/reconnect supervisor, REST
-outbound that can never mass-ping, a complete anti-loop family, and a step-by-step
-bot setup guide — validated end to end on real hardware — see
-[the release notes](docs/releases/v0.3.0.md). `master` builds on toward a production
+**`v0.4.0` is the current release.** It ships **Korvun Desktop** — the same
+in-process core as a native, double-click app (first-run onboarding, OS-keychain
+secrets, the embedded builder) on macOS, Windows, and Linux, cosign-signed on the
+free chain — alongside the unchanged headless binary, which is still the way to run
+Korvun on a server. Validated end to end on real hardware — see
+[the release notes](docs/releases/v0.4.0.md). `master` builds on toward a production
 beta; see [ROADMAP-V1.md](docs/ROADMAP-V1.md) and
 [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md) for what is closed and what comes next.
 
