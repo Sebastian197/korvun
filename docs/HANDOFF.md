@@ -87,54 +87,54 @@ explicit decision.
 
 ## Current state (as of 2026-07-26)
 
-> **CURRENT (2026-07-26): Webhook channel in the core — COMPLETE in software
-> (SP1–SP5, ADR-0038 `accepted`), 7 commits LOCAL on master, NOT pushed.** The
-> generic Stage-2 webhook adapter is now a first-class core channel: wired,
-> authenticated, hardened. **Zero new dependencies** (stdlib only: `net/http` +
-> `crypto/sha256`/`subtle`). `make quality` green `-race` (total ~93%); the local
-> `master` is **7 commits ahead of `origin/master`**, awaiting a hardware smoke →
-> ensayo → fast-forward.
-> - **`78a2d1e`** docs(spec): resolve webhook piece clarifications + draft ADR-0038.
-> - **`94698f4`** docs(adr): accept ADR-0038 with exact bind/path defaults.
-> - **`eb5d4f8`** feat(config): webhook channel schema (SP1) — `type:"webhook"` +
->   `WebhookConfig` block (pointer), defaults `127.0.0.1:8090` / `/webhook`,
->   `Effective{Bind,Path,Mapping}` accessors; `mode` exempt; `outbound_url` required.
-> - **`755226f`** feat(webhook): own-server `Start`/`Stop` lifecycle (SP2) — mirrors
->   the Telegram webhook-mode pattern; `BoundAddr` for ephemeral ports.
-> - **`0ec42d3`** feat(webhook): Bearer auth gate + edge validation (SP3) —
->   `secretsMatch` (sha256 + `subtle.ConstantTimeCompare`, the ADR-0028 §1 mechanism),
->   401 before reading the body; 405/415/413/400 at the edge.
-> - **`140eede`** feat(webhook): conversation identity + non-blocking saturation (SP4)
->   — `conversation.id` mapped field with sender-ID fallback; `DroppedCount` +
->   non-blocking enqueue + 503; RWMutex close/enqueue exclusion (`-race -count=5`).
-> - **`1a9df70`** feat(app): wire the channel (SP5) — env-only inbound/outbound
->   secrets (`ErrMissingSecret` parity), `Effective*`→`Options`, `isLoopbackBind`
->   non-loopback boot warning (ADR-0038 §7).
-> - **Docs batch (this session, one commit)**: `WEBHOOK-SETUP.md`, the `webhook`
->   block in `CONFIGURATION.md`, the webhook channel in `korvun.example.json`
->   (examples_test green), the ✅ banner + closed V1 criteria in `ROAD-TO-BETA.md`,
->   this HANDOFF, and the spec flipped to `implemented`.
+> **CURRENT (2026-07-26): a TWO-RELEASE day — v0.4.0 (Korvun Desktop) and v0.5.0
+> (Webhook channel) both PUBLISHED; the Webhook piece went spec-to-production in a
+> single session.** `origin/master` = local `master` = **`d2cea2b`** (v0.5.0 notes atop
+> `7b67449`). Verified first-hand.
 >
-> **E2E decision (SP5 case h): DISCARDED as not reasonable now.** The `internal/app`
-> test harness has no brain-injection seam (`WithChannelFactory` injects channels,
-> not brains; brains are built from real providers), and the router pump drains the
-> channel's inbound from Build, so a deterministic full-circle e2e (POST → fake brain
-> → outbound echo) is not achievable with reasonable effort. It is already covered by
-> the adapter-level outbound echo (`TestConversation_echoOnSend`, SP4), the router
-> suite, and the upcoming hardware smoke. **Non-blocking test-infra follow-up:** add a
-> `WithBrainFactory` seam later, then write the e2e — a production change out of the
-> piece's scope, parked, not required for close.
+> **Done today:**
+> - **`v0.4.0` PUBLISHED this morning** — Korvun Desktop, the first release with a
+>   native app; **Piece 5 closed**. (Release outlook + prior blocks below.)
+> - **Beta scope expansion RECORDED and published in `ROAD-TO-BETA.md`** — operator
+>   console, personality per brain, policy-governed tools + markdown skills, minimal
+>   memory; plugins as post-beta; the V1 criteria list now carries 14 items.
+> - **Webhook channel piece — COMPLETE spec-to-production in ONE session.** ADR-0038
+>   `accepted`; SP1–SP5 each TDD red→green, copilot-reviewed; docs (`WEBHOOK-SETUP.md`,
+>   the `webhook` block in `CONFIGURATION.md`, the example config); **hardware smoke
+>   12/12** (gate 401, cold ~11s / warm ~1s, `conversation_id` echo, SIGINT exit 0);
+>   **ensayo green** (run `30214646007`); fast-forward to master; and **`v0.5.0`
+>   PUBLISHED 18:38 UTC** (draft-until-complete OK for the 2nd time — 21 assets, both
+>   families cosign-signed).
+>   - The 8 piece commits (`78a2d1e`→`1a9df70` code + `7b67449` docs): schema (SP1),
+>     own-server lifecycle (SP2), Bearer auth + edge validation (SP3), conversation.id +
+>     non-blocking saturation (SP4), app wiring + bind-safety warning (SP5), close docs.
+>   - **Zero new dependencies** (stdlib only); every existing config unchanged.
+> - **Refs:** `master == origin/master == d2cea2b`. Verified.
 >
-> **NEXT STEPS:** (1) **hardware smoke** — a real Telegram/webhook round-trip through
-> the built binary on Chano's Mac (curl a message into the webhook, watch the reply on
-> the one-line receiver from `WEBHOOK-SETUP.md`); (2) **ensayo** of the 7-commit batch
-> (+ this docs commit); (3) **fast-forward to master** and the piece close. Then the
-> post-Piece-5 queue continues: **Builder-lienzo** → the expanded-scope pieces
-> (`ROAD-TO-BETA.md`).
+> **NEXT — Piece BUILDER-CANVAS (next in the queue):**
+> - A visual node editor: a draggable palette of the **3 channel blocks**
+>   (telegram/discord/webhook), a canvas with connections, the **privacy exclusion made
+>   visible**, and a properties panel — with **personality per brain INSIDE the brain
+>   node's panel** (decision 2026-07-26; it is not a standalone piece).
+> - **First move next session:** the design spec (`docs/superpowers/specs/TEMPLATE.md`)
+>   using the `design-drafts/` mockups as input, and — **non-negotiable** — a **Context7
+>   verification of React Flow** (versions + API) BEFORE any canvas code.
 >
-> **Note on the mojibake fix requested for `app.go`:** the `buildWebhookChannel` godoc
-> was ALREADY a correct UTF-8 em-dash (`e2 80 94`), no `U+FFFD` anywhere — nothing to
-> fix, so `app.go` was left untouched (no phantom change).
+> **PENDING ON CHANO (non-blocking, surface on open):**
+> - Gatekeeper/SmartScreen captures (SP8 formal, from a downloaded release artifact).
+> - The repo Settings → Social-preview upload (before the LinkedIn post).
+> - Rotate the `github_pat_` in `claude_desktop_config.json` and delete
+>   `BRIDGE-STATUS-2026-07-26.md`.
+>
+> **FOLLOW-UPS (non-blocking):**
+> - The nested `go.mod` under `web/builder` — TWO bites already (the golangci-lint
+>   walk + the `flatted 2.go` duplicate): a candidate to raise in priority, Chano's call.
+> - `WithBrainFactory` (a test seam for the full-circle e2e, SP5 case h).
+> - Smoke-trap hygiene (`wait $PID` to reap + a unique marker in `pgrep`, not a port
+>   number).
+> - `korvun.example.json` in the release package (GoReleaser).
+> - The `INSTALL.md` / `BUILDER.md` TODO-VERIFYs.
+> - The unpruned `origin/feat/user-docs` branch (Chano's call).
 
 > **PREVIOUS (2026-07-26): v0.4.0 batch — fixes + release docs + assets, LANDED
 > on master; the tag is Chano's explicit call (pending).** SP8 was

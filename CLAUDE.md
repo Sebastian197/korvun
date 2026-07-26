@@ -51,6 +51,10 @@ For every phase:
 3. **Tests first (TDD).** Write the test suite that defines the contract BEFORE
    the implementation, and confirm it fails (red). Only then write the minimum
    code to make it pass (green).
+   - **The approved red is a contract.** Once a red test suite is reviewed and
+     approved, do NOT adjust an already-approved test during the green step
+     without asking first — same stop-and-ask pattern as with phantom changes.
+     Diagnose first, change only after the "yes".
 4. **Implementation.** Only the code needed to make the tests pass.
 5. **Quality gate.** `make quality` must be green (lint + vet + tests +
    coverage) over the WHOLE suite, not just the new code, before closing.
