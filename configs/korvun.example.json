@@ -4,6 +4,15 @@
       "type": "telegram",
       "mode": "polling",
       "token_env": "TELEGRAM_BOT_TOKEN"
+    },
+    {
+      "type": "webhook",
+      "token_env": "KORVUN_WEBHOOK_SECRET",
+      "webhook": {
+        "bind": "127.0.0.1:8090",
+        "path": "/webhook",
+        "outbound_url": "https://example.com/korvun/replies"
+      }
     }
   ],
   "brains": [
@@ -32,6 +41,7 @@
     }
   ],
   "routes": [
-    {"channel": "telegram", "brain": "default"}
+    {"channel": "telegram", "brain": "default"},
+    {"channel": "webhook", "brain": "default"}
   ]
 }

@@ -87,7 +87,56 @@ explicit decision.
 
 ## Current state (as of 2026-07-26)
 
-> **CURRENT (2026-07-26): v0.4.0 batch — fixes + release docs + assets, LANDED
+> **CURRENT (2026-07-26): Webhook channel in the core — COMPLETE in software
+> (SP1–SP5, ADR-0038 `accepted`), 7 commits LOCAL on master, NOT pushed.** The
+> generic Stage-2 webhook adapter is now a first-class core channel: wired,
+> authenticated, hardened. **Zero new dependencies** (stdlib only: `net/http` +
+> `crypto/sha256`/`subtle`). `make quality` green `-race` (total ~93%); the local
+> `master` is **7 commits ahead of `origin/master`**, awaiting a hardware smoke →
+> ensayo → fast-forward.
+> - **`78a2d1e`** docs(spec): resolve webhook piece clarifications + draft ADR-0038.
+> - **`94698f4`** docs(adr): accept ADR-0038 with exact bind/path defaults.
+> - **`eb5d4f8`** feat(config): webhook channel schema (SP1) — `type:"webhook"` +
+>   `WebhookConfig` block (pointer), defaults `127.0.0.1:8090` / `/webhook`,
+>   `Effective{Bind,Path,Mapping}` accessors; `mode` exempt; `outbound_url` required.
+> - **`755226f`** feat(webhook): own-server `Start`/`Stop` lifecycle (SP2) — mirrors
+>   the Telegram webhook-mode pattern; `BoundAddr` for ephemeral ports.
+> - **`0ec42d3`** feat(webhook): Bearer auth gate + edge validation (SP3) —
+>   `secretsMatch` (sha256 + `subtle.ConstantTimeCompare`, the ADR-0028 §1 mechanism),
+>   401 before reading the body; 405/415/413/400 at the edge.
+> - **`140eede`** feat(webhook): conversation identity + non-blocking saturation (SP4)
+>   — `conversation.id` mapped field with sender-ID fallback; `DroppedCount` +
+>   non-blocking enqueue + 503; RWMutex close/enqueue exclusion (`-race -count=5`).
+> - **`1a9df70`** feat(app): wire the channel (SP5) — env-only inbound/outbound
+>   secrets (`ErrMissingSecret` parity), `Effective*`→`Options`, `isLoopbackBind`
+>   non-loopback boot warning (ADR-0038 §7).
+> - **Docs batch (this session, one commit)**: `WEBHOOK-SETUP.md`, the `webhook`
+>   block in `CONFIGURATION.md`, the webhook channel in `korvun.example.json`
+>   (examples_test green), the ✅ banner + closed V1 criteria in `ROAD-TO-BETA.md`,
+>   this HANDOFF, and the spec flipped to `implemented`.
+>
+> **E2E decision (SP5 case h): DISCARDED as not reasonable now.** The `internal/app`
+> test harness has no brain-injection seam (`WithChannelFactory` injects channels,
+> not brains; brains are built from real providers), and the router pump drains the
+> channel's inbound from Build, so a deterministic full-circle e2e (POST → fake brain
+> → outbound echo) is not achievable with reasonable effort. It is already covered by
+> the adapter-level outbound echo (`TestConversation_echoOnSend`, SP4), the router
+> suite, and the upcoming hardware smoke. **Non-blocking test-infra follow-up:** add a
+> `WithBrainFactory` seam later, then write the e2e — a production change out of the
+> piece's scope, parked, not required for close.
+>
+> **NEXT STEPS:** (1) **hardware smoke** — a real Telegram/webhook round-trip through
+> the built binary on Chano's Mac (curl a message into the webhook, watch the reply on
+> the one-line receiver from `WEBHOOK-SETUP.md`); (2) **ensayo** of the 7-commit batch
+> (+ this docs commit); (3) **fast-forward to master** and the piece close. Then the
+> post-Piece-5 queue continues: **Builder-lienzo** → the expanded-scope pieces
+> (`ROAD-TO-BETA.md`).
+>
+> **Note on the mojibake fix requested for `app.go`:** the `buildWebhookChannel` godoc
+> was ALREADY a correct UTF-8 em-dash (`e2 80 94`), no `U+FFFD` anywhere — nothing to
+> fix, so `app.go` was left untouched (no phantom change).
+
+> **PREVIOUS (2026-07-26): v0.4.0 batch — fixes + release docs + assets, LANDED
 > on master; the tag is Chano's explicit call (pending).** SP8 was
 > hardware-validated first (real `Korvun.app` from CI, Telegram round-trip through
 > a local brain, double-clicked, token from the keychain), so the v0.4.0 trigger

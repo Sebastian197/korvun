@@ -42,9 +42,10 @@ block means *read-only* (no mutation, the safe default).
 
 | Field | Type | Required | Values / meaning |
 |-------|------|----------|------------------|
-| `type` | string | **yes** | Adapter. Supported: `telegram`, `discord`. |
-| `mode` | string | **yes** | Transport. `telegram` → `polling`; `discord` → `gateway`. |
-| `token_env` | string | **yes** | **Name** of the env var holding the bot token. |
+| `type` | string | **yes** | Adapter. Supported: `telegram`, `discord`, `webhook`. |
+| `mode` | string | conditional | Transport. `telegram` → `polling`; `discord` → `gateway`. **`webhook` takes no `mode`** (a non-empty value is rejected). |
+| `token_env` | string | **yes** | **Name** of the env var holding the channel's inbound secret (bot token for telegram/discord; the shared Bearer secret for webhook). |
+| `webhook` | object | **yes** for `webhook` | The webhook block (below). Rejected on any other type. |
 
 A channel registers under its `type` as its name (the value `routes` reference).
 
@@ -68,6 +69,43 @@ of the form Discord issues in the Developer Portal → **Bot** tab.
 > intent turned ON in the Discord Developer Portal, and must be invited to your
 > server. Full walkthrough: **[docs/DISCORD-SETUP.md](DISCORD-SETUP.md)** (the Discord
 > counterpart of Telegram's BotFather steps).
+
+### `webhook`
+
+A generic HTTP endpoint: any system POSTs JSON in, Korvun replies by POSTing to a URL
+you choose (ADR-0038). It takes **no `mode`**. `token_env` names the env var holding the
+**inbound shared secret** every request must present as `Authorization: Bearer <secret>`
+(constant-time compared). The nested `webhook` block is **required**:
+
+| Field | Type | Required | Values / meaning |
+|-------|------|----------|------------------|
+| `bind` | string | no | Listen address. Default **`127.0.0.1:8090`** (loopback). A non-loopback bind warns at boot (secret crosses the network in cleartext without a TLS reverse proxy). |
+| `path` | string | no | Inbound POST path. Default **`/webhook`**. |
+| `outbound_url` | string | **yes** | Where brain replies are POSTed. |
+| `outbound_token_env` | string | no | **Name** of the env var holding an OUTBOUND Bearer secret sent to `outbound_url`. Optional — but if NAMED, it must resolve at boot (an unset value is a loud error, never a silent unauthenticated outbound). |
+| `mapping` | object | no | JSON field names → Envelope fields. Omitted fields use canonical defaults: `sender_id`, `sender_name`, `text`, `media_url`, `media_type`, `conversation_id`. |
+
+Two distinct secrets, both env-var **names** only (never values): `token_env` (inbound)
+and `webhook.outbound_token_env` (outbound). Edge validation on every request: `POST`
+only (else 405), `application/json` (else 415), ≤ 1 MiB body (else 413); a full inbound
+buffer answers `503` (retry later). `conversation_id` groups messages into one
+conversation; when absent, it falls back to the sender id.
+
+```json
+{
+  "type": "webhook",
+  "token_env": "KORVUN_WEBHOOK_SECRET",
+  "webhook": {
+    "bind": "127.0.0.1:8090",
+    "path": "/webhook",
+    "outbound_url": "https://example.com/korvun/replies"
+  }
+}
+```
+
+> **Zero-to-round-trip walkthrough** (generate the secret, curl a message in, a one-line
+> test receiver, and the reverse-proxy/TLS exposure path):
+> **[docs/WEBHOOK-SETUP.md](WEBHOOK-SETUP.md)**.
 
 ## `brains[]`
 
@@ -127,7 +165,7 @@ orchestrator. Both satisfy `brain.Brain`, so routing is unchanged.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `channel` | string | **yes** | Name of a configured channel (`telegram`, `discord`). |
+| `channel` | string | **yes** | Name of a configured channel (`telegram`, `discord`, `webhook`). |
 | `brain` | string | **yes** | Name of a configured brain. |
 
 ```json

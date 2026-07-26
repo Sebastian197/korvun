@@ -428,6 +428,23 @@ y el binario headless intacto (la app es una carcasa, no un fork de la lógica).
 
 ---
 
+## Canal Webhook en el core (post-Pieza 5, primero de la cola)
+
+> ✅ **COMPLETADO (SP1–SP5, ADR-0038 `accepted`) — el adaptador Webhook genérico de
+> Stage 2 CABLEADO y ENDURECIDO como canal de primera clase.** Código completo, **cero
+> dependencias nuevas** (stdlib puro: `net/http` + `crypto/sha256`/`subtle`): SP1
+> schema aditivo (`type:"webhook"` + bloque `WebhookConfig`, defaults `127.0.0.1:8090`
+> y `/webhook`), SP2 lifecycle `Start/Stop` con servidor HTTP propio, SP3 auth de
+> entrada Bearer (hash + tiempo constante, `401`) + validación de borde
+> (`405/415/413/400`), SP4 `conversation.id` con fallback al sender + saturación no
+> bloqueante (`DroppedCount` + `503`), SP5 cableado en `internal/app` (secretos
+> env-only inbound/outbound, `Effective*`→`Options`, warning de bind no-loopback).
+> `make quality` verde `-race`; docs de usuario (`WEBHOOK-SETUP.md` + bloque en
+> `CONFIGURATION.md` + ejemplo en `korvun.example.json`). **El smoke de hardware es el
+> gate previo al ensayo/push del lote** (ver `docs/HANDOFF.md`).
+
+---
+
 ## Ampliación de alcance de la beta — piezas pendientes tras la Pieza 5
 
 > **Ampliación registrada (2026-07-26).** El objetivo de beta de Chano (Piezas
@@ -501,7 +518,7 @@ escribir una sola línea.
 
 ## Criterios de "esto ya es V1" (del ROADMAP-V1 §5, actualizados)
 
-> La checklist honesta de cuándo dejar de llamarlo beta. Estado a **2026-07-05**.
+> La checklist honesta de cuándo dejar de llamarlo beta. Estado a **2026-07-26**.
 
 - [x] **Un mensaje real entra, se enruta, varios modelos responden, una política
       decide, y la respuesta vuelve — en el binario real.** COMPLETO (Stage 11,
@@ -510,12 +527,15 @@ escribir una sola línea.
 - [x] **Es observable.** COMPLETO (Stage 12).
 - [x] **Las políticas se expresan sin tocar Go (builder no-code).** COMPLETO
       (Stage 14 Fase 2 — **PR #6** mutación + **PR #7** UI, merge `442f7ea`).
-- [ ] **Lo configura alguien por fichero, sin recompilar.** El **mecanismo** existe
-      desde Stage 11 (config JSON); su validación de cara a un tercero se cierra con
-      la documentación de **Pieza 1**.
-- [ ] **Lo instala alguien que no soy yo, en su máquina, siguiendo la
-      documentación.** → **PIEZA 1**.
-- [ ] **Aguanta un proveedor caído sin caerse.** → **PIEZA 2**.
+- [x] **Lo configura alguien por fichero, sin recompilar.** COMPLETO — el **mecanismo**
+      existe desde Stage 11 (config JSON) y su validación de cara a un tercero se cerró
+      con **Pieza 1** (documentación de usuario, validada en hardware 2026-07-05; ver
+      HANDOFF).
+- [x] **Lo instala alguien que no soy yo, en su máquina, siguiendo la
+      documentación.** COMPLETO — **Pieza 1** (PR #8), validada en hardware
+      (iMac Intel, macOS 13, 2026-07-05; ver HANDOFF).
+- [x] **Aguanta un proveedor caído sin caerse.** COMPLETO — **Pieza 2** (ADR-0031),
+      verificada en hardware 2026-07-18 (ver HANDOFF).
 
 **Ampliación de alcance de la beta (2026-07-26):**
 

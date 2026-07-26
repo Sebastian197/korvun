@@ -1,7 +1,7 @@
 # Piece "Webhook channel in the core" — wiring & hardening the generic webhook adapter: Design Spec
 
-> **Status:** draft — all 6 clarifications resolved (2026-07-26); pending ADR-0038
-> acceptance before TDD.
+> **Status:** implemented (SP1–SP5 on master-track, ADR-0038 `accepted`, 2026-07-26).
+> All 6 clarifications resolved 2026-07-26.
 > **Governing ADRs:** ADR-0002 (channels; deferred WhatsApp, generic webhook is the
 > second channel), ADR-0008 (channel lifecycle / shutdown ordering), ADR-0010
 > (secrets are env-var NAME only, never value), ADR-0017 §§1,4,5 (config schema is a
