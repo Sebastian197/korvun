@@ -48,14 +48,34 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 # git-describe string — take the NEAREST tag, v-stripped (spec §1h: productVersion
 # from the tag). Stamped into wails.json for the build, then restored.
 PRODUCT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo 0.0.0)
-# macOS 13 / Xcode CLT need UTType made explicit (SP1 empirical); the ×6 headless
-# lane is unaffected (it never imports Wails). Non-Darwin hosts set neither.
-ifeq ($(shell uname -s),Darwin)
+# Artifact FILENAMES follow the headless GoReleaser scheme, which stamps the
+# version WITHOUT the leading "v" (korvun_0.3.0_… precedent) — while the binary
+# stamp keeps it (`korvun vX.Y.Z`). Strip it once here so both artifact families
+# name the version identically inside the same release (NC-2).
+ARTIFACT_VERSION := $(patsubst v%,%,$(VERSION))
+# Per-OS lane. Darwin: macOS 13 / Xcode CLT need UTType made explicit (SP1
+# empirical); the ×6 headless lane is unaffected (it never imports Wails).
+# Windows (7b): -nsis emits the installer, -webview2 download is the ADR-0035 R4
+# bootstrap strategy; GNU make there is the Chocolatey install driven from Git
+# Bash, so pin SHELL to bash to keep the trap/function recipe identical.
+# Linux (7b): ubuntu-24.04 ships only webkit2gtk-4.1 — wails v2.13.0 gates its
+# pkg-config lines on the `webkit2_41` build tag (source-verified:
+# internal/frontend/desktop/linux/*.go `#cgo webkit2_41 pkg-config:
+# webkit2gtk-4.1`), so the tag rides DESKTOP_TAGS on Linux only.
+DESKTOP_TAGS := desktop,production
+DESKTOP_WAILS_EXTRA :=
+ifeq ($(OS),Windows_NT)
+SHELL := bash
+DESKTOP_PLATFORM ?= windows/amd64
+DESKTOP_CGO_LDFLAGS :=
+DESKTOP_WAILS_EXTRA := -nsis -webview2 download
+else ifeq ($(shell uname -s),Darwin)
 DESKTOP_PLATFORM ?= darwin/universal
 DESKTOP_CGO_LDFLAGS := -framework UniformTypeIdentifiers
 else
 DESKTOP_PLATFORM ?= linux/amd64
 DESKTOP_CGO_LDFLAGS :=
+DESKTOP_TAGS := desktop,production,webkit2_41
 endif
 
 # One recipe shell with a `trap ... EXIT` so the working-tree restore ALWAYS
@@ -80,11 +100,11 @@ desktop:
 	( cd cmd/korvun-desktop/frontend && npm ci && npm run build ); \
 	echo "[desktop] stamp wails.json productVersion=$(PRODUCT_VERSION)"; \
 	perl -0pi -e 's/"productVersion":\s*"[^"]*"/"productVersion": "$(PRODUCT_VERSION)"/' cmd/korvun-desktop/wails.json; \
-	echo "[desktop] (c) wails build — universal, -s (own go:embed), -skipbindings, -clean"; \
+	echo "[desktop] (c) wails build — $(DESKTOP_PLATFORM), -s (own go:embed), -skipbindings, -clean"; \
 	( cd cmd/korvun-desktop && CGO_LDFLAGS="$(DESKTOP_CGO_LDFLAGS)" $(WAILS) build \
-		-s -skipbindings -clean -platform $(DESKTOP_PLATFORM) \
-		-tags desktop,production -ldflags "-X main.version=$(VERSION)" ); \
-	echo "Built cmd/korvun-desktop/build/bin/Korvun.app ($(VERSION), bundle $(PRODUCT_VERSION))"
+		-s -skipbindings -clean -platform $(DESKTOP_PLATFORM) $(DESKTOP_WAILS_EXTRA) \
+		-tags $(DESKTOP_TAGS) -ldflags "-X main.version=$(VERSION)" ); \
+	echo "Built cmd/korvun-desktop/build/bin for $(DESKTOP_PLATFORM) ($(VERSION), bundle $(PRODUCT_VERSION))"
 
 # Wrap the universal .app into a distributable .dmg (macOS built-in hdiutil,
 # zero external tool). Named to the NC-2 scheme. `dmg` depends on `desktop`, so
@@ -93,8 +113,8 @@ dmg: desktop
 	hdiutil create -volname Korvun \
 		-srcfolder cmd/korvun-desktop/build/bin/Korvun.app \
 		-ov -format UDZO \
-		cmd/korvun-desktop/build/bin/korvun-desktop_$(VERSION)_darwin_universal.dmg
-	@echo "Wrapped cmd/korvun-desktop/build/bin/korvun-desktop_$(VERSION)_darwin_universal.dmg"
+		cmd/korvun-desktop/build/bin/korvun-desktop_$(ARTIFACT_VERSION)_darwin_universal.dmg
+	@echo "Wrapped cmd/korvun-desktop/build/bin/korvun-desktop_$(ARTIFACT_VERSION)_darwin_universal.dmg"
 
 test:
 	go test -race $(GO_PKGS)
