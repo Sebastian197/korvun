@@ -52,8 +52,9 @@ builder-canvas piece).
 
 - **FR-CONFIG-1 — Additive `webhook` channel schema.** Extend `config.ChannelConfig`
   additively so `type: "webhook"` is accepted with its own block (bind address —
-  default loopback; inbound path; inbound shared-secret env-var NAME; field mapping;
-  outbound URL). Seam: `internal/config` (`ChannelConfig` + a new nested
+  default `127.0.0.1:8090`; inbound path — default `/webhook`; inbound shared-secret
+  env-var NAME; field mapping; outbound URL). Seam: `internal/config` (`ChannelConfig`
+  + a new nested
   `WebhookConfig`, likely a pointer for presence detection) + `validateChannels`
   gains a `case "webhook"`. **Blast radius:** `internal/config` (shared package) —
   strictly additive; every existing telegram/discord config MUST parse, validate,
@@ -233,6 +234,7 @@ builder-canvas piece).
   a `*WebhookConfig` pointer for presence detection. It is **required when
   `type == "webhook"`** (a field-path error if absent) and is a **field-path error if
   present under any other type** (`channels[i].webhook: only valid for type "webhook"`).
+  Exact defaults (ADR-0038 §1): `bind` → `127.0.0.1:8090`, `path` → `/webhook`.
 - **NC-1c — Webhook is EXEMPT from `mode`.** Unlike telegram/discord, `type: "webhook"`
   takes no transport mode. `Validate` requires `mode` to be **empty** for webhook; a
   non-empty `mode` is a named field-path error

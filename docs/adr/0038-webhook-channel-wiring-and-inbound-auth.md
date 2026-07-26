@@ -1,6 +1,6 @@
 # ADR-0038: Webhook channel wiring & inbound authentication (generic webhook as a core channel)
 
-> **Status:** proposed
+> **Status:** accepted
 > **Date:** 2026-07-26
 > **Deciders:** Sebastián Moreno Saavedra
 >
@@ -54,9 +54,9 @@ mechanism rather than inventing one.
   - **Required when `type == "webhook"`** (field-path error if absent); a
     field-path error if **present under any other type**
     (`channels[i].webhook: only valid for type "webhook"`).
-  - `bind` — listen address; **default loopback** (`127.0.0.1:PORT`) so a fresh boot
+  - `bind` — listen address; **default `127.0.0.1:8090`** (loopback) so a fresh boot
     exposes nothing (ADR-0020 §4).
-  - `path` — the inbound POST path (default e.g. `/webhook`).
+  - `path` — the inbound POST path; **default `/webhook`**.
   - `outbound_url` — where brain replies are POSTed.
   - `outbound_token_env` — **OPTIONAL** env-var NAME for the OUTBOUND downstream
     secret (see §4).
