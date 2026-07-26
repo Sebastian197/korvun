@@ -40,7 +40,11 @@ build: frontend-build
 # ALWAYS rebuild BOTH frontends fresh, then the binary — never trust a cached or
 # working-tree dist. Wails runs in cmd/korvun-desktop (where main.go + wails.json
 # + build/ live); output lands in cmd/korvun-desktop/build/bin (gitignored).
-WAILS := $(GOBIN)/wails
+# Forward-slash the path: on Windows `go env GOPATH` yields C:\Users\…, and make
+# pastes $(WAILS) into the recipe TEXT, where the shell then eats the backslashes
+# as escapes ("C:Usersrunneradmingo/bin/wails", dry-run #30194244673). C:/… is
+# valid for both Git Bash and the Windows API; no-op on Darwin/Linux.
+WAILS := $(subst \,/,$(GOBIN))/wails
 # Honest local version stamped into main.version via ldflags (goodbye "dev").
 # git describe --tags --always --dirty; 7b passes the exact clean tag.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
