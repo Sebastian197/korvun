@@ -57,7 +57,11 @@ mechanism rather than inventing one.
   - `bind` — listen address; **default `127.0.0.1:8090`** (loopback) so a fresh boot
     exposes nothing (ADR-0020 §4).
   - `path` — the inbound POST path; **default `/webhook`**.
-  - `outbound_url` — where brain replies are POSTed.
+  - `outbound_url` — where brain replies are POSTed. **REQUIRED** when
+    `type == "webhook"`: an absent or empty value is a field-path error
+    (`channels[i].webhook.outbound_url`). A webhook with no outbound path could not
+    deliver a reply, so a missing one is a misconfiguration, not a silent no-op
+    (the receive-only "sink" shape is a future extension, below).
   - `outbound_token_env` — **OPTIONAL** env-var NAME for the OUTBOUND downstream
     secret (see §4).
   - `mapping` — **OPTIONAL**, with canonical defaults: `sender_id`, `sender_name`,
@@ -176,3 +180,5 @@ per binary in beta (multi-endpoint deployments wait for the future `name` extens
 - **In-process TLS termination** (cert/key config fields) for operators who do not
   front the endpoint with a reverse proxy.
 - **Operator-configurable auth header name** (beyond `Authorization: Bearer`).
+- **Sink mode** (receive-only webhook: `outbound_url` optional with explicit reply
+  discard) if a real demand appears — the inverse of the required-outbound default.

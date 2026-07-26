@@ -147,13 +147,102 @@ func parsePositiveDuration(s string) time.Duration {
 }
 
 // ChannelConfig declares one messaging channel. Type selects the adapter
-// ("telegram" or "discord"); Mode selects its transport, which is type-aware
-// (telegram="polling", discord="gateway"). TokenEnv is the NAME of the environment
-// variable holding the bot token — never the token itself.
+// ("telegram", "discord", or "webhook"); Mode selects its transport, which is
+// type-aware (telegram="polling", discord="gateway", and webhook takes NO mode).
+// TokenEnv is the NAME of the environment variable holding the channel's inbound
+// secret — never the value itself (ADR-0010). For webhook, TokenEnv is the inbound
+// shared secret checked on every request (ADR-0038 §1, NC-1a — it REUSES token_env
+// rather than a dedicated field). Webhook is the optional nested block that a
+// "webhook" channel requires (ADR-0038 §1).
 type ChannelConfig struct {
-	Type     string `json:"type"`
-	Mode     string `json:"mode"`
-	TokenEnv string `json:"token_env"`
+	Type     string         `json:"type"`
+	Mode     string         `json:"mode"`
+	TokenEnv string         `json:"token_env"`
+	Webhook  *WebhookConfig `json:"webhook,omitempty"`
+}
+
+// DefaultWebhookBind is the webhook channel's default listen address: loopback so a
+// fresh boot exposes nothing to the network (ADR-0038 §1, ADR-0020 §4). An operator
+// who binds a non-loopback address owns the fronting TLS-terminating reverse proxy.
+const DefaultWebhookBind = "127.0.0.1:8090"
+
+// DefaultWebhookPath is the webhook channel's default inbound POST path (ADR-0038 §1).
+const DefaultWebhookPath = "/webhook"
+
+// WebhookConfig is the nested block a "webhook" channel carries (ADR-0038 §1). It is
+// a pointer on ChannelConfig for presence detection: required when type=="webhook",
+// and rejected under any other type. Bind/Path default via EffectiveBind/EffectivePath
+// when empty; OutboundURL is REQUIRED; OutboundTokenEnv is the OPTIONAL env-var NAME
+// for the outbound downstream Bearer secret (env-only, ADR-0010); Mapping is optional
+// and resolved through EffectiveMapping. The inbound secret is NOT here — it is the
+// channel-level TokenEnv (NC-1a).
+type WebhookConfig struct {
+	Bind             string          `json:"bind,omitempty"`
+	Path             string          `json:"path,omitempty"`
+	OutboundURL      string          `json:"outbound_url,omitempty"`
+	OutboundTokenEnv string          `json:"outbound_token_env,omitempty"`
+	Mapping          *WebhookMapping `json:"mapping,omitempty"`
+}
+
+// WebhookMapping names which JSON fields in an inbound payload map to Envelope fields
+// (ADR-0038 §1). Every field is optional; an empty field resolves to its canonical
+// default (the field's own conventional name) via EffectiveMapping.
+type WebhookMapping struct {
+	SenderID       string `json:"sender_id,omitempty"`
+	SenderName     string `json:"sender_name,omitempty"`
+	Text           string `json:"text,omitempty"`
+	MediaURL       string `json:"media_url,omitempty"`
+	MediaType      string `json:"media_type,omitempty"`
+	ConversationID string `json:"conversation_id,omitempty"`
+}
+
+// EffectiveBind resolves the webhook listen address: the configured Bind if set, else
+// DefaultWebhookBind (ADR-0038 §1). Mirrors the EffectiveRequestTimeout pattern —
+// the single place the defaulting rule lives, so downstream wiring stays thin.
+func (w *WebhookConfig) EffectiveBind() string {
+	if w.Bind != "" {
+		return w.Bind
+	}
+	return DefaultWebhookBind
+}
+
+// EffectivePath resolves the webhook inbound path: the configured Path if set, else
+// DefaultWebhookPath (ADR-0038 §1).
+func (w *WebhookConfig) EffectivePath() string {
+	if w.Path != "" {
+		return w.Path
+	}
+	return DefaultWebhookPath
+}
+
+// EffectiveMapping resolves the field mapping, filling every empty field with its
+// canonical default name (ADR-0038 §1). It merges field-by-field so an operator may
+// override only the fields they need; an absent Mapping block resolves to all six
+// canonical names.
+func (w *WebhookConfig) EffectiveMapping() WebhookMapping {
+	m := WebhookMapping{}
+	if w.Mapping != nil {
+		m = *w.Mapping
+	}
+	if m.SenderID == "" {
+		m.SenderID = "sender_id"
+	}
+	if m.SenderName == "" {
+		m.SenderName = "sender_name"
+	}
+	if m.Text == "" {
+		m.Text = "text"
+	}
+	if m.MediaURL == "" {
+		m.MediaURL = "media_url"
+	}
+	if m.MediaType == "" {
+		m.MediaType = "media_type"
+	}
+	if m.ConversationID == "" {
+		m.ConversationID = "conversation_id"
+	}
+	return m
 }
 
 // BrainConfig declares one orchestrating brain: its declared data Sensitivity
@@ -331,9 +420,9 @@ func (c *Config) validateAdmin() error {
 func (c *Config) validateChannels() (map[string]bool, error) {
 	names := make(map[string]bool, len(c.Channels))
 	for i, ch := range c.Channels {
-		// The transport mode is TYPE-AWARE: each channel type wires exactly one
-		// receive mode in this build (telegram=polling, discord=gateway), so a
-		// mode that belongs to another channel is rejected with its field path.
+		// The transport mode is TYPE-AWARE: telegram=polling, discord=gateway, and
+		// webhook takes NO mode (ADR-0038 §1). A mode that belongs to another channel
+		// — or any mode on a webhook — is rejected with its field path.
 		switch ch.Type {
 		case "telegram":
 			if err := validateChannelMode(i, ch.Mode, "polling"); err != nil {
@@ -343,15 +432,34 @@ func (c *Config) validateChannels() (map[string]bool, error) {
 			if err := validateChannelMode(i, ch.Mode, "gateway"); err != nil {
 				return nil, err
 			}
+		case "webhook":
+			// Webhook takes NO transport mode (ADR-0038 §1, NC-1c): a non-empty mode is
+			// a named field-path error. The nested block is REQUIRED (NC-1b); its
+			// outbound_url is validated after the common token_env check below.
+			if ch.Mode != "" {
+				return nil, fmt.Errorf("%w: channels[%d].mode: webhook takes no mode", ErrInvalidConfig, i)
+			}
+			if ch.Webhook == nil {
+				return nil, fmt.Errorf("%w: channels[%d].webhook: required for type %q", ErrInvalidConfig, i, ch.Type)
+			}
 		case "":
 			return nil, fmt.Errorf("%w: channels[%d].type: required", ErrInvalidConfig, i)
 		default:
-			return nil, fmt.Errorf("%w: channels[%d].type: unknown channel type %q (supported: telegram, discord)", ErrInvalidConfig, i, ch.Type)
+			return nil, fmt.Errorf("%w: channels[%d].type: unknown channel type %q (supported: telegram, discord, webhook)", ErrInvalidConfig, i, ch.Type)
+		}
+		// A webhook block is only valid on a webhook channel (ADR-0038 §1, NC-1b).
+		if ch.Type != "webhook" && ch.Webhook != nil {
+			return nil, fmt.Errorf("%w: channels[%d].webhook: only valid for type %q", ErrInvalidConfig, i, "webhook")
 		}
 		if ch.TokenEnv == "" {
-			return nil, fmt.Errorf("%w: channels[%d].token_env: required (name of the env var holding the bot token)", ErrInvalidConfig, i)
+			return nil, fmt.Errorf("%w: channels[%d].token_env: required (name of the env var holding the channel secret)", ErrInvalidConfig, i)
 		}
-		// A channel registers under its type name ("telegram" / "discord").
+		// Webhook-only field checks that depend on the block, AFTER the common
+		// token_env check so an empty token_env surfaces first (ADR-0038 §1).
+		if ch.Type == "webhook" && ch.Webhook.OutboundURL == "" {
+			return nil, fmt.Errorf("%w: channels[%d].webhook.outbound_url: required for type %q", ErrInvalidConfig, i, ch.Type)
+		}
+		// A channel registers under its type name ("telegram" / "discord" / "webhook").
 		names[ch.Type] = true
 	}
 	return names, nil
