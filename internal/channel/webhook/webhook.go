@@ -136,6 +136,14 @@ func (a *Adapter) InboundHandler() http.Handler {
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
+			// An oversized body (the authGate's http.MaxBytesReader cap, ADR-0038 §6)
+			// surfaces here as *http.MaxBytesError → 413; any other read failure keeps
+			// the existing 400.
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			http.Error(w, "failed to read body", http.StatusBadRequest)
 			return
 		}

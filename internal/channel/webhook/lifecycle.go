@@ -98,7 +98,9 @@ func (a *Adapter) Start(ctx context.Context) error {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(a.effectivePath(), a.InboundHandler())
+	// The inbound path is behind the auth+edge gate (ADR-0038 §§3,6); /healthz stays
+	// OUTSIDE the gate — a secret-free liveness probe (ADR-0038 §2).
+	mux.Handle(a.effectivePath(), a.authGate(a.InboundHandler()))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		a.mu.Lock()
 		running := a.started
