@@ -419,6 +419,77 @@ y el binario headless intacto (la app es una carcasa, no un fork de la lógica).
 
 ---
 
+## Ampliación de alcance de la beta — piezas pendientes tras la Pieza 5
+
+> **Ampliación registrada (2026-07-26).** El objetivo de beta de Chano (Piezas
+> 1–5) se amplía con las piezas de abajo. Van **al final de la cola de piezas
+> pendientes**, después del **canal Webhook** y del **Builder-lienzo**, en ese
+> orden (el mapa post-Pieza-5 ya registrado: webhook → builder-canvas → estas
+> piezas). Cada una es una **fase de peso** con el ciclo completo del proyecto
+> (encuadre + `/plan-eng-review` + ADR(s) + TDD + docs), hecha **de una en una**.
+
+### Pieza — Consola de operador (chat de canales en el escritorio)
+Objetivo: que el operador lea y responda manualmente las conversaciones de
+cualquier canal desde la app de escritorio, sin pasar por cerebros ni modelos.
+Alcance:
+- Bandeja de conversaciones: listado y detalle leídos del store.
+- Envío como operador: Envelope saliente entregado al adaptador del canal de
+  origen. No toca el pool de modelos, coste cero.
+- Tiempo real por el mismo mecanismo SSE que ya usa el escritorio.
+- Toma de control: mientras el operador lleva la conversación el cerebro no
+  responde; al soltar, la reanuda. Los mensajes del operador quedan en el
+  historial para conservar el contexto.
+Verificar en disco al especificarla: qué persiste hoy el store en
+conversaciones y mensajes; si la API de control ya expone su lectura; si el
+cerebro tiene un punto donde inhibir la respuesta automática.
+
+### Pieza — Personalidad por cerebro
+Objetivo: identidad configurable por cerebro (nombre, tono, idioma,
+instrucciones de sistema), editable desde el panel.
+Nota: se implementa DENTRO del Builder-lienzo, en el panel de propiedades del
+nodo cerebro. No es pieza independiente.
+Verificar en disco: qué parte de la config de cerebro admite hoy
+instrucciones de sistema.
+
+### Pieza — Herramientas gobernadas por políticas + skills
+Objetivo: que los agentes tengan herramientas útiles de serie y que el motor
+de políticas decida cuáles ve el modelo en cada petición.
+Alcance:
+- Conjunto pequeño de herramientas de serie (catálogo a fijar en el design spec).
+- Gobierno por el motor de políticas: permitir/denegar por herramienta, por
+  cerebro y por canal; herramientas sensibles restringidas a modelos locales;
+  auditoría de cada uso igual que la de decisiones de routing.
+- Skills en markdown: carpetas con SKILL.md y frontmatter YAML que enseñan al
+  agente cuándo usar cada herramienta. Formato abierto (compatible
+  AgentSkills). Solo lectura de ficheros: sin ejecución de código y sin
+  dependencias nuevas.
+Fuera de alcance explícito: plugins con código.
+Verificar en disco: estado real del protocolo de tool use en el AgentBrain
+(Etapa 8) y qué contrato expone hoy el motor de políticas.
+
+### Pieza — Memoria mínima
+Objetivo: que un cerebro conserve contexto más allá de la conversación en curso.
+Alcance: historial recuperable + notas persistentes por cerebro, sujetos al
+motor de políticas (lo sensible no sale de la máquina).
+Fuera de la beta: recuperación semántica y embeddings.
+
+Todas estas piezas quedan pendientes de design spec
+(docs/superpowers/specs/TEMPLATE.md).
+
+---
+
+## Post-beta
+
+### Post-beta — Plugins con código
+Dirección técnica: fuera de proceso, NUNCA cargados dentro del binario. El
+modelo de OpenClaw (plugins in-process instalados desde npm) es incompatible
+con el binario único de Go. Candidato principal: actuar como cliente MCP para
+heredar ecosistema en lugar de fabricarlo.
+Requisito previo innegociable: ADR + verificación con Context7 antes de
+escribir una sola línea.
+
+---
+
 ## Criterios de "esto ya es V1" (del ROADMAP-V1 §5, actualizados)
 
 > La checklist honesta de cuándo dejar de llamarlo beta. Estado a **2026-07-05**.
@@ -436,6 +507,16 @@ y el binario headless intacto (la app es una carcasa, no un fork de la lógica).
 - [ ] **Lo instala alguien que no soy yo, en su máquina, siguiendo la
       documentación.** → **PIEZA 1**.
 - [ ] **Aguanta un proveedor caído sin caerse.** → **PIEZA 2**.
+
+**Ampliación de alcance de la beta (2026-07-26):**
+
+- [ ] **El operador puede responder manualmente a una conversación de cualquier
+      canal desde la app de escritorio, y el cerebro respeta la toma de control.**
+- [ ] **Cada cerebro tiene personalidad configurable desde el panel.**
+- [ ] **Los agentes disponen de herramientas de serie cuya visibilidad decide el
+      motor de políticas, con auditoría, y el sistema carga skills en markdown.**
+- [ ] **Un cerebro conserva contexto entre conversaciones con memoria mínima, y la
+      memoria respeta la política de privacidad.**
 
 **Próximo paso:** **Piezas 1–4 ✅ cerradas** (la 4 el 2026-07-19: canal Discord
 end-to-end en hardware). Inmediato: **propuesta de `v0.3.0`** (el disparador del
