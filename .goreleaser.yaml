@@ -114,5 +114,15 @@ snapshot:
   version_template: "{{ incpatch .Version }}-snapshot"
 
 release:
-  draft: false
+  # Draft-until-complete (SP7 §1e, NC-3 — Chano's call, 2026-07-25): the release
+  # is BORN A DRAFT (invisible to the public) while GoReleaser uploads the
+  # headless family into it. The desktop lane (release-desktop.yml) uploads its
+  # artifacts + signatures into the same draft and its FINALIZER is the single
+  # publish moment (`gh release edit <tag> --draft=false`), fired only once both
+  # families + the desktop signatures are confirmed present. Failure mode, by
+  # design: a red desktop lane leaves the release an invisible draft until fixed
+  # or Chano decides manually. This flip is the one Chano-authorized bounded
+  # exception to "headless untouched" — a release-VISIBILITY flag only; the
+  # compiled bytes, checksums, SBOM, and cosign signing are all unchanged.
+  draft: true
   prerelease: auto
