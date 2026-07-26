@@ -87,7 +87,55 @@ explicit decision.
 
 ## Current state (as of 2026-07-26)
 
-> **CURRENT (2026-07-26): Piece 5 — SP7 COMPLETE (7a + 7b BOTH PUBLISHED,
+> **CURRENT (2026-07-26): v0.4.0 batch — fixes + release docs + assets, LANDED
+> on master; the tag is Chano's explicit call (pending).** SP8 was
+> hardware-validated first (real `Korvun.app` from CI, Telegram round-trip through
+> a local brain, double-clicked, token from the keychain), so the v0.4.0 trigger
+> (Piece 5 complete end-to-end) is met. This batch (7 commits atop `ad5717a`)
+> prepares the release; **no tag pushed yet**.
+> - **A1 `1c4272d`** ci(desktop): the finalizer's draft-until-complete assert now
+>   ALSO requires the headless family (`checksums.txt{,.sig,.pem}`) before
+>   `--draft=false` — closes the copilot P2 (GoReleaser dies mid-upload → desktop
+>   lane publishes a half-populated headless family).
+> - **A2 `716bc7f`** build(deps): `x/crypto v0.51.0→v0.54.0` (MVS companions
+>   `x/net→v0.56.0`, `x/sys→v0.47.0`, `x/text→v0.40.0`, all indirect) — closes
+>   Scorecard #23 (was already govulncheck-green/unreachable; the graph is now
+>   clean and the alert self-closes).
+> - **B `70ca44c`** docs(assets): `docs/assets/readme/` — `desktop-hero.png`
+>   (2592×2000, the SP8 hardware hero normalized per the hero-A spec; canvas is
+>   2592×2000 not the 3136×1856 ideal because the real window's aspect is 1.365
+>   vs the mockup's 1.84 — placed with spec margins, never deformed),
+>   `desktop-{activity,keychain,channels}.png` (2880×1800, from the e2e-harness
+>   captures reused rather than re-running Playwright — identical content),
+>   `gatekeeper-macos.png`, and `.github/social-preview.png` (variant A, ≤300KB;
+>   the Settings→Social-preview upload is Chano's post-release click).
+> - **C `36f89dc`** docs(readme): the Korvun Desktop section (lámina 07) — hero
+>   after badges, the 3-tile row, downloads→releases/latest, the unsigned-builds
+>   note, a Quickstart pointer, a Documentation row, Status→v0.4.0.
+> - **D `d57f5aa`** docs(install): the Korvun Desktop section in INSTALL.md
+>   (artifact table, cosign for `checksums-desktop.txt`, per-OS first-launch with
+>   the Gatekeeper screenshot + the real macOS-13 Open-Anyway path in text; two
+>   TODO-VERIFYs — the Open-Anyway capture and Windows SmartScreen).
+> - **E `f518198`** docs(release): `docs/releases/v0.4.0.md` (both-families table,
+>   both cosign blocks, draft-until-complete in one line).
+> - **`make quality` green `-race`** (92.4% total) over the whole suite;
+>   govulncheck clean; `go.mod` stays at 5 direct deps (the bump is all indirect).
+>
+> **PENDING TODO-VERIFY (for the install guide):** the macOS "Open Anyway"
+> System-Settings capture (the SP8 session could not re-trigger it — approving the
+> app registered a permanent Gatekeeper exception) and the Windows SmartScreen
+> capture (no Windows hardware). Non-blocking; same discipline as the Discord
+> intent step.
+>
+> **THE TAG (Chano's, not autonomous):** with the batch on master + double-green,
+> the next move is `git tag v0.4.0 <sha> && git push origin v0.4.0`, which fires
+> BOTH workflows — `release.yml` (headless, creates the draft) and
+> `release-desktop.yml` (3 native runners + finalizer that publishes only once
+> both families are complete). Then `gh release edit v0.4.0 --notes-file
+> docs/releases/v0.4.0.md`. **Do NOT push the tag without Chano's explicit
+> "adelante con el tag".**
+>
+> **PREVIOUS (2026-07-26): Piece 5 — SP7 COMPLETE (7a + 7b BOTH PUBLISHED,
 > double green): `origin/master` = local `master` = `origin/ensayo` =
 > **`ac9c192`**.** This session: (1) the opening ritual published the 7a batch
 > (`3db8be0`+`9e72d82`+`9e6dceb` → master `9e6dceb`, ensayo green + master hard
