@@ -23,6 +23,10 @@ import (
 	"github.com/Sebastian197/korvun/internal/envelope"
 )
 
+// ChannelName is the registered type name of the webhook channel, mirroring
+// telegram.ChannelName / discord.ChannelName. The app names the adapter with it.
+const ChannelName = "webhook"
+
 // FieldMapping configures which JSON fields in the incoming payload map to
 // Envelope fields.
 type FieldMapping struct {

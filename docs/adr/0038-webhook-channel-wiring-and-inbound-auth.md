@@ -105,6 +105,9 @@ mechanism rather than inventing one.
 - When `webhook.outbound_token_env` is set, its resolved value is sent as
   `Authorization: Bearer <token>` on the outbound POST (env-only, ADR-0010, never
   stored/logged). When absent, the outbound POST carries no auth (today's behavior).
+- A `outbound_token_env` that is NAMED but does not resolve at boot is a loud, named
+  boot error (`ErrMissingSecret`, naming the var) — an operator who asked for outbound
+  auth must never boot with an un-authenticated outbound in silence.
 
 ### 5. Saturation policy
 

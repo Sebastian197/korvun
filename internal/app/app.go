@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -33,6 +34,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/channel/discord"
 	"github.com/Sebastian197/korvun/internal/channel/telegram"
+	"github.com/Sebastian197/korvun/internal/channel/webhook"
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/controlapi"
 	"github.com/Sebastian197/korvun/internal/conversation"
@@ -837,9 +839,74 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 			return nil, err
 		}
 		return ad, nil
+	case webhook.ChannelName:
+		return buildWebhookChannel(b, cc)
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownChannelType, cc.Type)
 	}
+}
+
+// buildWebhookChannel resolves the webhook channel's env-only secrets and threads the
+// config's effective bind/path/mapping into webhook.Options (ADR-0038 §§1-5). The
+// inbound secret (token_env) is mandatory — an unset value is a loud, named boot error
+// with telegram/discord parity; the outbound secret (outbound_token_env) is optional
+// but, once NAMED, must resolve — a named-but-unset outbound secret fails loud rather
+// than booting silently un-authenticated (ADR-0038 §4). A non-loopback bind is warned
+// about (§7). Secret VALUES are resolved here and passed by value to the adapter;
+// only the env-var names ever appear in an error (ADR-0010).
+func buildWebhookChannel(b *builder, cc config.ChannelConfig) (Channel, error) {
+	secret := os.Getenv(cc.TokenEnv)
+	if secret == "" {
+		return nil, fmt.Errorf("%w: %q (webhook inbound secret)", ErrMissingSecret, cc.TokenEnv)
+	}
+
+	var outboundToken string
+	if cc.Webhook.OutboundTokenEnv != "" {
+		outboundToken = os.Getenv(cc.Webhook.OutboundTokenEnv)
+		if outboundToken == "" {
+			return nil, fmt.Errorf("%w: %q (webhook outbound secret)", ErrMissingSecret, cc.Webhook.OutboundTokenEnv)
+		}
+	}
+
+	bind := cc.Webhook.EffectiveBind()
+	if !isLoopbackBind(bind) {
+		b.logger.Warn(
+			"webhook: non-loopback bind — the Bearer secret crosses the network in cleartext unless a TLS-terminating reverse proxy fronts this endpoint",
+			"channel", webhook.ChannelName, "bind", bind)
+	}
+
+	em := cc.Webhook.EffectiveMapping()
+	return webhook.NewWithOptions(webhook.ChannelName, webhook.Options{
+		Bind:          bind,
+		Path:          cc.Webhook.EffectivePath(),
+		Secret:        secret,
+		OutboundURL:   cc.Webhook.OutboundURL,
+		OutboundToken: outboundToken,
+		Mapping: webhook.FieldMapping{
+			SenderID:       em.SenderID,
+			SenderName:     em.SenderName,
+			Text:           em.Text,
+			MediaURL:       em.MediaURL,
+			MediaType:      em.MediaType,
+			ConversationID: em.ConversationID,
+		},
+	}), nil
+}
+
+// isLoopbackBind reports whether a "host:port" bind address is loopback — the
+// safe-by-default case (ADR-0038 §7). A parse failure or a non-loopback / unresolvable
+// host returns false, so the caller warns (and net.Listen will fail on its own later
+// for a truly bad address). "localhost" is treated as loopback without a DNS lookup.
+func isLoopbackBind(bind string) bool {
+	host, _, err := net.SplitHostPort(bind)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // AdminAddr returns the admin server's effective bound address ("host:port",
