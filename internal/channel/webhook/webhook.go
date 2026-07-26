@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/envelope"
@@ -30,13 +31,29 @@ type FieldMapping struct {
 }
 
 // Adapter is a generic webhook channel that converts JSON payloads to/from
-// Envelopes. It implements the channel.Channel interface.
+// Envelopes. It implements the channel.Channel interface, and — once built via
+// NewWithOptions — the richer app.Channel (Start/Stop, see lifecycle.go).
 type Adapter struct {
 	name        string
 	mapping     FieldMapping
 	outboundURL string
 	inbound     chan *envelope.Envelope
 	client      *http.Client
+
+	// SP2 lifecycle (ADR-0038 §2). Zero-valued and unused for a Stage-2 adapter
+	// built via New(); populated and driven only through NewWithOptions +
+	// Start/Stop/BoundAddr in lifecycle.go. New(), InboundHandler() and Send() are
+	// unaffected by these fields — the outbound URL keeps its single home in the
+	// existing outboundURL field above (NewWithOptions copies opts.OutboundURL there).
+	bind          string
+	path          string
+	secret        string
+	outboundToken string
+	mu            sync.Mutex
+	server        *http.Server
+	boundAddr     string
+	started       bool
+	stopOnce      sync.Once
 }
 
 // New creates a webhook adapter with the given name and field mapping.
