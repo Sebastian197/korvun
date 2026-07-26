@@ -17,6 +17,112 @@ portable.
 
 ---
 
+## Korvun Desktop (the native app)
+
+From **v0.4.0**, the same release also carries **Korvun Desktop** — the full
+in-process gateway behind a native window (first-run onboarding, OS-keychain
+secrets, the embedded builder), so you can run Korvun by double-clicking instead
+of from a terminal. It is the **same core**: the headless binary above is
+unchanged and stays the way to run Korvun on a server. Pick the desktop app if you
+want a window; pick the headless binary for a service.
+
+### Desktop artifacts (v1: three targets)
+
+Built on native runners (cgo needs the host toolchain), so the desktop matrix is
+narrower than the headless one — no ARM64 desktop yet.
+
+| OS | Artifact | What it is |
+|----|----------|------------|
+| macOS (universal) | `korvun-desktop_<ver>_darwin_universal.dmg` | Universal `.app` (Intel + Apple Silicon) in a mountable disk image |
+| Windows x64 | `korvun-desktop_<ver>_windows_amd64-installer.exe` | NSIS installer with the WebView2 download bootstrap |
+| Linux x64 | `korvun-desktop_<ver>_linux_amd64.tar.gz` | Binary + a `.desktop` launcher |
+
+`<ver>` matches the headless scheme exactly — the version **without** the leading
+`v` (e.g. `0.4.0`), so both families sit side by side in the same release.
+
+### Verify the desktop artifacts (recommended)
+
+The desktop family has its own signed manifest, `checksums-desktop.txt`, signed
+keyless with cosign exactly like the headless `checksums.txt` — same free Sigstore
+chain, different signing workflow identity (`release-desktop.yml`). Verify the
+signature, then check your download against the verified manifest:
+
+```sh
+cosign verify-blob checksums-desktop.txt \
+  --signature checksums-desktop.txt.sig \
+  --certificate checksums-desktop.txt.pem \
+  --certificate-identity-regexp 'https://github.com/Sebastian197/korvun/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+# -> Verified OK
+
+# then, on macOS:
+shasum -a 256 -c checksums-desktop.txt --ignore-missing
+# on Linux:  sha256sum -c checksums-desktop.txt --ignore-missing
+```
+
+> **No paid platform signing.** These builds are **not** notarized by Apple and
+> carry no Windows Authenticode certificate (a deliberate, cost-free decision —
+> ADR-0035 §7). Integrity and transparency are fully covered by cosign + the Rekor
+> tlog; **platform identity is not**, so the OS shows a first-launch warning you
+> clear once, per OS below.
+
+### macOS — first launch
+
+1. Open the `.dmg` and drag **Korvun** to **Applications**.
+2. The first launch is blocked by Gatekeeper because the app is not
+   Apple-notarized:
+
+   <p align="center">
+     <img src="../assets/readme/gatekeeper-macos.png" width="360"
+          alt="macOS Gatekeeper dialog: Korvun cannot be opened because Apple cannot check it for malicious software.">
+   </p>
+
+3. **Clear it once** (macOS 13 Ventura, hardware-verified path): open **System
+   Settings → Privacy & Security**, scroll to the **Security** section, and next to
+   *"Korvun was blocked to protect your Mac"* click **Open Anyway**, then confirm
+   with **Open**. macOS remembers the exception permanently — it never asks again.
+   On older macOS the equivalent gesture is **right-click the app → Open → Open**.
+
+   <!-- TODO-VERIFY: capture the "Open Anyway" panel (System Settings → Privacy &
+        Security) on a clean first install. Not captured this round: approving the
+        app registered a permanent Gatekeeper exception, so the panel could not be
+        re-triggered without resetting Gatekeeper on the author's machine. Same
+        capture discipline as the Discord Message-Content-intent step. -->
+
+> **Hardware-verified (2026-07-26).** The real `Korvun.app` from the CI (universal
+> `.dmg`, `v0.3.0-69-gac9c192`, sha256 identical to the signed
+> `checksums-desktop.txt`) was installed on an Intel iMac (macOS 13), cleared
+> through the flow above, and completed a full Telegram round-trip: a message was
+> routed through a local `llama3.2:1b` brain and the reply came back — end to end,
+> from the packaged, double-clicked app.
+
+### Windows — first launch
+
+1. Run `korvun-desktop_<ver>_windows_amd64-installer.exe`. The NSIS installer
+   fetches the Microsoft WebView2 runtime if it is not already present.
+2. Because the installer is unsigned, **SmartScreen** shows *"Windows protected
+   your PC"*. Click **More info → Run anyway** to proceed.
+
+   <!-- TODO-VERIFY: the exact SmartScreen wording and click path on current
+        Windows 11, and whether a terminal (gh/curl) download avoids the
+        Mark-of-the-Web that triggers SmartScreen. Not verified on our own
+        hardware — no Windows machine to hand this round. -->
+
+### Linux — first launch
+
+1. `tar -xzf korvun-desktop_<ver>_linux_amd64.tar.gz` — it unpacks the
+   `korvun-desktop` binary and a `korvun-desktop.desktop` launcher.
+2. Run `./korvun-desktop`, or install the launcher into
+   `~/.local/share/applications/` (edit its `Exec=`/`Icon=` paths to where you put
+   the binary) to get a menu entry. The app needs a WebKitGTK runtime
+   (`libwebkit2gtk-4.1` on current distros) present on the system.
+
+   <!-- TODO-VERIFY: the exact WebKitGTK runtime package name across distros and a
+        first-launch walkthrough on real Linux hardware (built + smoke-tested under
+        xvfb in CI, but not hardware-validated as a desktop session yet). -->
+
+---
+
 ## macOS — full walkthrough (validated on Intel hardware)
 
 A complete, copy-paste path from download to `korvun --version` on macOS, using the
