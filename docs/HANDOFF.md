@@ -85,9 +85,66 @@ explicit decision.
 
 ---
 
-## Current state (as of session close, 2026-07-25)
+## Current state (as of 2026-07-26)
 
-> **CURRENT (2026-07-25, session close): Piece 5 (the desktop app) — SP6
+> **CURRENT (2026-07-26): Piece 5 — SP7 COMPLETE (7a + 7b BOTH PUBLISHED,
+> double green): `origin/master` = local `master` = `origin/ensayo` =
+> **`ac9c192`**.** This session: (1) the opening ritual published the 7a batch
+> (`3db8be0`+`9e72d82`+`9e6dceb` → master `9e6dceb`, ensayo green + master hard
+> gate green); (2) **cut 7b landed and PUBLISHED** — 5 commits, every external
+> fact source-verified first:
+> - `e8ec0a6` docs(cli) — the stale ldflags-retarget NOTE in
+>   `internal/cli/cli.go` now tells the truth (retarget done since v0.2.0).
+> - `60cf08b` ci(release) — **`.goreleaser.yaml` `release.draft: true`**
+>   (draft-until-complete, NC-3 §1e, the Chano-authorized bounded exception).
+>   **Byte-identity across the flip PROVEN** (sha256-identical compile +
+>   identical `go version -m`, cli.go held constant; details in the session
+>   report).
+> - `aefd855` feat(desktop) — Makefile Windows lane (`windows/amd64`,
+>   `-nsis -webview2 download`, `SHELL := bash`) + **Linux `webkit2_41` tag**
+>   (ubuntu-24.04 has only webkit2gtk-4.1; the cgo gate is source-verified in
+>   wails v2.13.0) + `ARTIFACT_VERSION` (v-stripped filenames matching the
+>   headless `korvun_0.3.0_…` scheme, NC-2).
+> - `714f4fa` ci(desktop) — **`release-desktop.yml`**: native 3-OS matrix,
+>   dispatch-guarded dry-run, least-privilege permissions, source-verified OS
+>   deps (windows-2025 has NO make/NSIS → choco + hard makensis verify; the
+>   installer's existence is ASSERTED, never inferred — wails exits 0 without
+>   makensis), wails CLI v2.13.0 build-time, govulncheck with the desktop tags
+>   per native GOOS, honest §1g smoke (non-GUI probe ×3; GUI only under xvfb on
+>   Linux; hosted macOS/Windows GUI explicitly NOT claimed — SP8), tag mode
+>   (poll the draft → upload → finalizer signs `checksums-desktop.txt` with
+>   cosign pinned v2.6.3 → asserts all 6 assets → the single `--draft=false`
+>   publish moment) and dry-run mode (workflow artifacts, REAL keyless signing,
+>   zero release/tag touched). Plus the committed Linux `.desktop` launcher.
+> - `ac9c192` fix(desktop) — Windows path fix (`$(subst \,/,$(GOBIN))`): make
+>   pastes `$(WAILS)` into recipe text and the shell ate the `C:\` backslashes
+>   (found by dry-run #1, the lane's first honest catch).
+>
+> **The `workflow_dispatch` DRY-RUN of `release-desktop.yml` is GREEN END TO
+> END** (run 30194713657, after the fix; run 30194244673 was the red first
+> attempt, Windows only): 3 native builds + finalize all success; all 3 OSes
+> stamped `v0.3.0-69-gac9c192` (goodbye "dev", including the Windows
+> GUI-subsystem binary answering `--version`); xvfb GUI smoke green on Linux;
+> NSIS installer asserted present; **real keyless cosign over
+> `checksums-desktop.txt` with `verify-blob` Verified OK (Rekor tlog index
+> 2255744013)**; artifacts: dmg 18.6MB / NSIS 10.9MB / tar.gz 8.8MB + signed
+> manifest. **NO tag pushed, NO release touched — the tag stays Chano's
+> explicit call.**
+>
+> **NEXT:** **SP8 formal** (artifact DOWNLOADED from a test release;
+> Gatekeeper/SmartScreen screenshots for the install guide) → **the v0.4.0
+> proposal** (trigger: Piece 5 complete end-to-end + hardware-validated; Chano
+> approves). Post-Piece-5 map unchanged (webhook → builder-canvas → universal
+> model gate).
+>
+> **Session note:** an untracked `BRIDGE-STATUS-2026-07-26.md` appeared in the
+> repo root mid-session — a Claude Desktop MCP-bridge status note from the
+> parallel copilot debugging, self-described as temporary ("delete when done").
+> Left untouched per the no-phantom-changes rule; it also flags a pending
+> security chore for Chano (rotate the plaintext `github_pat_` in
+> `claude_desktop_config.json`).
+>
+> **PREVIOUS (2026-07-25, session close): Piece 5 (the desktop app) — SP6
 > COMPLETE + the hardware-pass fixes + SP7 first-time all PUBLISHED (double
 > green); SP7 cut 7a done LOCALLY and copilot-approved, one master publish
 > away.** Verified first-hand at close: `origin/master` = **`a097522`**;
