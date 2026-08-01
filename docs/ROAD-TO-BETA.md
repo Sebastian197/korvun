@@ -538,6 +538,35 @@ Estado: pendiente de design spec.
 
 ---
 
+## Estreno de la beta — plan de difusión (cartucho único)
+
+> Decisión de Chano (2026-08-01): el lanzamiento público grande se
+> ejecuta EL DÍA del anuncio de la beta, en la convergencia
+> lienzo + web + beta. Antes de ese día, NO se publica en los canales
+> de estreno — solo eres novedad una vez.
+
+El paquete del día D (mismo día, coordinado, en INGLÉS, con la web de
+GitHub Pages como landing):
+
+- Show HN en Hacker News.
+- r/selfhosted (+ r/golang y r/LocalLLaMA).
+- Product Hunt.
+- Vídeo demo (YouTube): instalación con doble clic → canal conectado
+  → el lienzo componiendo → respuesta de un modelo local.
+
+Mientras llega el día (no queman el cartucho): social preview del
+repo, LinkedIn, clips cortos de práctica, y tras el estreno los
+tutoriales evergreen orientados a búsqueda ("self-hosted AI gateway",
+"telegram + ollama").
+
+Compromisos del copiloto: cada propuesta de release incluye su
+paquete de contenido (posts + guion de clip de 60s), y al acercarse
+la beta prepara el KIT DE ESTRENO completo: texto del Show HN, post
+de Reddit, ficha de Product Hunt y guion del vídeo, para revisión de
+Chano.
+
+---
+
 ## Post-beta
 
 ### Post-beta — Plugins con código
