@@ -3,7 +3,7 @@
 // POSTed. Everything here is a pure function so the guarantees (round-trip preserves
 // untouched fields, dirty detection) are Vitest-testable without a DOM.
 
-import type { Config, ModelConfig, BrainConfig } from './schema'
+import type { Config, ModelConfig, BrainConfig, PersonaConfig } from './schema'
 
 /** Deep clone of a config baseline. */
 export function clone(c: Config): Config {
@@ -39,6 +39,13 @@ export type ConfigAction =
   | { kind: 'addBrain' }
   | { kind: 'removeBrain'; brain: number }
   | { kind: 'reset'; config: Config }
+  // Canvas actions (builder-canvas SP2, FR-SER-3). The canvas mutates the SAME
+  // working copy through these branches — the graph is a projection, never a
+  // second state (NC-6).
+  | { kind: 'connectRoute'; channel: number; brain: number }
+  | { kind: 'disconnectRoute'; route: number }
+  | { kind: 'dropModel'; brain: number; model: ModelConfig }
+  | { kind: 'setPersonaField'; brain: number; field: keyof PersonaConfig; value: string }
 
 // Immutable helpers: replace one element of an array without touching the rest.
 function replaceAt<T>(arr: T[], i: number, next: T): T[] {
@@ -98,6 +105,38 @@ export function configReducer(state: Config, action: ConfigAction): Config {
           [action.field]: action.value,
         }),
       }
+    case 'connectRoute':
+      // Drawing the canal→cerebro edge IS creating the route (FR-SCOPE-3). A
+      // route names the channel by its TYPE — the registration rule of
+      // config.go validateChannels (names[ch.Type]) — and the brain by name.
+      return {
+        ...state,
+        routes: [
+          ...state.routes,
+          { channel: state.channels[action.channel].type, brain: state.brains[action.brain].name },
+        ],
+      }
+    case 'disconnectRoute':
+      // Deleting the edge removes exactly that route. Zero routes with
+      // channels present will 400 on Apply (validateRoutes) — the honest
+      // mid-edit state the error mapping surfaces, never masked here.
+      return { ...state, routes: state.routes.filter((_, j) => j !== action.route) }
+    case 'dropModel':
+      // The palette drop targets a BRAIN (NC-6: no orphan models — a model
+      // exists only as brains[i].models[j], config.go validateModels). Cloned
+      // so a caller-held reference cannot alias the working copy.
+      return editBrain(state, action.brain, (b) => ({
+        ...b,
+        models: [...b.models, structuredClone(action.model)],
+      }))
+    case 'setPersonaField':
+      // First edit materializes the block with only the edited field; later
+      // edits patch that field, preserving siblings (SP1 validatePersona:
+      // optional, partial, additive).
+      return editBrain(state, action.brain, (b) => ({
+        ...b,
+        persona: { ...(b.persona ?? {}), [action.field]: action.value },
+      }))
   }
 }
 
