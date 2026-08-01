@@ -31,7 +31,14 @@ import {
   PROVIDERS,
   LOCALITIES,
 } from '../config/schema'
-import { clone, isDirty, configReducer, newModel, type ConfigAction } from '../config/edit'
+import {
+  clone,
+  isDirty,
+  configReducer,
+  newModel,
+  pendingChangeCount,
+  type ConfigAction,
+} from '../config/edit'
 import { graphFromConfig, canConnect, type GraphNode } from './graph'
 import { postConfig, getConfig, getReloadStatus, HttpError } from '../api'
 import { pollReload, type ReloadStatus, type PollDeps } from '../config/reload'
@@ -57,7 +64,47 @@ const CanvasDispatch = createContext<Dispatch<ConfigAction>>(() => undefined)
 
 const BLOCK_MIME = 'application/korvun-block'
 
-type CanvasFlowNode = RFNode<{ label: string }, 'channel' | 'brain' | 'model'>
+// Rich node data (SP6, final-6): label plus the facts each kind shows as
+// badges / a policy line. All optional so one node type covers the union.
+type NodeData = {
+  label: string
+  sensitivity?: string
+  policy?: string
+  locality?: string
+}
+type CanvasFlowNode = RFNode<NodeData, 'channel' | 'brain' | 'model'>
+
+// Spanish labels for the house badges (final-6).
+const SENSITIVITY_ES: Record<string, string> = { private: 'privado', public: 'público' }
+const LOCALITY_ES: Record<string, string> = { local: 'local', cloud: 'nube' }
+const POLICY_ES: Record<string, string> = { priority: 'prioridad', consensus: 'consenso' }
+
+// One tiny inline glyph per kind — a same-origin SVG, never an external asset.
+function NodeIcon({ kind }: { kind: GraphNode['kind'] }) {
+  const path =
+    kind === 'channel'
+      ? 'M2 4h12v8H2z M2 4l6 4 6-4' // envelope
+      : kind === 'brain'
+        ? 'M8 2a4 4 0 0 1 4 4c1 1 1 3 0 4a4 4 0 0 1-8 0c-1-1-1-3 0-4a4 4 0 0 1 4-4z' // node
+        : 'M3 8h10 M8 3v10' // model cross
+  return (
+    <svg
+      className="node-icon"
+      data-testid="node-icon"
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={path} />
+    </svg>
+  )
+}
 
 const kindOf = (id: string): GraphNode['kind'] => id.split(':')[0] as GraphNode['kind']
 const indexOf = (id: string): number => Number(id.split(':')[1])
@@ -71,7 +118,10 @@ const isValidConnection = (c: { source: string; target: string }): boolean =>
 function ChannelNode({ id, data }: NodeProps<CanvasFlowNode>) {
   return (
     <div className="canvas-node" data-testid={id} data-kind="channel">
-      {data.label}
+      <span className="node-head">
+        <NodeIcon kind="channel" />
+        {data.label}
+      </span>
       <Handle type="source" position={Position.Right} />
     </div>
   )
@@ -95,7 +145,22 @@ function BrainNode({ id, data }: NodeProps<CanvasFlowNode>) {
       }}
     >
       <Handle type="target" position={Position.Left} />
-      {data.label}
+      <span className="node-head">
+        <NodeIcon kind="brain" />
+        {data.label}
+      </span>
+      <span className="node-badges">
+        {data.sensitivity && (
+          <span className="badge" data-testid="badge-sensitivity">
+            {SENSITIVITY_ES[data.sensitivity] ?? data.sensitivity}
+          </span>
+        )}
+      </span>
+      {data.policy && (
+        <span className="node-policy" data-testid="node-policy">
+          {POLICY_ES[data.policy] ?? data.policy}
+        </span>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   )
@@ -105,23 +170,33 @@ function ModelNode({ id, data }: NodeProps<CanvasFlowNode>) {
   return (
     <div className="canvas-node" data-testid={id} data-kind="model">
       <Handle type="target" position={Position.Left} />
-      {data.label}
+      <span className="node-head">
+        <NodeIcon kind="model" />
+        {data.label}
+      </span>
+      {data.locality && (
+        <span className="badge" data-testid="badge-locality">
+          {LOCALITY_ES[data.locality] ?? data.locality}
+        </span>
+      )}
     </div>
   )
 }
 
 const nodeTypes = { channel: ChannelNode, brain: BrainNode, model: ModelNode }
 
-function labelFor(n: GraphNode, cfg: Config): string {
+function dataFor(n: GraphNode, cfg: Config): NodeData {
   switch (n.kind) {
     case 'channel':
-      return cfg.channels[indexOf(n.id)]?.type ?? ''
-    case 'brain':
-      return cfg.brains[indexOf(n.id)]?.name || '(unnamed)'
+      return { label: cfg.channels[indexOf(n.id)]?.type ?? '' }
+    case 'brain': {
+      const b = cfg.brains[indexOf(n.id)]
+      return { label: b?.name || '(unnamed)', sensitivity: b?.sensitivity, policy: b?.policy.kind }
+    }
     case 'model': {
-      const [b, m] = n.id.split(':')[1].split('.').map(Number)
-      const mc = cfg.brains[b]?.models[m]
-      return mc ? mc.model_id || mc.provider : ''
+      const [bi, mi] = n.id.split(':')[1].split('.').map(Number)
+      const mc = cfg.brains[bi]?.models[mi]
+      return { label: mc ? mc.model_id || mc.provider : '', locality: mc?.locality }
     }
   }
 }
@@ -211,6 +286,22 @@ function ChannelPanel({ c, index, dispatch }: { c: Config['channels'][number]; i
               label={field}
               value={c.webhook?.[field] ?? ''}
               onChange={(value) => dispatch({ kind: 'setWebhookField', channel: index, field, value })}
+            />
+          ))}
+          {/* The mapping's six fields (SP6): which inbound JSON keys map to
+              Envelope fields. Empty resolves to the canonical default server-side
+              (EffectiveMapping), so the panel never inflates the file. */}
+          <span className="lbl">mapping</span>
+          {(
+            ['sender_id', 'sender_name', 'text', 'media_url', 'media_type', 'conversation_id'] as const
+          ).map((field) => (
+            <Field
+              key={field}
+              label={field}
+              value={c.webhook?.mapping?.[field] ?? ''}
+              onChange={(value) =>
+                dispatch({ kind: 'setWebhookMappingField', channel: index, field, value })
+              }
             />
           ))}
         </>
@@ -372,6 +463,7 @@ export function CanvasView({
 
   const locked = reload.phase === 'polling'
   const dirty = isDirty(wc, base)
+  const pending = pendingChangeCount(base, wc)
 
   // Dropped blocks must always land IN VIEW: React Flow fits only on mount,
   // so a node added outside the fitted viewport would be clipped (and
@@ -387,7 +479,7 @@ export function CanvasView({
         type: n.kind,
         // Derived layout only (NC-6): columns/rows from the projection.
         position: { x: n.column * 260, y: n.row * 110 },
-        data: { label: labelFor(n, wc) },
+        data: dataFor(n, wc),
       })),
     [graph, wc],
   )
@@ -402,8 +494,13 @@ export function CanvasView({
     [graph],
   )
 
+  // fitView options: a comfortable padding and a maxZoom so a two-node graph
+  // never balloons — nodes stay reachable, not lost in the void (SP6).
+  const fitViewOptions = { padding: 0.2, maxZoom: 1 }
   useEffect(() => {
-    flow?.fitView({ padding: 0.15 })
+    flow?.fitView(fitViewOptions)
+    // fitViewOptions is a stable literal; only re-fit when the node count moves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow, nodes.length])
 
   const onConnect = (c: Connection) => {
@@ -461,16 +558,29 @@ export function CanvasView({
       <div className="canvas-shell">
         <div className="korvun-canvas">
           <aside className="canvas-palette">
-            <h2 className="palette-title">paleta</h2>
-            {(['channel', 'brain', 'model'] as const).map((block) => (
-              <div
-                key={block}
-                className="palette-block"
-                data-testid={`palette:${block}`}
-                draggable="true"
-                onDragStart={(e) => e.dataTransfer.setData(BLOCK_MIME, block)}
-              >
-                {block}
+            {(
+              [
+                { block: 'channel', section: 'Canales' },
+                { block: 'brain', section: 'Cerebros' },
+                { block: 'model', section: 'Modelos' },
+              ] as const
+            ).map(({ block, section }) => (
+              <div key={block} className="palette-section">
+                <h2 className="palette-section-title">{section}</h2>
+                <div
+                  className="palette-block"
+                  data-testid={`palette:${block}`}
+                  draggable="true"
+                  onDragStart={(e) => e.dataTransfer.setData(BLOCK_MIME, block)}
+                >
+                  <span className="block-icon" data-testid="block-icon">
+                    <NodeIcon kind={block} />
+                  </span>
+                  {block}
+                  <span className="drag-dots" data-testid="drag-dots" aria-hidden="true">
+                    ⠿
+                  </span>
+                </div>
               </div>
             ))}
             <p className="palette-hint">Arrastra un bloque al lienzo y conéctalo.</p>
@@ -492,6 +602,7 @@ export function CanvasView({
               onInit={setFlow}
               colorMode={document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'}
               fitView
+              fitViewOptions={fitViewOptions}
             >
               <Background />
             </ReactFlow>
@@ -510,6 +621,19 @@ export function CanvasView({
           <button className="btn primary" type="button" disabled={!dirty || locked} onClick={save}>
             {locked ? 'Aplicando…' : 'Aplicar cambios'}
           </button>
+          <button
+            className="btn"
+            type="button"
+            disabled={pending === 0 || locked}
+            onClick={() => dispatch({ kind: 'reset', config: base })}
+          >
+            Descartar
+          </button>
+          {pending > 0 && (
+            <span className="muted" data-testid="pending-count">
+              {pending} {pending === 1 ? 'cambio' : 'cambios'} sin aplicar
+            </span>
+          )}
           <span className="muted">{dirty ? 'unsaved changes' : 'no changes'}</span>
           <ReloadView status={reload} onRetry={save} />
           {saveError && <SaveErrorView error={saveError} />}

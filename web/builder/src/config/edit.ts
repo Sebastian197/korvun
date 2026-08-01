@@ -3,7 +3,7 @@
 // POSTed. Everything here is a pure function so the guarantees (round-trip preserves
 // untouched fields, dirty detection) are Vitest-testable without a DOM.
 
-import type { Config, ModelConfig, BrainConfig, PersonaConfig, WebhookConfig } from './schema'
+import type { Config, ModelConfig, BrainConfig, PersonaConfig, WebhookConfig, WebhookMapping } from './schema'
 
 /** Deep clone of a config baseline. */
 export function clone(c: Config): Config {
@@ -14,6 +14,26 @@ export function clone(c: Config): Config {
  *  source (baseline + structuredClone), so a stable serialization compares safely. */
 export function isDirty(working: Config, baseline: Config): boolean {
   return JSON.stringify(working) !== JSON.stringify(baseline)
+}
+
+/** pendingChangeCount powers the canvas header's "N cambios sin aplicar" (SP6,
+ *  final-6). It counts DISTINCT entity changes across the three top-level lists
+ *  (channels, brains, routes): each index that differs by value is one change,
+ *  and each added/removed index (length delta) is one change. 0 for a clean
+ *  working copy. Deterministic and stable-serialization based (same as isDirty). */
+export function pendingChangeCount(baseline: Config, working: Config): number {
+  const countList = <T>(base: T[], work: T[]): number => {
+    let n = Math.abs(base.length - work.length) // added or removed entities
+    for (let i = 0; i < Math.min(base.length, work.length); i++) {
+      if (JSON.stringify(base[i]) !== JSON.stringify(work[i])) n++ // modified in place
+    }
+    return n
+  }
+  return (
+    countList(baseline.channels, working.channels) +
+    countList(baseline.brains, working.brains) +
+    countList(baseline.routes, working.routes)
+  )
 }
 
 /** A fresh model row (the "add model" default). model_id empty until the operator
@@ -63,6 +83,8 @@ export type ConfigAction =
       field: 'bind' | 'path' | 'outbound_url' | 'outbound_token_env'
       value: string
     }
+  // SP6: the webhook mapping's six fields, editable from the panel.
+  | { kind: 'setWebhookMappingField'; channel: number; field: keyof WebhookMapping; value: string }
 
 // Immutable helpers: replace one element of an array without touching the rest.
 function replaceAt<T>(arr: T[], i: number, next: T): T[] {
@@ -192,6 +214,20 @@ export function configReducer(state: Config, action: ConfigAction): Config {
         channels: replaceAt(state.channels, action.channel, {
           ...state.channels[action.channel],
           webhook,
+        }),
+      }
+    }
+    case 'setWebhookMappingField': {
+      // SP6: patch one of the six mapping fields, materializing the mapping
+      // object (and the block) on first edit; server defaults fill the rest
+      // (EffectiveMapping) so the mirror never inflates the file.
+      const current = state.channels[action.channel].webhook ?? {}
+      const mapping: WebhookMapping = { ...(current.mapping ?? {}), [action.field]: action.value }
+      return {
+        ...state,
+        channels: replaceAt(state.channels, action.channel, {
+          ...state.channels[action.channel],
+          webhook: { ...current, mapping },
         }),
       }
     }

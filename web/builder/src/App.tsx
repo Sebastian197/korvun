@@ -50,17 +50,24 @@ export function App() {
       })
   }, [token])
 
+  // Embedded in the desktop chrome (which already titles the view) → the
+  // builder's own top bar is redundant, so drop it and avoid a double header
+  // (SP6). window.top differs from window.self only inside an iframe.
+  const embedded = window.self !== window.top
+
   return (
     <div className="app">
-      <header className="bar">
-        <h1 className="brand">
-          <span className="glyph" aria-hidden="true" />
-          korvun
-        </h1>
-        <span className="crumb">builder</span>
-        <span className="spacer" />
-        <span className="token-state">{token ? 'bearer ✓' : 'no token'}</span>
-      </header>
+      {!embedded && (
+        <header className="bar">
+          <h1 className="brand">
+            <span className="glyph" aria-hidden="true" />
+            korvun
+          </h1>
+          <span className="crumb">builder</span>
+          <span className="spacer" />
+          <span className="token-state">{token ? 'bearer ✓' : 'no token'}</span>
+        </header>
+      )}
 
       {cleartextRisk() && (
         <p className="warn" role="note">

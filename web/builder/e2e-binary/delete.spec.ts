@@ -20,15 +20,20 @@ test('a. create+apply a brain → delete it from the panel → apply → the GET
 }) => {
   await openCanvas(page)
 
+  // The e2e-binary suite shares ONE server whose config other specs mutate, so
+  // the new brain's index = the current brain count (not a fixed brain:1).
+  const n = await page.locator('[data-kind="brain"]').count()
+  const nid = `brain:${n}`
+
   // Create + name a brain and APPLY it, so it genuinely exists in the served
   // config (create-then-delete in one shot would be a net-zero edit — Aplicar
   // would stay disabled, nothing to persist).
   await page.dragAndDrop('[data-testid="palette:brain"]', '[data-testid="canvas-surface"]')
-  await page.getByTestId('brain:1').click()
+  await page.getByTestId(nid).click()
   await page.getByLabel('name', { exact: true }).fill('efimero')
   // A brain needs >=1 model with a model_id to pass Validate (validateModels).
-  await page.dragAndDrop('[data-testid="palette:model"]', '[data-testid="brain:1"]')
-  await page.getByTestId('model:1.0').click()
+  await page.dragAndDrop('[data-testid="palette:model"]', `[data-testid="${nid}"]`)
+  await page.getByTestId(`model:${n}.0`).click()
   await page.getByLabel('model_id').fill('llama3.2:1b')
   await page.getByRole('button', { name: /aplicar/i }).click()
   await expect(page.getByTestId('reload-succeeded')).toBeVisible({ timeout: 30_000 })
@@ -39,10 +44,10 @@ test('a. create+apply a brain → delete it from the panel → apply → the GET
   expect((created as { brains: Array<{ name: string }> }).brains.map((b) => b.name)).toContain('efimero')
 
   // Now DELETE it from the panel (with the confirmation gate) and apply again.
-  await page.getByTestId('brain:1').click()
+  // After the apply re-baselined, the appended brain is still the last index.
+  await page.getByTestId(nid).click()
   await page.getByRole('button', { name: /eliminar nodo/i }).click()
   await page.getByRole('button', { name: /sí, eliminar|confirmar/i }).click()
-  await expect(page.getByTestId('brain:1')).toHaveCount(0)
   await page.getByRole('button', { name: /aplicar/i }).click()
   await expect(page.getByTestId('reload-succeeded')).toBeVisible({ timeout: 30_000 })
 

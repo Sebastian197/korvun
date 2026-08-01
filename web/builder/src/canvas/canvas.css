@@ -79,6 +79,12 @@
   stroke: var(--text-3);
 }
 
+/* Connection affordance: a violet halo on the handles at hover (final-6). */
+.canvas-surface .react-flow__handle:hover {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
+}
+
 /* The connection affordance (the in-progress cable) rides the accent token. */
 .canvas-surface .react-flow__connectionline path,
 .canvas-surface .react-flow__connection-path {
@@ -93,12 +99,67 @@
 }
 
 .canvas-node {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--text-1);
   font-size: 0.8rem;
+}
+
+.node-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-weight: 500;
+}
+.node-icon {
+  color: var(--accent-text);
+  flex: none;
+}
+.node-badges {
+  display: flex;
+  gap: var(--space-2xs);
+}
+.badge {
+  padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.65rem;
+  line-height: 1.6;
+}
+.node-policy {
+  color: var(--text-3);
+  font-size: 0.66rem;
+}
+
+.palette-section {
+  margin-bottom: var(--space-sm);
+}
+.palette-section-title {
+  margin: 0 0 var(--space-2xs);
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.canvas-palette .palette-block {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.block-icon {
+  color: var(--accent-text);
+  display: inline-flex;
+}
+.drag-dots {
+  margin-left: auto;
+  color: var(--text-3);
+  cursor: grab;
 }
 
 .canvas-surface .react-flow__attribution {
