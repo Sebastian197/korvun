@@ -121,14 +121,18 @@ describe('configReducer — model rows (ADR-0030 §7)', () => {
 })
 
 describe('configReducer — removeBrain (functional symmetry with removeModel)', () => {
-  it('removes the named brain and preserves EVERYTHING else', () => {
-    const base = baseline() // two brains: support, other
+  it('removes the named brain and cascades its routes, preserving everything else', () => {
+    // SP5 re-target: removeBrain now CASCADES the routes that name the deleted
+    // brain (a dangling routes[i].brain would 400 on Apply — validateRoutes).
+    // The pre-SP5 contract asserted routes were untouched; that left an orphan
+    // route. The rest of the round-trip guarantee stands.
+    const base = baseline() // two brains: support (routed), other
     const wc = configReducer(clone(base), { kind: 'removeBrain', brain: 0 })
     expect(wc.brains).toHaveLength(1)
     expect(wc.brains[0]).toEqual(base.brains[1]) // the surviving brain is intact
-    // the round-trip guarantee: nothing else dropped
+    expect(wc.routes).toEqual([]) // telegram→support cascaded out
+    // everything the delete does not touch is byte-identical
     expect(wc.channels).toEqual(base.channels)
-    expect(wc.routes).toEqual(base.routes)
     expect(wc.storage).toEqual(base.storage)
     expect(wc.observability).toEqual(base.observability)
     expect(wc.admin).toEqual(base.admin)

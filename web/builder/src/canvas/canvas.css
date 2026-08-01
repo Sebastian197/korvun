@@ -124,3 +124,53 @@
   font-family: var(--font-display);
   font-size: 0.95rem;
 }
+
+.palette-hint {
+  margin: var(--space-md) 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-3);
+}
+
+/* Destructive affordance (final-6 "Eliminar nodo…") — danger token, gated
+   behind the confirm row below it. */
+.delete-node {
+  margin-top: var(--space-sm);
+  align-self: flex-start;
+  padding: var(--space-xs) 0;
+  border: none;
+  background: none;
+  color: var(--failed);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.delete-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.btn-danger-sm,
+.btn-ghost-sm {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.btn-danger-sm {
+  background: var(--failed);
+  border-color: var(--failed);
+  color: var(--on-accent);
+}
+.btn-ghost-sm {
+  background: var(--surface-2);
+  color: var(--text-1);
+}

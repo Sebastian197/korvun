@@ -17,12 +17,22 @@
   margin-bottom: var(--space-xs);
 }
 select.txt {
-  /* appearance:none strips the native dropdown arrow, so add one back as an inline
-     data-URI chevron (no network request — the no-CDN gate excludes data: URIs). */
+  /* appearance:none strips the native dropdown arrow, so draw a chevron back
+     with PURE CSS. A data: URI background would be blocked by the builder's
+     CSP (default-src 'self', no img-src data:) — proven in the SP4 smoke; the
+     old comment claiming data: was exempt was WRONG. Two crossed linear
+     gradients form the ▾ with zero network and zero data URI. */
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' stroke='%239aa0b4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position:
+    right 14px center,
+    right 9px center;
+  background-size:
+    5px 5px,
+    5px 5px;
   background-repeat: no-repeat;
-  background-position: right 10px center;
   padding-right: 28px;
 }
 .row2 {

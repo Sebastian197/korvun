@@ -245,28 +245,74 @@ function BrainPanel({ b, index, dispatch }: { b: Config['brains'][number]; index
   )
 }
 
+// DeleteNodeControl is the "Eliminar nodo…" affordance (final-6), gated behind
+// a confirmation because it cascades (SP5). It dispatches the kind-specific
+// remove action and then clears the selection (the node it edited is gone).
+function DeleteNodeControl({
+  action,
+  onDeleted,
+  dispatch,
+}: {
+  action: ConfigAction
+  onDeleted: () => void
+  dispatch: Dispatch<ConfigAction>
+}) {
+  const [confirming, setConfirming] = useState(false)
+  if (confirming) {
+    return (
+      <div className="delete-confirm" data-testid="delete-node-confirm">
+        <span>¿Eliminar este nodo?</span>
+        <button
+          type="button"
+          className="btn-danger-sm"
+          onClick={() => {
+            dispatch(action)
+            onDeleted()
+          }}
+        >
+          Sí, eliminar
+        </button>
+        <button type="button" className="btn-ghost-sm" onClick={() => setConfirming(false)}>
+          Cancelar
+        </button>
+      </div>
+    )
+  }
+  return (
+    <button type="button" className="delete-node" onClick={() => setConfirming(true)}>
+      Eliminar nodo…
+    </button>
+  )
+}
+
 function PropertiesPanel({
   selected,
   cfg,
   dispatch,
+  onDeleted,
 }: {
   selected: string
   cfg: Config
   dispatch: Dispatch<ConfigAction>
+  onDeleted: () => void
 }) {
   const kind = kindOf(selected)
   let body = null
+  let deleteAction: ConfigAction | null = null
   if (kind === 'channel') {
     const i = indexOf(selected)
     const c = cfg.channels[i]
     body = c ? <ChannelPanel c={c} index={i} dispatch={dispatch} /> : null
+    if (c) deleteAction = { kind: 'removeChannel', channel: i }
   } else if (kind === 'brain') {
     const i = indexOf(selected)
     const b = cfg.brains[i]
     body = b ? <BrainPanel b={b} index={i} dispatch={dispatch} /> : null
+    if (b) deleteAction = { kind: 'removeBrain', brain: i }
   } else {
     const [b, m] = selected.split(':')[1].split('.').map(Number)
     const mc = cfg.brains[b]?.models[m]
+    if (mc) deleteAction = { kind: 'removeModel', brain: b, model: m }
     // Editable since SP4, through the existing updateModel action.
     const up = (patch: Partial<NonNullable<typeof mc>>) =>
       dispatch({ kind: 'updateModel', brain: b, model: m, patch })
@@ -300,6 +346,9 @@ function PropertiesPanel({
   return (
     <aside className="properties-panel" data-testid="properties-panel">
       {body}
+      {deleteAction && (
+        <DeleteNodeControl action={deleteAction} onDeleted={onDeleted} dispatch={dispatch} />
+      )}
     </aside>
   )
 }
@@ -364,6 +413,15 @@ export function CanvasView({
     dispatch({ kind: 'connectRoute', channel: indexOf(c.source), brain: indexOf(c.target) })
   }
 
+  // React Flow's edge-delete hook (Delete/Backspace on a selected edge). Only
+  // ROUTE edges are cable-deletable → disconnectRoute by its index; a
+  // composition edge is ignored (a model leaves via its panel — schema mirror).
+  const onEdgesDelete = (deleted: Array<{ id: string }>) => {
+    for (const e of deleted) {
+      if (e.id.startsWith('route:')) dispatch({ kind: 'disconnectRoute', route: indexOf(e.id) })
+    }
+  }
+
   const onSurfaceDrop = (e: DragEvent) => {
     e.preventDefault()
     const block = e.dataTransfer.getData(BLOCK_MIME)
@@ -415,6 +473,7 @@ export function CanvasView({
                 {block}
               </div>
             ))}
+            <p className="palette-hint">Arrastra un bloque al lienzo y conéctalo.</p>
           </aside>
           <div
             className="canvas-surface"
@@ -428,6 +487,7 @@ export function CanvasView({
               nodeTypes={nodeTypes}
               isValidConnection={isValidConnection}
               onConnect={onConnect}
+              onEdgesDelete={onEdgesDelete}
               onNodeClick={(_, node) => setSelected(node.id)}
               onInit={setFlow}
               colorMode={document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'}
@@ -436,7 +496,14 @@ export function CanvasView({
               <Background />
             </ReactFlow>
           </div>
-          {selected && <PropertiesPanel selected={selected} cfg={wc} dispatch={dispatch} />}
+          {selected && (
+            <PropertiesPanel
+              selected={selected}
+              cfg={wc}
+              dispatch={dispatch}
+              onDeleted={() => setSelected(null)}
+            />
+          )}
         </div>
 
         <div className="save-bar">

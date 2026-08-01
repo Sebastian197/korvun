@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Same-origin brand favicon (Vite copies public/ to the dist root under
+         base=/builder/), so the browser's automatic /favicon.ico request no
+         longer 404s. Never an external asset (the no-CDN gate). -->
+    <link rel="icon" type="image/svg+xml" href="/builder/favicon.svg" />
     <title>Korvun · builder</title>
   </head>
   <body>

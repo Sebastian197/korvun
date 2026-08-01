@@ -50,6 +50,7 @@ export type ConfigAction =
   // working copy through these branches — the graph is a projection, never a
   // second state (NC-6).
   | { kind: 'addChannel' }
+  | { kind: 'removeChannel'; channel: number }
   | { kind: 'connectRoute'; channel: number; brain: number }
   | { kind: 'disconnectRoute'; route: number }
   | { kind: 'dropModel'; brain: number; model: ModelConfig }
@@ -82,11 +83,19 @@ export function configReducer(state: Config, action: ConfigAction): Config {
       return clone(action.config)
     case 'addBrain':
       return { ...state, brains: [...state.brains, newBrain()] }
-    case 'removeBrain':
-      // Symmetric with removeModel: drop one brain, preserve everything else
-      // (channels, routes, storage, admin, the other brains). Removing the last
-      // brain leaves an empty list → the UI shows the empty/first-run state.
-      return { ...state, brains: state.brains.filter((_, j) => j !== action.brain) }
+    case 'removeBrain': {
+      // Delete one brain AND cascade the routes that name it (SP5): a dangling
+      // routes[i].brain would 400 on the next Apply (validateRoutes). The
+      // brain's models live inside it, so they go with it. Everything else is
+      // byte-identical. Removing the last brain leaves an empty list → the UI
+      // shows the empty/first-run state.
+      const gone = state.brains[action.brain]?.name
+      return {
+        ...state,
+        brains: state.brains.filter((_, j) => j !== action.brain),
+        routes: state.routes.filter((r) => r.brain !== gone),
+      }
+    }
     case 'setBrainField':
       return editBrain(state, action.brain, (b) => ({ ...b, [action.field]: action.value }))
     case 'setPolicyKind':
@@ -125,6 +134,18 @@ export function configReducer(state: Config, action: ConfigAction): Config {
       // A channel palette block dropped on the canvas (SP3): the fresh
       // telegram/polling default; the panel completes token_env.
       return { ...state, channels: [...state.channels, newChannel()] }
+    case 'removeChannel': {
+      // Delete one channel AND cascade the routes that name it (SP5). A route
+      // names a channel by its TYPE (config.go validateChannels, names[ch.Type]),
+      // so the cascade matches on type — same dangling-route 400 prevention as
+      // removeBrain.
+      const gone = state.channels[action.channel]?.type
+      return {
+        ...state,
+        channels: state.channels.filter((_, j) => j !== action.channel),
+        routes: state.routes.filter((r) => r.channel !== gone),
+      }
+    }
     case 'connectRoute':
       // Drawing the canal→cerebro edge IS creating the route (FR-SCOPE-3). A
       // route names the channel by its TYPE — the registration rule of
