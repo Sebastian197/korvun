@@ -447,22 +447,44 @@ y el binario headless intacto (la app es una carcasa, no un fork de la lógica).
 
 ## Builder-lienzo (post-Webhook, segundo de la cola)
 
-> ✅ **COMPLETADO — código completo SP0–SP4, ADR-0039 `accepted`** — el builder ES
-> un editor visual de nodos: **el lienzo es la cara** tras la puerta del token
-> (FR-SCOPE-1), como chunk perezoso (el bundle principal incluso adelgaza). SP0
-> spike + ADR-0039 (**@xyflow/react 12.11.2**, MIT, CSP real del binario a cero
-> violaciones; **atribución visible re-estilizada con tokens = POLÍTICA**, gasto
-> cero en licencias); SP1 **persona por cerebro DENTRO** (config aditiva con topes
-> en runas + `ComposePersona` + prefijo en ambos tipos de brain — la pieza
-> "Personalidad por cerebro" de abajo queda cubierta); SP2 schema/proyección
-> (`CHANNEL_TYPES` al día con discord/webhook — **el bug latente del espejo,
-> muerto** — y `graphFromConfig` determinista con la exclusión ADR-0015 como
-> dato); SP3 la vista (paleta, panel de propiedades, save-bar sobre la MISMA
-> máquina de reload); SP4 el switch + **e2e contra el binario real** (flujo
-> maestro con drags reales, trazo excluido pintado, axe completo con contraste en
-> dark y light) **y dentro del iframe del escritorio** (18/18). `make quality`
-> verde `-race`. **El smoke visual de Chano (capturas sp4-canvas-* en
-> design-drafts/ junto a final-6) es el gate previo al ensayo/push del lote.**
+> ✅ **COMPLETADO — código completo SP0–SP6, ADR-0039 `accepted`, SMOKE GATE
+> CUMPLIDO (2026-08-01).** El builder ES un editor visual de nodos: **el lienzo
+> es la cara** tras la puerta del token (FR-SCOPE-1), como chunk perezoso (el
+> bundle principal incluso adelgaza). SP0 spike + ADR-0039 (**@xyflow/react
+> 12.11.2**, MIT, CSP real del binario a cero violaciones; **atribución visible
+> re-estilizada con tokens = POLÍTICA**, gasto cero en licencias); SP1 **persona
+> por cerebro DENTRO** (config aditiva con topes en runas + `ComposePersona` +
+> prefijo en ambos tipos de brain — la pieza "Personalidad por cerebro" de abajo
+> queda cubierta); SP2 schema/proyección (`CHANNEL_TYPES` al día con
+> discord/webhook — **el bug latente del espejo, muerto** — y `graphFromConfig`
+> determinista con la exclusión ADR-0015 como dato); SP3 la vista (paleta, panel
+> de propiedades, save-bar sobre la MISMA máquina de reload); SP4 el switch +
+> **e2e contra el binario real** (flujo maestro con drags reales, trazo excluido
+> pintado, axe completo con contraste en dark y light) **y dentro del iframe del
+> escritorio**; **SP5 el BORRADO** (cascada de dominio — borrar cerebro/canal
+> arrastra sus rutas — + hint de arrastre de final-6 + consola limpia con
+> guardián permanente: cero CSP, cero 404, favicon de marca, flecha de selects
+> en CSS puro); **SP6 el VESTIDO contra final-6** (nodos ricos con icono/badges/
+> política, paleta seccionada, contador "N cambios sin aplicar", **Descartar**,
+> mapping del webhook editable, halo violeta en handles, y **cabecera única
+> dentro del iframe** — sin doble título).
+>
+> **Cero controles muertos (INVENTARIO-GATE, §24 del reporte):** cada control
+> del lienzo y el panel tiene un test vivo (SP1–SP6 los reparten: drag, cables,
+> exclusión, persona, panel de modelo/webhook/mapping, borrado de nodo y cable,
+> contador, Descartar, Aplicar→reload); el único sin control (config de agente)
+> queda preservado por diseño (final-6 no lo pide), no muerto.
+>
+> **SMOKE GATE — CUMPLIDO (2026-08-01):** la app de ESCRITORIO REAL (`make
+> desktop` fresco desde el lote) conducida end-to-end — **12 estaciones en
+> verde** (arranque → cards → core → SSE → builder → drag cerebro+modelo →
+> cable válido y prohibido → exclusión gris → persona → contador+Descartar →
+> borrado → Aplicar→reload → temas). Grabado para el paquete de contenido (2
+> vídeos en `design-drafts/media/`). Verificaciones: Vitest **152/152**, e2e
+> binario real **6/6**, escritorio **19/19**, `make quality` verde `-race`,
+> `go.mod`/`go.sum` a cero diff. Un chirrido de pulido, NO bloqueante
+> (re-token al re-montar el iframe al cambiar de sección) → post-v0.6.0.
+> **Lote listo para ensayo/push; siguiente release = v0.6.0.**
 
 ---
 

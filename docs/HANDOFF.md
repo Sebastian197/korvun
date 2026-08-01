@@ -87,14 +87,40 @@ explicit decision.
 
 ## Current state (as of 2026-08-01)
 
-> **CURRENT (2026-08-01): the BUILDER-CANVAS piece went spec-to-code-complete in
-> one day — the builder IS a visual node editor now.** Local batch of SEVEN
-> commits, **NOT pushed** (the piece's gate below): `722a20e` (SP0 spike +
-> ADR-0039 `accepted`) → `af63a34` (SP1 persona-per-brain, Go) → `04b42f4` (SP2
-> schema + graph projection) → `f6973df` (SP3 canvas view) → `f7b00f2` (SP4 the
-> switch + real-binary e2e) → `40589f8` (build hygiene, below) → the docs-close
-> commit carrying this handoff. `origin/master` = `d89acf1` (the beta-launch
-> distribution plan, pushed as its own docs-only batch mid-piece).
+> **CURRENT (2026-08-01, end of day): BUILDER-CANVAS complete SP0–SP6, smoke
+> gate PASSED on the real desktop app, docs closed — the batch is going to
+> rehearsal now.** Local batch of ELEVEN commits ahead of `origin/master`
+> (`d89acf1`): `722a20e` SP0 (+ADR-0039 `accepted`) → `af63a34` SP1 persona →
+> `04b42f4` SP2 schema+projection → `f6973df` SP3 canvas view → `f7b00f2` SP4
+> the switch + real-binary e2e → `40589f8` build hygiene → `faf1850` docs
+> (mid-piece close) → `cfea538` lockfile P1 → `e1882d1` SP5 delete → `0243bcc`
+> SP6 dress-to-final-6 → **this docs-of-close commit**.
+>
+> **SP5 + SP6 (the two that finished the piece):** SP5 = DELETE with a domain
+> CASCADE (removing a brain/channel also drops its routes — no dangling-route
+> 400), the final-6 drag hint, and a clean-console GUARDIAN (zero CSP, zero
+> 404s: brand favicon shipped, select chevron redrawn in pure CSS — the old
+> `data:` URI was CSP-blocked). SP6 = DRESS to final-6: rich nodes
+> (icon/sensitivity+locality badges/policy line), sectioned palette, the
+> "N cambios sin aplicar" counter + **Descartar**, the editable webhook
+> mapping, a violet handle-hover halo, and a SINGLE header inside the desktop
+> iframe (the builder's own bar hides when `self !== top`).
+>
+> **The audit (§20) and its P1:** a full walk of the desktop app found `make
+> desktop` BROKEN — `web/builder`'s lockfile was out of sync, so the release
+> artifact could not build. Fixed in `cfea538` (that fix MUST ride this batch or
+> v0.6.0 won't compile). The audit also confirmed every OTHER control across
+> Inicio/Actividad/Canales/Ajustes/Onboarding is live (the two "dead" ones were
+> my probe errors, re-confirmed working); the "cero controles muertos" bar is
+> met (INVENTARIO-GATE, report §24).
+>
+> **SMOKE GATE — PASSED (report §26/§27):** the REAL desktop chrome (`make
+> desktop` fresh from the batch, real core) driven end-to-end at human speed —
+> 12 stations green. Recorded for the content pack: **two videos in
+> `design-drafts/media/`** (`korvun-v060-demo-full.webm`,
+> `korvun-v060-clip-60s.webm`; recordVideo of the viewport — zero terminals/
+> tokens by construction; `.webm` not `.mov` because ffmpeg is absent). One
+> non-blocking snag only (below).
 >
 > **The piece in one paragraph:** @xyflow/react 12.11.2 (MIT, ADR-0039; visible
 > token-restyled attribution is POLICY), persona per brain composed as a system
@@ -132,25 +158,38 @@ explicit decision.
 > Also done this week: the repo moved OUT of iCloud sync (`korvun.nosync` +
 > symlink at the old path) — the duplicate-minting source is gone.
 >
-> **NEXT (the piece's exit gate, in order):**
-> 1. **Chano's visual smoke** — captures `sp4-canvas-{dark,light,panel}.png` in
->    `design-drafts/` next to `final-6-builder-estados.png` (repeatable:
->    `node e2e-binary/captures.mjs` with the binary serving).
-> 2. **Batch rehearsal**: push the 7-commit batch to `ensayo`, full gate green.
-> 3. Fast-forward master + **v0.6.0 release proposal** (the canvas builder as
->    the headline; the launch-day kit stays holstered per the single-shot rule).
+> **NEXT: rehearsal → master → v0.6.0.** The 11-commit batch goes to `ensayo`
+> (`push --force-with-lease origin master:ensayo`), the full gate runs green on
+> all 3 OS AND the Frontend gate fires this time (the batch touches web/builder
+> squarely), then fast-forward `origin/master` and cut the **v0.6.0 release
+> proposal** (the visual builder as the headline; the launch-day kit stays
+> holstered per the single-shot rule).
 >
 > **LIVE FOLLOW-UPS (non-blocking):**
-> - **Design-track notice (copilot delivers):** the mockups' functional teal is
->   substituted by the violet accent (NC-7, ADR-0030 §1 intact) — and the 2b
->   error-state visuals are reused as-is by the canvas save-bar.
+> - **[post-v0.6.0 polish] token-al-volver-al-Builder:** changing chrome
+>   section and returning to Builder re-mounts the iframe, which re-asks for the
+>   bearer (the canvas doesn't persist across chrome navigations). Safe by
+>   design (token is iframe-memory-only, ADR-0030 §6); the fix is to hold the
+>   token in the desktop shell or re-hydrate the iframe. First polish after the
+>   release.
+> - **Design-track brief (copilot writes it):** for the Claude Design pass —
+>   the video's card captions/lower-thirds, the remaining final-6 deltas (the
+>   counter+Descartar+Aplicar live in the bottom save-bar vs the mockup's top
+>   header; a visible −/100%/+ zoom control), and the teal→violet reconciliation
+>   note (NC-7, ADR-0030 §1 intact; 2b error visuals reused by the save-bar).
+> - **[P3] transient headed drag:** the FIRST palette drag in a freshly-opened
+>   headed window occasionally no-ops (window reflow); irreproducible in 4+
+>   probes. Watch, don't chase.
 > - The generated `wailsjs/runtime/runtime.d.ts` fails the desktop frontend's
->   `no-explicit-any` lint (pre-existing, generated code — decide: ignore-path
->   or regenerate).
+>   `no-explicit-any` lint (pre-existing, generated code — ignore-path or
+>   regenerate).
 > - `/understand --full` (the understand-anything plugin graph is >150 files
->   stale) — an idle-moment task, NOT mid-piece.
-> - The Claude Desktop `obsidian` MCP server gets the `.nosync` path ONLY if it
->   protests (filesystem already has it; one-line recipe in the §13 report).
+>   stale) — an idle-moment task.
+> - **Chano's personal errands** (surface on open, non-blocking): rotate the
+>   `github_pat_` in `claude_desktop_config.json` + delete
+>   `BRIDGE-STATUS-2026-07-26.md`; the Gatekeeper/SmartScreen release captures;
+>   the Settings→Social-preview upload; the `obsidian` MCP `.nosync` path only
+>   if it protests (filesystem already has it, §13).
 >
 > **PREVIOUS (2026-07-26): a TWO-RELEASE day — v0.4.0 (Korvun Desktop) and v0.5.0
 > (Webhook channel) both PUBLISHED; the Webhook piece went spec-to-production in a
