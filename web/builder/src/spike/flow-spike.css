@@ -1,0 +1,77 @@
+/*
+  SP0 spike-only styles (ADR-0039). Maps the house tokens (styles/theme.css)
+  onto React Flow's --xy-* variables so the canvas follows [data-theme] in
+  both light and dark without touching the library CSS.
+*/
+.flow-spike {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--base);
+  color: var(--text-1);
+  font-family: var(--font-ui);
+}
+
+.flow-spike header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border);
+}
+
+.flow-spike h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.flow-spike button {
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.flow-spike .canvas {
+  flex: 1;
+  min-height: 0;
+}
+
+.flow-spike .react-flow {
+  --xy-background-color: var(--base);
+  --xy-node-background-color-default: var(--surface);
+  --xy-node-border-default: 1px solid var(--border);
+  --xy-node-border-radius-default: var(--radius-md);
+  --xy-node-boxshadow-default: none;
+  --xy-handle-background-color-default: var(--surface-2);
+  --xy-handle-border-color-default: var(--accent);
+  --xy-edge-label-color-default: var(--text-2);
+}
+
+.flow-spike .react-flow__edge-path {
+  stroke: var(--text-3);
+}
+
+/* Keep the library's attribution visible (its ask), but on house tokens so it
+   meets WCAG AA — the stock #999999 fails contrast in light mode. */
+.flow-spike .react-flow__attribution {
+  background: var(--surface);
+}
+.flow-spike .react-flow__attribution a {
+  color: var(--text-3);
+}
+
+.flow-spike .korvun-node {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-1);
+  font-size: 0.8rem;
+}
