@@ -626,8 +626,12 @@ func (b *builder) buildBrain(bc config.BrainConfig) (brain.Brain, error) {
 	if err != nil {
 		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 	}
+	// Persona (builder-canvas spec FR-PERSONA-2, NC-4): composed ONCE here, then
+	// applied only when non-empty — a nil persona or an all-empty block adds
+	// ZERO options, keeping today's requests byte-for-byte intact.
+	personaPrompt := composePersonaPrompt(bc.Persona)
 	if bc.Agent != nil {
-		return b.buildAgentBrain(bc, selected)
+		return b.buildAgentBrain(bc, selected, personaPrompt)
 	}
 	pol, err := buildPolicy(bc.Policy)
 	if err != nil {
@@ -635,12 +639,33 @@ func (b *builder) buildBrain(bc config.BrainConfig) (brain.Brain, error) {
 	}
 	coord := buildCoordinator(bc.Dispatch, bc.Policy.Kind)
 	orchOpts := []brain.Option{brain.WithLogger(b.logger), brain.WithMetrics(b.metrics)}
+	if personaPrompt != "" {
+		// The previously-unwired path: the persona reaches the model as the
+		// request's system message via WithSystemPrompt (AS-PERSONA-2).
+		orchOpts = append(orchOpts, brain.WithSystemPrompt(personaPrompt))
+	}
 	if b.store != nil {
 		// Shared durable memory; recentTurns 0 => the Orchestrator default
 		// (ADR-0019: config stays minimal, history depth is a Brain concern).
 		orchOpts = append(orchOpts, brain.WithConversationStore(b.store, 0))
 	}
 	return brain.NewOrchestrator(coord, selected, pol, orchOpts...), nil
+}
+
+// composePersonaPrompt maps the config persona block onto the brain package's
+// Persona and composes it (brain.ComposePersona). The mapping lives HERE so
+// internal/brain never imports internal/config (the same seam direction as the
+// rest of the factory). nil in → "" out.
+func composePersonaPrompt(p *config.PersonaConfig) string {
+	if p == nil {
+		return ""
+	}
+	return brain.ComposePersona(&brain.Persona{
+		DisplayName:  p.DisplayName,
+		Tone:         p.Tone,
+		Language:     p.Language,
+		Instructions: p.Instructions,
+	})
 }
 
 // buildAgentBrain assembles a single-model tool-use AgentBrain (ADR-0021). The
@@ -650,7 +675,7 @@ func (b *builder) buildBrain(bc config.BrainConfig) (brain.Brain, error) {
 // lives, so a dangerous name fails loudly at boot (ErrUnknownTool, §8). The shared
 // durable store and metrics are injected like the Orchestrator's; only the FINAL
 // user+assistant pair is persisted (§6).
-func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model) (brain.Brain, error) {
+func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model, personaPrompt string) (brain.Brain, error) {
 	if len(selected) != 1 {
 		return nil, fmt.Errorf("%w: brain %q: got %d", ErrAgentModelCount, bc.Name, len(selected))
 	}
@@ -676,6 +701,11 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model)
 	}
 	if bc.Agent.SystemPrompt != "" {
 		opts = append(opts, brain.WithAgentSystemPrompt(bc.Agent.SystemPrompt))
+	}
+	if personaPrompt != "" {
+		// Persona as a PREFIX before the intact ADR-0021 protocol block
+		// (FR-PERSONA-2, AS-PERSONA-3); empty adds nothing.
+		opts = append(opts, brain.WithAgentPersona(personaPrompt))
 	}
 	if b.store != nil {
 		opts = append(opts, brain.WithAgentConversationStore(b.store, 0))

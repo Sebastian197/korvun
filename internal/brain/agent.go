@@ -52,8 +52,12 @@ type AgentBrain struct {
 	perModelCall time.Duration
 	fallback     string
 	systemPrompt string
-	logger       *slog.Logger
-	metrics      metrics.Metrics
+	// personaPrefix is the composed persona fragment (ComposePersona) prepended
+	// BEFORE the protocol block in the seed system message (builder-canvas spec
+	// FR-PERSONA-2, NC-4). Empty = today's prompt byte-for-byte.
+	personaPrefix string
+	logger        *slog.Logger
+	metrics       metrics.Metrics
 	// store is the optional, conversation-keyed memory (ADR-0018). It persists the
 	// FINAL user+assistant pair only — never the tool-use trace (§6). nil =
 	// stateless. historyN is how many prior turns to load.
@@ -79,6 +83,16 @@ func WithAgentFallback(text string) AgentOption {
 // protocol block in the seed system message (ADR-0021 §3.1).
 func WithAgentSystemPrompt(prompt string) AgentOption {
 	return func(a *AgentBrain) { a.systemPrompt = prompt }
+}
+
+// WithAgentPersona sets the composed persona fragment (ComposePersona output)
+// prepended as a PREFIX before the ADR-0021 protocol block in the seed system
+// message, separated by one blank line (builder-canvas spec FR-PERSONA-2,
+// NC-4 resolved). The protocol block itself is untouched — grammar, catalog
+// and operator prompt keep their §3.1 internal order. An empty prefix leaves
+// the prompt byte-identical to today.
+func WithAgentPersona(prefix string) AgentOption {
+	return func(a *AgentBrain) { a.personaPrefix = prefix }
 }
 
 // WithAgentLogger sets the structured logger. A nil logger is ignored.
@@ -201,6 +215,11 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// scratch slice — it grows with assistant:TOOL + user:OBSERVATION turns and is
 	// NEVER persisted (§5, §6).
 	sysPrompt := buildSystemPrompt(a.tools, a.systemPrompt)
+	if a.personaPrefix != "" {
+		// Persona rides as a PREFIX; buildSystemPrompt's output stays intact
+		// (FR-PERSONA-2 — nothing overwritten, both contributions present).
+		sysPrompt = a.personaPrefix + "\n\n" + sysPrompt
+	}
 	req, ok := requestWithHistory(env, sysPrompt, history)
 	if !ok {
 		return nil, nil // nothing to ask — clean no-reply (ADR-0014 §5)

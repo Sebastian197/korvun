@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"unicode/utf8"
 )
 
 // DefaultRequestTimeout is the per-attempt provider timeout used when neither a
@@ -265,6 +266,22 @@ type BrainConfig struct {
 	// fan-out Orchestrator (ADR-0021). Both satisfy brain.Brain, so the router and
 	// cmd/korvun are agnostic to which one a brain wires. nil = the Orchestrator.
 	Agent *AgentConfig `json:"agent,omitempty"`
+	// Persona, when present, gives this brain a personality composed as a PREFIX
+	// of its system prompt (builder-canvas spec FR-PERSONA-1, NC-4 resolved).
+	// nil = today's behavior byte-for-byte: no system-prompt contribution at all.
+	Persona *PersonaConfig `json:"persona,omitempty"`
+}
+
+// PersonaConfig is the optional per-brain personality block (builder-canvas
+// spec FR-PERSONA-1, NC-4 resolved): all fields are free text and optional.
+// DisplayName is PRESENTATION ONLY — BrainConfig.Name remains the routing key.
+// Validate caps each field in RUNES (user-visible characters, not bytes):
+// display_name 80, tone 200, language 60, instructions 4000 (FR-PERSONA-3).
+type PersonaConfig struct {
+	DisplayName  string `json:"display_name,omitempty"`
+	Tone         string `json:"tone,omitempty"`
+	Language     string `json:"language,omitempty"`
+	Instructions string `json:"instructions,omitempty"`
 }
 
 // AgentConfig configures a tool-use AgentBrain (ADR-0021). Tools names the
@@ -524,8 +541,39 @@ func (c *Config) validateBrains() (map[string]bool, error) {
 		if err := validateAgent(i, b.Agent); err != nil {
 			return nil, err
 		}
+		if err := validatePersona(i, b.Persona); err != nil {
+			return nil, err
+		}
 	}
 	return names, nil
+}
+
+// validatePersona checks the optional persona block's length caps
+// (FR-PERSONA-3, NC-4 resolved). Caps count RUNES, not bytes, so multi-byte
+// text is capped by what the operator actually typed. Every violation names
+// the indexed field path (brains[i].persona.<field>) so the builder's inline
+// 400 mapping can target the offending input.
+func validatePersona(brainIdx int, p *PersonaConfig) error {
+	if p == nil {
+		return nil
+	}
+	caps := []struct {
+		field string
+		value string
+		max   int
+	}{
+		{"display_name", p.DisplayName, 80},
+		{"tone", p.Tone, 200},
+		{"language", p.Language, 60},
+		{"instructions", p.Instructions, 4000},
+	}
+	for _, c := range caps {
+		if n := utf8.RuneCountInString(c.value); n > c.max {
+			return fmt.Errorf("%w: brains[%d].persona.%s: exceeds %d characters (got %d)",
+				ErrInvalidConfig, brainIdx, c.field, c.max, n)
+		}
+	}
+	return nil
 }
 
 // validateAgent checks the optional agent block's structure (ADR-0021). Tool-name
