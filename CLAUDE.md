@@ -153,6 +153,13 @@ third skill to document.
 - Prefer the Go standard library whenever reasonable.
 - Every external dependency requires a justifying ADR in `docs/adr/` AND
   Context7 verification before adoption.
+- **Frontend lockfiles (learned the hard way — a v0.6.0 rehearsal red):**
+  regenerate lockfiles ALWAYS with `npm install --include=optional` and verify
+  `npm ci` runs clean TWICE in a row (determinism). A plain `npm install` on
+  macOS silently omits the optional-of-optional subtree of platform WASM
+  bindings (e.g. rolldown → `@emnapi/*`), so `npm ci` passes locally but breaks
+  on Linux CI. Conflicting/floating transitives are pinned with EXACT
+  `overrides` (no `^`) in `package.json`.
 
 ## Documentation layout
 

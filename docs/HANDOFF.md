@@ -87,110 +87,92 @@ explicit decision.
 
 ## Current state (as of 2026-08-01)
 
-> **CURRENT (2026-08-01, end of day): BUILDER-CANVAS complete SP0–SP6, smoke
-> gate PASSED on the real desktop app, docs closed — the batch is going to
-> rehearsal now.** Local batch of ELEVEN commits ahead of `origin/master`
-> (`d89acf1`): `722a20e` SP0 (+ADR-0039 `accepted`) → `af63a34` SP1 persona →
-> `04b42f4` SP2 schema+projection → `f6973df` SP3 canvas view → `f7b00f2` SP4
-> the switch + real-binary e2e → `40589f8` build hygiene → `faf1850` docs
-> (mid-piece close) → `cfea538` lockfile P1 → `e1882d1` SP5 delete → `0243bcc`
-> SP6 dress-to-final-6 → **this docs-of-close commit**.
+> **CURRENT (2026-08-01, session close): BUILDER-CANVAS piece LANDED and
+> v0.6.0 PUBLISHED — the builder is a visual node editor, shipped.**
+> `master` = `origin/master` = **`51005c3`** (the v0.6.0 notes atop the piece).
 >
-> **SP5 + SP6 (the two that finished the piece):** SP5 = DELETE with a domain
-> CASCADE (removing a brain/channel also drops its routes — no dangling-route
-> 400), the final-6 drag hint, and a clean-console GUARDIAN (zero CSP, zero
-> 404s: brand favicon shipped, select chevron redrawn in pure CSS — the old
-> `data:` URI was CSP-blocked). SP6 = DRESS to final-6: rich nodes
-> (icon/sensitivity+locality badges/policy line), sectioned palette, the
-> "N cambios sin aplicar" counter + **Descartar**, the editable webhook
-> mapping, a violet handle-hover halo, and a SINGLE header inside the desktop
-> iframe (the builder's own bar hides when `self !== top`).
+> **The piece — LANDED (14 commits, `722a20e`→`abc7362`).** SP0 spike +
+> ADR-0039 → SP1 persona-per-brain (Go) → SP2 schema+projection → SP3 canvas
+> view → SP4 the switch + real-binary e2e → build hygiene → docs → lockfile P1
+> → SP5 delete-with-cascade → SP6 dress-to-final-6 → docs-close → **@emnapi
+> lockfile fix → prettier/eslint wailsjs exclude → CI builder-dist**. The
+> rehearsal went red TWICE — both legitimate, both turned into a HARDER CI:
+> (1) the frontend lockfiles' transitive WASM deps (`@emnapi/*` via rolldown)
+> floated and broke `npm ci` on Linux while passing on macOS → pinned with
+> `overrides` + a from-scratch optional-inclusive lock regen (the new CLAUDE.md
+> rule); (2) the first real exercise of the Frontend gate exposed
+> chrome-frontend debt — prettier/eslint auditing generated `wailsjs/`, and the
+> chrome e2e never built `web/builder/dist` so the iframe served the placeholder
+> → both fixed. Third rehearsal green (Quality ×3 SO + Frontend's 4 jobs), then
+> a clean fast-forward `d89acf1`→`abc7362`.
 >
-> **The audit (§20) and its P1:** a full walk of the desktop app found `make
-> desktop` BROKEN — `web/builder`'s lockfile was out of sync, so the release
-> artifact could not build. Fixed in `cfea538` (that fix MUST ride this batch or
-> v0.6.0 won't compile). The audit also confirmed every OTHER control across
-> Inicio/Actividad/Canales/Ajustes/Onboarding is live (the two "dead" ones were
-> my probe errors, re-confirmed working); the "cero controles muertos" bar is
-> met (INVENTARIO-GATE, report §24).
+> **v0.6.0 PUBLISHED (~20:22 UTC) — the sixth release, the visual builder.**
+> Draft-until-complete 3/3 (Release headless + Release Desktop finalizer both
+> green; released `draft=false`), **21 assets**, both families cosign-signed
+> keyless. Korvun Desktop 0.6.0 embeds the canvas (single header in the
+> iframe). Highlights: drag-to-compose palette, validator-respecting cables,
+> the VISIBLE privacy exclusion (gray dashed cable to cloud models on private
+> brains), delete-with-domain-cascade, Descartar, hot apply; persona per brain
+> in the Go core; the three channels editable visually (the latent
+> CHANNEL_TYPES bug dead). Additive, zero breaking, `go.mod` untouched.
+> Release: https://github.com/Sebastian197/korvun/releases/tag/v0.6.0
 >
-> **SMOKE GATE — PASSED (report §26/§27):** the REAL desktop chrome (`make
-> desktop` fresh from the batch, real core) driven end-to-end at human speed —
-> 12 stations green. Recorded for the content pack: **two videos in
-> `design-drafts/media/`** (`korvun-v060-demo-full.webm`,
-> `korvun-v060-clip-60s.webm`; recordVideo of the viewport — zero terminals/
-> tokens by construction; `.webm` not `.mov` because ffmpeg is absent). One
-> non-blocking snag only (below).
+> **CONTENT PACKAGE — COMPLETE (all in `design-drafts/media/`, gitignored).**
+> Brutos: `korvun-v060-demo-full.webm`, `korvun-v060-clip-60s.webm` (recordVideo
+> of the viewport — zero terminals/tokens by construction). Cartelas from Claude
+> Design in `media/cards/` (apertura/cierre + 3 lower-thirds + thumbnail, ×3
+> formats + README). Finales in `media/final/` (5): `korvun-v060-clip-{1920x1080,
+> 1080x1080,1080x1920}.mp4` (27s each, apertura+lower-thirds+cierre, ending on
+> "reload succeeded" green), `korvun-v060-demo-full-1080p.mp4` (43s), + the
+> YouTube thumbnail. Montaged with a static ffmpeg 7.1 (imageio-ffmpeg via pip —
+> brew was compiling python from source).
 >
-> **The piece in one paragraph:** @xyflow/react 12.11.2 (MIT, ADR-0039; visible
-> token-restyled attribution is POLICY), persona per brain composed as a system
-> prompt PREFIX for both brain kinds (rune caps 80/200/60/4000, field-path
-> 400s), the schema mirror current (CHANNEL_TYPES + webhook block + per-type
-> modes — the latent single-type bug is dead), a pure deterministic
-> config→graph projection with the ADR-0015 exclusion as DATA, the canvas view
-> over it (palette / properties panel / same reload machine), and the SWITCH:
-> post-token the canvas is the face, spike and gates retired, ConfigEditor
-> demoted to module. Verified: Vitest 117/117, preview e2e 6/6 (declared
-> re-target of builder.spec.ts only), REAL-binary e2e 3/3 (master flow with
-> real drags, painted dashed excluded stroke, axe complete with contrast in
-> dark AND light), desktop suite 18/18 (canvas inside the iframe), `make
-> quality` green, `go.mod`/`go.sum` untouched all week.
+> **PUBLICATION PLAN (tomorrow, 2026-08-02 — Chano's decision). STRICT ORDER:**
+> 1. **Repo Social preview FIRST** — Settings → Social preview → upload
+>    `.github/social-preview.png`. Prerequisite of every link below.
+> 2. **LinkedIn** — the copilot-written copy (the "historia" variant
+>    recommended; Chano has it in the chat) + the video NATIVE (attached), the
+>    `media/final/korvun-v060-clip-1080x1080.mp4` file.
+> 3. **X** — the English copy + the 16:9 file (`korvun-v060-clip-1920x1080.mp4`).
+> 4. **YouTube** (if the channel debuts) — `korvun-v060-demo-full-1080p.mp4` as
+>    the video + the thumbnail from `media/final/`; the vertical
+>    (`korvun-v060-clip-1080x1920.mp4`) as a Short.
+> RULES: video ALWAYS native (attached, never a link); reply to comments in the
+> first hour; save the post URLs (feedback prioritises the queue). RESERVED —
+> the single-shot cartucho, DO NOT touch tomorrow: **Hacker News, r/selfhosted,
+> Product Hunt** — only at the lienzo+web+beta convergence.
 >
-> **Five things the REAL e2e caught that jsdom never could** (each fixed):
-> dropped nodes could land outside the fitted viewport (now re-fitView on node
-> count change); the page had no h1 (brand is now the h1 — axe contrast-on
-> clean); the master flow MUTATED its own fixture (the core persists applied
-> config — the suite now serves a throwaway copy); the desktop suite's
-> serial-order contract (the canvas spec now hands the core back STOPPED); two
-> ambiguous substring matchers (exact: true).
->
-> **Build hygiene closed at the root (`40589f8`)** — the promised fix for the
-> node_modules-vs-Go saga (three bites: golangci walk, `flatted 2` dir, `.git`
-> ref corruption): every Go invoker (Makefile, golangci config via
-> `issues.exclude-dirs` — schema-verified with `golangci-lint config verify` —
-> and every raw `./...` in `quality.yml`) now enumerates packages from a
-> find-with-node_modules-PRUNED dir list, because ONE junk file in node_modules
-> aborts `go list ./...` ENTIRELY (verified empirically). **Nested go.mod files
-> were ruled out on purpose: both UIs ride //go:embed from the root module and a
-> module boundary would break the embeds.** A `guard-gopkgs` target in `make
-> quality` turns any relapse into an immediate, explained red (proven: fails on
-> empty list AND on a contaminated list; quality stays green with junk planted).
-> Also done this week: the repo moved OUT of iCloud sync (`korvun.nosync` +
-> symlink at the old path) — the duplicate-minting source is gone.
->
-> **NEXT: rehearsal → master → v0.6.0.** The 11-commit batch goes to `ensayo`
-> (`push --force-with-lease origin master:ensayo`), the full gate runs green on
-> all 3 OS AND the Frontend gate fires this time (the batch touches web/builder
-> squarely), then fast-forward `origin/master` and cut the **v0.6.0 release
-> proposal** (the visual builder as the headline; the launch-day kit stays
-> holstered per the single-shot rule).
+> **NEXT (after publication): the OPERATOR CONSOLE.** Read+reply to any
+> channel's conversations manually from the desktop, no brains/models involved
+> (`docs/ROAD-TO-BETA.md`). SPEC FIRST, with the on-disk verifications recorded
+> there (what the store persists today for conversations/messages; whether the
+> control API already exposes their read; where the brain can be inhibited). In
+> PARALLEL: the **website + GitHub Pages docs track** (open product decisions:
+> site language ES/EN/bilingual, and the `korvun.dev` domain).
 >
 > **LIVE FOLLOW-UPS (non-blocking):**
-> - **[post-v0.6.0 polish] token-al-volver-al-Builder:** changing chrome
->   section and returning to Builder re-mounts the iframe, which re-asks for the
->   bearer (the canvas doesn't persist across chrome navigations). Safe by
->   design (token is iframe-memory-only, ADR-0030 §6); the fix is to hold the
->   token in the desktop shell or re-hydrate the iframe. First polish after the
->   release.
-> - **Design-track brief (copilot writes it):** for the Claude Design pass —
->   the video's card captions/lower-thirds, the remaining final-6 deltas (the
->   counter+Descartar+Aplicar live in the bottom save-bar vs the mockup's top
->   header; a visible −/100%/+ zoom control), and the teal→violet reconciliation
->   note (NC-7, ADR-0030 §1 intact; 2b error visuals reused by the save-bar).
+> - **[post-v0.6.0 polish] token-al-volver-al-Builder:** changing chrome section
+>   and returning to Builder re-mounts the iframe, which re-asks for the bearer
+>   (the canvas doesn't persist across chrome navigations). Safe by design
+>   (token is iframe-memory-only, ADR-0030 §6); fix = hold the token in the
+>   desktop shell or re-hydrate the iframe. First polish after the release.
+> - **Design-track brief (copilot writes it):** the builder STATE mockups + the
+>   remaining final-6 deltas (counter+Descartar+Aplicar live in the bottom
+>   save-bar vs the mockup's top header; a visible −/100%/+ zoom control) + the
+>   teal→violet reconciliation made FORMAL (NC-7, ADR-0030 §1; the v0.6.0
+>   cartelas already apply the violet in the video).
 > - **[P3] transient headed drag:** the FIRST palette drag in a freshly-opened
 >   headed window occasionally no-ops (window reflow); irreproducible in 4+
 >   probes. Watch, don't chase.
-> - The generated `wailsjs/runtime/runtime.d.ts` fails the desktop frontend's
->   `no-explicit-any` lint (pre-existing, generated code — ignore-path or
->   regenerate).
 > - `/understand --full` (the understand-anything plugin graph is >150 files
->   stale) — an idle-moment task.
-> - **Chano's personal errands** (surface on open, non-blocking): rotate the
->   `github_pat_` in `claude_desktop_config.json` + delete
->   `BRIDGE-STATUS-2026-07-26.md`; the Gatekeeper/SmartScreen release captures;
->   the Settings→Social-preview upload; the `obsidian` MCP `.nosync` path only
->   if it protests (filesystem already has it, §13).
+>   stale) — an idle-moment task. (graphify, the canonical graph, was refreshed
+>   this session.)
+> - **Chano's personal errands** (surface on open, non-blocking): the
+>   Gatekeeper/SmartScreen release captures; rotate the `github_pat_` in
+>   `claude_desktop_config.json` + delete `BRIDGE-STATUS-2026-07-26.md`. (The
+>   Settings→Social-preview upload moved to tomorrow's publication plan, step 1.)
 >
+
 > **PREVIOUS (2026-07-26): a TWO-RELEASE day — v0.4.0 (Korvun Desktop) and v0.5.0
 > (Webhook channel) both PUBLISHED; the Webhook piece went spec-to-production in a
 > single session.** `origin/master` = local `master` = **`d2cea2b`** (v0.5.0 notes atop
