@@ -120,6 +120,12 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ hashFiles('cmd/korvun-desktop/frontend/package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       - run: npm run build
+      # The harness's core embeds web/builder/dist via go:embed; build it fresh
+      # so the /builder/ iframe serves the REAL builder, not the committed
+      # placeholder — the SP4/SP6 canvas e2e drive the real builder in the frame.
+      - name: Build embedded builder dist
+        working-directory: web/builder
+        run: npm ci && npm run build
       # Pre-compile the harness so its cold build (modernc.org/sqlite tree)
       # never eats into Playwright's webServer timeout on a cache miss.
       - run: go build -o /dev/null ../e2e-harness
