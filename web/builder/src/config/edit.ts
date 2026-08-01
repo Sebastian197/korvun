@@ -27,6 +27,13 @@ export function newBrain(): BrainConfig {
   return { name: '', sensitivity: 'public', policy: { kind: 'priority' }, dispatch: 'fanout', models: [] }
 }
 
+/** A fresh channel (the palette-drop default): telegram/polling with an empty
+ *  token_env — the properties panel completes it; the server 400 is the
+ *  authority on a still-empty value (builder-canvas SP3). */
+export function newChannel(): Config['channels'][number] {
+  return { type: 'telegram', mode: 'polling', token_env: '' }
+}
+
 export type ConfigAction =
   | { kind: 'setBrainField'; brain: number; field: 'name' | 'sensitivity' | 'dispatch'; value: string }
   | { kind: 'setPolicyKind'; brain: number; value: string }
@@ -42,6 +49,7 @@ export type ConfigAction =
   // Canvas actions (builder-canvas SP2, FR-SER-3). The canvas mutates the SAME
   // working copy through these branches — the graph is a projection, never a
   // second state (NC-6).
+  | { kind: 'addChannel' }
   | { kind: 'connectRoute'; channel: number; brain: number }
   | { kind: 'disconnectRoute'; route: number }
   | { kind: 'dropModel'; brain: number; model: ModelConfig }
@@ -105,6 +113,10 @@ export function configReducer(state: Config, action: ConfigAction): Config {
           [action.field]: action.value,
         }),
       }
+    case 'addChannel':
+      // A channel palette block dropped on the canvas (SP3): the fresh
+      // telegram/polling default; the panel completes token_env.
+      return { ...state, channels: [...state.channels, newChannel()] }
     case 'connectRoute':
       // Drawing the canal→cerebro edge IS creating the route (FR-SCOPE-3). A
       // route names the channel by its TYPE — the registration rule of

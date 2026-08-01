@@ -1,0 +1,119 @@
+/*
+  Canvas view styles (builder-canvas SP3). House tokens throughout (ADR-0030,
+  styles/theme.css); the violet affordance is var(--accent) — NEVER a loose
+  hex (NC-7; the CanvasView test scans this file for smuggled violet).
+  The excluded composition edge (ADR-0015 data from SP2) paints gray dashed.
+*/
+.canvas-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  height: 100%;
+}
+
+.korvun-canvas {
+  display: flex;
+  flex: 1;
+  min-height: 480px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--base);
+  color: var(--text-1);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+.canvas-palette {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 168px;
+  padding: var(--space-md);
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.palette-title {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.palette-block {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: 0.85rem;
+  cursor: grab;
+}
+
+.canvas-surface {
+  position: relative;
+  flex: 1;
+  min-height: 480px;
+}
+
+.canvas-surface .react-flow {
+  --xy-background-color: var(--base);
+  --xy-node-background-color-default: var(--surface);
+  --xy-node-border-default: 1px solid var(--border);
+  --xy-node-border-radius-default: var(--radius-md);
+  --xy-node-boxshadow-default: none;
+  --xy-handle-background-color-default: var(--surface-2);
+  --xy-handle-border-color-default: var(--accent);
+  --xy-theme-selected: var(--accent);
+  --xy-edge-label-color-default: var(--text-2);
+}
+
+.canvas-surface .react-flow__edge-path {
+  stroke: var(--text-3);
+}
+
+/* The connection affordance (the in-progress cable) rides the accent token. */
+.canvas-surface .react-flow__connectionline path,
+.canvas-surface .react-flow__connection-path {
+  stroke: var(--accent);
+}
+
+/* ADR-0015 exclusion: present but inert — gray, dashed, dimmed. */
+.canvas-surface .react-flow__edge.edge-excluded .react-flow__edge-path {
+  stroke: var(--text-3);
+  stroke-dasharray: 6 4;
+  opacity: 0.55;
+}
+
+.canvas-node {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-1);
+  font-size: 0.8rem;
+}
+
+.canvas-surface .react-flow__attribution {
+  background: var(--surface);
+}
+.canvas-surface .react-flow__attribution a {
+  color: var(--text-3);
+}
+
+.properties-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 280px;
+  padding: var(--space-md);
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  overflow: auto;
+}
+
+.properties-panel h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+}

@@ -115,5 +115,15 @@ export const LOCALITIES = ['local', 'cloud'] as const
 export const CHANNEL_TYPES = ['telegram', 'discord', 'webhook'] as const
 export const CHANNEL_MODES = ['polling'] as const
 
+/** Per-type transport modes, mirroring config.Validate's type switch
+ *  (config.go:444-452): telegram → polling, discord → gateway, webhook → NO
+ *  mode ("webhook takes no mode", ADR-0038 §1 NC-1c). The flat CHANNEL_MODES
+ *  above predates discord/webhook and remains only for the legacy form. */
+export const CHANNEL_MODES_BY_TYPE: Record<(typeof CHANNEL_TYPES)[number], readonly string[]> = {
+  telegram: ['polling'],
+  discord: ['gateway'],
+  webhook: [],
+}
+
 /** Providers that require an api_key_env (cloud). Mirrors config.Validate: groq. */
 export const CLOUD_PROVIDERS = new Set<string>(['groq'])

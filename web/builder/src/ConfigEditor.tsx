@@ -262,7 +262,9 @@ function RouteForm({ r, index, dispatch }: { r: Config['routes'][number]; index:
   )
 }
 
-function ReloadView({ status, onRetry }: { status: ReloadStatus; onRetry: () => void }) {
+// Exported since SP3: the canvas save-bar reuses the SAME reload UI (the
+// FR-HOT-5 rule — no duplicated reload states).
+export function ReloadView({ status, onRetry }: { status: ReloadStatus; onRetry: () => void }) {
   switch (status.phase) {
     case 'idle':
       return null
@@ -305,7 +307,8 @@ function ReloadView({ status, onRetry }: { status: ReloadStatus; onRetry: () => 
   }
 }
 
-function SaveErrorView({ error }: { error: SaveError }) {
+// Exported since SP3: the canvas reuses the SAME save-error treatments.
+export function SaveErrorView({ error }: { error: SaveError }) {
   switch (error.kind) {
     case 'validation':
       return (
