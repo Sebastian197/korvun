@@ -16,3 +16,4 @@ coverage/
 test-results/
 playwright-report/
 playwright/.cache/
+e2e-binary/korvun.e2e.run.json

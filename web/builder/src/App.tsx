@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { getBrains, getChannels, getConfig, type BrainSummary, type ChannelSummary } from './api.ts'
 import { cleartextRisk } from './cleartext.ts'
 import type { Config } from './config/schema.ts'
-import { ConfigEditor } from './ConfigEditor.tsx'
 import './App.css'
 
-// Phase 2b.1 minimal builder: reads the live wiring (/api/brains + /api/channels,
-// open) and — once the operator pastes the admin bearer — the raw config
-// (/api/config, gated). READ-ONLY: no edit forms yet (that is 2b.2). The point of
-// this cut is "the builder loads and shows the live state, wearing Korvun's face."
+// The builder: reads the live wiring (/api/brains + /api/channels, open) and —
+// once the operator pastes the admin bearer — the full config (/api/config,
+// gated). Since SP4 (FR-SCOPE-1) the post-token FACE is the canvas; the 2b
+// ConfigEditor survives as a MODULE (ReloadView/SaveErrorView + the reload
+// machine live there), no longer as a view.
+
+// Lazy: the canvas chunk loads only after the token gate opens, so the main
+// bundle stays flat.
+const CanvasView = lazy(() => import('./canvas/CanvasView.tsx').then((m) => ({ default: m.CanvasView })))
 
 const EVENTS = [
   { key: 'received', label: 'received' },
@@ -49,10 +53,10 @@ export function App() {
   return (
     <div className="app">
       <header className="bar">
-        <span className="brand">
+        <h1 className="brand">
           <span className="glyph" aria-hidden="true" />
           korvun
-        </span>
+        </h1>
         <span className="crumb">builder</span>
         <span className="spacer" />
         <span className="token-state">{token ? 'bearer ✓' : 'no token'}</span>
@@ -65,6 +69,16 @@ export function App() {
         </p>
       )}
 
+      {config !== null ? (
+        // The canvas face (FR-SCOPE-1): palette + surface + properties panel +
+        // the save-bar riding the same reload machine as the 2b editor.
+        <main className="canvas-main">
+          <Suspense fallback={<p className="muted">loading…</p>}>
+            <CanvasView baseline={config} token={token} onAuthError={() => setToken('')} />
+          </Suspense>
+        </main>
+      ) : (
+        <>
       <main className="grid">
         <section className="panel">
           <h2>Brains</h2>
@@ -145,12 +159,12 @@ export function App() {
           </form>
         ) : err ? (
           <p className="err">Could not load config: {err}</p>
-        ) : config === null ? (
-          <p className="muted">loading…</p>
         ) : (
-          <ConfigEditor baseline={config} token={token} onAuthError={() => setToken('')} />
+          <p className="muted">loading…</p>
         )}
       </section>
+        </>
+      )}
 
       <footer className="legend">
         {EVENTS.map((e) => (

@@ -3,7 +3,7 @@
 // POSTed. Everything here is a pure function so the guarantees (round-trip preserves
 // untouched fields, dirty detection) are Vitest-testable without a DOM.
 
-import type { Config, ModelConfig, BrainConfig, PersonaConfig } from './schema'
+import type { Config, ModelConfig, BrainConfig, PersonaConfig, WebhookConfig } from './schema'
 
 /** Deep clone of a config baseline. */
 export function clone(c: Config): Config {
@@ -54,6 +54,14 @@ export type ConfigAction =
   | { kind: 'disconnectRoute'; route: number }
   | { kind: 'dropModel'; brain: number; model: ModelConfig }
   | { kind: 'setPersonaField'; brain: number; field: keyof PersonaConfig; value: string }
+  // SP4: the webhook block is editable from the properties panel. mapping is
+  // deliberately NOT a panel field in v1 (server defaults rule, ADR-0038 §1).
+  | {
+      kind: 'setWebhookField'
+      channel: number
+      field: 'bind' | 'path' | 'outbound_url' | 'outbound_token_env'
+      value: string
+    }
 
 // Immutable helpers: replace one element of an array without touching the rest.
 function replaceAt<T>(arr: T[], i: number, next: T): T[] {
@@ -149,6 +157,23 @@ export function configReducer(state: Config, action: ConfigAction): Config {
         ...b,
         persona: { ...(b.persona ?? {}), [action.field]: action.value },
       }))
+    case 'setWebhookField': {
+      // The persona pattern for the webhook block (ADR-0038 §1): the first
+      // edit on a blockless webhook channel materializes it; later edits
+      // patch one field preserving siblings. Completeness (outbound_url
+      // required) stays the server 400's call.
+      const webhook: WebhookConfig = {
+        ...(state.channels[action.channel].webhook ?? {}),
+        [action.field]: action.value,
+      }
+      return {
+        ...state,
+        channels: replaceAt(state.channels, action.channel, {
+          ...state.channels[action.channel],
+          webhook,
+        }),
+      }
+    }
   }
 }
 

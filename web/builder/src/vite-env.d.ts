@@ -6,4 +6,5 @@
 // deps). Only the one signature used is declared; runtime is node.
 declare module 'node:fs' {
   export function readFileSync(path: string | URL, encoding: 'utf-8'): string
+  export function existsSync(path: string | URL): boolean
 }

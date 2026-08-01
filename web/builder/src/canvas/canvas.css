@@ -4,6 +4,13 @@
   hex (NC-7; the CanvasView test scans this file for smuggled violet).
   The excluded composition edge (ADR-0015 data from SP2) paints gray dashed.
 */
+.canvas-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 60vh;
+}
+
 .canvas-shell {
   display: flex;
   flex-direction: column;

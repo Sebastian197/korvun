@@ -41,11 +41,22 @@ async function readOnly(page: Page) {
   await page.route('**/api/channels', (r) => json(r, 200, CHANNELS))
 }
 
+// SP4 re-target (the declared switch list): the post-paste face is the CANVAS
+// (FR-SCOPE-1), so the load anchor is the drop surface, edits go node→panel,
+// and the save button is Aplicar — the reload machine and its testids are the
+// SAME (reused, not duplicated).
 async function loadWithToken(page: Page) {
   await page.goto('/builder/')
   await page.getByLabel('admin bearer token').fill('secret')
   await page.getByRole('button', { name: 'Load' }).click()
-  await expect(page.getByLabel('name', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('canvas-surface')).toBeVisible()
+}
+
+// Open the brain panel and rename it — the canvas equivalent of the old
+// BrainForm name edit the pre-SP4 specs drove.
+async function renameBrain(page: Page, value: string) {
+  await page.getByTestId('brain:0').click()
+  await page.getByLabel('name', { exact: true }).fill(value)
 }
 
 test('reload survives ECONNREFUSED during cutover, reaches succeeded, makes no external requests', async ({
@@ -69,8 +80,8 @@ test('reload survives ECONNREFUSED during cutover, reaches succeeded, makes no e
   })
 
   await loadWithToken(page)
-  await page.getByLabel('name', { exact: true }).fill('support-v2')
-  await page.getByRole('button', { name: 'Save and reload' }).click()
+  await renameBrain(page, 'support-v2')
+  await page.getByRole('button', { name: /aplicar/i }).click()
 
   await expect(page.getByTestId('reload-inflight')).toContainText('cutover-in-progress')
   await expect(page.getByTestId('reload-succeeded')).toBeVisible({ timeout: 30_000 })
@@ -88,8 +99,8 @@ test('prefers-reduced-motion: the reload flow still succeeds and the enter anima
   await page.route('**/api/reload/r1', (r) => json(r, 200, { state: 'succeeded' }))
 
   await loadWithToken(page)
-  await page.getByLabel('name', { exact: true }).fill('assistant-v2')
-  await page.getByRole('button', { name: 'Save and reload' }).click()
+  await renameBrain(page, 'assistant-v2')
+  await page.getByRole('button', { name: /aplicar/i }).click()
 
   const ok = page.getByTestId('reload-succeeded')
   await ok.waitFor({ state: 'visible', timeout: 15000 }) // flow works without View Transitions
@@ -98,11 +109,11 @@ test('prefers-reduced-motion: the reload flow still succeeds and the enter anima
   expect(parseFloat(dur)).toBeLessThan(0.02)
 })
 
-test('axe-core: the editor forms have no accessibility violations', async ({ page }) => {
+test('axe-core: the canvas view has no accessibility violations', async ({ page }) => {
   await readOnly(page)
   await page.route('**/api/config', (r) => json(r, 200, BASE_CONFIG))
   await loadWithToken(page)
-  const results = await new AxeBuilder({ page }).include('.editor').analyze()
+  const results = await new AxeBuilder({ page }).include('.canvas-shell').analyze()
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
 })
 
@@ -114,8 +125,8 @@ test('409 self-lock renders its distinct treatment', async ({ page }) => {
       : json(r, 200, BASE_CONFIG),
   )
   await loadWithToken(page)
-  await page.getByLabel('name', { exact: true }).fill('x')
-  await page.getByRole('button', { name: 'Save and reload' }).click()
+  await renameBrain(page, 'x')
+  await page.getByRole('button', { name: /aplicar/i }).click()
   await expect(page.getByTestId('save-selflock')).toBeVisible()
   await expect(page.getByTestId('save-reload-in-progress')).toHaveCount(0)
 })
@@ -126,8 +137,8 @@ test('401 clears the token and returns to the paste screen', async ({ page }) =>
     r.request().method() === 'POST' ? json(r, 401, { error: 'unauthorized' }) : json(r, 200, BASE_CONFIG),
   )
   await loadWithToken(page)
-  await page.getByLabel('name', { exact: true }).fill('x')
-  await page.getByRole('button', { name: 'Save and reload' }).click()
+  await renameBrain(page, 'x')
+  await page.getByRole('button', { name: /aplicar/i }).click()
   await expect(page.getByLabel('admin bearer token')).toBeVisible()
 })
 

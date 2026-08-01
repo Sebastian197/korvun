@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
   useState,
@@ -16,6 +17,7 @@ import {
   type Edge as RFEdge,
   type Node as RFNode,
   type NodeProps,
+  type ReactFlowInstance,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './canvas.css'
@@ -26,6 +28,8 @@ import {
   SENSITIVITIES,
   DISPATCHES,
   POLICY_KINDS,
+  PROVIDERS,
+  LOCALITIES,
 } from '../config/schema'
 import { clone, isDirty, configReducer, newModel, type ConfigAction } from '../config/edit'
 import { graphFromConfig, canConnect, type GraphNode } from './graph'
@@ -151,12 +155,12 @@ function Field({
   label,
   value,
   onChange,
-  readOnly,
+  placeholder,
 }: {
   label: string
   value: string
-  onChange?: (v: string) => void
-  readOnly?: boolean
+  onChange: (v: string) => void
+  placeholder?: string
 }) {
   return (
     <label className="field">
@@ -164,8 +168,8 @@ function Field({
       <input
         className="txt"
         value={value}
-        readOnly={readOnly ?? false}
-        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+        placeholder={placeholder ?? ''}
+        onChange={(e) => onChange(e.target.value)}
       />
     </label>
   )
@@ -199,13 +203,16 @@ function ChannelPanel({ c, index, dispatch }: { c: Config['channels'][number]; i
       />
       {c.type === 'webhook' && (
         <>
-          {/* The nested webhook block (ADR-0038 §1). READ-ONLY in SP3: the red
-              fixes presence only; editing these fields has no test yet — it
-              goes red-first in SP4 rather than shipping untested mutations. */}
-          <Field label="bind" value={c.webhook?.bind ?? ''} readOnly />
-          <Field label="path" value={c.webhook?.path ?? ''} readOnly />
-          <Field label="outbound_url" value={c.webhook?.outbound_url ?? ''} readOnly />
-          <Field label="outbound_token_env" value={c.webhook?.outbound_token_env ?? ''} readOnly />
+          {/* The nested webhook block (ADR-0038 §1), editable since SP4 via
+              setWebhookField — the first edit materializes a missing block. */}
+          {(['bind', 'path', 'outbound_url', 'outbound_token_env'] as const).map((field) => (
+            <Field
+              key={field}
+              label={field}
+              value={c.webhook?.[field] ?? ''}
+              onChange={(value) => dispatch({ kind: 'setWebhookField', channel: index, field, value })}
+            />
+          ))}
         </>
       )}
     </>
@@ -260,13 +267,32 @@ function PropertiesPanel({
   } else {
     const [b, m] = selected.split(':')[1].split('.').map(Number)
     const mc = cfg.brains[b]?.models[m]
-    // Model editing stays in the brain's form scope; the panel shows the facts.
+    // Editable since SP4, through the existing updateModel action.
+    const up = (patch: Partial<NonNullable<typeof mc>>) =>
+      dispatch({ kind: 'updateModel', brain: b, model: m, patch })
     body = mc ? (
       <>
         <h2>model · {mc.model_id || '(unset)'}</h2>
-        <p className="muted">
-          {mc.provider} · {mc.locality}
-        </p>
+        <SelectField
+          label="provider"
+          value={mc.provider}
+          options={PROVIDERS}
+          onChange={(provider) => up({ provider })}
+        />
+        <Field label="model_id" value={mc.model_id} onChange={(model_id) => up({ model_id })} />
+        <SelectField
+          label="locality"
+          value={mc.locality}
+          options={LOCALITIES}
+          onChange={(locality) => up({ locality })}
+        />
+        {/* The env-var NAME, never the value (ADR-0010) — the house microcopy. */}
+        <Field
+          label="api_key_env"
+          value={mc.api_key_env ?? ''}
+          onChange={(api_key_env) => up({ api_key_env })}
+          placeholder="env var name"
+        />
       </>
     ) : null
   }
@@ -298,6 +324,12 @@ export function CanvasView({
   const locked = reload.phase === 'polling'
   const dirty = isDirty(wc, base)
 
+  // Dropped blocks must always land IN VIEW: React Flow fits only on mount,
+  // so a node added outside the fitted viewport would be clipped (and
+  // unreachable). Re-fit whenever the node count changes. (The jsdom test
+  // seam never calls onInit — flow stays null there, a clean no-op.)
+  const [flow, setFlow] = useState<ReactFlowInstance | null>(null)
+
   const graph = useMemo(() => graphFromConfig(wc), [wc])
   const nodes = useMemo<CanvasFlowNode[]>(
     () =>
@@ -320,6 +352,10 @@ export function CanvasView({
       })),
     [graph],
   )
+
+  useEffect(() => {
+    flow?.fitView({ padding: 0.15 })
+  }, [flow, nodes.length])
 
   const onConnect = (c: Connection) => {
     // The guard runs here too: React Flow's isValidConnection covers the
@@ -393,6 +429,7 @@ export function CanvasView({
               isValidConnection={isValidConnection}
               onConnect={onConnect}
               onNodeClick={(_, node) => setSelected(node.id)}
+              onInit={setFlow}
               colorMode={document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'}
               fitView
             >

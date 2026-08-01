@@ -1,0 +1,17 @@
+{
+  "channels": [],
+  "brains": [
+    {
+      "name": "asistente",
+      "sensitivity": "private",
+      "policy": { "kind": "priority", "order": ["ollama", "groq"] },
+      "dispatch": "fanout",
+      "models": [
+        { "provider": "ollama", "model_id": "llama3.2:1b", "locality": "local" },
+        { "provider": "groq", "model_id": "llama-3.3-70b", "locality": "cloud", "api_key_env": "GROQ_E2E_KEY" }
+      ]
+    }
+  ],
+  "routes": [],
+  "admin": { "token_env": "KORVUN_ADMIN_TOKEN" }
+}
