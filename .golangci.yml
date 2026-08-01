@@ -10,3 +10,9 @@ run:
 
 issues:
   exclude-use-default: false
+  # Never analyze node_modules: npm packages ship stray Go files (flatted) and
+  # sync tools mint junk there. Verified for this binary (v1.64.x):
+  # issues.exclude-dirs is the current knob (run.skip-dirs is its deprecated
+  # ancestor) — `golangci-lint config verify` validates the schema.
+  exclude-dirs:
+    - node_modules

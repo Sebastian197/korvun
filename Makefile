@@ -3,13 +3,24 @@ GOLANGCI_LINT := $(GOBIN)/golangci-lint
 GOIMPORTS := $(GOBIN)/goimports
 COVERAGE_THRESHOLD := 85
 
-.PHONY: build test lint cover quality fmt vet frontend-install frontend-build desktop-frontend-install desktop-frontend desktop dmg
+.PHONY: build test lint cover quality fmt vet guard-gopkgs frontend-install frontend-build desktop-frontend-install desktop-frontend desktop dmg
 
-# The builder frontend's node_modules vendors a stray Go package (flatted), which
-# `./...` would otherwise pick up. Exclude it from Go tooling. FOLLOW-UP (by
-# construction): a nested go.mod in web/builder would make root ./... skip it
-# without this filter — see the 2b.1 report.
-GO_PKGS := $(shell go list ./... 2>/dev/null | grep -v '/node_modules/')
+# Go tooling must NEVER walk node_modules. npm packages ship stray .go files
+# (flatted), and desktop sync tools mint junk like "x 2.go" in there — ONE such
+# file aborts `go list ./...` ENTIRELY (empty list → every tool silently runs
+# on nothing; the 2026-08-01 incident). Nested go.mod files are NOT an option:
+# both UIs ride //go:embed from the ROOT module (web/builder and the desktop
+# chrome, ADR-0029 §4), and a module boundary would break those embeds. So the
+# package DIRS are discovered by find with node_modules PRUNED (go never
+# enters it), handed to go list; the grep stays as a second belt.
+GO_PKG_DIRS := $(shell find . \( -name node_modules -o -name .git \) -prune -o -type f -name '*.go' -print 2>/dev/null | sed 's|/[^/]*$$||' | sort -u)
+# -e + the Error filter replicates `./...` semantics over explicit dirs: a
+# package whose files are ALL excluded by build tags (the wails desktop main)
+# is skipped silently instead of erroring the whole listing.
+GO_PKGS := $(shell go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' $(GO_PKG_DIRS) 2>/dev/null | grep -v '^$$' | grep -v '/node_modules/')
+# golangci-lint takes DIRECTORY paths, not import paths — derive them from
+# GO_PKGS (so the tag-excluded packages are filtered identically).
+GO_LINT_DIRS := $(patsubst github.com/Sebastian197/korvun%,.%,$(GO_PKGS))
 
 # The builder frontend (web/builder) is built to web/builder/dist and embedded via
 # go:embed (ADR-0029 §4). `build` (the shipped binary) rebuilds it FIRST so the
@@ -128,12 +139,12 @@ vet:
 
 fmt:
 	@echo "Checking gofmt..."
-	@test -z "$$(gofmt -l .)" || { echo "Files need gofmt:"; gofmt -l .; exit 1; }
+	@test -z "$$(gofmt -l $(GO_PKG_DIRS))" || { echo "Files need gofmt:"; gofmt -l $(GO_PKG_DIRS); exit 1; }
 	@echo "Checking goimports..."
-	@test -z "$$($(GOIMPORTS) -l .)" || { echo "Files need goimports:"; $(GOIMPORTS) -l .; exit 1; }
+	@test -z "$$($(GOIMPORTS) -l $(GO_PKG_DIRS))" || { echo "Files need goimports:"; $(GOIMPORTS) -l $(GO_PKG_DIRS); exit 1; }
 
 lint: fmt vet
-	$(GOLANGCI_LINT) run ./...
+	$(GOLANGCI_LINT) run $(GO_LINT_DIRS)
 
 cover:
 	@go test -race -coverprofile=coverage.out ./internal/... 2>&1 | tee /dev/stderr | grep -q 'ok' && \
@@ -153,5 +164,14 @@ cover:
 # not via go test. Lint, vet and test still cover ./... above; only
 # the coverage threshold excludes cmd/.
 
-quality: lint test cover
+# THE GUARD: a relapse must be an IMMEDIATE, explained red — never
+# silently-empty tooling. Raw `go list ./...` can never be required clean
+# (flatted legitimately ships Go files inside node_modules); what MUST hold is
+# that the EFFECTIVE package list is non-empty and node_modules-free.
+guard-gopkgs:
+	@test -n "$(strip $(GO_PKGS))" || { echo "FAIL: GO_PKGS is EMPTY — go list aborted (node_modules junk again? see the header of this Makefile); Go tooling would silently run on NOTHING"; exit 1; }
+	@case "$(GO_PKGS)" in *node_modules*) echo "FAIL: GO_PKGS contains node_modules — the exclusion regressed"; exit 1;; esac
+	@echo "GO_PKGS guard: $(words $(GO_PKGS)) packages, node_modules-free."
+
+quality: guard-gopkgs lint test cover
 	@echo "Quality gate passed."

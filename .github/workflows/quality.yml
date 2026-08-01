@@ -33,21 +33,33 @@ jobs:
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
           go install golang.org/x/tools/cmd/goimports@latest
 
+      # Raw `./...` walks node_modules (npm ships stray Go files; junk there
+      # aborts the whole listing — see the Makefile header). CI checkouts are
+      # Node-free, but every invoker rides the same pruned enumeration anyway.
       - name: Build
-        run: go build ./...
+        shell: bash
+        run: |
+          GO_PKGS=$(go list -e -f "{{if not .Error}}{{.ImportPath}}{{end}}" $(find . \( -name node_modules -o -name .git \) -prune -o -type f -name "*.go" -print | sed "s|/[^/]*$||" | sort -u) | grep -v "^$")
+          go build $GO_PKGS
 
       - name: Lint (fmt + vet + golangci-lint)
         shell: bash
         run: |
+          GO_PKG_DIRS=$(find . \( -name node_modules -o -name .git \) -prune -o -type f -name '*.go' -print | sed 's|/[^/]*$||' | sort -u)
+          GO_PKGS=$(go list -e -f "{{if not .Error}}{{.ImportPath}}{{end}}" $GO_PKG_DIRS | grep -v "^$")
           echo "Checking gofmt..."
-          test -z "$(gofmt -l .)" || { echo "Files need gofmt:"; gofmt -l .; exit 1; }
+          test -z "$(gofmt -l $GO_PKG_DIRS)" || { echo "Files need gofmt:"; gofmt -l $GO_PKG_DIRS; exit 1; }
           echo "Checking goimports..."
-          test -z "$($(go env GOPATH)/bin/goimports -l .)" || { echo "Files need goimports:"; $(go env GOPATH)/bin/goimports -l .; exit 1; }
-          go vet ./...
-          $(go env GOPATH)/bin/golangci-lint run ./...
+          test -z "$($(go env GOPATH)/bin/goimports -l $GO_PKG_DIRS)" || { echo "Files need goimports:"; $(go env GOPATH)/bin/goimports -l $GO_PKG_DIRS; exit 1; }
+          go vet $GO_PKGS
+          GO_LINT_DIRS=$(echo "$GO_PKGS" | sed "s|github.com/Sebastian197/korvun|.|")
+          $(go env GOPATH)/bin/golangci-lint run $GO_LINT_DIRS
 
       - name: Test
-        run: go test -race ./...
+        shell: bash
+        run: |
+          GO_PKGS=$(go list -e -f "{{if not .Error}}{{.ImportPath}}{{end}}" $(find . \( -name node_modules -o -name .git \) -prune -o -type f -name "*.go" -print | sed "s|/[^/]*$||" | sort -u) | grep -v "^$")
+          go test -race $GO_PKGS
 
       - name: Coverage gate
         shell: bash
@@ -121,13 +133,17 @@ jobs:
 
       - name: SAST (gosec)
         shell: bash
-        run: $(go env GOPATH)/bin/golangci-lint run --enable gosec ./...
+        run: |
+          GO_PKGS=$(go list -e -f "{{if not .Error}}{{.ImportPath}}{{end}}" $(find . \( -name node_modules -o -name .git \) -prune -o -type f -name "*.go" -print | sed "s|/[^/]*$||" | sort -u) | grep -v "^$")
+          GO_LINT_DIRS=$(echo "$GO_PKGS" | sed "s|github.com/Sebastian197/korvun|.|")
+          $(go env GOPATH)/bin/golangci-lint run --enable gosec $GO_LINT_DIRS
 
       - name: Govulncheck
         shell: bash
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          $(go env GOPATH)/bin/govulncheck ./...
+          GO_PKGS=$(go list -e -f "{{if not .Error}}{{.ImportPath}}{{end}}" $(find . \( -name node_modules -o -name .git \) -prune -o -type f -name "*.go" -print | sed "s|/[^/]*$||" | sort -u) | grep -v "^$")
+          $(go env GOPATH)/bin/govulncheck $GO_PKGS
 
   cross-compile:
     runs-on: ubuntu-latest
