@@ -85,9 +85,74 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-07-26)
+## Current state (as of 2026-08-01)
 
-> **CURRENT (2026-07-26): a TWO-RELEASE day — v0.4.0 (Korvun Desktop) and v0.5.0
+> **CURRENT (2026-08-01): the BUILDER-CANVAS piece went spec-to-code-complete in
+> one day — the builder IS a visual node editor now.** Local batch of SEVEN
+> commits, **NOT pushed** (the piece's gate below): `722a20e` (SP0 spike +
+> ADR-0039 `accepted`) → `af63a34` (SP1 persona-per-brain, Go) → `04b42f4` (SP2
+> schema + graph projection) → `f6973df` (SP3 canvas view) → `f7b00f2` (SP4 the
+> switch + real-binary e2e) → `40589f8` (build hygiene, below) → the docs-close
+> commit carrying this handoff. `origin/master` = `d89acf1` (the beta-launch
+> distribution plan, pushed as its own docs-only batch mid-piece).
+>
+> **The piece in one paragraph:** @xyflow/react 12.11.2 (MIT, ADR-0039; visible
+> token-restyled attribution is POLICY), persona per brain composed as a system
+> prompt PREFIX for both brain kinds (rune caps 80/200/60/4000, field-path
+> 400s), the schema mirror current (CHANNEL_TYPES + webhook block + per-type
+> modes — the latent single-type bug is dead), a pure deterministic
+> config→graph projection with the ADR-0015 exclusion as DATA, the canvas view
+> over it (palette / properties panel / same reload machine), and the SWITCH:
+> post-token the canvas is the face, spike and gates retired, ConfigEditor
+> demoted to module. Verified: Vitest 117/117, preview e2e 6/6 (declared
+> re-target of builder.spec.ts only), REAL-binary e2e 3/3 (master flow with
+> real drags, painted dashed excluded stroke, axe complete with contrast in
+> dark AND light), desktop suite 18/18 (canvas inside the iframe), `make
+> quality` green, `go.mod`/`go.sum` untouched all week.
+>
+> **Five things the REAL e2e caught that jsdom never could** (each fixed):
+> dropped nodes could land outside the fitted viewport (now re-fitView on node
+> count change); the page had no h1 (brand is now the h1 — axe contrast-on
+> clean); the master flow MUTATED its own fixture (the core persists applied
+> config — the suite now serves a throwaway copy); the desktop suite's
+> serial-order contract (the canvas spec now hands the core back STOPPED); two
+> ambiguous substring matchers (exact: true).
+>
+> **Build hygiene closed at the root (`40589f8`)** — the promised fix for the
+> node_modules-vs-Go saga (three bites: golangci walk, `flatted 2` dir, `.git`
+> ref corruption): every Go invoker (Makefile, golangci config via
+> `issues.exclude-dirs` — schema-verified with `golangci-lint config verify` —
+> and every raw `./...` in `quality.yml`) now enumerates packages from a
+> find-with-node_modules-PRUNED dir list, because ONE junk file in node_modules
+> aborts `go list ./...` ENTIRELY (verified empirically). **Nested go.mod files
+> were ruled out on purpose: both UIs ride //go:embed from the root module and a
+> module boundary would break the embeds.** A `guard-gopkgs` target in `make
+> quality` turns any relapse into an immediate, explained red (proven: fails on
+> empty list AND on a contaminated list; quality stays green with junk planted).
+> Also done this week: the repo moved OUT of iCloud sync (`korvun.nosync` +
+> symlink at the old path) — the duplicate-minting source is gone.
+>
+> **NEXT (the piece's exit gate, in order):**
+> 1. **Chano's visual smoke** — captures `sp4-canvas-{dark,light,panel}.png` in
+>    `design-drafts/` next to `final-6-builder-estados.png` (repeatable:
+>    `node e2e-binary/captures.mjs` with the binary serving).
+> 2. **Batch rehearsal**: push the 7-commit batch to `ensayo`, full gate green.
+> 3. Fast-forward master + **v0.6.0 release proposal** (the canvas builder as
+>    the headline; the launch-day kit stays holstered per the single-shot rule).
+>
+> **LIVE FOLLOW-UPS (non-blocking):**
+> - **Design-track notice (copilot delivers):** the mockups' functional teal is
+>   substituted by the violet accent (NC-7, ADR-0030 §1 intact) — and the 2b
+>   error-state visuals are reused as-is by the canvas save-bar.
+> - The generated `wailsjs/runtime/runtime.d.ts` fails the desktop frontend's
+>   `no-explicit-any` lint (pre-existing, generated code — decide: ignore-path
+>   or regenerate).
+> - `/understand --full` (the understand-anything plugin graph is >150 files
+>   stale) — an idle-moment task, NOT mid-piece.
+> - The Claude Desktop `obsidian` MCP server gets the `.nosync` path ONLY if it
+>   protests (filesystem already has it; one-line recipe in the §13 report).
+>
+> **PREVIOUS (2026-07-26): a TWO-RELEASE day — v0.4.0 (Korvun Desktop) and v0.5.0
 > (Webhook channel) both PUBLISHED; the Webhook piece went spec-to-production in a
 > single session.** `origin/master` = local `master` = **`d2cea2b`** (v0.5.0 notes atop
 > `7b67449`). Verified first-hand.
@@ -127,8 +192,10 @@ explicit decision.
 >   `BRIDGE-STATUS-2026-07-26.md`.
 >
 > **FOLLOW-UPS (non-blocking):**
-> - The nested `go.mod` under `web/builder` — TWO bites already (the golangci-lint
->   walk + the `flatted 2.go` duplicate): a candidate to raise in priority, Chano's call.
+> - ~~The nested `go.mod` under `web/builder`~~ — **RESOLVED 2026-08-01
+>   (`40589f8`) the other way**: node_modules pruned from every Go invoker's
+>   enumeration + the `guard-gopkgs` quality guard (nested go.mod was ruled out
+>   — it would break both //go:embed UIs; see Current state above).
 > - `WithBrainFactory` (a test seam for the full-circle e2e, SP5 case h).
 > - Smoke-trap hygiene (`wait $PID` to reap + a unique marker in `pgrep`, not a port
 >   number).

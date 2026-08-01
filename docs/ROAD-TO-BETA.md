@@ -445,6 +445,27 @@ y el binario headless intacto (la app es una carcasa, no un fork de la lógica).
 
 ---
 
+## Builder-lienzo (post-Webhook, segundo de la cola)
+
+> ✅ **COMPLETADO — código completo SP0–SP4, ADR-0039 `accepted`** — el builder ES
+> un editor visual de nodos: **el lienzo es la cara** tras la puerta del token
+> (FR-SCOPE-1), como chunk perezoso (el bundle principal incluso adelgaza). SP0
+> spike + ADR-0039 (**@xyflow/react 12.11.2**, MIT, CSP real del binario a cero
+> violaciones; **atribución visible re-estilizada con tokens = POLÍTICA**, gasto
+> cero en licencias); SP1 **persona por cerebro DENTRO** (config aditiva con topes
+> en runas + `ComposePersona` + prefijo en ambos tipos de brain — la pieza
+> "Personalidad por cerebro" de abajo queda cubierta); SP2 schema/proyección
+> (`CHANNEL_TYPES` al día con discord/webhook — **el bug latente del espejo,
+> muerto** — y `graphFromConfig` determinista con la exclusión ADR-0015 como
+> dato); SP3 la vista (paleta, panel de propiedades, save-bar sobre la MISMA
+> máquina de reload); SP4 el switch + **e2e contra el binario real** (flujo
+> maestro con drags reales, trazo excluido pintado, axe completo con contraste en
+> dark y light) **y dentro del iframe del escritorio** (18/18). `make quality`
+> verde `-race`. **El smoke visual de Chano (capturas sp4-canvas-* en
+> design-drafts/ junto a final-6) es el gate previo al ensayo/push del lote.**
+
+---
+
 ## Ampliación de alcance de la beta — piezas pendientes tras la Pieza 5
 
 > **Ampliación registrada (2026-07-26).** El objetivo de beta de Chano (Piezas
@@ -470,12 +491,11 @@ conversaciones y mensajes; si la API de control ya expone su lectura; si el
 cerebro tiene un punto donde inhibir la respuesta automática.
 
 ### Pieza — Personalidad por cerebro
+> ✅ Implementada DENTRO del Builder-lienzo (SP1 Go + panel del lienzo, NC-4):
+> `brains[i].persona` con `display_name`/`tone`/`language`/`instructions`,
+> compuesta como PREFIJO del system prompt en ambos tipos de brain.
 Objetivo: identidad configurable por cerebro (nombre, tono, idioma,
 instrucciones de sistema), editable desde el panel.
-Nota: se implementa DENTRO del Builder-lienzo, en el panel de propiedades del
-nodo cerebro. No es pieza independiente.
-Verificar en disco: qué parte de la config de cerebro admite hoy
-instrucciones de sistema.
 
 ### Pieza — Herramientas gobernadas por políticas + skills
 Objetivo: que los agentes tengan herramientas útiles de serie y que el motor

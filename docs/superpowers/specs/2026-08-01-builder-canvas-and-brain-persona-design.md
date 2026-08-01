@@ -1,8 +1,9 @@
 # Piece BUILDER-CANVAS — visual node editor + personality per brain: Design Spec
 
-> **Status:** approved (2026-08-01) — SP0 gated on Context7. All clarifications
-> resolved (see "Clarifications resolved" below). Ready for TDD once the SP0
-> Context7 gate is confirmed connected.
+> **Status:** implemented (2026-08-01) — SP0–SP4 code-complete on the local
+> batch (`722a20e` → `f7b00f2`), ADR-0039 `accepted`. All clarifications were
+> resolved before TDD (see "Clarifications resolved" below). Pending: Chano's
+> visual smoke → batch rehearsal → push.
 >
 > **Governing ADRs (inherited as law):** ADR-0015 (pre-dispatch privacy
 > selector — Public keeps all models, Private keeps Local only), ADR-0017
