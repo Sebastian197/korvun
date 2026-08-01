@@ -502,6 +502,40 @@ Fuera de la beta: recuperación semántica y embeddings.
 Todas estas piezas quedan pendientes de design spec
 (docs/superpowers/specs/TEMPLATE.md).
 
+## Track paralelo — Sitio web + documentación (GitHub Pages)
+
+> Decisión de Chano (2026-08-01): corre EN PARALELO a la cola de la
+> beta — no bloquea ni es bloqueada por ninguna pieza. Estreno natural:
+> coordinado con el anuncio de la beta.
+
+Objetivo: la web pública de Korvun servida por GitHub Pages — una
+landing de producto con la identidad de marca + la documentación del
+repo, navegable, con buscador y fácil de entender para alguien que
+llega sin contexto.
+
+Requisito de acabado (Chano, 2026-08-01): profesional y elegante, con
+transiciones. Vara de medir: el design system del escritorio y el
+precedente 2b.3 del builder — motion nativo (CSS + View Transitions
+API), sobrio, prefers-reduced-motion SIEMPRE respetado, rendimiento
+primero (transform/opacity), y ninguna librería de animación sin ADR.
+
+Alcance orientativo (el design spec lo fija):
+- Generador de documentación sobre los markdown YA existentes
+  (INSTALL, QUICKSTART, CONFIGURATION, BUILDER, guías de canal,
+  releases), reorganizados y traducidos a lenguaje de usuario.
+- Landing de portada con la marca (paleta #7A5AF5/#2BC8B7, el K
+  terminal, Geist); el track visual lo lleva Claude Design.
+- Deploy automático: push a master → GitHub Actions → Pages.
+- Elección del generador EN EL SPEC con verificación Context7
+  (candidatos: VitePress / Docusaurus / MkDocs) + ADR de toolchain
+  (precedente ADR-0029; build-time, jamás en go.mod).
+
+Decisiones abiertas (se resuelven en el spec, las de producto son de
+Chano): idioma de la web (ES / EN / bilingüe — la doc del repo está
+en inglés); dominio propio korvun.dev (verificación + coste).
+
+Estado: pendiente de design spec.
+
 ---
 
 ## Post-beta
