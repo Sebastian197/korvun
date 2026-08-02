@@ -1,0 +1,7 @@
+# Build-time only (ADR-0040). node_modules is never committed.
+node_modules/
+
+# The built site is produced in CI by the pages workflow (SP5) and locally by
+# `make website-check`; never trusted from git.
+.vitepress/dist/
+.vitepress/cache/

@@ -3,7 +3,7 @@ GOLANGCI_LINT := $(GOBIN)/golangci-lint
 GOIMPORTS := $(GOBIN)/goimports
 COVERAGE_THRESHOLD := 85
 
-.PHONY: build test lint cover quality fmt vet guard-gopkgs frontend-install frontend-build desktop-frontend-install desktop-frontend desktop dmg
+.PHONY: build test lint cover quality fmt vet guard-gopkgs frontend-install frontend-build desktop-frontend-install desktop-frontend desktop dmg website-check
 
 # Go tooling must NEVER walk node_modules. npm packages ship stray .go files
 # (flatted), and desktop sync tools mint junk like "x 2.go" in there — ONE such
@@ -175,3 +175,29 @@ guard-gopkgs:
 
 quality: guard-gopkgs lint test cover
 	@echo "Quality gate passed."
+
+# --- Web track SP1: the site check harness (spec AS-1 + AS-9, ADR-0040) ----------
+# The public website (website/) is build-time only and Pages-published; it NEVER
+# gates the Go pipeline (`quality` does not depend on this target — the ADR-0029
+# §6 rule). This harness is what the SP5 pages.yml build job will run:
+# (1) npm ci TWICE with a lockfile compare — the CLAUDE.md determinism rule (a
+#     macOS `npm install` silently omitting the optional-of-optional WASM subtree
+#     is exactly what this catches BEFORE Linux CI does);
+# (2) a production build under base '/korvun/' (the project-page subdirectory);
+# (3) link + asset integrity over the built dist — a root-absolute path outside
+#     the base is the AS-1 violation that 404s on sebastian197.github.io/korvun/.
+website-check:
+	@set -e; \
+	cd website; \
+	echo "[website-check] (1/3) npm ci x2 — lockfile determinism (AS-9)"; \
+	lock1=$$(mktemp); cp package-lock.json "$$lock1"; \
+	npm ci; \
+	rm -rf node_modules; \
+	npm ci; \
+	cmp -s package-lock.json "$$lock1" || { rm -f "$$lock1"; echo "FAIL: package-lock.json drifted across npm ci runs"; exit 1; }; \
+	rm -f "$$lock1"; \
+	echo "[website-check] (2/3) vitepress build under base '/korvun/' (AS-1)"; \
+	npm run build; \
+	echo "[website-check] (3/3) link + asset integrity over dist (AS-1)"; \
+	node scripts/check-dist.mjs; \
+	echo "website-check passed."
