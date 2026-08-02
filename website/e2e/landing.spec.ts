@@ -98,10 +98,17 @@ test.describe('landing — brand, clip, pillars (FR-LAND-1..3)', () => {
     // them — wait until several consecutive frames show none running.
     await page.waitForTimeout(300) // let reveal.ts arm
     await page.evaluate(async () => {
+      // FINITE, time-driven animations only: scroll-driven ones never
+      // settle, and the hero's idle float is infinite BY DESIGN (SP2c) —
+      // awaiting either would hang this forever.
       const running = () =>
         document
           .getAnimations()
-          .filter((a) => a.timeline === document.timeline)
+          .filter(
+            (a) =>
+              a.timeline === document.timeline &&
+              a.effect?.getTiming().iterations !== Infinity,
+          )
       for (let quiet = 0, i = 0; quiet < 3 && i < 300; i++) {
         await new Promise((r) => requestAnimationFrame(r))
         if (running().length === 0) {

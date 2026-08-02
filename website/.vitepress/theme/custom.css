@@ -68,24 +68,105 @@
  * (scripts/check-motion.mjs is the gate), short and eased — never a
  * requirement, always an enhancement. */
 
-/* Hero presence at load — once, subtle. Gated behind the JS arm too, so
- * a no-JS visit is complete from the first pixel. */
-html.k-motion .VPHero .main,
+/* --- SP2c: the cinematic hero welcome (once, at load, ~1.2s) ----------
+ * The K lands with depth and weight — born slightly high, large and
+ * soft, it SETTLES, and its violet-tinted projected shadow grows and
+ * settles WITH it; afterwards a very subtle, slow float (±3px, ~7s)
+ * with the shadow breathing in counter-phase. The name composes right
+ * behind (~150ms), then text → tagline → buttons cascade (~90ms steps).
+ * Gated behind the JS arm (html.k-motion): with reduced motion or no JS
+ * the hero simply IS — complete, sharp, still (AS-4b/4c are the judges).
+ * `filter` is mandate-granted for the shadow. The animation target is
+ * the OUTER .image div ON PURPOSE — the only hero-image box with no
+ * static theme transform at any breakpoint (.image-src carries
+ * translate(-50%,-50%); .image-container carries translate(-32px,-32px)
+ * at ≥960px; animating either displaces the K — caught red-first). */
 html.k-motion .VPHero .image {
-  animation: k-enter 0.5s ease-out both;
+  animation:
+    k-hero-land 1s cubic-bezier(0.22, 1, 0.36, 1) both,
+    k-hero-float 7s ease-in-out 1.6s infinite,
+    k-hero-breathe 7s ease-in-out 1.6s infinite;
 }
-html.k-motion .VPHero .image {
-  animation-delay: 0.08s;
+@keyframes k-hero-land {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(1.06);
+    filter: blur(5px) drop-shadow(0 4px 8px rgba(122, 90, 245, 0));
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(1px) scale(0.998);
+    filter: blur(0px) drop-shadow(0 20px 32px rgba(122, 90, 245, 0.22));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0px) drop-shadow(0 16px 26px rgba(122, 90, 245, 0.2));
+  }
 }
-@keyframes k-enter {
+/* The idle float and its counter-phase shadow: when the K rises, the
+ * shadow softens and spreads (farther from the ground); when it comes
+ * back, it gathers. Alive, never dizzying. */
+@keyframes k-hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes k-hero-breathe {
+  0%,
+  100% {
+    filter: blur(0px) drop-shadow(0 16px 26px rgba(122, 90, 245, 0.2));
+  }
+  50% {
+    filter: blur(0px) drop-shadow(0 20px 32px rgba(122, 90, 245, 0.13));
+  }
+}
+
+/* The composed cascade: name leads, each next line rising ~90ms later. */
+html.k-motion .VPHero .name,
+html.k-motion .VPHero .heading .text,
+html.k-motion .VPHero .tagline,
+html.k-motion .VPHero .actions {
+  animation: k-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+html.k-motion .VPHero .name {
+  animation-delay: 0.15s;
+}
+html.k-motion .VPHero .heading .text {
+  animation-delay: 0.24s;
+}
+html.k-motion .VPHero .tagline {
+  animation-delay: 0.33s;
+}
+html.k-motion .VPHero .actions {
+  animation-delay: 0.42s;
+}
+@keyframes k-rise {
   from {
     opacity: 0;
     transform: translateY(12px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
+}
+
+/* The buttons' resting shadow — a static style that ARRIVES with their
+ * rise (never animated: the gate allows animating transform/opacity/
+ * filter only). */
+.VPHome .actions .VPButton.brand {
+  box-shadow: 0 8px 22px rgba(122, 90, 245, 0.3);
+}
+.VPHome .actions .VPButton.alt {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+}
+.dark .VPHome .actions .VPButton.alt {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 /* Scenes reveal by layers on viewport entry — once (reveal.ts unobserves

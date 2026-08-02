@@ -1,9 +1,10 @@
 // The motion-property gate (SP2b, the "transform/opacity ONLY" law from
-// the design spec FR-MOT-1 and ROAD-TO-BETA): every @keyframes block and
-// every transition declared in the site's own CSS may animate transform
-// and opacity, nothing else — anything else is compositor-hostile and
-// goes red HERE, not in a code review. Stdlib Node only; run from
-// website/.
+// the design spec FR-MOT-1 and ROAD-TO-BETA; SP2c amendment: `filter` is
+// additionally allowed — the mandate grants it for the hero's projected
+// shadow): every @keyframes block and every transition declared in the
+// site's own CSS may animate transform, opacity and filter, nothing else —
+// anything else is compositor-hostile and goes red HERE, not in a code
+// review. Stdlib Node only; run from website/.
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +13,7 @@ const CSS = fileURLToPath(
   new URL('../.vitepress/theme/custom.css', import.meta.url),
 )
 const css = readFileSync(CSS, 'utf-8')
-const ALLOWED = new Set(['transform', 'opacity', 'none'])
+const ALLOWED = new Set(['transform', 'opacity', 'filter', 'none'])
 const offences = []
 
 // @keyframes blocks: any declared property must be transform/opacity.
