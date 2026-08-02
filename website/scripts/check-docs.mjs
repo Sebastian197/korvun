@@ -35,9 +35,9 @@ const violations = []
 for (const file of html) {
   const rel = path.relative(DIST, file).split(path.sep).join('/')
   const text = readFileSync(file, 'utf-8')
-  const isES = rel.startsWith('es/')
-  // (1) stub markers — EN only (the ES layer is SP4's mandate).
-  if (!isES && text.includes('Stub (SP1')) {
+  // (1) stub markers — EVERY locale (the ES layer shipped in SP4; both
+  // marker spellings used along the way are outlawed).
+  if (/Stub \(SP|Stub — SP/.test(text)) {
     violations.push(`${rel}: still a stub`)
   }
   // (2) secret-looking values — every locale, no exceptions.
@@ -52,5 +52,5 @@ if (violations.length > 0) {
   process.exit(1)
 }
 console.log(
-  `check-docs: ${html.length} pages — EN map fully populated, no secret-looking values — OK`,
+  `check-docs: ${html.length} pages — every locale populated, no secret-looking values — OK`,
 )

@@ -49,9 +49,38 @@ export default defineConfig({
 
   themeConfig: {
     // In-browser full-text search (MiniSearch) — no external service
-    // (zero-CDN/zero-analytics posture, ADR-0040 §3).
+    // (zero-CDN/zero-analytics posture, ADR-0040 §3). The es strings ride
+    // search.options.locales (the Context7-verified shape) so the search
+    // UI speaks Spanish on /es/ (FR-I18N-2 / AS-5).
     search: {
       provider: 'local',
+      options: {
+        locales: {
+          es: {
+            translations: {
+              button: {
+                buttonText: 'Buscar',
+                buttonAriaLabel: 'Buscar',
+              },
+              modal: {
+                displayDetails: 'Mostrar lista detallada',
+                resetButtonTitle: 'Borrar búsqueda',
+                backButtonTitle: 'Cerrar búsqueda',
+                noResultsText: 'Sin resultados para',
+                footer: {
+                  selectText: 'seleccionar',
+                  selectKeyAriaLabel: 'intro',
+                  navigateText: 'para navegar',
+                  navigateUpKeyAriaLabel: 'flecha arriba',
+                  navigateDownKeyAriaLabel: 'flecha abajo',
+                  closeText: 'cerrar',
+                  closeKeyAriaLabel: 'escape',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     // ES is a partial layer (FR-I18N-1): most EN pages have no ES
     // counterpart, and with i18nRouting enabled the switcher links
