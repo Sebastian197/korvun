@@ -8,6 +8,12 @@ import { defineConfig } from 'vitepress'
 // (landing + quickstart today, expandable page-by-page — FR-I18N-1).
 export default defineConfig({
   base: '/korvun/',
+  // VitePress builds EVERY .md under the source root — and Playwright
+  // writes error-context.md artifacts into test-results/, which ended up
+  // PUBLISHED in dist (the docs-map gate caught them). Exclude test
+  // artifacts from the site source (srcExclude verified in the installed
+  // 1.6.4 types).
+  srcExclude: ['**/test-results/**', '**/playwright-report/**'],
   title: 'Korvun',
   description:
     'Self-hosted AI messaging gateway, multi-model router, and multi-brain orchestrator in a single Go binary.',
