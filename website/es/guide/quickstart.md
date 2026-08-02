@@ -7,7 +7,7 @@ el mismo en Linux, macOS y Windows.
 ## Antes de empezar
 
 - **El binario `korvun` instalado** — la
-  [guía de instalación (EN)](/guide/install) cubre descarga y verificación.
+  [guía de instalación](/es/guide/install) cubre descarga y verificación.
   Confírmalo con `korvun --version`.
 - **[Ollama](https://ollama.com)** para el modelo local (paso 1).
 - **Un token de bot de Telegram**, de [@BotFather](https://t.me/BotFather)
@@ -64,7 +64,7 @@ Los campos que más importan:
   una etiqueta inventada.
 
 Cada campo está documentado en la
-[referencia de configuración (EN)](/reference/configuration).
+[referencia de configuración](/es/reference/configuration).
 
 ## Paso 3 — Exporta el token
 
@@ -122,10 +122,17 @@ vuelve al chat — cero nube. Korvun sirve hasta `Ctrl-C` y apaga limpio.
   la primera respuesta tarda unos segundos, es el modelo cargándose — las
   siguientes son inmediatas.
 
+## Compilar desde código, si lo prefieres
+
+Requiere **Go 1.26.5+**:
+
+```sh
+make build          # or: go build ./cmd/korvun
+```
+
 ## Siguientes pasos
 
-- Configúralo **visualmente, sin JSON** → [el builder (EN)](/guide/builder)
-- Añade [Discord (EN)](/channels/discord) o un
-  [webhook (EN)](/channels/webhook)
-- La versión completa de esta guía y del resto de la documentación está en
-  inglés → [Quickstart](/guide/quickstart)
+- Configúralo **visualmente, sin JSON** → [el builder](/es/guide/builder)
+- Añade [Discord](/es/channels/discord) o un
+  [webhook](/es/channels/webhook)
+- Qué hace cada campo → [referencia de configuración](/es/reference/configuration)

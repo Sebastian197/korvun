@@ -189,23 +189,25 @@ quality: guard-gopkgs lint test cover
 website-check:
 	@set -e; \
 	cd website; \
-	echo "[website-check] (1/7) npm ci x2 — lockfile determinism (AS-9)"; \
+	echo "[website-check] (1/8) npm ci x2 — lockfile determinism (AS-9)"; \
 	lock1=$$(mktemp); cp package-lock.json "$$lock1"; \
 	npm ci; \
 	rm -rf node_modules; \
 	npm ci; \
 	cmp -s package-lock.json "$$lock1" || { rm -f "$$lock1"; echo "FAIL: package-lock.json drifted across npm ci runs"; exit 1; }; \
 	rm -f "$$lock1"; \
-	echo "[website-check] (2/7) vitepress build under base '/korvun/' (AS-1)"; \
+	echo "[website-check] (2/8) vitepress build under base '/korvun/' (AS-1)"; \
 	npm run build; \
-	echo "[website-check] (3/7) link + asset integrity over dist (AS-1)"; \
+	echo "[website-check] (3/8) link + asset integrity over dist (AS-1)"; \
 	node scripts/check-dist.mjs; \
-	echo "[website-check] (4/7) WCAG AA contrast over the site token pairs (AS-8)"; \
+	echo "[website-check] (4/8) WCAG AA contrast over the site token pairs (AS-8)"; \
 	node scripts/check-contrast.mjs; \
-	echo "[website-check] (5/7) motion-property gate — transform/opacity only (AS-perf)"; \
+	echo "[website-check] (5/8) motion-property gate — transform/opacity only (AS-perf)"; \
 	node scripts/check-motion.mjs; \
-	echo "[website-check] (6/7) docs-map gate — no stubs in EN, no secret-looking values (FR-DOCS)"; \
+	echo "[website-check] (6/8) docs-map gate — no stubs, no secret-looking values (FR-DOCS)"; \
 	node scripts/check-docs.mjs; \
-	echo "[website-check] (7/7) e2e — same-origin, motion law, axe, search, docs map (AS-2/3/4/8/perf)"; \
+	echo "[website-check] (7/8) locale-parity gate — ES mirrors EN, code blocks identical (SP4b)"; \
+	node scripts/check-parity.mjs; \
+	echo "[website-check] (8/8) e2e — same-origin, motion law, axe, search, docs map, i18n (AS-2/3/4/5/8/perf)"; \
 	npx playwright test; \
 	echo "website-check passed."

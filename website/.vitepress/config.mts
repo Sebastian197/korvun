@@ -82,16 +82,12 @@ export default defineConfig({
         },
       },
     },
-    // ES is a partial layer (FR-I18N-1): most EN pages have no ES
-    // counterpart, and with i18nRouting enabled the switcher links
-    // page-to-page — a dead link on every untranslated page (the harness
-    // caught it). `false` routes the switcher to the target locale ROOT
-    // (verified against the INSTALLED 1.6.4 source: types/default-theme.d.ts
-    // declares `i18nRouting?: boolean`, and langs.js gates the
-    // corresponding-page link on `i18nRouting !== false`; the function form
-    // Context7 shows is the unreleased 2.x). SP4 may refine per-page links
-    // where a counterpart exists (FR-I18N-2).
-    i18nRouting: false,
+    // ES is a FULL MIRROR of EN (Chano's 2026-08-02 decision, SP4b):
+    // every page has its twin, so the default per-page i18n routing is
+    // correct again — the switcher goes to the SAME page in the other
+    // language. The locale-parity gate (scripts/check-parity.mjs)
+    // guarantees no future page ships without its twin, which is what
+    // made the SP2b-era `i18nRouting: false` workaround retirable.
   },
 
   locales: {
@@ -152,16 +148,54 @@ export default defineConfig({
       link: '/es/',
       description:
         'Pasarela de mensajería con IA autoalojada: router multimodelo y orquestador multicerebro en un único binario Go.',
+      // Full structural mirror of the EN tree (SP4b) — the parity gate
+      // and the i18n e2e keep both sides identical page for page.
       themeConfig: {
         nav: [
-          { text: 'Guía', link: '/es/guide/quickstart' },
+          { text: 'Guía', link: '/es/guide/what-is-korvun' },
+          { text: 'Referencia', link: '/es/reference/configuration' },
+          { text: 'Releases', link: '/es/releases/' },
           { text: 'GitHub', link: 'https://github.com/Sebastian197/korvun' },
         ],
         sidebar: {
           '/es/guide/': [
             {
               text: 'Guía',
-              items: [{ text: 'Inicio rápido', link: '/es/guide/quickstart' }],
+              items: [
+                { text: '¿Qué es Korvun?', link: '/es/guide/what-is-korvun' },
+                { text: 'Instalación', link: '/es/guide/install' },
+                { text: 'Inicio rápido', link: '/es/guide/quickstart' },
+                { text: 'El builder visual', link: '/es/guide/builder' },
+              ],
+            },
+            {
+              text: 'Canales',
+              items: [
+                { text: 'Telegram', link: '/es/channels/telegram' },
+                { text: 'Discord', link: '/es/channels/discord' },
+                { text: 'Webhook', link: '/es/channels/webhook' },
+              ],
+            },
+          ],
+          '/es/channels/': [
+            {
+              text: 'Canales',
+              items: [
+                { text: 'Telegram', link: '/es/channels/telegram' },
+                { text: 'Discord', link: '/es/channels/discord' },
+                { text: 'Webhook', link: '/es/channels/webhook' },
+              ],
+            },
+          ],
+          '/es/reference/': [
+            {
+              text: 'Referencia',
+              items: [
+                {
+                  text: 'Configuración',
+                  link: '/es/reference/configuration',
+                },
+              ],
             },
           ],
         },

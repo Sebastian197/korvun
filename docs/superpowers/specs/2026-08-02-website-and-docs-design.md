@@ -127,13 +127,18 @@ reserved for the lienzo+web+beta convergence).
 
 ### i18n (Chano's decision 2026-08-02 — NOT an open point)
 
-- **FR-I18N-1** — Bilingual by layers: `root` locale = **EN, the complete
-  source of truth** (every page); `es` locale = **landing + quickstart
-  only**, under `/es/`, expandable page-by-page later without restructuring
-  (the `locales` map is already in place — Context7-verified shape).
-- **FR-I18N-2** — The default-theme locale switcher links EN↔ES; ES pages
-  without a counterpart simply do not exist in the `es` nav (no dead links).
-  Search UI strings translated for `es` via `search.options.locales`.
+- **FR-I18N-1** — ~~Bilingual by layers (ES = landing + quickstart)~~
+  **AMENDED (Chano, 2026-08-02, SP4b): the ES locale is a FULL MIRROR of
+  EN** — same ten pages, same nav/sidebar tree, under `/es/`. EN remains
+  the source of truth authored first; the technical truth (commands,
+  paths, ports, env-var names) is byte-identical between locales and
+  MECHANICALLY enforced (the locale-parity gate compares the fenced code
+  blocks of every page pair).
+- **FR-I18N-2** — The default-theme locale switcher links EN↔ES
+  **per page** (every page has its twin; the SP2b-era `i18nRouting:
+  false` workaround retired in SP4b). A future page added without its ES
+  twin is a permanent harness red (`scripts/check-parity.mjs`). Search UI
+  strings translated for `es` via `search.options.locales`.
 
 ### Finish & motion (the ROAD-TO-BETA bar)
 
