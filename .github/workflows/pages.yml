@@ -1,0 +1,72 @@
+# Deploy the public website (website/, ADR-0040) to GitHub Pages.
+#
+# NON-GATING for the Go pipeline (FR-DEP-2, the ADR-0029 §6 rule): no Go
+# job depends on this workflow — a red here can never block a build, the
+# cross-compile, or a release.
+#
+# The build job runs the FULL site harness (make website-check), so what
+# deploys is exactly what passed every gate: base-path integrity, WCAG AA
+# contrast, the motion-property law, the docs map, locale parity, and the
+# e2e suite (AS-1/2/3/4/5/8/9/perf). Deploy only ever happens from master
+# (FR-DEP-1): the push trigger is master-only, and the workflow_dispatch
+# path is guarded by an explicit ref check on the deploy job.
+#
+# Action pinning (house convention; tags verified at source 2026-08-02):
+# every action below is GitHub-owned -> repo major-tag convention.
+name: Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'website/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; never cancel an in-progress production deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v7 # GitHub-owned, repo major-tag convention
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Setup Pages
+        uses: actions/configure-pages@v6 # GitHub-owned, repo major-tag convention
+      - name: Install the site toolchain + the e2e browser
+        run: |
+          cd website
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Site gates — the full harness (AS-1/2/3/4/5/8/9/perf)
+        run: make website-check
+      - name: Upload the built site
+        uses: actions/upload-pages-artifact@v5 # GitHub-owned, repo major-tag convention
+        with:
+          path: website/.vitepress/dist
+
+  deploy:
+    # Belt over the master-only push trigger: a workflow_dispatch from any
+    # other ref builds (useful as a check) but never deploys.
+    if: github.ref == 'refs/heads/master'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5 # GitHub-owned, repo major-tag convention
