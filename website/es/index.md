@@ -50,6 +50,36 @@ features:
       para 6 plataformas, verificadas con cosign.
 ---
 
+<!-- La escena de privacidad (SP2b): el diferencial con su propio momento.
+     Todo verificado contra v0.6.0 — el cable gris discontinuo hacia
+     modelos cloud en cerebros privados es comportamiento publicado. -->
+<section class="k-privacy" aria-labelledby="k-privacy-title">
+  <h2 id="k-privacy-title">Privacidad que se ve</h2>
+  <p>
+    Marca un cerebro como privado y el builder enseña la exclusión en vez
+    de enterrarla: un cable gris discontinuo hacia cada modelo cloud. Las
+    conversaciones sensibles se quedan en los modelos locales — una
+    política de enrutado dibujada en el lienzo, no una promesa en un
+    README.
+  </p>
+  <div
+    class="k-privacy-diagram"
+    role="img"
+    aria-label="Un cerebro privado unido a un modelo local por un cable violeta continuo, y excluido de un modelo cloud por un cable gris discontinuo"
+  >
+    <div class="k-wire-row">
+      <span class="k-node">cerebro privado</span>
+      <span class="k-cable k-cable-live" aria-hidden="true"></span>
+      <span class="k-node">modelo local</span>
+    </div>
+    <div class="k-wire-row">
+      <span class="k-node">cerebro privado</span>
+      <span class="k-cable k-cable-excluded" aria-hidden="true"></span>
+      <span class="k-node k-node-dim">modelo cloud — excluido</span>
+    </div>
+  </div>
+</section>
+
 <!-- El clip del estreno (FR-LAND-2): mismo fichero committeado. Los assets
      de public/ se referencian con ruta absoluta raíz — VitePress los
      reescribe bajo el base '/korvun/' al construir (una ruta relativa aquí

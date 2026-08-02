@@ -90,9 +90,28 @@ test.describe('landing — brand, clip, pillars (FR-LAND-1..3)', () => {
     // computed colors, and a mid-fade element blends with the page bg
     // (23 phantom color-contrast hits when scanned during the fade —
     // found empirically). Steady state is what users read.
-    await page.evaluate(() =>
-      Promise.all(document.getAnimations().map((a) => a.finished)),
-    )
+    // Deterministic settle before auditing. Two subtleties, both earned:
+    // (1) only time-driven animations can finish — a scroll-driven one
+    // (animation-timeline: view()) parks forever and its `finished`
+    // promise never settles; (2) the reveal transitions are ARMED a few
+    // frames after load (and carry stagger delays), so sample-once misses
+    // them — wait until several consecutive frames show none running.
+    await page.waitForTimeout(300) // let reveal.ts arm
+    await page.evaluate(async () => {
+      const running = () =>
+        document
+          .getAnimations()
+          .filter((a) => a.timeline === document.timeline)
+      for (let quiet = 0, i = 0; quiet < 3 && i < 300; i++) {
+        await new Promise((r) => requestAnimationFrame(r))
+        if (running().length === 0) {
+          quiet++
+        } else {
+          quiet = 0
+          await Promise.all(running().map((a) => a.finished.catch(() => {})))
+        }
+      }
+    })
     const axe = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa'])
       .analyze()

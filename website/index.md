@@ -57,6 +57,35 @@ features:
     linkText: Releases
 ---
 
+<!-- The privacy scene (SP2b): the differential gets its own moment. All
+     claims verified against v0.6.0 — the gray dashed cable to cloud
+     models on private brains is shipped behavior. -->
+<section class="k-privacy" aria-labelledby="k-privacy-title">
+  <h2 id="k-privacy-title">Privacy you can see</h2>
+  <p>
+    Mark a brain private and the builder shows the exclusion instead of
+    burying it: a gray dashed cable to every cloud model. Sensitive
+    conversations stay with local models — a routing policy drawn on the
+    canvas, not a promise in a README.
+  </p>
+  <div
+    class="k-privacy-diagram"
+    role="img"
+    aria-label="A private brain linked to a local model by a solid violet cable, and excluded from a cloud model by a gray dashed cable"
+  >
+    <div class="k-wire-row">
+      <span class="k-node">private brain</span>
+      <span class="k-cable k-cable-live" aria-hidden="true"></span>
+      <span class="k-node">local model</span>
+    </div>
+    <div class="k-wire-row">
+      <span class="k-node">private brain</span>
+      <span class="k-cable k-cable-excluded" aria-hidden="true"></span>
+      <span class="k-node k-node-dim">cloud model — excluded</span>
+    </div>
+  </div>
+</section>
+
 <!-- The launch clip (FR-LAND-2): committed, same-origin, click-to-play.
      public/ assets are referenced root-absolute — VitePress rewrites them
      under the '/korvun/' base at build (a bare relative path here is

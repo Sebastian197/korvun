@@ -189,19 +189,21 @@ quality: guard-gopkgs lint test cover
 website-check:
 	@set -e; \
 	cd website; \
-	echo "[website-check] (1/5) npm ci x2 — lockfile determinism (AS-9)"; \
+	echo "[website-check] (1/6) npm ci x2 — lockfile determinism (AS-9)"; \
 	lock1=$$(mktemp); cp package-lock.json "$$lock1"; \
 	npm ci; \
 	rm -rf node_modules; \
 	npm ci; \
 	cmp -s package-lock.json "$$lock1" || { rm -f "$$lock1"; echo "FAIL: package-lock.json drifted across npm ci runs"; exit 1; }; \
 	rm -f "$$lock1"; \
-	echo "[website-check] (2/5) vitepress build under base '/korvun/' (AS-1)"; \
+	echo "[website-check] (2/6) vitepress build under base '/korvun/' (AS-1)"; \
 	npm run build; \
-	echo "[website-check] (3/5) link + asset integrity over dist (AS-1)"; \
+	echo "[website-check] (3/6) link + asset integrity over dist (AS-1)"; \
 	node scripts/check-dist.mjs; \
-	echo "[website-check] (4/5) WCAG AA contrast over the site token pairs (AS-8)"; \
+	echo "[website-check] (4/6) WCAG AA contrast over the site token pairs (AS-8)"; \
 	node scripts/check-contrast.mjs; \
-	echo "[website-check] (5/5) landing e2e — same-origin, reduced-motion, axe (AS-3/4/8)"; \
+	echo "[website-check] (5/6) motion-property gate — transform/opacity only (AS-perf)"; \
+	node scripts/check-motion.mjs; \
+	echo "[website-check] (6/6) landing e2e — same-origin, motion law, axe (AS-3/4/8/perf)"; \
 	npx playwright test; \
 	echo "website-check passed."
