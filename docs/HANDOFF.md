@@ -87,7 +87,53 @@ explicit decision.
 
 ## Current state (as of 2026-08-02)
 
-> **CURRENT (2026-08-02, session close): the WEBSITE piece is DELIVERED
+> **CURRENT (2026-08-02, day close): a TWO-LAUNCH day — the v0.6.0 public
+> premiere in the morning, and the WEBSITE from spec to production in the
+> same day.** `master` = `origin/master` = the session-close commit atop
+> **`2acc33e`**.
+>
+> **The whole day, in order:**
+> - **Morning — v0.6.0 premiered publicly**: LinkedIn (native square clip)
+>   + X (16:9, English copy); YouTube deferred to Chano. Recorded in the
+>   docs-only batch `67d78c4`. HN / r/selfhosted / Product Hunt stay
+>   RESERVED for the single-shot cartucho.
+> - **The WEB TRACK, spec→production in one day**: the 9-commit batch
+>   (`67d78c4..9414fc0`) — spec+ADR-0040, scaffold+harness, branded
+>   landing, scroll storytelling, cinematic hero, full EN docs, full ES
+>   MIRROR with the permanent locale-parity gate, and pages.yml. Ensayo
+>   green, Chano flipped Pages, deploy run **`30744809158`** green,
+>   **verification 11/11 against the deployed URL**:
+>   **https://sebastian197.github.io/korvun/** (ES: `…/es/`).
+> - **Docs-close `2acc33e`**: HANDOFF/ROAD-TO-BETA banners, README with
+>   the web in both languages, layered-i18n residue cleaned; the
+>   triggered redeploy observed green (the harness is the gate).
+>
+> **CHANO'S IMMEDIATE PENDING: publish the WEB ANNOUNCEMENT.** The
+> package is ready and delivered by the copilot (LinkedIn post in
+> Spanish + X post in English). On publishing: comment guard the first
+> hour + hand the links over for their record commit.
+>
+> **NEXT (next session): the OPERATOR CONSOLE — SPEC FIRST**, with the
+> on-disk verifications up front, already noted: (1) what the
+> conversation/message store persists TODAY; (2) whether the control API
+> already exposes conversation reads; (3) whether the brain has an
+> inhibition point to silence the automatic reply during operator
+> takeover (`docs/ROAD-TO-BETA.md`).
+>
+> **LIVE FOLLOW-UPS (non-blocking):**
+> - **Design-track brief (copilot writes it when Chano says):** builder
+>   STATE mockups + final-6 deltas + teal→violet reconciliation formal.
+> - **[post-v0.6.0 polish] token-al-volver-al-Builder** (iframe re-asks
+>   the bearer on chrome navigation).
+> - `/understand --full` (understand-anything graph stale) — idle moment.
+> - **[P3] transient headed drag** — watch, don't chase.
+> - **Chano's errands:** rotate the `github_pat_` in
+>   `claude_desktop_config.json` + delete `BRIDGE-STATUS-2026-07-26.md`;
+>   Gatekeeper/SmartScreen release captures; the repo Settings social
+>   preview (if still pending from the premiere checklist); **NEW: put
+>   the website URL in the repo's About box.**
+
+> **PREVIOUS (2026-08-02, piece close): the WEBSITE piece is DELIVERED
 > and LIVE — https://sebastian197.github.io/korvun/ (ES: …/korvun/es/).**
 > `master` = `origin/master` = **`9414fc0`** + the docs-close commit atop.
 >

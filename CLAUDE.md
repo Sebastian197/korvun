@@ -60,6 +60,18 @@ For every phase:
    coverage) over the WHOLE suite, not just the new code, before closing.
 6. **Documentation.** Update stage docs, ADRs, and the master document.
 
+## External enablers — the click comes BEFORE the push (2026-08-02)
+
+When a piece depends on an **external enablement toggle** that only Chano
+can flip (GitHub Pages "Source: GitHub Actions", a marketplace approval, a
+DNS record, an OAuth consent), the enablement click goes **BEFORE the push
+that triggers the dependent workflow**. Sequence the piece so the ask
+happens first: prepare everything, stop, get the click confirmed, THEN
+push. `master` must never show even a transient enablement red (the
+website piece showed one: the pages.yml run that fired on the landing push
+failed on "Pages not enabled" before the flip — harmless, but a red on
+master's history that better sequencing avoids).
+
 ## External documentation verification — which tool for what
 
 Never program against an external API, library, or tooling version from memory.
