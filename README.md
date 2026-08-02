@@ -11,6 +11,11 @@
 </p>
 
 <p align="center">
+  <a href="https://sebastian197.github.io/korvun/"><strong>Website &amp; docs</strong></a>
+  · <a href="https://sebastian197.github.io/korvun/es/">en español</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/Sebastian197/korvun/actions/workflows/quality.yml"><img src="https://github.com/Sebastian197/korvun/actions/workflows/quality.yml/badge.svg" alt="Quality Gate"></a>
   <a href="https://github.com/Sebastian197/korvun/actions/workflows/codeql.yml"><img src="https://github.com/Sebastian197/korvun/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/Sebastian197/korvun"><img src="https://api.scorecard.dev/projects/github.com/Sebastian197/korvun/badge" alt="OpenSSF Scorecard"></a>

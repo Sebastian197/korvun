@@ -47,10 +47,12 @@ After this piece, Korvun has a public website at
 **`https://sebastian197.github.io/korvun/`**: a branded product landing
 (K terminal mark, ADR-0030 palette, Geist, the v0.6.0 launch clip embedded)
 plus user-facing documentation generated from the repo's existing markdown —
-navigable, with client-side full-text search, bilingual by layers (EN = the
-complete source of truth; ES = landing + quickstart, expandable), deployed
-automatically by a SHA-pinned-per-house-convention Actions workflow on every
-master push that touches the site. Explicitly out: the custom domain
+navigable, with client-side full-text search, bilingual as a FULL EN/ES
+mirror (EN = the source of truth, authored first; ES = its complete twin,
+enforced by the locale-parity gate — Chano's 2026-08-02 decision, see
+FR-I18N-1 as amended), deployed automatically by a
+pinned-per-house-convention Actions workflow on every master push that
+touches the site. Explicitly out: the custom domain
 (`korvun.dev` — documented as a future extension: CNAME + DNS on top of what
 is built, plus a single `base` flip to `'/'`; nothing else is redone), any
 blog/versioned-docs machinery, operator-console docs (that piece has no spec

@@ -87,7 +87,49 @@ explicit decision.
 
 ## Current state (as of 2026-08-02)
 
-> **CURRENT (2026-08-01, session close): BUILDER-CANVAS piece LANDED and
+> **CURRENT (2026-08-02, session close): the WEBSITE piece is DELIVERED
+> and LIVE — https://sebastian197.github.io/korvun/ (ES: …/korvun/es/).**
+> `master` = `origin/master` = **`9414fc0`** + the docs-close commit atop.
+>
+> **The piece — spec→SP5 in one day, a 9-commit batch
+> (`67d78c4..9414fc0`), rehearsed on `ensayo` (quality ×3 OS + SBOM +
+> cross-compile ×6 green) and fast-forwarded.** Spec + ADR-0040 (VitePress
+> 1.6.4 exact, build-time only, zero-CDN/zero-analytics) → SP1 scaffold +
+> harness → SP2 branded landing (launch clip self-hosted, Geist, AA/axe
+> gates) → SP2b scroll storytelling (never-hide law, privacy scene) →
+> SP2c cinematic hero (weight+settle+float, displacement invariant) →
+> SP3 full EN docs (10 pages, user-language rewrite) → SP4/SP4b **full ES
+> mirror** (Chano's 2026-08-02 decision; locale-parity gate: bijection +
+> zero "(EN)" + code blocks byte-identical) → SP5 pages.yml (tags
+> verified at source, house pinning, build runs the FULL harness).
+> **website-check = 8 permanent gates**; e2e on its own port 4174 (the
+> zombie-preview lesson).
+>
+> **LIVE (2026-08-02):** Chano flipped Settings→Pages→GitHub Actions;
+> dispatch run **`30744809158`** build+deploy green; **final verification
+> 11/11 AGAINST THE DEPLOYED URL** (AS-1 zero 4xx/5xx under `/korvun/`,
+> AS-2 search same-origin, AS-3 zero external requests site-wide, AS-5
+> per-page ES switcher, clip plays from the live origin; screenshots in
+> `design-drafts/site-live/`). Every master push touching `website/**`
+> redeploys through the harness. Custom domain stays a documented future
+> extension (ADR-0040 §5: CNAME + DNS + base flip).
+>
+> **NEXT: the OPERATOR CONSOLE — SPEC FIRST** (read+reply to any
+> channel's conversations manually from the desktop, brain inhibited;
+> the on-disk verifications recorded in `docs/ROAD-TO-BETA.md`).
+>
+> **LIVE FOLLOW-UPS (non-blocking):**
+> - **Design-track brief (copilot writes it when Chano says):** builder
+>   STATE mockups + final-6 deltas + teal→violet reconciliation formal.
+> - **[post-v0.6.0 polish] token-al-volver-al-Builder** (iframe re-asks
+>   the bearer on chrome navigation; hold/re-hydrate in the shell).
+> - `/understand --full` (understand-anything graph stale) — idle moment.
+> - **[P3] transient headed drag** — watch, don't chase.
+> - **Chano's errands:** rotate the `github_pat_` in
+>   `claude_desktop_config.json` + delete `BRIDGE-STATUS-2026-07-26.md`;
+>   the Gatekeeper/SmartScreen release captures.
+
+> **PREVIOUS (2026-08-01, session close): BUILDER-CANVAS piece LANDED and
 > v0.6.0 PUBLISHED — the builder is a visual node editor, shipped.**
 > `master` = `origin/master` = **`51005c3`** (the v0.6.0 notes atop the piece).
 >

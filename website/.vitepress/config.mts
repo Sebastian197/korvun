@@ -4,8 +4,9 @@ import { defineConfig } from 'vitepress'
 // base '/korvun/' is the GitHub *project page* subdirectory — VitePress
 // prepends it to every internal URL starting with '/' and to static assets
 // (Context7-verified); the custom-domain future extension flips it to '/'.
-// Locales: root = EN (the complete source of truth), es = the ES layer
-// (landing + quickstart today, expandable page-by-page — FR-I18N-1).
+// Locales: root = EN (the source of truth, authored first), es = a FULL
+// MIRROR of the EN tree (Chano's 2026-08-02 decision, FR-I18N-1 as
+// amended) — the locale-parity gate keeps both sides identical.
 export default defineConfig({
   base: '/korvun/',
   // VitePress builds EVERY .md under the source root — and Playwright

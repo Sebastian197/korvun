@@ -546,6 +546,21 @@ Todas estas piezas quedan pendientes de design spec
 
 ## Track paralelo — Sitio web + documentación (GitHub Pages)
 
+> ✅ **ENTREGADO Y EN VIVO (2026-08-02) —
+> <https://sebastian197.github.io/korvun/> (ES: `…/korvun/es/`).**
+> Spec→SP5 en un lote de 9 commits (`67d78c4..9414fc0`, ensayo verde,
+> run de deploy `30744809158`, verificación 11/11 contra la URL
+> desplegada). Landing de producto con la marca (hero cinematográfico,
+> storytelling nativo con ley de nunca-ocultar, la escena del cable gris),
+> las 10 páginas de documentación reescritas a lenguaje de usuario en
+> **espejo EN/ES completo** (decisión de Chano 2026-08-02; paridad
+> mecanizada por puerta permanente), buscador local, cero CDN / cero
+> analytics (ADR-0040), y deploy automático vía `pages.yml` en cada push
+> a master que toque `website/**` — con el harness completo de 8 puertas
+> como puerta del build. Dominio propio: extensión futura documentada
+> (ADR-0040 §5). El estreno público grande sigue reservado al cartucho
+> único (abajo).
+
 > Decisión de Chano (2026-08-01): corre EN PARALELO a la cola de la
 > beta — no bloquea ni es bloqueada por ninguna pieza. Estreno natural:
 > coordinado con el anuncio de la beta.
@@ -576,7 +591,10 @@ Decisiones abiertas (se resuelven en el spec, las de producto son de
 Chano): idioma de la web (ES / EN / bilingüe — la doc del repo está
 en inglés); dominio propio korvun.dev (verificación + coste).
 
-Estado: pendiente de design spec.
+Estado: ✅ entregado (banner arriba). Las decisiones que este bloque
+dejaba abiertas quedaron resueltas: generador VitePress 1.6.4 (ADR-0040,
+Context7-verificado), idioma bilingüe EN/ES en espejo completo (Chano,
+2026-08-02), dominio propio como extensión futura sin coste presente.
 
 ---
 
