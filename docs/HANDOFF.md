@@ -85,7 +85,7 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-01)
+## Current state (as of 2026-08-02)
 
 > **CURRENT (2026-08-01, session close): BUILDER-CANVAS piece LANDED and
 > v0.6.0 PUBLISHED — the builder is a visual node editor, shipped.**
@@ -142,6 +142,25 @@ explicit decision.
 > the single-shot cartucho, DO NOT touch tomorrow: **Hacker News, r/selfhosted,
 > Product Hunt** — only at the lienzo+web+beta convergence.
 >
+> **ESTRENO EJECUTADO (2026-08-02) — the plan above, carried out:**
+> - Repo Social preview: UPLOADED (off the pending-errands list).
+> - LinkedIn: PUBLISHED with the native square clip —
+>   <https://www.linkedin.com/posts/chano-moreno_opensource-golang-ia-ugcPost-7489565247654219776-AYe4>
+> - X: PUBLISHED with the native 16:9 clip and the short English copy
+>   (post URL still to be noted down here).
+> - YouTube: DEFERRED to Chano's decision (material ready in
+>   `media/final/`: demo-full + thumbnail + vertical).
+> - Standing rule unchanged: HN / r/selfhosted / Product Hunt remain
+>   RESERVED for the single-shot cartucho (lienzo+web+beta convergence).
+> - Lesson of the day (recorded in the copilot's memory): public content
+>   gets verified like code — the "hace un año" opener was false and
+>   Chano caught it before publishing.
+>
+> **NEXT: comment guard duty (Chano, today);** then the Claude Design
+> brief (the builder STATE mockups + the violet reconciliation of the
+> mockups — the copilot writes it when Chano says); then the queue:
+> the operator console (spec) and the web track.
+>
 > **NEXT (after publication): the OPERATOR CONSOLE.** Read+reply to any
 > channel's conversations manually from the desktop, no brains/models involved
 > (`docs/ROAD-TO-BETA.md`). SPEC FIRST, with the on-disk verifications recorded
@@ -170,7 +189,7 @@ explicit decision.
 > - **Chano's personal errands** (surface on open, non-blocking): the
 >   Gatekeeper/SmartScreen release captures; rotate the `github_pat_` in
 >   `claude_desktop_config.json` + delete `BRIDGE-STATUS-2026-07-26.md`. (The
->   Settings→Social-preview upload moved to tomorrow's publication plan, step 1.)
+>   Settings→Social-preview upload: DONE 2026-08-02, launch step 1.)
 >
 
 > **PREVIOUS (2026-07-26): a TWO-RELEASE day — v0.4.0 (Korvun Desktop) and v0.5.0
