@@ -5,3 +5,8 @@ node_modules/
 # `make website-check`; never trusted from git.
 .vitepress/dist/
 .vitepress/cache/
+
+# Playwright (the web/builder idiom)
+test-results/
+playwright-report/
+playwright/.cache/

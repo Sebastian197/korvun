@@ -12,6 +12,35 @@ export default defineConfig({
   description:
     'Self-hosted AI messaging gateway, multi-model router, and multi-brain orchestrator in a single Go binary.',
 
+  // Social cards (FR fold-in): absolute URLs on purpose — scrapers do not
+  // resolve relative paths. The image is the repo social preview, copied
+  // into the site's own assets (same-origin posture).
+  head: [
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:title', content: 'Korvun' }],
+    [
+      'meta',
+      {
+        property: 'og:description',
+        content:
+          'Self-hosted AI messaging gateway, multi-model router, and multi-brain orchestrator in a single Go binary.',
+      },
+    ],
+    [
+      'meta',
+      {
+        property: 'og:image',
+        content:
+          'https://sebastian197.github.io/korvun/brand/korvun-social-preview.png',
+      },
+    ],
+    [
+      'meta',
+      { property: 'og:url', content: 'https://sebastian197.github.io/korvun/' },
+    ],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+  ],
+
   themeConfig: {
     // In-browser full-text search (MiniSearch) — no external service
     // (zero-CDN/zero-analytics posture, ADR-0040 §3).

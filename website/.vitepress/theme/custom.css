@@ -1,0 +1,85 @@
+/* Korvun site theme (ADR-0030 identity, ADR-0040 posture).
+ *
+ * Token pairs are ASSERTED by scripts/check-contrast.mjs (AA is a gate,
+ * not a memory — ADR-0029 §6). Accent values come from the desktop design
+ * system (cmd/korvun-desktop/frontend/src/design/tokens.ts, its own WCAG
+ * test): vioT per scheme as the TEXT accent, vio #7A5AF5 as the FILL with
+ * white text. Variable names verified against the installed vitepress
+ * 1.6.4 vars.css. */
+
+/* Geist, self-hosted woff2 via @fontsource (SIL OFL) — zero CDN
+ * (ADR-0029 §5 / ADR-0040 §3; the desktop SP6 idiom). */
+@import '@fontsource/geist-sans/400.css';
+@import '@fontsource/geist-sans/500.css';
+@import '@fontsource/geist-sans/600.css';
+@import '@fontsource/geist-sans/700.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
+
+:root {
+  --vp-font-family-base: 'Geist Sans', ui-sans-serif, system-ui, sans-serif;
+  --vp-font-family-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Violet — the single functional accent (ADR-0030 §1). brand-1 = text/
+   * links (AA over the page bg), brand-3 = fills (white text), brand-2 =
+   * hover fill. */
+  --vp-c-brand-1: #6644e8;
+  --vp-c-brand-2: #6644e8;
+  --vp-c-brand-3: #7a5af5;
+
+  /* The teal→violet gradient — identity moments ONLY: the hero name
+   * (never functional UI color). */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #2bc8b7, #7a5af5);
+}
+
+.dark {
+  --vp-c-brand-1: #a28bff;
+  --vp-c-brand-2: #6644e8;
+  --vp-c-brand-3: #7a5af5;
+}
+
+/* The launch clip block (FR-LAND-2): native <video>, click-to-play. */
+.k-clip {
+  margin: 48px auto 0;
+  max-width: 960px;
+  padding: 0 24px;
+}
+.k-clip video {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--vp-c-divider);
+}
+.k-clip-caption {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+}
+
+/* Sober native motion (FR-MOT-1/2): entrance fades, transform/opacity
+ * ONLY, and only when motion is welcome — with `reduce`, none of this
+ * exists (the AS-4 e2e asserts zero running animations at idle). */
+@media (prefers-reduced-motion: no-preference) {
+  .VPHero .main,
+  .VPHero .image,
+  .VPFeature,
+  .k-clip {
+    animation: k-enter 0.5s ease-out both;
+  }
+  .VPFeature,
+  .k-clip {
+    animation-duration: 0.65s;
+  }
+}
+@keyframes k-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
