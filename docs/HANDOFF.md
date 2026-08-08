@@ -2245,3 +2245,26 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
   force-push/deletion, require status checks). Enabled now that CI is green.
 - `make quality` green with `-race` is the bar — do not advance a
   phase until the whole tree (not just the new code) is green.
+
+---
+
+## Session 2026-08-08 — design track discarded, back to plan
+
+- **The aurora website redesign AND the aurora logo finish are DISCARDED**
+  (director's decision, 2026-08-08). The whole local design batch was removed
+  before any push: working tree restored, `git reset --hard c24eda2` — master
+  is byte-identical to origin/master; the remote never saw any of it. The
+  exploration material stays on disk under `design-drafts/` (outside the
+  effective repo) if it is ever wanted again: redesign PROPOSAL + spec drafts,
+  the logo comparison sheet, full-page captures of the built aurora landing.
+- **Lesson recorded: design cuts are decided by looking at mockups, not by
+  reading descriptions.** The direction was approved from prose and mockups,
+  implemented through two sub-phases with every gate green — and discarded on
+  first live look. The next design piece puts a rendered, scrollable artifact
+  in front of the director BEFORE any spec is approved or any red is written.
+- Verified after the cleanup: `master == origin/master == c24eda2`, working
+  tree clean, `make quality` AND `make website-check` green (the known state).
+- **NEXT = the operator console** (the plan of record): conversation inbox
+  from the store, manual operator replies to any channel, real-time via the
+  existing SSE, brain-silencing takeover, operator messages persisted in
+  history. Spec first, per the house cycle.
