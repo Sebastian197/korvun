@@ -380,6 +380,17 @@ func TestFirstRun_builderAddsFirstChannel(t *testing.T) {
 // but never dialed (warmup is off in the template; no message flows).
 func TestFirstRun_templateBoots(t *testing.T) {
 	t.Setenv("KORVUN_ADMIN_TOKEN", "")
+	// The template now ships the storage block with an empty path, which
+	// resolves to <os.UserConfigDir>/korvun/korvun.db at boot — sandbox the
+	// user dir so the test never opens a real user's database.
+	tmp := t.TempDir()
+	switch runtime.GOOS {
+	case "darwin", "linux":
+		t.Setenv("HOME", tmp)
+		t.Setenv("XDG_CONFIG_HOME", "") // linux: fall through to HOME/.config
+	case "windows":
+		t.Setenv("AppData", tmp)
+	}
 	path := filepath.Join(t.TempDir(), "korvun.json")
 	created, err := EnsureDefaultConfig(path)
 	if err != nil || !created {

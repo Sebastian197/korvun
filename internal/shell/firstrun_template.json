@@ -23,10 +23,14 @@
     }
   ],
   "routes": [],
+  "storage": {
+    "path": ""
+  },
   "observability": {
     "enabled": true
   },
   "admin": {
     "token_env": "KORVUN_ADMIN_TOKEN"
-  }
+  },
+  "session": {}
 }
