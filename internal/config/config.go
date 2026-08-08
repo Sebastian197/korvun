@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -70,6 +71,37 @@ type Config struct {
 	// env-var name — resolved via os.Getenv in internal/app, so a config that names
 	// an unset var mounts nothing (no token => mutation not mounted, ADR-0028 §1).
 	Admin *AdminConfig `json:"admin,omitempty"`
+	// Session is the optional session-dispatch block (operator-console spec
+	// 2026-08-08, FR-SESS-3/5). ABSENT means no session behavior at all — the
+	// spec's `none` default; upgrading changes nothing until configured.
+	// PRESENT enables the reset triggers (defaulted when omitted) and the
+	// optional daily/idle automatic expiry. It requires the storage block:
+	// sessions live in the durable conversation store.
+	Session *SessionConfig `json:"session,omitempty"`
+}
+
+// SessionConfig declares session dispatch (operator-console spec). Triggers
+// are the exact-match first-token reset commands (omitted -> DefaultSessionTriggers);
+// DailyAt is a local-time "HH:MM" boundary (empty -> no daily expiry); IdleMin
+// is the idle expiry in whole minutes (0 -> no idle expiry).
+type SessionConfig struct {
+	Triggers []string `json:"triggers,omitempty"`
+	DailyAt  string   `json:"daily_at,omitempty"`
+	IdleMin  int      `json:"idle_min,omitempty"`
+}
+
+// DefaultSessionTriggers is the trigger set a present session block gets when
+// it does not name its own (the spec's folded default).
+var DefaultSessionTriggers = []string{"/new", "/reset"}
+
+// SessionSettings is the resolved, validated view of SessionConfig the app
+// wires into the router.
+type SessionSettings struct {
+	Triggers  []string
+	Daily     bool
+	DailyHour int
+	DailyMin  int
+	IdleMin   int
 }
 
 // AdminConfig names the env-var holding the admin bearer token (ADR-0028 §1). The
@@ -384,6 +416,9 @@ func (c *Config) Validate() error {
 	if err := c.validateAdmin(); err != nil {
 		return err
 	}
+	if err := c.validateSession(); err != nil {
+		return err
+	}
 	if err := c.validateRoutes(channelNames, brainNames); err != nil {
 		return err
 	}
@@ -422,6 +457,66 @@ func (c *Config) validateTimeouts() error {
 // validateAdmin checks the optional admin block: if present, it must name a
 // non-empty token_env (the env-var NAME). The value's presence in the environment
 // is resolved at boot (internal/app), not here (ADR-0028 §1).
+// validateSession checks the optional session block (operator-console spec):
+// an invalid shape must FAIL CLEARLY at startup (config check / boot), never
+// be silently ignored into a policy the operator did not ask for.
+func (c *Config) validateSession() error {
+	s := c.Session
+	if s == nil {
+		return nil
+	}
+	if c.Storage == nil {
+		return fmt.Errorf("%w: session: requires the storage block (sessions live in the durable conversation store)", ErrInvalidConfig)
+	}
+	for i, trig := range s.Triggers {
+		if strings.TrimSpace(trig) == "" {
+			return fmt.Errorf("%w: session.triggers[%d]: empty trigger", ErrInvalidConfig, i)
+		}
+	}
+	if s.DailyAt != "" {
+		if _, _, err := parseDailyAt(s.DailyAt); err != nil {
+			return fmt.Errorf("%w: session.daily_at: %v", ErrInvalidConfig, err)
+		}
+	}
+	if s.IdleMin < 0 {
+		return fmt.Errorf("%w: session.idle_min: must be >= 0, got %d", ErrInvalidConfig, s.IdleMin)
+	}
+	return nil
+}
+
+// parseDailyAt parses a "HH:MM" local-time boundary.
+func parseDailyAt(v string) (hour, minute int, err error) {
+	t, err := time.Parse("15:04", v)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid HH:MM %q: %w", v, err)
+	}
+	return t.Hour(), t.Minute(), nil
+}
+
+// SessionSettings resolves the session block into the wired policy: absent
+// block -> everything off (the spec's `none` default); present block ->
+// DefaultSessionTriggers unless the operator named a set, daily/idle per the
+// validated fields. Call only after Validate.
+func (c *Config) SessionSettings() SessionSettings {
+	s := c.Session
+	if s == nil {
+		return SessionSettings{}
+	}
+	out := SessionSettings{IdleMin: s.IdleMin}
+	out.Triggers = s.Triggers
+	if len(out.Triggers) == 0 {
+		out.Triggers = append([]string(nil), DefaultSessionTriggers...)
+	}
+	if s.DailyAt != "" {
+		// Validate already accepted it; a parse failure here is impossible.
+		h, m, err := parseDailyAt(s.DailyAt)
+		if err == nil {
+			out.Daily, out.DailyHour, out.DailyMin = true, h, m
+		}
+	}
+	return out
+}
+
 func (c *Config) validateAdmin() error {
 	if c.Admin != nil && c.Admin.TokenEnv == "" {
 		return fmt.Errorf("%w: admin.token_env: required when an admin block is present (name of the env var holding the bearer token)", ErrInvalidConfig)

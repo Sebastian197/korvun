@@ -269,6 +269,24 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	if eventBus != nil {
 		ropts = append(ropts, router.WithEventPublisher(eventBus))
 	}
+	// Session dispatch (operator-console spec SP3): wired only when the
+	// session block is configured — Validate guarantees storage exists with
+	// it, and the sqlite store IS a SessionStore. Absent block: the router
+	// behaves exactly as before (the spec's `none` default).
+	if cfg.Session != nil && b.store != nil {
+		if ss, ok := b.store.(conversation.SessionStore); ok {
+			s := cfg.SessionSettings()
+			ropts = append(ropts,
+				router.WithSessionStore(ss),
+				router.WithSessionPolicy(router.SessionPolicy{
+					Triggers:  s.Triggers,
+					Daily:     s.Daily,
+					DailyHour: s.DailyHour,
+					DailyMin:  s.DailyMin,
+					IdleMin:   s.IdleMin,
+				}))
+		}
+	}
 	r := router.New(ropts...)
 
 	channels, brainSummaries, channelInfos, err := b.wire(r, cfg)
@@ -340,6 +358,13 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 				// whose Save would 404 is a trap, so with no token only the read-only
 				// /ui is served. StripPrefix("/builder") maps GET /builder/ -> "/".
 				adminServer.Handle("GET /builder/", http.StripPrefix("/builder", builderui.Handler()))
+				// Mount the operator console (operator-console spec SP3) on the
+				// SAME bearer: its responses carry message content, so it exists
+				// only where the mutation surface exists AND a sessionful store
+				// is open. The router is the operator seam (SP2).
+				if ss, ok := b.store.(conversation.SessionStore); ok && b.store != nil {
+					controlapi.RegisterConsole(adminServer, token, ss, app.router)
+				}
 			}
 		}
 	}

@@ -213,10 +213,15 @@ responses, any change to dispatch policy semantics, **session compaction**
   bus; Given a release, When the next envelope arrives, Then the brain
   runs and its loaded history contains the user turns from the takeover
   window AND the operator's replies, in order.
-- **AS-5 (send failure is honest)** Given the origin adapter fails
-  `Send`, When the operator posts a reply, Then the API responds with the
-  failure, a `MessageDropped` event fires, and the console can see the
-  reply did not deliver.
+- **AS-5 (send failure is honest — amended 2026-08-08, copilot-approved)**
+  The outbound funnel is asynchronous BY DESIGN (one funnel, same queue as
+  brain replies), so the reply API answers **accepted** once the operator
+  turn is persisted and the envelope is enqueued; Given the origin adapter
+  then fails `Send`, Then the failure surfaces through the event/error
+  funnel (the delivery-failure signal the console listens to) and the
+  operator turn REMAINS in history (persist-then-send) — asserted at
+  router level in SP2. Synchronous failures (validation, unknown channel,
+  saturation, persistence) DO fail the API call honestly.
 - **AS-6 (secret-free SSE unchanged)** Given the console connected to
   `/api/events` during replies and takeovers, When frames are captured,
   Then no frame contains message content — byte-audited in the test.
