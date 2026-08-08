@@ -554,16 +554,32 @@ func (c *Config) validateChannels() (map[string]bool, error) {
 			if ch.Webhook == nil {
 				return nil, fmt.Errorf("%w: channels[%d].webhook: required for type %q", ErrInvalidConfig, i, ch.Type)
 			}
+		case "console":
+			// The internal direct-chat channel (operator-console spec
+			// FR-CONS-2): no network, no transport mode, no secret — but it
+			// IS persistence, so it demands the durable store and sessions.
+			if ch.Mode != "" {
+				return nil, fmt.Errorf("%w: channels[%d].mode: console takes no mode", ErrInvalidConfig, i)
+			}
+			if ch.TokenEnv != "" {
+				return nil, fmt.Errorf("%w: channels[%d].token_env: console takes no secret", ErrInvalidConfig, i)
+			}
+			if c.Storage == nil {
+				return nil, fmt.Errorf("%w: channels[%d]: console requires the storage block (the direct chat is persistence)", ErrInvalidConfig, i)
+			}
+			if c.Session == nil {
+				return nil, fmt.Errorf("%w: channels[%d]: console requires the session block (/new and resets live there)", ErrInvalidConfig, i)
+			}
 		case "":
 			return nil, fmt.Errorf("%w: channels[%d].type: required", ErrInvalidConfig, i)
 		default:
-			return nil, fmt.Errorf("%w: channels[%d].type: unknown channel type %q (supported: telegram, discord, webhook)", ErrInvalidConfig, i, ch.Type)
+			return nil, fmt.Errorf("%w: channels[%d].type: unknown channel type %q (supported: telegram, discord, webhook, console)", ErrInvalidConfig, i, ch.Type)
 		}
 		// A webhook block is only valid on a webhook channel (ADR-0038 §1, NC-1b).
 		if ch.Type != "webhook" && ch.Webhook != nil {
 			return nil, fmt.Errorf("%w: channels[%d].webhook: only valid for type %q", ErrInvalidConfig, i, "webhook")
 		}
-		if ch.TokenEnv == "" {
+		if ch.TokenEnv == "" && ch.Type != "console" {
 			return nil, fmt.Errorf("%w: channels[%d].token_env: required (name of the env var holding the channel secret)", ErrInvalidConfig, i)
 		}
 		// Webhook-only field checks that depend on the block, AFTER the common

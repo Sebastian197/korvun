@@ -32,6 +32,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/channel"
+	"github.com/Sebastian197/korvun/internal/channel/console"
 	"github.com/Sebastian197/korvun/internal/channel/discord"
 	"github.com/Sebastian197/korvun/internal/channel/telegram"
 	"github.com/Sebastian197/korvun/internal/channel/webhook"
@@ -186,7 +187,18 @@ func withChannelFactory(f func(b *builder, cc config.ChannelConfig) (Channel, er
 func WithChannelFactory(f func(cc config.ChannelConfig) (Channel, error)) Option {
 	return func(b *builder) {
 		if f != nil {
-			b.newChannel = func(_ *builder, cc config.ChannelConfig) (Channel, error) { return f(cc) }
+			b.newChannel = func(inner *builder, cc config.ChannelConfig) (Channel, error) {
+				ch, err := f(cc)
+				if ch == nil && err == nil {
+					// (nil, nil) = "not mine, use the real factory": lets a
+					// test harness fake the NETWORK channels while the
+					// internal console channel stays real (it needs the
+					// builder's store, which an external factory cannot
+					// reach) — operator-console spec FR-CONS wiring.
+					return defaultChannelFactory(inner, cc)
+				}
+				return ch, err
+			}
 		}
 	}
 }
@@ -580,7 +592,34 @@ func (b *builder) wire(r *router.Router, cfg *config.Config) ([]Channel, []contr
 			return nil, nil, nil, fmt.Errorf("app: route %q->%q: %w", rc.Channel, rc.Brain, err)
 		}
 	}
+	// The console channel auto-routes to the FIRST brain when the config
+	// names no explicit route (operator-console spec FR-CONS-2's
+	// default-brain default): a declared direct chat must never boot inert.
+	if hasChannelType(cfg, console.ChannelName) && len(cfg.Brains) > 0 {
+		routed := false
+		for _, rc := range cfg.Routes {
+			if rc.Channel == console.ChannelName {
+				routed = true
+				break
+			}
+		}
+		if !routed {
+			if err := r.Route(console.ChannelName, cfg.Brains[0].Name); err != nil {
+				return nil, nil, nil, fmt.Errorf("app: console default route: %w", err)
+			}
+		}
+	}
 	return channels, brainSummaries, channelInfos, nil
+}
+
+// hasChannelType reports whether cfg declares a channel of the given type.
+func hasChannelType(cfg *config.Config, t string) bool {
+	for _, ch := range cfg.Channels {
+		if ch.Type == t {
+			return true
+		}
+	}
+	return false
 }
 
 // newChannelInfo captures one channel's static facts and binds a live reader of
@@ -896,6 +935,21 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 		return ad, nil
 	case webhook.ChannelName:
 		return buildWebhookChannel(b, cc)
+	case console.ChannelName:
+		// The internal direct chat (FR-CONS-1): no network, no secret. In a
+		// real Build the sessionful store is present (config.Validate
+		// demands the storage block); in PREFLIGHT the builder carries NO
+		// store by design (openStore happens inside the cutover), so a nil
+		// store constructs a throwaway channel — Preflight only proves
+		// constructibility (the 2026-08-08 reload-rollback repro).
+		if b.store == nil {
+			return console.New(nil), nil
+		}
+		ss, ok := b.store.(conversation.SessionStore)
+		if !ok {
+			return nil, fmt.Errorf("app: console channel requires the sessionful store")
+		}
+		return console.New(ss), nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownChannelType, cc.Type)
 	}

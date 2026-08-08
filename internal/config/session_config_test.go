@@ -99,3 +99,33 @@ func TestSessionConfig_AbsentBlockMeansNone(t *testing.T) {
 		t.Fatalf("absent block must resolve to none, got %+v", s)
 	}
 }
+
+func TestConsoleChannel_ValidationContract(t *testing.T) {
+	base := func() *Config {
+		c := validBase()
+		c.Session = &SessionConfig{}
+		c.Channels = append(c.Channels, ChannelConfig{Type: "console"})
+		return c
+	}
+	if err := base().Validate(); err != nil {
+		t.Fatalf("valid console channel rejected: %v", err)
+	}
+	cases := []struct {
+		name string
+		mut  func(*Config)
+	}{
+		{"mode rejected", func(c *Config) { c.Channels[1].Mode = "polling" }},
+		{"secret rejected", func(c *Config) { c.Channels[1].TokenEnv = "X" }},
+		{"requires storage", func(c *Config) { c.Storage = nil }},
+		{"requires session", func(c *Config) { c.Session = nil }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := base()
+			tc.mut(c)
+			if err := c.Validate(); err == nil {
+				t.Fatalf("invalid console config accepted (%s)", tc.name)
+			}
+		})
+	}
+}

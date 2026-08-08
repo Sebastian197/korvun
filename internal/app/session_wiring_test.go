@@ -79,3 +79,54 @@ func TestBuild_SessionDispatchWiredFromConfig(t *testing.T) {
 	}
 	t.Fatal("no acknowledgement left the channel: session config did not reach the router")
 }
+
+func TestBuild_ConsoleChannelAutoRoutesToFirstBrain(t *testing.T) {
+	// FR-CONS-2: a console channel with no explicit route must not boot
+	// inert — DispatchInbound to it finds a brain (no ErrNoRoute).
+	cfg := cfgWith(ollamaBrain())
+	cfg.Storage = &config.StorageConfig{Path: filepath.Join(t.TempDir(), "korvun.db")}
+	cfg.Session = &config.SessionConfig{}
+	cfg.Channels = append(cfg.Channels, config.ChannelConfig{Type: "console"})
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	app, err := Build(cfg,
+		WithLogger(slog.New(slog.DiscardHandler)),
+		// Per-type fakes: one factory call per configured channel, each
+		// registering under its OWN name (a single shared fake would
+		// register "telegram" twice and never "console").
+		withChannelFactory(func(_ *builder, cc config.ChannelConfig) (Channel, error) {
+			return &sessionRecChannel{fakeChannel: newFakeChannel(cc.Type)}, nil
+		}))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
+
+	e := envelope.New("console", envelope.Inbound, envelope.Participant{ID: "op"}).AddText("hola")
+	e.Meta["conversation.id"] = "chat-1"
+	if err := app.router.DispatchInbound(context.Background(), e); err != nil {
+		t.Fatalf("DispatchInbound to console: %v (auto-route missing?)", err)
+	}
+}
+
+func TestPreflight_AcceptsConsoleChannel(t *testing.T) {
+	// The 2026-08-08 harness repro: Preflight constructs channels WITHOUT a
+	// store by design (openStore happens inside the cutover), so the console
+	// factory must prove constructibility with a nil store — otherwise EVERY
+	// reload of a console-bearing config fails preflight and rolls back.
+	// Console-only channel list: this test isolates the console factory's
+	// nil-store path (a telegram entry would demand its secret and a real
+	// getMe — out of scope here).
+	cfg := cfgWith(ollamaBrain())
+	cfg.Channels = []config.ChannelConfig{{Type: "console"}}
+	cfg.Routes = []config.RouteConfig{{Channel: "console", Brain: "default"}}
+	cfg.Storage = &config.StorageConfig{Path: filepath.Join(t.TempDir(), "korvun.db")}
+	cfg.Session = &config.SessionConfig{}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if err := Preflight(cfg, WithLogger(slog.New(slog.DiscardHandler))); err != nil {
+		t.Fatalf("Preflight with console channel: %v", err)
+	}
+}
