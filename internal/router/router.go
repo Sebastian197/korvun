@@ -53,6 +53,17 @@ type Router struct {
 	// default) disables publishing at zero cost. Set via WithEventPublisher.
 	eventPublisher EventPublisher
 
+	// SP2 (operator-console spec): session dispatch + takeover + operator
+	// outbound. sessionStore nil disables session behavior entirely; clock
+	// is the injected time source (defaults to time.Now); the takeover set
+	// is in-memory ON PURPOSE — a restart fails open to the brain, never to
+	// silence (spec folded decision).
+	sessionStore  conversation.SessionStore
+	sessionPolicy SessionPolicy
+	clock         func() time.Time
+	takeoverMu    sync.RWMutex
+	takeover      map[conversation.Key]struct{}
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -99,6 +110,8 @@ func New(opts ...Option) *Router {
 		brainHandlerTimeout:    DefaultBrainHandlerTimeout,
 		outboundQueueCapacity:  DefaultOutboundQueueCapacity,
 		outboundEnqueueTimeout: DefaultOutboundEnqueueTimeout,
+		clock:                  time.Now,
+		takeover:               make(map[conversation.Key]struct{}),
 		ctx:                    ctx,
 		cancel:                 cancel,
 	}
@@ -251,6 +264,14 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 		return fmt.Errorf("%w: %q", ErrUnknownBrain, brainName)
 	}
 	r.mu.RUnlock()
+
+	// SP2 (operator-console spec): lazy session expiry → reset triggers →
+	// the takeover gate — all BEFORE the brain enqueue. A fully-handled
+	// message (trigger ack, takeover silence) is an accepted dispatch.
+	env, handled := r.sessionPreDispatch(ctx, env, brainName)
+	if handled {
+		return nil
+	}
 
 	if r.enqueueTimeout <= 0 {
 		select {

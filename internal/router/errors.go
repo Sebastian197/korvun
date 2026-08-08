@@ -115,6 +115,12 @@ const (
 	// context-cancellation guard (a narrow TOCTOU window means a shutdown
 	// error may still slip through once).
 	ErrKindInboundDispatch
+
+	// ErrKindSession indicates a session-dispatch store operation failed
+	// (opening a session for a trigger/expiry, or persisting a takeover
+	// turn). The dispatch FAILS OPEN: the message continues to the brain
+	// untouched rather than being dropped (operator-console spec SP2).
+	ErrKindSession
 )
 
 // String returns the short human-readable name of the error kind.
