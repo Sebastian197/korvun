@@ -299,6 +299,19 @@ func (s *Supervisor) serve(ctx context.Context, app App) (stopReason, reloadReq,
 	for {
 		select {
 		case err := <-serveErr:
+			if ctx.Err() != nil {
+				// The parent context is cancelled: this is a shutdown the
+				// select happened to observe through serveErr first — never
+				// an app failure. Without this guard a clean stop was a
+				// select draw away from "running app failed: %!w(<nil>)"
+				// (the 2026-08-08 Windows rehearsal red).
+				return reasonShutdown, reloadReq{}, nil
+			}
+			if err == nil {
+				// Serve quit on its own with nil: still a failure of the
+				// serving contract, but wrap a real error, never a nil.
+				err = errors.New("app.Serve returned with no error while the supervisor was not shutting down")
+			}
 			return reasonAppFailed, reloadReq{}, err
 		case <-ctx.Done():
 			cancel()
