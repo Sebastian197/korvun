@@ -42,9 +42,9 @@ block means *read-only* (no mutation, the safe default).
 
 | Field | Type | Required | Values / meaning |
 |-------|------|----------|------------------|
-| `type` | string | **yes** | Adapter. Supported: `telegram`, `discord`, `webhook`. |
-| `mode` | string | conditional | Transport. `telegram` → `polling`; `discord` → `gateway`. **`webhook` takes no `mode`** (a non-empty value is rejected). |
-| `token_env` | string | **yes** | **Name** of the env var holding the channel's inbound secret (bot token for telegram/discord; the shared Bearer secret for webhook). |
+| `type` | string | **yes** | Adapter. Supported: `telegram`, `discord`, `webhook`, `console`. |
+| `mode` | string | conditional | Transport. `telegram` → `polling`; `discord` → `gateway`. **`webhook` and `console` take no `mode`** (a non-empty value is rejected). |
+| `token_env` | string | conditional | **Name** of the env var holding the channel's inbound secret (bot token for telegram/discord; the shared Bearer secret for webhook). **`console` takes no secret** (a non-empty value is rejected). |
 | `webhook` | object | **yes** for `webhook` | The webhook block (below). Rejected on any other type. |
 
 A channel registers under its `type` as its name (the value `routes` reference).
@@ -106,6 +106,21 @@ conversation; when absent, it falls back to the sender id.
 > **Zero-to-round-trip walkthrough** (generate the secret, curl a message in, a one-line
 > test receiver, and the reverse-proxy/TLS exposure path):
 > **[docs/WEBHOOK-SETUP.md](WEBHOOK-SETUP.md)**.
+
+### `console`
+
+The internal direct-chat channel: the operator talks to the brains from the
+desktop app's Chat tab, with **no network, no transport and no secret** —
+messages enter through the control API and every turn is persisted like any
+other conversation. It requires the `storage` **and** `session` blocks (the
+direct chat IS persistence, and `/new` / `/reset` live in sessions). When no
+route names it, it auto-routes to the **first brain**, so it never boots inert.
+
+```json
+{ "type": "console" }
+```
+
+See [`CHAT.md`](CHAT.md) for how the Chat tab uses it.
 
 ## `brains[]`
 
@@ -182,6 +197,23 @@ Present ⇒ durable, per-conversation memory that survives restarts (including a
 graceful shutdown). Absent ⇒ stateless. Under the hardened systemd unit, set
 `path` to `/var/lib/korvun/korvun.db` (the `StateDirectory`; see
 [`packaging/INSTALL.md`](packaging/INSTALL.md)).
+
+## `session` (optional, operator-console spec 2026-08-08)
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `triggers` | string[] | no | Exact-match first-token reset commands. Omitted ⇒ `["/new", "/reset"]`. |
+| `daily_at` | string | no | Local-time `"HH:MM"` boundary for daily expiry. Empty ⇒ no daily expiry. |
+| `idle_min` | int | no | Idle expiry in whole minutes. `0` ⇒ no idle expiry. |
+
+Present ⇒ session dispatch is on: a conversation is a series of **sessions**,
+the newest one active. A trigger (or a lazy daily/idle expiry, evaluated at the
+next inbound — no timers) cuts the context hard: the brain only sees the active
+session. Old sessions stay stored and navigable from the Chat tab. **Requires
+the `storage` block** (sessions live in the durable store). Absent ⇒ no session
+behavior at all; upgrading changes nothing until configured. An empty block
+(`"session": {}`) enables the default triggers with no automatic expiry —
+that is what the desktop provisions on first run and on upgrade.
 
 ## `observability` (optional, ADR-0020)
 

@@ -2268,3 +2268,57 @@ the shutdown ordering was not moved to manufacture a 503 for a safe edge case.)
   from the store, manual operator replies to any channel, real-time via the
   existing SSE, brain-silencing takeover, operator messages persisted in
   history. Spec first, per the house cycle.
+
+---
+
+## Session 2026-08-08 (later) — operator console piece DELIVERED
+
+The plan of record executed end to end, house cycle intact (spec →
+red-on-disk → green → gates), and validated on real hardware before a
+single line of SP4 was committed.
+
+- **What shipped** — the desktop's third tab, **Chat**:
+  - **SP1** store sessions (OpenClaw model: monotonic sessions per key,
+    active = newest, `LoadRecent` scoped to active; sqlite schema v2 with a
+    one-transaction v1 migration).
+  - **SP2** router session dispatch (`/new`/`/reset` exact-first-token
+    triggers with a fixed ack, lazy daily/idle expiry with an injected
+    clock — zero timers, per-conversation fail-open takeover gate,
+    `DispatchOutbound` as the one operator-reply funnel).
+  - **SP3** bearer control API + config wiring (`session.*` validated loud
+    at boot; SSE stays secret-free — change signal + bearer REST re-fetch,
+    ADR-0024 §1 intact).
+  - **SP4 + completion riders** (held uncommitted under the golden rule
+    until the director's final visual OK): the full Chat UI (inbox with
+    instant filter + server content search, unread badges with a
+    shell-persistent last-read, role-styled transcript, session tabs with
+    read-only archives, Enter/Shift+Enter composer), OpenClaw deletion
+    (conversation + archived session, exact confirmation copy, active
+    session protected), announced attachments (`[image]` markers at
+    persistence; media rendering post-beta by design), the **console
+    channel** (first-class internal `type:"console"` — direct chat with
+    the brains from the app, no network, auto-route to the first brain),
+    and **first-run provisioning** (an existing config gains
+    `storage`+`session` on mount — an app upgrade never boots a dead Chat
+    tab; the first-run template ships chat-alive).
+- **The one defect the live smoke caught** — step (c): an operator reply
+  persisted but never reached the phone. Cause: telegram outbound read only
+  `telegram.chat_id`, and control-API replies travel with `conversation.id`.
+  Fixed red-first with a fallback; re-verified live on the fixed build.
+- **Validation** — Chano ran the numbered smoke script (steps a–l) on his
+  iMac with his real stack (Telegram bot + ollama `llama3.2:1b`, secrets
+  via Keychain/environment only) from his own phone, with the store
+  observed live from inside. **Final OK given 2026-08-08.** Beta criterion
+  "operator can reply manually + brain respects takeover" → **[x]** in
+  ROAD-TO-BETA.
+- **Gates at close** — `make quality` green (total 92.5%; conversation
+  95.6%, sqlite 85.6%, router 91.8%, controlapi ~96%, envelope 97.2%,
+  brain 94.5%, telegram 90.6%); Vitest 220/220; Playwright 20/20 including
+  the full a–l console flow; `-race -count=5` clean on touched packages.
+- **Docs** — spec → DELIVERED; `docs/CHAT.md` (user guide: takeover,
+  `/new`/`/reset`, deletion, search, direct chat); CONFIGURATION gains
+  `session` + `console`; ROAD-TO-BETA queue now points at **policy-governed
+  tools + skills**. The chat page on the WEBSITE deliberately not in this
+  batch — it goes with the release package.
+- **Pending** — the batch is LOCAL ONLY (nothing pushed): copilot disk
+  review, then the lot rehearsal (prompt aparte), then push/release.

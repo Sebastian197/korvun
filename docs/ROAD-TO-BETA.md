@@ -498,6 +498,16 @@ y el binario headless intacto (la app es una carcasa, no un fork de la lógica).
 > (encuadre + `/plan-eng-review` + ADR(s) + TDD + docs), hecha **de una en una**.
 
 ### Pieza — Consola de operador (chat de canales en el escritorio)
+> ✅ **ENTREGADA (2026-08-08)** — pestaña **Chat** en Korvun Desktop, con TODO
+> el alcance de abajo y más: sesiones estilo OpenClaw (`/new`/`/reset`,
+> expiración diaria/idle perezosa), borrado de conversaciones y sesiones,
+> búsqueda de contenido, no-leídos, adjuntos anunciados (`[image]`…), canal
+> interno `console` para chatear con la IA desde la app, y provisión
+> first-run de `storage`+`session` (un upgrade jamás arranca la pestaña
+> muerta). Validada en hardware real por Chano (smoke a–l: iMac + Telegram +
+> ollama local, desde su móvil). Spec:
+> `docs/superpowers/specs/2026-08-08-operator-console.md`; guía de uso:
+> `docs/CHAT.md`.
 Objetivo: que el operador lea y responda manualmente las conversaciones de
 cualquier canal desde la app de escritorio, sin pasar por cerebros ni modelos.
 Alcance:
@@ -662,8 +672,10 @@ escribir una sola línea.
 
 **Ampliación de alcance de la beta (2026-07-26):**
 
-- [ ] **El operador puede responder manualmente a una conversación de cualquier
+- [x] **El operador puede responder manualmente a una conversación de cualquier
       canal desde la app de escritorio, y el cerebro respeta la toma de control.**
+      COMPLETO — **pieza Consola de operador** (2026-08-08), validada en hardware
+      real (smoke a–l de Chano: iMac + Telegram + ollama local; ver HANDOFF).
 - [ ] **Cada cerebro tiene personalidad configurable desde el panel.**
 - [ ] **Los agentes disponen de herramientas de serie cuya visibilidad decide el
       motor de políticas, con auditoría, y el sistema carga skills en markdown.**
@@ -671,10 +683,12 @@ escribir una sola línea.
       memoria respeta la política de privacidad.**
 
 **Próximo paso:** **Piezas 1–5 ✅ cerradas** (la 5 el 2026-07-26:
-`v0.4.0` publicada con Korvun Desktop). Siguiente en la cola: **canal
-WEBHOOK** → **Builder-lienzo** → las piezas de la ampliación de
-alcance (arriba). La puerta universal de modelos sigue en cola,
-reordenable por Chano.
+`v0.4.0` publicada con Korvun Desktop), **canal Webhook ✅**,
+**Builder-lienzo ✅** (con la personalidad por cerebro dentro) y
+**Consola de operador ✅** (2026-08-08, validada en hardware). Siguiente
+en la cola: **Herramientas gobernadas por políticas + skills** → Memoria
+mínima. La puerta universal de modelos sigue en cola, reordenable por
+Chano.
 
 ---
 

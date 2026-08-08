@@ -1,5 +1,20 @@
 # Operator console SP1–SP4 — inbox, sessions, manual reply, takeover: Design Spec
 
+> **Status: DELIVERED** (2026-08-08). SP1–SP3 landed first; SP4 plus the
+> completion riders (reply-addressing fix, OpenClaw deletion, content
+> search, unread badges, announced attachments, chat polish, the console
+> direct-chat channel, first-run provisioning of the chat blocks) were
+> held uncommitted under the golden rule and committed only after the
+> director's final OK. **Validation on real hardware:** the director ran
+> the full numbered smoke script (steps a–l) on his iMac with his real
+> stack — Telegram bot + local ollama `llama3.2:1b`, secrets via
+> Keychain/environment — from his own phone, while the store was
+> observed live from inside. All steps passed; the one defect found
+> mid-smoke (step c: operator reply persisted but never reached the
+> phone) was fixed red-first in this same batch and re-verified live.
+>
+> Original approval record follows.
+>
 > **Status:** approved for TDD (2026-08-08 — the three clarifications
 > resolved by Chano: (1) console surface = **Korvun Desktop** (his
 > 2026-07-26 decision, "chat en la app de escritorio"; whether it shares
@@ -173,6 +188,92 @@ responses, any change to dispatch policy semantics, **session compaction**
   The gate is in-memory (a restart releases all takeovers — folded
   decision below).
 
+### Deletion (Chano's 2026-08-08 completion rider — OpenClaw-style wipe)
+
+- **FR-DEL-1 — Store deletion, real on disk.** The SessionStore seam gains
+  `DeleteConversation(key)` — every turn and every session of the key,
+  atomically, actually gone from the database — and
+  `DeleteSession(key, id)` for ARCHIVED sessions only: deleting the active
+  session is rejected with a sentinel (`ErrActiveSession`; reset first).
+  Both implementations (sqlite + memstore), both under `-race`.
+- **FR-DEL-2 — API deletion.** `DELETE /api/conversations/{key}` (bearer):
+  releases the takeover gate if held, then wipes the conversation — a
+  deleted conversation must not leave a silenced ghost. `DELETE
+  /api/conversations/{key}/sessions/{id}` (bearer): archived only; the
+  active session answers 409 honestly.
+- **FR-DEL-3 — UI deletion.** A delete control on the conversation and on
+  an archived session, behind an EXPLICIT inline confirmation ("This
+  deletes the conversation from disk. No undo." / the session variant),
+  keyboard-operable; the inbox refreshes after the wipe.
+
+### The complete chat (Chano's 2026-08-08 final rider)
+
+- **FR-SEARCH — Filter + content search.** The inbox filters instantly by
+  channel/id (client-side). Content search is a store read
+  (`SearchTurns`: case-insensitive substring, sqlite `LIKE` with escaped
+  `%`/`_`/`\` so queries match literally; memstore equivalent) exposed as
+  `GET /api/search?q=` (bearer — content leaves the process; an empty
+  query is a 400, never an unbounded scan), newest first with a limit.
+  A hit is addressable (key + session + seq) and opens the conversation
+  AT that session.
+- **FR-UNREAD — Unread accounting in the SHELL.** The core only reports
+  totals (`ConversationInfo.TurnCount`, additive); last-read counts live
+  in the shell's persistent state (localStorage), diffed client-side:
+  per-conversation badge + bold until opened, and the tab total on the
+  Chat nav entry — alive while the chat view is CLOSED (an App-level
+  hook on the same signal+poll rhythm). Opening marks read; history
+  shrinking (deletion) clamps at zero.
+- **FR-ATTACH — Announced attachments.** `envelope.TranscriptText`
+  renders the transcript content: an honest marker per non-text part
+  (`[image]`/`[audio]`/`[video]`/`[file]`) plus the latest text. Every
+  persistence point uses it (orchestrator pair persist AND its
+  media-only early path — which now persists instead of dropping —
+  agent persist, takeover persist), so the operator never faces a mute
+  void. Media RENDERING is explicitly post-beta.
+- **FR-POLISH — A decent chat.** Relative timestamps ("2m ago", English
+  ladder), autoscroll pinned to the newest turn UNLESS the human
+  scrolled up (near-bottom detection), Enter sends / Shift+Enter breaks
+  the line (textarea composer), clear empty states, and a stable inbox
+  (keyed rows, selection survives refreshes).
+
+### The console channel (Chano's 2026-08-08 direct-chat rider — OpenClaw standard)
+
+- **FR-CONS-1 — A first-class internal channel.** `type:"console"` behind
+  the `channel.Channel` seam: no network, no token. Its `Receive` stream
+  never emits (the API injects inbound); its `Send` succeeds without I/O —
+  the brain has already persisted the reply pair, and the router's
+  `ReplySent` (post-Send) is the SSE signal. The ONE outbound Send must
+  persist is the session-reset ack (which nothing else records): the
+  router now MARKS ack envelopes (`Meta["korvun.ack"]`), and console.Send
+  persists marked envelopes as SYSTEM turns — visible in the chat, never
+  duplicated.
+- **FR-CONS-2 — Config + routing like any channel.** Declared in
+  `channels` (validated: no token required), it appears in the builder
+  and routes to brains via config/canvas. Folded decision: routing is the
+  router's 1:1 channel→brain law, so ONE console channel routes to ONE
+  brain — when no explicit route exists, the app auto-routes it to the
+  FIRST brain (the default-brain default); a per-chat brain picker only
+  becomes meaningful with multi-route, noted as future.
+- **FR-CONS-3 — The human is USER here.** Console conversations flow the
+  FULL pipeline (DispatchInbound → session dispatch → brain → policy →
+  reply): the API gains `POST /api/conversations/{key}/message` (bearer;
+  console-channel keys only, 400 otherwise) building a USER envelope —
+  never operator. Sessions, `/new` (ack included, as a system turn),
+  deletion, search and unread apply UNCHANGED (all key-based).
+- **FR-CONS-4 — UI.** "New chat" opens a draft conversation (fresh
+  console key; it materializes on the first message); console rows read
+  as channel "Console"; their composer sends as user and shows an honest
+  "Thinking…" while the local model works; takeover is DISABLED with the
+  reason on screen — there is no one to displace: you already are the
+  human.
+- **AS-18 (direct chat, full circle)** Given a console channel routed to
+  a brain, When the operator sends a message from a New chat, Then a
+  user turn and the brain's assistant reply land in the active session
+  and render in the chat; When they type `/new`, Then the ack appears as
+  a system turn, session 2 opens, and session 1 archives; And the
+  takeover control is disabled with its reason; And a message to a
+  NON-console key via the new endpoint is a 400.
+
 ### Real time
 
 - **FR-RT-1 — SSE reuse WITHOUT breaking the secret-free law.** The
@@ -257,6 +358,39 @@ responses, any change to dispatch policy semantics, **session compaction**
   are inspected, Then every turn of every session is present, scoped to
   its session, in order, with no leakage between sessions — and the
   pre-migration fixture's turns live intact as session 1.
+- **AS-13 (conversation wipe)** Given a conversation with turns across
+  several sessions AND an active takeover, When `DELETE
+  /api/conversations/{key}` runs with a bearer, Then the database holds
+  ZERO rows for the key (turns and sessions — verified at the store),
+  the takeover gate is released, and the inbox no longer lists it; When
+  a new inbound later arrives for the same key, Then the conversation is
+  REBORN clean at session 1 with only the new turn.
+- **AS-14 (archived-session wipe, active protected)** Given sessions 1
+  and 2 (2 active), When session 1 is DELETEd, Then its turns are gone
+  and session 2 is intact; When the ACTIVE session is DELETEd, Then the
+  API answers 409 and nothing is deleted.
+- **AS-15 (search finds and addresses)** Given turns across sessions and
+  keys, When the operator searches a word (any case, `%`/`_` literal),
+  Then the hits list the matching turns newest first with key/session/seq,
+  and opening a hit lands on THAT session of THAT conversation; an empty
+  query is a 400.
+- **AS-16 (unread lights and clears)** Given a conversation gaining turns
+  while unopened, When the inbox refreshes, Then its badge shows the
+  unseen count (bold row) and the Chat tab carries the total even with
+  the chat view closed; When the operator opens it, Then the badge
+  clears and persists cleared across a shell restart.
+- **AS-17 (attachments announced)** Given an inbound with an image part
+  (with or without caption), When it is persisted (brain path or
+  takeover path), Then the stored turn reads `[image]` (+ the caption),
+  a media-only message persists WITHOUT any model call, and the console
+  renders the marker — never a mute void.
+- **AS-5 correction (2026-08-08 smoke defect, fixed red-first):** the
+  operator reply carries only the conversation identity; telegram's
+  outbound addressing now falls back from `telegram.chat_id` to
+  `conversation.id` (the same value by the adapter's own inbound
+  construction), so a console reply addressed by KEY ALONE is
+  deliverable. No addressing at all, or a non-numeric id, stays an
+  honest sentinel error.
 
 ## Success criteria
 
