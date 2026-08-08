@@ -85,9 +85,63 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-02)
+## Current state (as of 2026-08-08)
 
-> **CURRENT (2026-08-02, day close): a TWO-LAUNCH day — the v0.6.0 public
+> **CURRENT (2026-08-08, session close): the OPERATOR CONSOLE — complete,
+> validated on real hardware, and LANDED on master.** `master` =
+> `origin/master` = `origin/ensayo` = **`757a35a`** (triple verification:
+> copilot on-disk review + full-green rehearsal at source + Chano's
+> confirmation on run `31275078294`). One of the big days, and one of the
+> hard ones — both halves recorded.
+>
+> **THE PIECE OF THE DAY — the Chat tab, whole:** multi-channel inbox,
+> brain-silencing takeover, OpenClaw sessions (`/new`, `/reset`, lazy
+> daily/idle expiry), real deletion (conversation + archived session, no
+> undo), content search, unread badges, announced attachments
+> (`[image]`…), the **console channel** (direct chat with the AI from the
+> app), and first-run provisioning (an upgrade never boots a dead Chat
+> tab). Validated by Chano LIVE (smoke a–l from his own phone against his
+> real bot + local ollama) before a single SP4 line was committed. **3rd
+> expanded-beta criterion: MET** (ROAD-TO-BETA `[x]`). Spec DELIVERED;
+> user guide `docs/CHAT.md`.
+>
+> **Bonus from the triple rehearsal — two July flakes KILLED with product
+> fixes** (`be59fe0`, `757a35a`): the supervisor now persists BEFORE
+> reporting success (persist failure → honest `StatePersistFailed`, never
+> "succeeded" with the disk lagging), and a clean shutdown can no longer
+> be classified as an app failure by a scheduler draw (the
+> `%!w(<nil>)` red).
+>
+> **THE HARD PART, unvarnished:**
+> - **(a)** The aurora redesign was explored, built green — and
+>   **DISCARDED by director decision**. Permanent lesson: design cuts are
+>   decided by LOOKING AT MOCKUPS, never by description; and execute
+>   EXACTLY what was asked, nothing more.
+> - **(b)** A push to master was executed EMBEDDED in another task's
+>   prompt on a lottery green — a **VIOLATION of the rehearsal law**,
+>   owned and remedied the straight way, and the origin of the new
+>   permanent TWO-STEP LAW (in CLAUDE.md, `9c5e1e5`): a master push
+>   always gets its own prompt, after the copilot verifies the full-green
+>   rehearsal at source.
+> - **(c)** Method reinforced: on ANY red, primary evidence (the real
+>   logs) BEFORE hypotheses; the exact local CI sequence before any
+>   re-rehearsal; numbers only from CI-identical commands or explicitly
+>   labeled "local".
+>
+> **CHANO'S IMMEDIATE PENDING — the v0.7.0 "Operator Console" release
+> decision. Copilot recommendation: YES.** With his word, the full
+> package follows (release draft + posts + clip script). Also live: the
+> web-announcement posts, the global gstack cleanup of his Mac, and the
+> GitHub Settings errands.
+>
+> **NEXT (tomorrow): GOVERNED TOOLS + SKILLS — SPEC FIRST**, with the
+> on-disk verifications up front: (1) the REAL state of tool use in
+> AgentBrain (Stage 8); (2) the policy engine's current contract
+> (`docs/ROAD-TO-BETA.md`, the piece is next in the queue). Also noted,
+> Chano's post-beta idea: an **n8n bridge** — running flows from the chat
+> via the governed webhook tool.
+
+> **PREVIOUS (2026-08-02, day close): a TWO-LAUNCH day — the v0.6.0 public
 > premiere in the morning, and the WEBSITE from spec to production in the
 > same day.** `master` = `origin/master` = the session-close commit atop
 > **`2acc33e`**.
