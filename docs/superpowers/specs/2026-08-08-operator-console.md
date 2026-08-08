@@ -1,8 +1,15 @@
 # Operator console SP1–SP4 — inbox, sessions, manual reply, takeover: Design Spec
 
-> **Status:** draft, amended 2026-08-08 (scope expansion by Chano: chat
-> SESSIONS, OpenClaw-style) — open clarifications below BLOCK TDD; do not
-> proceed to tests until Chano resolves them.
+> **Status:** approved for TDD (2026-08-08 — the three clarifications
+> resolved by Chano: (1) console surface = **Korvun Desktop** (his
+> 2026-07-26 decision, "chat en la app de escritorio"; whether it shares
+> the embedded builder shell is an SP4 technical detail, to confirm on
+> disk then); (2) operator turns = **new role `operator` persisted
+> as-is, mapped to `assistant`** in the provider translation; (3) real
+> time = **the recommended shape**: SSE stays secret-free as change
+> signal + bearer REST re-fetch — zero new ADR, ADR-0024 §1 intact).
+> Amended 2026-08-08 (scope expansion by Chano: chat SESSIONS,
+> OpenClaw-style).
 > Session-model provenance: the semantics were decided by Chano and
 > verified by him against OpenClaw's official doc
 > (docs.openclaw.ai/concepts/session, 2026-08-08). There is NO code
@@ -117,10 +124,11 @@ responses, any change to dispatch policy semantics, **session compaction**
 - **FR-STORE-2 — Operator turns persist in history.** Operator messages
   are appended to the ACTIVE session of the conversation via the
   existing atomic seam so the brain's next `LoadRecent` sees them
-  (continuity). Their role encoding is clarification #2; whatever is
-  chosen, a stored history containing operator turns MUST remain
-  loadable by today's brains without breaking the role translation to
-  providers.
+  (continuity). **Encoding (resolved 2026-08-08): a new
+  `Role("operator")`, persisted as-is** (the schema takes any TEXT — no
+  migration), **mapped to the provider's `assistant` role** in the
+  brains' role translation (one explicit switch arm, guard-tested): a
+  history containing operator turns loads and dispatches cleanly.
 
 ### Control API (bearer-auth conventions of the existing surface)
 
@@ -177,10 +185,13 @@ responses, any change to dispatch policy semantics, **session compaction**
 
 ### Console UI
 
-- **FR-UI-1 — The console surface renders the inbox** (list + detail),
-  the reply box, and the takeover switch, live-updating per FR-RT-1.
-  Blocked by clarification #1 (which surface); the backend FRs above are
-  surface-agnostic on purpose.
+- **FR-UI-1 — The console lives in KORVUN DESKTOP** (resolved
+  2026-08-08, per Chano's 2026-07-26 decision): inbox (list + session
+  navigation), the "new session" button, the reply box, and the takeover
+  switch, live-updating per FR-RT-1. Whether the implementation shares
+  the embedded builder shell is an SP4 technical detail, confirmed on
+  disk at SP4 kickoff (with its own Context7 verifications then). The
+  backend FRs above stay surface-agnostic on purpose.
 
 ## Acceptance scenarios (Given / When / Then)
 
@@ -299,26 +310,36 @@ responses, any change to dispatch policy semantics, **session compaction**
   "new session" button, reply box, takeover switch (scoped after
   clarification #1; its own red set per the surface's harness).
 
+## Review checklist (template gate — green before "approved for TDD")
+
+- [x] Goal stated behaviorally, with explicit exclusions (compaction,
+      `/new <model>`, presence, canned responses).
+- [x] Every FR traces to a governing decision (Chano 2026-08-08 ×2 +
+      2026-07-26, ADR-0017/0018/0024) and names its seam and blast
+      radius.
+- [x] Acceptance scenarios assertable; unhappy paths covered (auth,
+      failed send, saturation semantics, migration fixture, no-leak SSE
+      audit, race on same key).
+- [x] Success criteria measurable (coverage floors, `-race`, `go.mod`
+      untouched, AS-6/AS-12 proofs).
+- [x] External-docs verification stated: Go side stdlib+internal only;
+      session model self-contained (no OpenClaw code dependency); UI
+      verifications deferred to SP4 kickoff by design.
+- [x] `[NEEDS CLARIFICATION]` empty — **all three resolved 2026-08-08;
+      checklist green.**
+
 ## `[NEEDS CLARIFICATION]`
 
-1. **Console surface.** Where does the operator console live: (a) the
-   builder web UI (`web/builder`, React — ships in the binary, already
-   talks to the admin API), (b) Korvun Desktop (the Wails shell), or (c)
-   the liveview embedded UI? (a) and (b) can share the implementation if
-   Desktop embeds the builder shell — but that is an assumption to
-   confirm, and it decides which frontend harness and Context7
-   verifications apply. Blocks FR-UI-1 / SP4 scoping.
-2. **Operator turn encoding.** New `Role("operator")` persisted as-is
-   (schema takes any TEXT; needs an explicit mapping to a provider role —
-   presumably assistant — in the brains' role translation), or
-   `RoleAssistant` + an origin marker (no translation change, but
-   operator turns become indistinguishable in the raw history)?
-   Recommendation: **new role, mapped to assistant** — the history stays
-   honest and the mapping is one switch arm. Blocks FR-STORE-2 (SP1).
-3. **Real-time transport for content.** FR-RT-1 assumes: SSE stays
-   secret-free, console re-fetches over bearer REST on change signals
-   (recommended — zero ADR churn). The alternative — a new authed,
-   content-bearing stream — needs its own ADR and changes SP3.
-   Confirm the recommended shape or order the ADR.
+1. ~~Console surface.~~ **Resolved (Chano, 2026-08-08): Korvun Desktop**
+   — his 2026-07-26 decision; builder-shell sharing is an SP4 detail to
+   confirm on disk. Folded into FR-UI-1.
+2. ~~Operator turn encoding.~~ **Resolved (Chano, 2026-08-08): new role
+   `operator` persisted as-is, mapped to `assistant` in the provider
+   translation** (the spec's recommendation, accepted). Folded into
+   FR-STORE-2.
+3. ~~Real-time transport for content.~~ **Resolved (Chano, 2026-08-08):
+   the recommended shape** — SSE intact and secret-free as change
+   signal, bearer REST re-fetch for content; zero new ADR, ADR-0024 §1
+   untouched. Folded into FR-RT-1.
 
-Per CLAUDE.md, TDD does not start while any of these is open.
+No open points remain.
