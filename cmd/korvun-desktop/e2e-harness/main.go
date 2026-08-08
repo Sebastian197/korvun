@@ -222,7 +222,12 @@ func newFakeModel() (*fakeModel, error) {
 // model endpoint.
 func harnessConfig(modelURL string) *config.Config {
 	return &config.Config{
-		Channels: []config.ChannelConfig{{Type: defaultChannel, Mode: "polling", TokenEnv: harnessTokenEnv}},
+		Channels: []config.ChannelConfig{
+			{Type: defaultChannel, Mode: "polling", TokenEnv: harnessTokenEnv},
+			// The direct-chat channel (FR-CONS): no secret, no mode; it
+			// auto-routes to the first brain (FR-CONS-2).
+			{Type: "console"},
+		},
 		Brains: []config.BrainConfig{{
 			Name:        "asistente",
 			Sensitivity: "private",
@@ -231,8 +236,14 @@ func harnessConfig(modelURL string) *config.Config {
 				{Provider: "ollama", ModelID: "llama3.2:1b", Locality: "local", BaseURL: modelURL},
 			},
 		}},
-		Routes:        []config.RouteConfig{{Channel: "telegram", Brain: "asistente"}},
-		Admin:         &config.AdminConfig{TokenEnv: "KORVUN_ADMIN_TOKEN"},
+		Routes: []config.RouteConfig{{Channel: "telegram", Brain: "asistente"}},
+		Admin:  &config.AdminConfig{TokenEnv: "KORVUN_ADMIN_TOKEN"},
+		// SP4 (operator-console): durable store + sessions so the console
+		// API mounts and /__test/inject produces real persisted history.
+		// Storage.Path empty resolves under the harness's ISOLATED temp
+		// HOME (set below), so nothing touches the developer's real data.
+		Storage:       &config.StorageConfig{},
+		Session:       &config.SessionConfig{},
 		Observability: &config.ObservabilityConfig{Enabled: boolPtr(true)},
 	}
 }
@@ -301,6 +312,11 @@ func run() error {
 		// keychain double only connects because the reload seam re-provisions it.
 		if cc.TokenEnv != "" && os.Getenv(cc.TokenEnv) == "" {
 			return nil, fmt.Errorf("%w: %q", app.ErrMissingSecret, cc.TokenEnv)
+		}
+		if cc.Type == "console" {
+			// (nil, nil): the app builds the REAL console channel — the
+			// direct chat is in-process, nothing to script (FR-CONS).
+			return nil, nil
 		}
 		fc := newFakeChannel(cc.Type)
 		chanMu.Lock()

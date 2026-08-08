@@ -74,7 +74,8 @@ test('AS-2: Start from the UI → marcha with real data, no client-side bearer',
   await expect(page.getByTestId('healthz-badge')).toContainText('OK')
   // Real control-API data: the scripted channel and the template brain.
   await expect(page.getByText('Telegram')).toBeVisible()
-  await expect(page.getByText('Operativo')).toBeVisible()
+  // SP-console: two operational channels now (telegram + console).
+  await expect(page.getByText('Operativo').first()).toBeVisible()
   await expect(page.getByText('asistente')).toBeVisible()
   await expect(page.getByText('Privado')).toBeVisible()
   // Zero-CDN + bearer honesty: nothing leaves the origin, and no request

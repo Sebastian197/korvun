@@ -64,6 +64,15 @@ export function IconChannels(p: IconProps): JSX.Element {
   )
 }
 
+/** Chat — the operator console's speech bubble (SP4). */
+export function IconChat(p: IconProps): JSX.Element {
+  return (
+    <Svg {...p}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </Svg>
+  )
+}
+
 /** Actividad — the design's pulse. */
 export function IconActivity(p: IconProps): JSX.Element {
   return (

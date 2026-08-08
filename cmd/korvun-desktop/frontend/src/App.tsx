@@ -8,18 +8,27 @@ import './App.css'
 import { BrandMark } from './components/BrandMark'
 import { HealthzBadge } from './components/HealthzBadge'
 import { StatusChip } from './components/StatusChip'
-import { IconActivity, IconBuilder, IconChannels, IconHome, IconSettings } from './components/icons'
+import {
+  IconActivity,
+  IconBuilder,
+  IconChannels,
+  IconChat,
+  IconHome,
+  IconSettings,
+} from './components/icons'
 import { desktop } from './lib/go'
+import { useUnreadTotal } from './console/useUnreadTotal'
 import { useSnapshot } from './snapshot/store'
 import { Activity } from './views/Activity'
 import { BuilderEmbed } from './views/BuilderEmbed'
 import { Channels } from './views/Channels'
+import { Console } from './views/Console'
 import { ChannelWizard } from './views/ChannelWizard'
 import { Home } from './views/Home'
 import { Onboarding } from './views/Onboarding'
 import { Settings } from './views/Settings'
 
-type View = 'inicio' | 'builder' | 'canales' | 'actividad' | 'ajustes'
+type View = 'inicio' | 'builder' | 'chat' | 'canales' | 'actividad' | 'ajustes'
 
 // Design order (6a review rider a): Builder second, exactly as the sidebar
 // mock paints it.
@@ -30,6 +39,7 @@ const NAV: ReadonlyArray<{
 }> = [
   { id: 'inicio', label: 'Inicio', icon: IconHome },
   { id: 'builder', label: 'Builder', icon: IconBuilder },
+  { id: 'chat', label: 'Chat', icon: IconChat },
   { id: 'canales', label: 'Canales', icon: IconChannels },
   { id: 'actividad', label: 'Actividad', icon: IconActivity },
   { id: 'ajustes', label: 'Ajustes', icon: IconSettings },
@@ -41,6 +51,9 @@ export function App(): React.JSX.Element {
   const [onboarding, setOnboarding] = useState(false)
   const [wizardOpen, setWizardOpen] = useState(false)
   const snapshot = useSnapshot()
+  // FR-UNREAD: the Chat tab total, alive while the chat is closed. Rendered
+  // via data-unread + CSS content so the nav-order text guards stay stable.
+  const unread = useUnreadTotal()
 
   useEffect(() => {
     const d = desktop()
@@ -104,6 +117,7 @@ export function App(): React.JSX.Element {
               className="nav-item"
               aria-current={view === item.id ? 'page' : undefined}
               onClick={() => setView(item.id)}
+              data-unread={item.id === 'chat' && unread > 0 ? unread : undefined}
             >
               <span className="nav-icon" aria-hidden="true">
                 <item.icon />
@@ -123,6 +137,7 @@ export function App(): React.JSX.Element {
         </header>
         {view === 'inicio' && <Home />}
         {view === 'builder' && <BuilderEmbed />}
+        {view === 'chat' && <Console />}
         {view === 'canales' && (
           <Channels
             onOpenWizard={() => setWizardOpen(true)}

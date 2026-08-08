@@ -29,7 +29,7 @@ test('the stopped chrome: real 503 contract → parado hero, same-origin only', 
   })
 })
 
-test('sidebar navigation: five sections in design order, active state, real views', async ({
+test('sidebar navigation: six sections in design order, active state, real views', async ({
   page,
 }) => {
   await page.goto('/')
@@ -37,9 +37,12 @@ test('sidebar navigation: five sections in design order, active state, real view
     .getByRole('navigation', { name: 'Secciones' })
     .getByRole('button')
     .allTextContents()
+  // SP4 (operator-console spec): Chat joins third — the same evolution the
+  // App.test.tsx guard records.
   expect(labels.map((l) => l.trim())).toEqual([
     'Inicio',
     'Builder',
+    'Chat',
     'Canales',
     'Actividad',
     'Ajustes',

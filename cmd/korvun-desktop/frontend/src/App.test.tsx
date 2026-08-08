@@ -22,13 +22,15 @@ describe('chrome shell', () => {
     expect(screen.getByTestId('version').textContent).toBe('dev')
   })
 
-  it('nav follows the design order: Inicio, Builder, Canales, Actividad, Ajustes', () => {
+  it('nav follows the design order: Inicio, Builder, Chat, Canales, Actividad, Ajustes', () => {
     render(<App />)
     const nav = screen.getByRole('navigation', { name: 'Secciones' })
     const labels = Array.from(nav.querySelectorAll('button')).map((b) =>
       (b.textContent ?? '').trim(),
     )
-    expect(labels).toEqual(['Inicio', 'Builder', 'Canales', 'Actividad', 'Ajustes'])
+    // SP4 (operator-console spec): Chat joins the nav, third — the console
+    // sits right after the Builder in the daily flow.
+    expect(labels).toEqual(['Inicio', 'Builder', 'Chat', 'Canales', 'Actividad', 'Ajustes'])
   })
 
   it('every nav item carries its real design icon (svg), not a placeholder dot', () => {
