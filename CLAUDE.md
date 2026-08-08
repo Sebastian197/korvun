@@ -72,6 +72,12 @@ website piece showed one: the pages.yml run that fired on the landing push
 failed on "Pages not enabled" before the flip — harmless, but a red on
 master's history that better sequencing avoids).
 
+## The rehearsal law — push to master (2026-08-08) — CRITICAL
+
+A push to master is NEVER bundled as a conditional step inside another
+task's prompt. It always gets its own prompt, issued after the copilot
+verifies the full-green rehearsal at source.
+
 ## External documentation verification — which tool for what
 
 Never program against an external API, library, or tooling version from memory.
