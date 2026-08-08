@@ -88,6 +88,11 @@ const (
 	StateSucceeded         State = "succeeded"
 	StateRolledBack        State = "rolled-back"
 	StateFailed            State = "failed"
+	// StatePersistFailed is a cutover whose new app IS serving but whose
+	// config could not be persisted: the reload is live yet would not
+	// survive a restart. Reported instead of StateSucceeded so the caller
+	// is never told "succeeded" while the on-disk record lags.
+	StatePersistFailed State = "persist-failed"
 )
 
 // Handle is the opaque identifier a reload request returns; the caller polls
@@ -245,11 +250,19 @@ func (s *Supervisor) Run(ctx context.Context) error {
 				app = rApp
 				continue
 			}
-			// Start confirmed the new app is serving: swap, mark succeeded, and only
-			// NOW persist (F5). curCfg advances to the new, proven config.
+			// Start confirmed the new app is serving: swap, persist (F5),
+			// and only THEN report. Success is never reported while the
+			// on-disk config still lacks the reload — a poller that sees
+			// "succeeded" may immediately read the file (the 2026-08-08
+			// macOS rehearsal red). A persist failure is reported as
+			// StatePersistFailed, never as succeeded. curCfg advances to
+			// the new, proven config either way — the new app IS serving.
 			s.setCurrent(nApp)
-			s.setStatus(req.handle, StateSucceeded)
-			s.persistConfig(req.cfg)
+			if s.persistConfig(req.cfg) != nil {
+				s.setStatus(req.handle, StatePersistFailed)
+			} else {
+				s.setStatus(req.handle, StateSucceeded)
+			}
 			s.setCurrentCfg(req.cfg)
 			curCfg = req.cfg
 			s.finishReload()
@@ -384,16 +397,20 @@ func (s *Supervisor) finishReload() {
 	s.mu.Unlock()
 }
 
-// persistConfig writes the config after a confirmed cutover. A persist failure is
-// logged, not fatal: the new app is already serving (its Start succeeded); only the
-// on-disk record lags, so the reload is live but would not survive a restart.
-func (s *Supervisor) persistConfig(cfg *config.Config) {
+// persistConfig writes the config after a confirmed cutover and reports the
+// outcome. A persist failure is logged and returned, not fatal: the new app
+// is already serving (its Start succeeded); only the on-disk record lags, so
+// the reload is live but would not survive a restart — the caller surfaces
+// that as StatePersistFailed instead of succeeded.
+func (s *Supervisor) persistConfig(cfg *config.Config) error {
 	if s.persist == nil {
-		return
+		return nil
 	}
 	if err := s.persist(cfg); err != nil {
 		s.logger.Error("supervisor: persisting config after a confirmed cutover failed; the reload is live but will not survive a restart", "error", err.Error())
+		return err
 	}
+	return nil
 }
 
 // shutdownApp tears an app down within the supervisor's shutdown budget.
