@@ -34,8 +34,184 @@ import (
 	_ "modernc.org/sqlite" // registers the pure-Go "sqlite" database/sql driver
 )
 
-// Compile-time assertion: SqliteStore is a Store.
-var _ conversation.Store = (*SqliteStore)(nil)
+// Compile-time assertions: *SqliteStore satisfies the Store seam and its
+// sessionful superset (operator-console spec SP1).
+var (
+	_ conversation.Store        = (*SqliteStore)(nil)
+	_ conversation.SessionStore = (*SqliteStore)(nil)
+)
+
+// tsToTime maps a stored ts back to time.Time, honoring the 0 sentinel for
+// the zero value (see AppendTurns).
+func tsToTime(ns int64) time.Time {
+	if ns == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, ns).UTC()
+}
+
+// NewSession opens a fresh session for key and returns its id
+// (conversation.SessionStore). Idempotent on an empty active session; a key
+// with no history returns 1. The single transaction on the serialized
+// connection makes resolve-then-insert race-free (the ADR-0019 §3 discipline).
+func (s *SqliteStore) NewSession(ctx context.Context, key conversation.Key) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: NewSession begin %q: %w", key, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var active int
+	if err := tx.QueryRowContext(ctx, activeSessionQuery, string(key)).Scan(&active); err != nil {
+		return 0, fmt.Errorf("sqlite: NewSession active %q: %w", key, err)
+	}
+	if active > 0 {
+		var turnsInActive int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM turns WHERE key = ? AND session = ?`,
+			string(key), active).Scan(&turnsInActive); err != nil {
+			return 0, fmt.Errorf("sqlite: NewSession count %q: %w", key, err)
+		}
+		if turnsInActive == 0 {
+			// Idempotent: never stack empty sessions.
+			return active, tx.Commit()
+		}
+	}
+	next := active + 1
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO sessions(key, id, created_ts) VALUES (?, ?, ?)`,
+		string(key), next, time.Now().UTC().UnixNano()); err != nil {
+		return 0, fmt.Errorf("sqlite: NewSession insert %q: %w", key, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("sqlite: NewSession commit %q: %w", key, err)
+	}
+	return next, nil
+}
+
+// ListConversations lists up to limit conversations, most recent activity
+// first (conversation.SessionStore). LastActivity/LastRole come from the
+// key's most recent turn across sessions; ties order by key for determinism.
+func (s *SqliteStore) ListConversations(ctx context.Context, limit int) ([]conversation.ConversationInfo, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.key,
+		       MAX(s.id),
+		       COUNT(s.id),
+		       COALESCE((SELECT MAX(t.ts) FROM turns t WHERE t.key = s.key), 0),
+		       COALESCE((SELECT t2.role FROM turns t2 WHERE t2.key = s.key
+		                 ORDER BY t2.session DESC, t2.seq DESC LIMIT 1), '')
+		FROM sessions s
+		GROUP BY s.key
+		ORDER BY 4 DESC, s.key ASC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: ListConversations: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []conversation.ConversationInfo
+	for rows.Next() {
+		var (
+			key, role string
+			active    int
+			count     int
+			ns        int64
+		)
+		if err := rows.Scan(&key, &active, &count, &ns, &role); err != nil {
+			return nil, fmt.Errorf("sqlite: ListConversations scan: %w", err)
+		}
+		out = append(out, conversation.ConversationInfo{
+			Key:           conversation.Key(key),
+			ActiveSession: active,
+			SessionCount:  count,
+			LastActivity:  tsToTime(ns),
+			LastRole:      conversation.Role(role),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: ListConversations rows: %w", err)
+	}
+	return out, nil
+}
+
+// ListSessions lists every session of key, oldest first
+// (conversation.SessionStore). An unknown key returns an empty slice.
+func (s *SqliteStore) ListSessions(ctx context.Context, key conversation.Key) ([]conversation.SessionInfo, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT s.id,
+		       COUNT(t.seq),
+		       COALESCE(MIN(t.ts), 0),
+		       COALESCE(MAX(t.ts), 0)
+		FROM sessions s
+		LEFT JOIN turns t ON t.key = s.key AND t.session = s.id
+		WHERE s.key = ?
+		GROUP BY s.id
+		ORDER BY s.id ASC`, string(key))
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: ListSessions %q: %w", key, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []conversation.SessionInfo
+	for rows.Next() {
+		var (
+			id, count   int
+			first, last int64
+		)
+		if err := rows.Scan(&id, &count, &first, &last); err != nil {
+			return nil, fmt.Errorf("sqlite: ListSessions scan %q: %w", key, err)
+		}
+		out = append(out, conversation.SessionInfo{
+			ID:        id,
+			TurnCount: count,
+			First:     tsToTime(first),
+			Last:      tsToTime(last),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: ListSessions rows %q: %w", key, err)
+	}
+	return out, nil
+}
+
+// LoadSession returns ALL turns of the given session of key, oldest first
+// (conversation.SessionStore). An unknown key or session returns an empty
+// slice, not an error.
+func (s *SqliteStore) LoadSession(ctx context.Context, key conversation.Key, session int) ([]conversation.Turn, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT role, content, ts, seq FROM turns
+		 WHERE key = ? AND session = ? ORDER BY seq ASC`,
+		string(key), session)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: LoadSession %q/%d: %w", key, session, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []conversation.Turn
+	for rows.Next() {
+		var (
+			role, content string
+			ns            int64
+			seq           int
+		)
+		if err := rows.Scan(&role, &content, &ns, &seq); err != nil {
+			return nil, fmt.Errorf("sqlite: LoadSession scan %q/%d: %w", key, session, err)
+		}
+		out = append(out, conversation.Turn{
+			Role:      conversation.Role(role),
+			Content:   content,
+			Timestamp: tsToTime(ns),
+			Seq:       seq,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: LoadSession rows %q/%d: %w", key, session, err)
+	}
+	return out, nil
+}
 
 // dsnQuery configures every connection: WAL for reader/checkpoint robustness,
 // busy_timeout as a safety net, foreign_keys on for future-proofing.
@@ -44,15 +220,94 @@ var _ conversation.Store = (*SqliteStore)(nil)
 // PRAGMAs on each connection.
 const dsnQuery = "_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)"
 
+// The v2 schema (operator-console spec SP1, FR-STORE-1): turns are scoped by
+// session — turn identity is (key, session, seq), seq restarting per session
+// — and the sessions table is the source of truth for which sessions exist
+// (an EMPTY session has no turns rows, so it can only live here). The ACTIVE
+// session of a key is its highest id.
 const createTableStmt = `
+CREATE TABLE IF NOT EXISTS sessions (
+    key        TEXT    NOT NULL,
+    id         INTEGER NOT NULL,
+    created_ts INTEGER NOT NULL,
+    PRIMARY KEY (key, id)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS turns (
     key     TEXT    NOT NULL,
+    session INTEGER NOT NULL,
     seq     INTEGER NOT NULL,
     role    TEXT    NOT NULL,
     content TEXT    NOT NULL,
     ts      INTEGER NOT NULL,
-    PRIMARY KEY (key, seq)
+    PRIMARY KEY (key, session, seq)
 ) WITHOUT ROWID;`
+
+// migrateV1Stmt upgrades a pre-session database (the 2026-08 v1 schema:
+// turns keyed by (key, seq)) in ONE transaction: every existing turn becomes
+// session 1 of its key — same seq, same order, nothing lost — and session 1
+// is registered as that key's (active) session. created_ts 0 is the same
+// zero-sentinel the ts column already uses.
+const migrateV1Stmt = `
+ALTER TABLE turns RENAME TO turns_v1;
+CREATE TABLE turns (
+    key     TEXT    NOT NULL,
+    session INTEGER NOT NULL,
+    seq     INTEGER NOT NULL,
+    role    TEXT    NOT NULL,
+    content TEXT    NOT NULL,
+    ts      INTEGER NOT NULL,
+    PRIMARY KEY (key, session, seq)
+) WITHOUT ROWID;
+INSERT INTO turns (key, session, seq, role, content, ts)
+    SELECT key, 1, seq, role, content, ts FROM turns_v1;
+CREATE TABLE IF NOT EXISTS sessions (
+    key        TEXT    NOT NULL,
+    id         INTEGER NOT NULL,
+    created_ts INTEGER NOT NULL,
+    PRIMARY KEY (key, id)
+) WITHOUT ROWID;
+INSERT INTO sessions (key, id, created_ts)
+    SELECT DISTINCT key, 1, 0 FROM turns_v1;
+DROP TABLE turns_v1;`
+
+// migrateIfV1 detects a pre-session database (a turns table without the
+// session column) and upgrades it. Idempotent by construction: a migrated or
+// fresh database never matches the detection predicate again.
+func migrateIfV1(db *sql.DB) error {
+	var turnsExists int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'turns'`,
+	).Scan(&turnsExists); err != nil {
+		return fmt.Errorf("detect turns table: %w", err)
+	}
+	if turnsExists == 0 {
+		return nil // fresh database — nothing to migrate
+	}
+	var hasSession int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info('turns') WHERE name = 'session'`,
+	).Scan(&hasSession); err != nil {
+		return fmt.Errorf("detect session column: %w", err)
+	}
+	if hasSession > 0 {
+		return nil // already v2
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(migrateV1Stmt); err != nil {
+		return fmt.Errorf("run migration: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit migration: %w", err)
+	}
+	return nil
+}
+
+// activeSessionQuery resolves a key's active session id (0 = no sessions).
+const activeSessionQuery = `SELECT COALESCE(MAX(id), 0) FROM sessions WHERE key = ?`
 
 // buildFileDSN builds the SQLite "file:" DSN from a forward-slashed absolute
 // path (the result of filepath.ToSlash). dsnQuery is emitted verbatim as the
@@ -118,6 +373,13 @@ func Open(path string) (*SqliteStore, error) {
 	// reintroduces a read-max race and (key,seq) PK collisions (ADR-0019 §3).
 	db.SetMaxOpenConns(1)
 
+	// Pre-session databases upgrade HERE, before the v2 bootstrap — same
+	// boot-fatal posture as a bad path: a failed migration fails Open, never
+	// the first message (AS-12: the fixture test proves nothing is lost).
+	if err := migrateIfV1(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("sqlite: migrate %q: %w", abs, err)
+	}
 	if _, err := db.Exec(createTableStmt); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("sqlite: bootstrap schema in %q: %w", abs, err)
@@ -137,10 +399,14 @@ func (s *SqliteStore) LoadRecent(ctx context.Context, key conversation.Key, n in
 	if n <= 0 {
 		return nil, nil
 	}
-	// Take the last n by seq DESC, then reverse to oldest-first.
+	// Take the last n of the ACTIVE session by seq DESC, then reverse to
+	// oldest-first. Scoping to the active session is FR-SESS-2: a session
+	// reset is a hard context cut — previous sessions never surface here.
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT role, content, ts, seq FROM turns WHERE key = ? ORDER BY seq DESC LIMIT ?`,
-		string(key), n)
+		`SELECT role, content, ts, seq FROM turns
+		 WHERE key = ? AND session = (`+activeSessionQuery+`)
+		 ORDER BY seq DESC LIMIT ?`,
+		string(key), string(key), n)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: LoadRecent %q: %w", key, err)
 	}
@@ -210,12 +476,33 @@ func (s *SqliteStore) AppendTurns(ctx context.Context, key conversation.Key, tur
 	// partial group (crash-consistency).
 	defer func() { _ = tx.Rollback() }()
 
-	// Next seq for this key. COALESCE(...,0) handles the empty-history case.
-	// Running inside the (serialized) transaction means no other writer can read
-	// the same MAX before this group inserts.
+	// Resolve the ACTIVE session, creating session 1 for a brand-new key
+	// (the same implicit-first-session behavior MemStore has). Running inside
+	// the (serialized) transaction means no other writer can race the same
+	// resolution.
+	var active int
+	if err := tx.QueryRowContext(ctx, activeSessionQuery, string(key)).Scan(&active); err != nil {
+		return nil, fmt.Errorf("sqlite: AppendTurns active-session %q: %w", key, err)
+	}
+	if active == 0 {
+		active = 1
+		var created int64
+		if !turns[0].Timestamp.IsZero() {
+			created = turns[0].Timestamp.UTC().UnixNano()
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO sessions(key, id, created_ts) VALUES (?, ?, ?)`,
+			string(key), active, created); err != nil {
+			return nil, fmt.Errorf("sqlite: AppendTurns open session %q: %w", key, err)
+		}
+	}
+
+	// Next seq WITHIN the active session. COALESCE(...,0) handles the
+	// empty-session case. Same serialized-transaction guarantee as above.
 	var base int
 	if err := tx.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(seq)+1, 0) FROM turns WHERE key = ?`, string(key)).Scan(&base); err != nil {
+		`SELECT COALESCE(MAX(seq)+1, 0) FROM turns WHERE key = ? AND session = ?`,
+		string(key), active).Scan(&base); err != nil {
 		return nil, fmt.Errorf("sqlite: AppendTurns next-seq %q: %w", key, err)
 	}
 
@@ -231,8 +518,8 @@ func (s *SqliteStore) AppendTurns(ctx context.Context, key conversation.Key, tur
 			ns = turn.Timestamp.UTC().UnixNano()
 		}
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO turns(key, seq, role, content, ts) VALUES (?, ?, ?, ?, ?)`,
-			string(key), seq, string(turn.Role), turn.Content, ns,
+			`INSERT INTO turns(key, session, seq, role, content, ts) VALUES (?, ?, ?, ?, ?, ?)`,
+			string(key), active, seq, string(turn.Role), turn.Content, ns,
 		); err != nil {
 			return nil, fmt.Errorf("sqlite: AppendTurns insert %q seq %d: %w", key, seq, err)
 		}

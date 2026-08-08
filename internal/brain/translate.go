@@ -61,11 +61,15 @@ func requestWithHistory(in *envelope.Envelope, systemPrompt string, history []co
 // toModelRole maps a stored conversation.Role to the model role the providers
 // understand. This translation lives in the Orchestrator side (ADR-0018 §2,
 // resolution 3) so the conversation package stays a leaf with no model import.
+// Operator turns (console replies, FR-STORE-2) speak with the assistant's
+// voice toward providers — the resolution of the operator-console spec's
+// clarification #2 (2026-08-08): the history stays honest about WHO spoke,
+// the model simply sees its own side of the dialogue.
 func toModelRole(r conversation.Role) model.Role {
 	switch r {
 	case conversation.RoleSystem:
 		return model.RoleSystem
-	case conversation.RoleAssistant:
+	case conversation.RoleAssistant, conversation.RoleOperator:
 		return model.RoleAssistant
 	default:
 		return model.RoleUser

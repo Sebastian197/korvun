@@ -46,6 +46,11 @@ const (
 	RoleUser      Role = "user"
 	RoleAssistant Role = "assistant"
 	RoleSystem    Role = "system"
+	// RoleOperator marks a turn written by a human operator from the console
+	// (operator-console spec 2026-08-08, FR-STORE-2). It is persisted as-is —
+	// the history stays honest about who spoke — and the brains' provider
+	// translation maps it to the assistant role (brain.toModelRole).
+	RoleOperator Role = "operator"
 )
 
 // Turn is one message in a conversation's history. Timestamp and Seq are carried
@@ -98,6 +103,65 @@ type Store interface {
 	// history). The order BETWEEN concurrent groups may vary; each group stays
 	// intact. An empty group is a no-op returning (nil, nil).
 	AppendTurns(ctx context.Context, key Key, turns ...Turn) ([]Turn, error)
+}
+
+// ConversationInfo is one row of the inbox listing (operator-console spec
+// FR-STORE-1): a conversation key with its session bookkeeping. LastActivity
+// is the timestamp of the key's most recent turn (zero when the conversation
+// has no turns yet); LastRole is that turn's author ("" likewise).
+type ConversationInfo struct {
+	Key           Key
+	ActiveSession int
+	SessionCount  int
+	LastActivity  time.Time
+	LastRole      Role
+}
+
+// SessionInfo describes one session of a conversation (FR-SESS-6 /
+// FR-API-1b): its id, how many turns it holds, and the timestamps of its
+// first and last turns (zero for an empty session).
+type SessionInfo struct {
+	ID        int
+	TurnCount int
+	First     time.Time
+	Last      time.Time
+}
+
+// SessionStore is the sessionful store seam (operator-console spec,
+// FR-SESS-1/2/6 + FR-STORE-1). It EMBEDS Store — the additive-seam
+// discipline: every existing Store consumer (the brains, the router, their
+// fakes) keeps compiling untouched, while session-aware consumers (the
+// dispatch layer's reset handling, the control API's inbox) ask for the
+// superset.
+//
+// Sessions are store-assigned, monotonic per key (1, 2, 3…); the ACTIVE
+// session of a key is the highest one, and the Store methods operate on it:
+// Append/AppendTurns write to it, LoadRecent reads ONLY from it (a session
+// reset is therefore a hard context cut — FR-SESS-2). Old sessions stay
+// stored and readable via ListSessions/LoadSession, never fed to LoadRecent
+// again.
+type SessionStore interface {
+	Store
+
+	// NewSession closes the key's active session by opening a fresh one and
+	// returns the new active session id. On a key whose active session holds
+	// zero turns it is idempotent: it returns the current (still empty)
+	// active session instead of stacking empty sessions. On a key with no
+	// history at all it returns 1.
+	NewSession(ctx context.Context, key Key) (int, error)
+
+	// ListConversations lists up to limit conversations, most recent activity
+	// first. limit <= 0 returns nothing; an empty store returns an empty
+	// slice. Neither is an error.
+	ListConversations(ctx context.Context, limit int) ([]ConversationInfo, error)
+
+	// ListSessions lists every session of key, oldest first (ascending id).
+	// An unknown key returns an empty slice, not an error.
+	ListSessions(ctx context.Context, key Key) ([]SessionInfo, error)
+
+	// LoadSession returns ALL turns of the given session of key, oldest
+	// first. An unknown key or session returns an empty slice, not an error.
+	LoadSession(ctx context.Context, key Key, session int) ([]Turn, error)
 }
 
 // KeyFromEnvelope derives the canonical conversation Key from an inbound
