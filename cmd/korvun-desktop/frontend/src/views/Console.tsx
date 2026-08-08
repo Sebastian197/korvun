@@ -55,10 +55,7 @@ function isConsoleKey(key: string | null): boolean {
 }
 const CONFIRM_SESSION = 'This deletes the archived session from disk. No undo.'
 
-type ComposerState =
-  | { kind: 'idle' }
-  | { kind: 'inflight' }
-  | { kind: 'error'; message: string }
+type ComposerState = { kind: 'idle' } | { kind: 'inflight' } | { kind: 'error'; message: string }
 
 type ConfirmState = 'none' | 'conversation' | 'session'
 
@@ -84,7 +81,11 @@ function roleLabel(role: string): string {
 /** True when el is scrolled close enough to its bottom that new content
  * should keep it pinned there (FR-POLISH: autoscroll respects a human who
  * scrolled up to read). Exported for its unit test. */
-export function isNearBottom(el: { scrollHeight: number; scrollTop: number; clientHeight: number }): boolean {
+export function isNearBottom(el: {
+  scrollHeight: number
+  scrollTop: number
+  clientHeight: number
+}): boolean {
   return el.scrollHeight - el.scrollTop - el.clientHeight < 48
 }
 
@@ -369,7 +370,9 @@ export function Console(props: ConsoleProps): React.JSX.Element {
         {hits !== null && (
           <section className="console-hits" aria-label="Search results">
             <h3 className="console-hits-title">
-              {hits.length === 0 ? 'No messages found.' : `${hits.length} message${hits.length === 1 ? '' : 's'}`}
+              {hits.length === 0
+                ? 'No messages found.'
+                : `${hits.length} message${hits.length === 1 ? '' : 's'}`}
             </h3>
             <ul className="console-list">
               {hits.map((h) => {

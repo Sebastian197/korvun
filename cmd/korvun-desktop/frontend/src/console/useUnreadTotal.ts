@@ -9,7 +9,10 @@ import { useFeed } from '../feed/store'
 
 const NAV_POLL_MS = 15_000
 
-export function useUnreadTotal(fetcher: typeof fetch = fetch, pollMs: number = NAV_POLL_MS): number {
+export function useUnreadTotal(
+  fetcher: typeof fetch = fetch,
+  pollMs: number = NAV_POLL_MS,
+): number {
   const feed = useFeed()
   const c = feed.counters
   const feedVersion = c.received + c.replied + c.dropped + c.failed + (feed.live ? 1 : 0)

@@ -19,10 +19,7 @@ interface Captured {
   headers: Headers
 }
 
-function fakeFetch(
-  status: number,
-  json: unknown,
-): { fetcher: typeof fetch; calls: Captured[] } {
+function fakeFetch(status: number, json: unknown): { fetcher: typeof fetch; calls: Captured[] } {
   const calls: Captured[] = []
   const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({

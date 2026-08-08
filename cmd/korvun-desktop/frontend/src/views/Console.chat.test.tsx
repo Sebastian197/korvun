@@ -25,7 +25,12 @@ function chatFetch(): { fetcher: typeof fetch; calls: Captured[] } {
       setTimeout(() => {
         turns = [
           ...turns,
-          { role: 'assistant', content: 'hola humano', timestamp: '2026-08-08T12:00:02Z', seq: turns.length },
+          {
+            role: 'assistant',
+            content: 'hola humano',
+            timestamp: '2026-08-08T12:00:02Z',
+            seq: turns.length,
+          },
         ]
       }, 30)
       return json({}, 202)
@@ -34,18 +39,21 @@ function chatFetch(): { fetcher: typeof fetch; calls: Captured[] } {
       return json(
         turns.length === 0
           ? []
-          : [{
-              key: 'console::chat-1',
-              active_session: 1,
-              session_count: 1,
-              turn_count: turns.length,
-              last_activity: '2026-08-08T12:00:00Z',
-              last_role: turns[turns.length - 1].role,
-              taken_over: false,
-            }],
+          : [
+              {
+                key: 'console::chat-1',
+                active_session: 1,
+                session_count: 1,
+                turn_count: turns.length,
+                last_activity: '2026-08-08T12:00:00Z',
+                last_role: turns[turns.length - 1].role,
+                taken_over: false,
+              },
+            ],
       )
     }
-    if (url.endsWith('/sessions') && method === 'GET') return json([{ id: 1, turn_count: turns.length }])
+    if (url.endsWith('/sessions') && method === 'GET')
+      return json([{ id: 1, turn_count: turns.length }])
     return json(turns)
   }) as typeof fetch
   return { fetcher, calls }

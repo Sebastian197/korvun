@@ -102,9 +102,7 @@ test('SP4 — inbox, three-role conversation, takeover, operator reply, session 
 
   // DELETE the whole conversation: confirm copy, inbox empties…
   await page.getByRole('button', { name: 'Delete conversation' }).click()
-  await expect(
-    page.getByText('This deletes the conversation from disk. No undo.'),
-  ).toBeVisible()
+  await expect(page.getByText('This deletes the conversation from disk. No undo.')).toBeVisible()
   await page.getByRole('button', { name: /^Delete$/ }).click()
   await expect(page.getByText('No conversations yet.')).toBeVisible({ timeout: 15_000 })
   await page.screenshot({ path: CONSOLE_SHOT('07-after-delete.png'), fullPage: true })
@@ -114,7 +112,10 @@ test('SP4 — inbox, three-role conversation, takeover, operator reply, session 
   await post(page, '/__test/inject', { text: 'empiezo de cero' })
   const chatNav = page.getByRole('button', { name: /^Chat(\s+\d+)?$/ })
   await expect(chatNav).toHaveAttribute('data-unread', /\d+/, { timeout: 15_000 })
-  await page.getByRole('button', { name: /telegram/i }).first().click()
+  await page
+    .getByRole('button', { name: /telegram/i })
+    .first()
+    .click()
   await expect(pane.getByText('empiezo de cero')).toBeVisible({ timeout: 15_000 })
   // Reborn clean: a single session, no session tabs at all.
   await expect(page.getByRole('button', { name: /session \d/i })).toHaveCount(0)

@@ -32,7 +32,12 @@ const CONVS = [
 const ACTIVE_TURNS = [
   { role: 'user', content: 'necesito ayuda humana', timestamp: '2026-08-08T11:58:00Z', seq: 0 },
   { role: 'assistant', content: 'Puedo intentarlo yo', timestamp: '2026-08-08T11:59:00Z', seq: 1 },
-  { role: 'operator', content: 'aquí Chano, te atiendo', timestamp: '2026-08-08T12:00:00Z', seq: 2 },
+  {
+    role: 'operator',
+    content: 'aquí Chano, te atiendo',
+    timestamp: '2026-08-08T12:00:00Z',
+    seq: 2,
+  },
   { role: 'system', content: 'nota del sistema', timestamp: '2026-08-08T12:00:30Z', seq: 3 },
 ]
 
@@ -41,9 +46,10 @@ const OLD_TURNS = [{ role: 'user', content: 'histórico viejo', timestamp: '', s
 // A STATEFUL fake of the console API: takeover and new-session mutate what
 // later reads return, so the view's refetch-after-mutation shows real state
 // transitions (the same shape the live core produces).
-function consoleFetch(overrides?: {
-  replyStatus?: number
-}): { fetcher: typeof fetch; calls: Captured[] } {
+function consoleFetch(overrides?: { replyStatus?: number }): {
+  fetcher: typeof fetch
+  calls: Captured[]
+} {
   const calls: Captured[] = []
   let takenOver = true
   let sessionIDs = [1, 2]
@@ -198,9 +204,7 @@ describe('Console — controls', () => {
     await openFirstConversation(fetcher)
     fireEvent.click(screen.getByRole('button', { name: /new session/i }))
     await screen.findByText(/session 3/i)
-    expect(
-      calls.some((c) => c.url.endsWith('/sessions') && c.method === 'POST'),
-    ).toBe(true)
+    expect(calls.some((c) => c.url.endsWith('/sessions') && c.method === 'POST')).toBe(true)
     expect(calls.some((c) => c.url.endsWith('/reply'))).toBe(false)
   })
 

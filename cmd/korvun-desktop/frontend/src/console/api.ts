@@ -39,8 +39,7 @@ export interface TurnRow {
 }
 
 export type ReplyResult =
-  | { ok: true }
-  | { ok: false; reason: 'channel-missing' | 'saturated' | 'invalid' | 'failed' }
+  { ok: true } | { ok: false; reason: 'channel-missing' | 'saturated' | 'invalid' | 'failed' }
 
 function convPath(key: string): string {
   return `/api/conversations/${encodeURIComponent(key)}`
@@ -169,8 +168,7 @@ export async function searchTurns(
 }
 
 export type UserMessageResult =
-  | { ok: true }
-  | { ok: false; reason: 'not-wired' | 'saturated' | 'invalid' | 'failed' }
+  { ok: true } | { ok: false; reason: 'not-wired' | 'saturated' | 'invalid' | 'failed' }
 
 /** The direct-chat send (console channel): the human speaks as USER and the
  * full pipeline answers. Console keys only — the server enforces it too. */
