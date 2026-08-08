@@ -31,6 +31,11 @@ const MetaConversationID = "conversation.id"
 // are the same error and errors.Is treats them identically.
 var ErrNoConversationID = errors.New(`conversation: envelope is missing Meta["conversation.id"]`)
 
+// ErrActiveSession is returned by SessionStore.DeleteSession when the target
+// is the key's ACTIVE session (FR-DEL-1): the active session is never
+// deleted directly — reset first, then the archived copy can go.
+var ErrActiveSession = errors.New("conversation: cannot delete the active session")
+
 // Key is the conversation identity: the channel name joined to the conversation
 // id with "::". It is a named type so the Store seam cannot be called with an
 // arbitrary string. Build it only via KeyFromEnvelope.
@@ -113,8 +118,24 @@ type ConversationInfo struct {
 	Key           Key
 	ActiveSession int
 	SessionCount  int
-	LastActivity  time.Time
-	LastRole      Role
+	// TurnCount is the TOTAL number of turns across every session of the
+	// key — the unread arithmetic's anchor (FR-UNREAD: the shell keeps
+	// last-read counts; the store only reports totals).
+	TurnCount    int
+	LastActivity time.Time
+	LastRole     Role
+}
+
+// SearchHit is one content-search result (FR-SEARCH): the turn's identity
+// and content, addressable enough for the console to open the conversation
+// at its exact point.
+type SearchHit struct {
+	Key       Key
+	Session   int
+	Seq       int
+	Role      Role
+	Content   string
+	Timestamp time.Time
 }
 
 // SessionInfo describes one session of a conversation (FR-SESS-6 /
@@ -162,6 +183,24 @@ type SessionStore interface {
 	// LoadSession returns ALL turns of the given session of key, oldest
 	// first. An unknown key or session returns an empty slice, not an error.
 	LoadSession(ctx context.Context, key Key, session int) ([]Turn, error)
+
+	// DeleteConversation atomically removes EVERY turn and EVERY session of
+	// key — really gone, not hidden (FR-DEL-1). An unknown key is a no-op,
+	// not an error.
+	DeleteConversation(ctx context.Context, key Key) error
+
+	// DeleteSession atomically removes one ARCHIVED session of key (its
+	// turns and its registration). Deleting the key's active session
+	// returns ErrActiveSession and deletes nothing; an unknown key or
+	// session is a no-op.
+	DeleteSession(ctx context.Context, key Key, session int) error
+
+	// SearchTurns finds turns whose content contains query
+	// (case-insensitive substring; the sqlite implementation escapes LIKE
+	// metacharacters so `%`/`_` in the query match literally), newest
+	// first, up to limit. An empty/whitespace query or limit <= 0 returns
+	// nothing.
+	SearchTurns(ctx context.Context, query string, limit int) ([]SearchHit, error)
 }
 
 // KeyFromEnvelope derives the canonical conversation Key from an inbound

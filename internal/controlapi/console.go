@@ -32,6 +32,9 @@ import (
 // gate. An interface so the handlers stay testable with a fake.
 type OperatorRouter interface {
 	DispatchOutbound(ctx context.Context, env *envelope.Envelope) error
+	// DispatchInbound is the direct-chat entry (FR-CONS-3): the console
+	// channel's user messages enter the FULL pipeline here.
+	DispatchInbound(ctx context.Context, env *envelope.Envelope) error
 	TakeOver(key conversation.Key)
 	Release(key conversation.Key)
 	TakenOver(key conversation.Key) bool
@@ -43,10 +46,26 @@ type conversationRow struct {
 	Key           string `json:"key"`
 	ActiveSession int    `json:"active_session"`
 	SessionCount  int    `json:"session_count"`
-	LastActivity  string `json:"last_activity,omitempty"`
-	LastRole      string `json:"last_role,omitempty"`
-	TakenOver     bool   `json:"taken_over"`
+	// TurnCount is the total across sessions — the shell's unread anchor
+	// (FR-UNREAD): the console keeps last-read counts client-side and
+	// diffs against this.
+	TurnCount    int    `json:"turn_count"`
+	LastActivity string `json:"last_activity,omitempty"`
+	LastRole     string `json:"last_role,omitempty"`
+	TakenOver    bool   `json:"taken_over"`
 }
+
+type searchHitRow struct {
+	Key       string `json:"key"`
+	Session   int    `json:"session"`
+	Seq       int    `json:"seq"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp,omitempty"`
+}
+
+// defaultSearchLimit bounds GET /api/search when no limit is given.
+const defaultSearchLimit = 50
 
 type sessionRow struct {
 	ID        int    `json:"id"`
@@ -82,6 +101,128 @@ func RegisterConsole(m Mounter, token string, store conversation.SessionStore, o
 	m.Handle("POST /api/conversations/{key}/reply", auth(replyHandler(op)))
 	m.Handle("POST /api/conversations/{key}/takeover", auth(takeoverHandler(op, true)))
 	m.Handle("POST /api/conversations/{key}/release", auth(takeoverHandler(op, false)))
+	m.Handle("DELETE /api/conversations/{key}", auth(deleteConversationHandler(store, op)))
+	m.Handle("DELETE /api/conversations/{key}/sessions/{id}", auth(deleteSessionHandler(store)))
+	m.Handle("GET /api/search", auth(searchHandler(store)))
+	m.Handle("POST /api/conversations/{key}/message", auth(userMessageHandler(op)))
+}
+
+// userMessageHandler is the direct-chat send (FR-CONS-3): a USER envelope —
+// never operator — into the full dispatch pipeline. Console-channel keys
+// only: the other channels' users live on their own networks.
+func userMessageHandler(op OperatorRouter) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		channelName, convID, ok := splitKey(r.PathValue("key"))
+		if !ok || channelName != "console" {
+			writeError(w, http.StatusBadRequest, "key must be console::conversation-id")
+			return
+		}
+		var body struct {
+			Text string `json:"text"`
+		}
+		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxReplyBodyBytes))
+		if err := dec.Decode(&body); err != nil || strings.TrimSpace(body.Text) == "" {
+			writeError(w, http.StatusBadRequest, "body must be JSON with a non-empty text field")
+			return
+		}
+		env := envelope.New(channelName, envelope.Inbound,
+			envelope.Participant{ID: "console-user", Name: "You"}).AddText(body.Text)
+		env.Meta[conversation.MetaConversationID] = convID
+
+		err := op.DispatchInbound(r.Context(), env)
+		switch {
+		case err == nil:
+			w.WriteHeader(http.StatusAccepted)
+		case errors.Is(err, router.ErrNoRoute), errors.Is(err, router.ErrUnknownChannel):
+			writeError(w, http.StatusConflict, "console channel not wired in the running core")
+		case errors.Is(err, router.ErrBrainSaturated):
+			writeError(w, http.StatusServiceUnavailable, "brain queue is saturated")
+		default:
+			writeError(w, http.StatusInternalServerError, "message failed")
+		}
+	})
+}
+
+// deleteConversationHandler wipes a conversation (FR-DEL-2 / AS-13):
+// releases the takeover gate FIRST — a deleted conversation must never
+// leave a silenced ghost — then deletes for real.
+func deleteConversationHandler(store conversation.SessionStore, op OperatorRouter) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, _, ok := splitKey(r.PathValue("key")); !ok {
+			writeError(w, http.StatusBadRequest, "key must be channel::conversation-id")
+			return
+		}
+		key := conversation.Key(r.PathValue("key"))
+		op.Release(key)
+		if err := store.DeleteConversation(r.Context(), key); err != nil {
+			writeError(w, http.StatusInternalServerError, "deleting conversation failed")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// deleteSessionHandler wipes one ARCHIVED session (FR-DEL-2 / AS-14); the
+// active session answers 409 honestly.
+func deleteSessionHandler(store conversation.SessionStore) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, _, ok := splitKey(r.PathValue("key")); !ok {
+			writeError(w, http.StatusBadRequest, "key must be channel::conversation-id")
+			return
+		}
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil || id <= 0 {
+			writeError(w, http.StatusBadRequest, "session id must be a positive integer")
+			return
+		}
+		err = store.DeleteSession(r.Context(), conversation.Key(r.PathValue("key")), id)
+		switch {
+		case err == nil:
+			w.WriteHeader(http.StatusNoContent)
+		case errors.Is(err, conversation.ErrActiveSession):
+			writeError(w, http.StatusConflict, "cannot delete the active session — reset first")
+		default:
+			writeError(w, http.StatusInternalServerError, "deleting session failed")
+		}
+	})
+}
+
+// searchHandler is the content search (FR-SEARCH): bearer-gated like every
+// content-bearing read; an empty query is a 400, never an unbounded scan.
+func searchHandler(store conversation.SessionStore) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := strings.TrimSpace(r.URL.Query().Get("q"))
+		if q == "" {
+			writeError(w, http.StatusBadRequest, "q must not be empty")
+			return
+		}
+		limit := defaultSearchLimit
+		if v := r.URL.Query().Get("limit"); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n <= 0 {
+				writeError(w, http.StatusBadRequest, "limit must be a positive integer")
+				return
+			}
+			limit = n
+		}
+		hits, err := store.SearchTurns(r.Context(), q, limit)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "search failed")
+			return
+		}
+		out := make([]searchHitRow, 0, len(hits))
+		for _, h := range hits {
+			out = append(out, searchHitRow{
+				Key:       string(h.Key),
+				Session:   h.Session,
+				Seq:       h.Seq,
+				Role:      string(h.Role),
+				Content:   h.Content,
+				Timestamp: fmtTime(h.Timestamp),
+			})
+		}
+		writeJSON(w, out)
+	})
 }
 
 func fmtTime(t time.Time) string {
@@ -124,6 +265,7 @@ func listConversationsHandler(store conversation.SessionStore, op OperatorRouter
 				Key:           string(c.Key),
 				ActiveSession: c.ActiveSession,
 				SessionCount:  c.SessionCount,
+				TurnCount:     c.TurnCount,
 				LastActivity:  fmtTime(c.LastActivity),
 				LastRole:      string(c.LastRole),
 				TakenOver:     op.TakenOver(c.Key),

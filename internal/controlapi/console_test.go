@@ -30,6 +30,8 @@ type fakeOpRouter struct {
 	mu          sync.Mutex
 	dispatched  []*envelope.Envelope
 	dispatchErr error
+	inbound     []*envelope.Envelope
+	inboundErr  error
 	taken       map[conversation.Key]bool
 }
 
@@ -45,6 +47,20 @@ func (f *fakeOpRouter) DispatchOutbound(_ context.Context, env *envelope.Envelop
 	}
 	f.dispatched = append(f.dispatched, env)
 	return nil
+}
+func (f *fakeOpRouter) DispatchInbound(_ context.Context, env *envelope.Envelope) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.inboundErr != nil {
+		return f.inboundErr
+	}
+	f.inbound = append(f.inbound, env)
+	return nil
+}
+func (f *fakeOpRouter) Inbound() []*envelope.Envelope {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]*envelope.Envelope(nil), f.inbound...)
 }
 func (f *fakeOpRouter) TakeOver(k conversation.Key) {
 	f.mu.Lock()

@@ -166,3 +166,53 @@ func TestNewSession_EmptyActiveOnFreshKeyStaysIdempotentAcrossReopen(t *testing.
 		t.Fatalf("NewSession after reopen = (%d, %v), want (1, nil) — empty session lost or stacked", id, err)
 	}
 }
+
+func TestDeletionAndSearch_ErrorsOnClosedStore(t *testing.T) {
+	s, _ := openStore(t)
+	mustAppend(t, s, conversation.Key("tg::1"), conversation.RoleUser, "hola", at(1))
+	if err := s.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	ctx := context.Background()
+	if err := s.DeleteConversation(ctx, "tg::1"); err == nil {
+		t.Fatal("DeleteConversation on closed store: want error")
+	}
+	if err := s.DeleteSession(ctx, "tg::1", 1); err == nil {
+		t.Fatal("DeleteSession on closed store: want error")
+	}
+	if _, err := s.SearchTurns(ctx, "hola", 5); err == nil {
+		t.Fatal("SearchTurns on closed store: want error")
+	}
+}
+
+func TestDeleteSession_SurfacesMidTransactionFailures(t *testing.T) {
+	// Drop the turns table behind the store's back: the delete inside the
+	// transaction fails and surfaces wrapped — never a silent half-delete.
+	s, path := openStore(t)
+	mustAppend(t, s, conversation.Key("tg::1"), conversation.RoleUser, "s1", at(1))
+	if _, err := s.NewSession(context.Background(), "tg::1"); err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	mustAppend(t, s, conversation.Key("tg::1"), conversation.RoleUser, "s2", at(2))
+	dropTable(t, path, "turns")
+	if err := s.DeleteSession(context.Background(), "tg::1", 1); err == nil {
+		t.Fatal("DeleteSession without turns table: want error")
+	}
+	// And DeleteConversation hits the same wall honestly.
+	if err := s.DeleteConversation(context.Background(), "tg::1"); err == nil {
+		t.Fatal("DeleteConversation without turns table: want error")
+	}
+}
+
+func TestSearchTurns_EmptyInputsOnRealStore(t *testing.T) {
+	s, _ := openStore(t)
+	mustAppend(t, s, conversation.Key("tg::1"), conversation.RoleUser, "hola", at(1))
+	for _, q := range []string{"", "  "} {
+		if hits, err := s.SearchTurns(context.Background(), q, 5); err != nil || len(hits) != 0 {
+			t.Fatalf("SearchTurns(%q) = (%v, %v), want (empty, nil)", q, hits, err)
+		}
+	}
+	if hits, err := s.SearchTurns(context.Background(), "hola", 0); err != nil || len(hits) != 0 {
+		t.Fatalf("SearchTurns(limit 0) = (%v, %v), want (empty, nil)", hits, err)
+	}
+}

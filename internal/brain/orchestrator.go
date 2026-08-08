@@ -199,7 +199,14 @@ func (o *Orchestrator) Handle(ctx context.Context, env *envelope.Envelope) ([]*e
 
 	req, ok := requestWithHistory(env, o.systemPrompt, history)
 	if !ok {
-		return nil, nil // nothing to ask — clean no-reply (ADR-0014 §5)
+		// Nothing to ASK — but not necessarily nothing to REMEMBER: a
+		// media-only message persists its honest markers (FR-ATTACH,
+		// "[image]"/"[audio]"/…) so the operator console never faces a mute
+		// void. Still a clean no-reply (ADR-0014 §5) and zero model calls.
+		if transcript := envelope.TranscriptText(env.Parts); transcript != "" {
+			o.persistTurns(ctx, key, transcript, "")
+		}
+		return nil, nil
 	}
 
 	// One inbound dispatched to this brain.
@@ -234,7 +241,10 @@ func (o *Orchestrator) Handle(ctx context.Context, env *envelope.Envelope) ([]*e
 	// via AppendTurns, so the pair stays contiguous under concurrency (ADR-0018
 	// reconciliation note). key is the empty Key when no store is configured or no
 	// conversation id is present, in which case persistTurns is a no-op.
-	o.persistTurns(ctx, key, latestText(env.Parts), content)
+	// TranscriptText, not latestText: attachments persist their honest
+	// markers alongside the caption (FR-ATTACH) — the model request keeps
+	// seeing the plain text, the HISTORY tells the whole truth.
+	o.persistTurns(ctx, key, envelope.TranscriptText(env.Parts), content)
 	return decisionToEnvelopes(content, env), nil
 }
 

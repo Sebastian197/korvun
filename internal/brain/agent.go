@@ -226,7 +226,10 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	}
 
 	a.metrics.IncMessages(env.Channel)
-	userText := latestText(env.Parts)
+	// TranscriptText, not latestText: attachments persist their honest
+	// markers alongside the caption (FR-ATTACH); the request keeps the
+	// plain text, the history tells the whole truth.
+	userText := envelope.TranscriptText(env.Parts)
 
 	finalText, answered := a.runLoop(ctx, env, req)
 	if !answered {

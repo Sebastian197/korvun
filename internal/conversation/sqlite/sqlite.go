@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/conversation"
@@ -100,6 +101,7 @@ func (s *SqliteStore) ListConversations(ctx context.Context, limit int) ([]conve
 		SELECT s.key,
 		       MAX(s.id),
 		       COUNT(s.id),
+		       (SELECT COUNT(*) FROM turns tc WHERE tc.key = s.key),
 		       COALESCE((SELECT MAX(t.ts) FROM turns t WHERE t.key = s.key), 0),
 		       COALESCE((SELECT t2.role FROM turns t2 WHERE t2.key = s.key
 		                 ORDER BY t2.session DESC, t2.seq DESC LIMIT 1), '')
@@ -118,15 +120,17 @@ func (s *SqliteStore) ListConversations(ctx context.Context, limit int) ([]conve
 			key, role string
 			active    int
 			count     int
+			turnTotal int
 			ns        int64
 		)
-		if err := rows.Scan(&key, &active, &count, &ns, &role); err != nil {
+		if err := rows.Scan(&key, &active, &count, &turnTotal, &ns, &role); err != nil {
 			return nil, fmt.Errorf("sqlite: ListConversations scan: %w", err)
 		}
 		out = append(out, conversation.ConversationInfo{
 			Key:           conversation.Key(key),
 			ActiveSession: active,
 			SessionCount:  count,
+			TurnCount:     turnTotal,
 			LastActivity:  tsToTime(ns),
 			LastRole:      conversation.Role(role),
 		})
@@ -539,4 +543,113 @@ func (s *SqliteStore) AppendTurns(ctx context.Context, key conversation.Key, tur
 // cancels its context on shutdown (see the durability note in app.Shutdown).
 func (s *SqliteStore) Close() error {
 	return s.db.Close()
+}
+
+// DeleteConversation implements conversation.SessionStore (FR-DEL-1): every
+// turn and session row of key gone in ONE transaction — really deleted, not
+// hidden. An unknown key is a no-op.
+func (s *SqliteStore) DeleteConversation(ctx context.Context, key conversation.Key) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite: DeleteConversation begin %q: %w", key, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM turns WHERE key = ?`, string(key)); err != nil {
+		return fmt.Errorf("sqlite: DeleteConversation turns %q: %w", key, err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE key = ?`, string(key)); err != nil {
+		return fmt.Errorf("sqlite: DeleteConversation sessions %q: %w", key, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: DeleteConversation commit %q: %w", key, err)
+	}
+	return nil
+}
+
+// DeleteSession implements conversation.SessionStore (FR-DEL-1): one
+// ARCHIVED session's turns and registration, in one transaction. The active
+// session is protected by conversation.ErrActiveSession; an unknown key or
+// session is a no-op.
+func (s *SqliteStore) DeleteSession(ctx context.Context, key conversation.Key, session int) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite: DeleteSession begin %q: %w", key, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var active int
+	if err := tx.QueryRowContext(ctx, activeSessionQuery, string(key)).Scan(&active); err != nil {
+		return fmt.Errorf("sqlite: DeleteSession active %q: %w", key, err)
+	}
+	if active == 0 {
+		return nil // unknown key: no-op
+	}
+	if session == active {
+		return conversation.ErrActiveSession
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM turns WHERE key = ? AND session = ?`, string(key), session); err != nil {
+		return fmt.Errorf("sqlite: DeleteSession turns %q/%d: %w", key, session, err)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM sessions WHERE key = ? AND id = ?`, string(key), session); err != nil {
+		return fmt.Errorf("sqlite: DeleteSession session %q/%d: %w", key, session, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite: DeleteSession commit %q/%d: %w", key, session, err)
+	}
+	return nil
+}
+
+// likeEscape makes a user query safe inside a LIKE pattern: backslash the
+// escape character itself, then the %% and _ wildcards, so they match
+// literally (FR-SEARCH).
+func likeEscape(q string) string {
+	q = strings.ReplaceAll(q, `\`, `\\`)
+	q = strings.ReplaceAll(q, `%`, `\%`)
+	q = strings.ReplaceAll(q, `_`, `\_`)
+	return q
+}
+
+// SearchTurns implements conversation.SessionStore (FR-SEARCH):
+// case-insensitive LIKE over every turn (sqlite LIKE is case-insensitive
+// for ASCII by default), wildcards escaped so the query matches literally,
+// newest first with the key/seq tiebreak, up to limit.
+func (s *SqliteStore) SearchTurns(ctx context.Context, query string, limit int) ([]conversation.SearchHit, error) {
+	q := strings.TrimSpace(query)
+	if q == "" || limit <= 0 {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT key, session, seq, role, content, ts FROM turns
+		WHERE content LIKE ? ESCAPE '\'
+		ORDER BY ts DESC, key ASC, session DESC, seq DESC
+		LIMIT ?`,
+		"%"+likeEscape(q)+"%", limit)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: SearchTurns: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []conversation.SearchHit
+	for rows.Next() {
+		var (
+			key, role, content string
+			session, seq       int
+			ns                 int64
+		)
+		if err := rows.Scan(&key, &session, &seq, &role, &content, &ns); err != nil {
+			return nil, fmt.Errorf("sqlite: SearchTurns scan: %w", err)
+		}
+		out = append(out, conversation.SearchHit{
+			Key:       conversation.Key(key),
+			Session:   session,
+			Seq:       seq,
+			Role:      conversation.Role(role),
+			Content:   content,
+			Timestamp: tsToTime(ns),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: SearchTurns rows: %w", err)
+	}
+	return out, nil
 }

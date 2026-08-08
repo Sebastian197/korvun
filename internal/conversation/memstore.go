@@ -6,6 +6,7 @@ package conversation
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -157,6 +158,9 @@ func (s *MemStore) ListConversations(_ context.Context, limit int) ([]Conversati
 			ActiveSession: sessions[len(sessions)-1].id,
 			SessionCount:  len(sessions),
 		}
+		for _, sess := range sessions {
+			info.TurnCount += len(sess.turns)
+		}
 		// The most recent turn: sessions are ordered, so scan from the back
 		// for the last non-empty one.
 		for i := len(sessions) - 1; i >= 0; i-- {
@@ -213,4 +217,79 @@ func (s *MemStore) LoadSession(_ context.Context, key Key, session int) ([]Turn,
 		}
 	}
 	return nil, nil
+}
+
+// DeleteConversation atomically removes every session and turn of key
+// (SessionStore, FR-DEL-1): really gone from the map. An unknown key is a
+// no-op.
+func (s *MemStore) DeleteConversation(_ context.Context, key Key) error {
+	s.mu.Lock()
+	delete(s.m, key)
+	s.mu.Unlock()
+	return nil
+}
+
+// DeleteSession atomically removes one ARCHIVED session of key
+// (SessionStore, FR-DEL-1). The active (last) session is protected by
+// ErrActiveSession; an unknown key or session is a no-op.
+func (s *MemStore) DeleteSession(_ context.Context, key Key, session int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions := s.m[key]
+	if len(sessions) == 0 {
+		return nil
+	}
+	if sessions[len(sessions)-1].id == session {
+		return ErrActiveSession
+	}
+	kept := sessions[:0]
+	for _, sess := range sessions {
+		if sess.id != session {
+			kept = append(kept, sess)
+		}
+	}
+	s.m[key] = kept
+	return nil
+}
+
+// SearchTurns implements SessionStore (FR-SEARCH): case-insensitive
+// substring over every turn of every key, newest first (by timestamp, key
+// as the deterministic tiebreak), up to limit.
+func (s *MemStore) SearchTurns(_ context.Context, query string, limit int) ([]SearchHit, error) {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" || limit <= 0 {
+		return nil, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var hits []SearchHit
+	for key, sessions := range s.m {
+		for _, sess := range sessions {
+			for _, t := range sess.turns {
+				if strings.Contains(strings.ToLower(t.Content), q) {
+					hits = append(hits, SearchHit{
+						Key:       key,
+						Session:   sess.id,
+						Seq:       t.Seq,
+						Role:      t.Role,
+						Content:   t.Content,
+						Timestamp: t.Timestamp,
+					})
+				}
+			}
+		}
+	}
+	sort.Slice(hits, func(i, j int) bool {
+		if !hits[i].Timestamp.Equal(hits[j].Timestamp) {
+			return hits[i].Timestamp.After(hits[j].Timestamp)
+		}
+		if hits[i].Key != hits[j].Key {
+			return hits[i].Key < hits[j].Key
+		}
+		return hits[i].Seq > hits[j].Seq
+	})
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return hits, nil
 }

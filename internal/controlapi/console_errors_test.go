@@ -88,3 +88,9 @@ func TestConsole_MalformedParamsAre400s(t *testing.T) {
 		}
 	}
 }
+
+func (failingStore) DeleteConversation(context.Context, conversation.Key) error { return errStore }
+func (failingStore) DeleteSession(context.Context, conversation.Key, int) error { return errStore }
+func (failingStore) SearchTurns(context.Context, string, int) ([]conversation.SearchHit, error) {
+	return nil, errStore
+}

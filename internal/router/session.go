@@ -195,7 +195,10 @@ func (r *Router) sessionPreDispatch(ctx context.Context, env *envelope.Envelope,
 		// lost (FR-TAKE-1), still announce the message on the bus (the
 		// console's change signal), and skip the brain entirely.
 		if r.sessionStore != nil {
-			if text := latestEnvelopeText(env.Parts); text != "" {
+			// TranscriptText: a media message under takeover persists its
+			// honest markers too (FR-ATTACH) — the human at the console
+			// must see WHAT arrived, never a mute void.
+			if text := envelope.TranscriptText(env.Parts); text != "" {
 				if _, err := r.sessionStore.Append(ctx, key, conversation.Turn{
 					Role:      conversation.RoleUser,
 					Content:   text,
@@ -291,6 +294,9 @@ func triggerAck(in *envelope.Envelope) *envelope.Envelope {
 	for k, v := range in.Meta {
 		out.Meta[k] = v
 	}
+	// Marked as an ack (FR-CONS-1): self-persisting channels (console)
+	// record marked envelopes as SYSTEM turns; network channels ignore it.
+	out.Meta[envelope.MetaAck] = envelope.AckSessionReset
 	return out
 }
 

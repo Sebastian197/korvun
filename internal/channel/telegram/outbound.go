@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -486,6 +487,15 @@ func OutboundToSendMessage(e *envelope.Envelope) (*bot.SendMessageParams, error)
 func parseChatID(e *envelope.Envelope) (int64, error) {
 	chatIDStr, ok := e.Meta[MetaChatID]
 	if !ok || chatIDStr == "" {
+		// The conversation identity is the chat id VERBATIM for telegram
+		// (the adapter's inbound construction copies MetaChatID into
+		// conversation.id), so an outbound addressed by the conversation
+		// KEY alone — the operator console's envelope shape (AS-5
+		// correction, the 2026-08-08 smoke defect) — is deliverable
+		// without any channel-specific meta.
+		chatIDStr = e.Meta[conversation.MetaConversationID]
+	}
+	if chatIDStr == "" {
 		return 0, ErrMissingChatID
 	}
 	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
