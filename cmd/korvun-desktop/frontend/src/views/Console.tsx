@@ -32,6 +32,7 @@ import {
 } from '../console/api'
 import { markRead, readLastSeen, unreadCount } from '../console/unread'
 import { relTime } from '../console/time'
+import { isNearBottom } from '../console/scroll'
 
 export interface ConsoleProps {
   fetcher?: typeof fetch
@@ -76,17 +77,6 @@ function roleLabel(role: string): string {
     default:
       return 'User'
   }
-}
-
-/** True when el is scrolled close enough to its bottom that new content
- * should keep it pinned there (FR-POLISH: autoscroll respects a human who
- * scrolled up to read). Exported for its unit test. */
-export function isNearBottom(el: {
-  scrollHeight: number
-  scrollTop: number
-  clientHeight: number
-}): boolean {
-  return el.scrollHeight - el.scrollTop - el.clientHeight < 48
 }
 
 /** The live feed reduced to a change counter — the console's re-fetch tick.

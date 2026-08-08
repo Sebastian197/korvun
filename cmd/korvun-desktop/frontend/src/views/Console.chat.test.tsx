@@ -1,6 +1,6 @@
 // FR-CONS-4 red: the direct chat — New chat drafts, user-voiced sends with
 // the honest "Thinking…" latency, and takeover disabled with its reason.
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Console } from './Console'
 
@@ -88,7 +88,9 @@ describe('the direct chat (console channel)', () => {
     await new Promise((r) => setTimeout(r, 60))
     view.rerender(<Console fetcher={fetcher} feedVersion={1} coreState="running" />)
     await screen.findByText('hola humano')
-    expect(screen.queryByText(/thinking/i)).toBeNull()
+    // The indicator clears a state-tick after the reply lands — auto-wait
+    // for its real removal (house lesson: never assert absence impatiently).
+    await waitFor(() => expect(screen.queryByText(/thinking/i)).toBeNull())
   })
 
   it('takeover is disabled with its reason in console conversations', async () => {
