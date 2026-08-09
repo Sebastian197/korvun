@@ -99,3 +99,22 @@ func WithErrorHandler(h func(RouterError)) Option {
 func WithEventPublisher(p EventPublisher) Option {
 	return func(r *Router) { r.eventPublisher = p }
 }
+
+// ToolsReporter composes the /tools gatekeeper report for the given brain
+// (ADR-0041 FR-CHAT-1). It runs on the dispatch path, so it must be fast,
+// non-blocking, and — the ADR-0024 §1 law — METADATA-ONLY: grants, modes,
+// rules, latencies; never tool args nor message content.
+type ToolsReporter func(brainName string) string
+
+// WithToolsCommand mounts the /tools first-token command on the given
+// channel (the /new pattern: exact first token, a fixed system response
+// through the outbound funnel, zero model involvement). A nil reporter or an
+// empty channel leaves the command off — the router's optional-seam default.
+func WithToolsCommand(channel string, report ToolsReporter) Option {
+	return func(r *Router) {
+		if channel != "" && report != nil {
+			r.toolsChannel = channel
+			r.toolsReport = report
+		}
+	}
+}

@@ -52,6 +52,12 @@ type Router struct {
 	// eventPublisher is the optional ADR-0023 lifecycle-event sink. nil (the
 	// default) disables publishing at zero cost. Set via WithEventPublisher.
 	eventPublisher EventPublisher
+	// toolsChannel/toolsReport wire the /tools first-token command (ADR-0041
+	// FR-CHAT-1): on toolsChannel, "/tools" answers with toolsReport's text
+	// as a system response. nil toolsReport (the default) disables the
+	// command at zero cost. Set via WithToolsCommand.
+	toolsChannel string
+	toolsReport  ToolsReporter
 
 	// SP2 (operator-console spec): session dispatch + takeover + operator
 	// outbound. sessionStore nil disables session behavior entirely; clock

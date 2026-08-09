@@ -306,13 +306,27 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 				}))
 		}
 	}
+	// The /tools gatekeeper command (ADR-0041 FR-CHAT-1) mounts on the
+	// console channel when the bus exists to feed its activity ring —
+	// without observability the command stays off rather than serving an
+	// empty feed as if nothing ever ran.
+	if eventBus != nil {
+		ring := newToolEventRing(defaultToolRingSize, nil)
+		ring.subscribe(eventBus)
+		ropts = append(ropts, router.WithToolsCommand(console.ChannelName, toolsReporterFor(cfg, ring)))
+	}
 	r := router.New(ropts...)
 
 	channels, brainSummaries, channelInfos, err := b.wire(r, cfg)
 	if err != nil {
 		// Clean up any brain/channel workers the partial wiring started, plus the
-		// store we just opened, so a failed Build leaks nothing.
+		// store we just opened, so a failed Build leaks nothing. The event bus
+		// closes too: the /tools ring subscribes BEFORE wiring, so its
+		// subscriber goroutines must not outlive a failed boot.
 		_ = r.Shutdown(context.Background())
+		if eventBus != nil {
+			eventBus.Close()
+		}
 		if store != nil {
 			_ = store.Close()
 		}

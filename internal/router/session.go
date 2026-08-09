@@ -190,6 +190,13 @@ func (r *Router) sessionPreDispatch(ctx context.Context, env *envelope.Envelope,
 		}
 	}
 
+	// The /tools gatekeeper report (FR-CHAT-1) answers BEFORE the takeover
+	// gate: it is a system command, so it works whether or not a human has
+	// silenced the brain.
+	if r.maybeHandleToolsCommand(env, brainName) {
+		return nil, true
+	}
+
 	if r.TakenOver(key) {
 		// The human is the brain: persist the user's words so nothing is
 		// lost (FR-TAKE-1), still announce the message on the bus (the
@@ -284,6 +291,29 @@ func (r *Router) maybeHandleTrigger(ctx context.Context, key conversation.Key, e
 		return nil, true
 	}
 	return rewriteEnvelopeText(env, rest), false
+}
+
+// maybeHandleToolsCommand answers the /tools first-token command on the
+// configured tools channel (ADR-0041 FR-CHAT-1): a SYSTEM response carrying
+// the gatekeeper report for the conversation's routed brain, through the
+// normal outbound funnel, zero brain involvement. Any trailing text after
+// the token is ignored — the report is the whole answer. nil reporter or a
+// different channel/token = not handled.
+func (r *Router) maybeHandleToolsCommand(env *envelope.Envelope, brainName string) bool {
+	if r.toolsReport == nil || env.Channel != r.toolsChannel {
+		return false
+	}
+	first, _, _ := strings.Cut(strings.TrimSpace(latestEnvelopeText(env.Parts)), " ")
+	if first != "/tools" {
+		return false
+	}
+	out := envelope.New(env.Channel, envelope.Outbound, korvun).AddText(r.toolsReport(brainName))
+	for k, v := range env.Meta {
+		out.Meta[k] = v
+	}
+	out.Meta[envelope.MetaAck] = envelope.AckToolsReport
+	r.sendReply(out)
+	return true
 }
 
 // triggerAck builds the fixed, model-free acknowledgement for a bare

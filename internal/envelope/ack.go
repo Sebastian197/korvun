@@ -11,3 +11,8 @@ const MetaAck = "korvun.ack"
 
 // AckSessionReset is the MetaAck value for the session-reset ack.
 const AckSessionReset = "session-reset"
+
+// AckToolsReport is the MetaAck value for the /tools gatekeeper report
+// (ADR-0041, FR-CHAT-1): a system response the console persists as a SYSTEM
+// turn like any ack.
+const AckToolsReport = "tools-report"
