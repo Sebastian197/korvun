@@ -109,6 +109,18 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   const [confirm, setConfirm] = useState<ConfirmState>('none')
   const [lastSeen, setLastSeen] = useState<Record<string, number>>(() => readLastSeen())
   const [thinking, setThinking] = useState(false)
+  // Honest-wait clock (pega 4-UI): when the thinking started, so the caption
+  // can turn plain-words after ~10s of a slow local model.
+  const [thinkingSince, setThinkingSince] = useState<number | null>(null)
+  const [thinkingLong, setThinkingLong] = useState(false)
+  // Optimistic echo (pega 2): the user's turn paints the instant Send is
+  // pressed and reconciles with the store's real pair; a failed send stays
+  // visible, marked — never a silent vanish.
+  const [pending, setPending] = useState<{
+    key: string
+    content: string
+    state: 'sending' | 'failed'
+  } | null>(null)
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   const turnsRef = useRef<HTMLOListElement | null>(null)
@@ -196,8 +208,42 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   useEffect(() => {
     if (turns.length === 0) return
     const last = turns[turns.length - 1]
-    if (last.role === 'assistant' || last.role === 'system') setThinking(false)
+    if (last.role === 'assistant' || last.role === 'system') {
+      setThinking(false)
+      setThinkingSince(null)
+    }
   }, [turns])
+
+  // Reconcile the optimistic echo: once the store carries the user turn,
+  // the local copy retires (no duplicates, no flicker).
+  useEffect(() => {
+    if (pending === null || pending.state !== 'sending') return
+    if (pending.key !== selected) return
+    // A system command ("/new", "/tools"…) never persists a user turn — its
+    // SYSTEM ack is the reconciliation signal instead (no eternal Sending…).
+    if (pending.content.startsWith('/') && turns.length > 0 && turns[turns.length - 1].role === 'system') {
+      setPending(null)
+      return
+    }
+    for (let i = turns.length - 1; i >= 0; i--) {
+      if (turns[i].role === 'user' && turns[i].content === pending.content) {
+        setPending(null)
+        return
+      }
+    }
+  }, [turns, pending, selected])
+
+  // The honest-wait tick: after ~10s of thinking, say it in plain words.
+  useEffect(() => {
+    if (thinkingSince === null) {
+      setThinkingLong(false)
+      return
+    }
+    const tick = () => setThinkingLong(Date.now() - thinkingSince > 10_000)
+    tick()
+    const id = setInterval(tick, 1_000)
+    return () => clearInterval(id)
+  }, [thinkingSince])
 
   // Autoscroll: pin to the newest turn unless the human scrolled up.
   useEffect(() => {
@@ -232,6 +278,15 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     setComposer({ kind: 'idle' })
     setConfirm('none')
     pinnedRef.current = true
+    // The pane belongs to the NEW conversation from this instant: stale
+    // turns from the previous one must never show under its title (the
+    // 2026-08-09 duplicated-conversation bug — they also suppressed the
+    // optimistic echo via the same-content reconciliation).
+    setTurns([])
+    setSessions([])
+    setPending(null)
+    setThinking(false)
+    setThinkingSince(null)
   }
 
   async function runSearch(): Promise<void> {
@@ -252,18 +307,26 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   async function submitReply(): Promise<void> {
     if (selected === null || draft.trim() === '') return
     if (isConsoleKey(selected)) {
-      // Direct chat: speak as the USER through the full pipeline and show
-      // the honest local-model latency while the brain works.
+      // Direct chat: the user's turn ECHOES INSTANTLY (pega 2) and the
+      // honest wait starts from the send instant (pega 4-UI) — the store's
+      // final pair reconciles both later.
+      const text = draft
       setComposer({ kind: 'idle' })
-      const sent = await sendUserMessage(selected, draft, fetcher)
+      setPending({ key: selected, content: text, state: 'sending' })
+      setThinking(true)
+      setThinkingSince(Date.now())
+      pinnedRef.current = true
+      const sent = await sendUserMessage(selected, text, fetcher)
       if (sent.ok) {
         setDraft('')
-        setThinking(true)
-        pinnedRef.current = true
         refetchConversation()
         refetchInbox()
         return
       }
+      // The echo NEVER vanishes silently: it stays, marked as not sent.
+      setPending({ key: selected, content: text, state: 'failed' })
+      setThinking(false)
+      setThinkingSince(null)
       setComposer({
         kind: 'error',
         message:
@@ -522,7 +585,7 @@ export function Console(props: ConsoleProps): React.JSX.Element {
               </div>
             )}
 
-            {turns.length === 0 && (
+            {turns.length === 0 && (archived || pending === null) && (
               <p className="console-empty">
                 {archived ? 'This session is empty.' : 'No messages in this session yet.'}
               </p>
@@ -536,12 +599,36 @@ export function Console(props: ConsoleProps): React.JSX.Element {
               }}
             >
               {turns.map((t) => (
-                <li key={t.seq} className="console-turn" data-role={t.role} data-seq={t.seq}>
+                <li
+                  key={t.seq}
+                  className="console-turn"
+                  data-role={t.role}
+                  data-seq={t.seq}
+                  data-side={
+                    isConsoleKey(current.key) && t.role === 'user' ? 'own' : undefined
+                  }
+                >
                   <span className="console-turn-role">{roleLabel(t.role)}</span>
                   <span className="console-turn-content">{t.content}</span>
                   <span className="console-turn-time">{relTime(t.timestamp, nowMs)}</span>
                 </li>
               ))}
+              {pending !== null &&
+                pending.key === current.key &&
+                !turns.some((t) => t.role === 'user' && t.content === pending.content) && (
+                <li
+                  className="console-turn"
+                  data-role="user"
+                  data-side="own"
+                  data-send-state={pending.state}
+                >
+                  <span className="console-turn-role">{roleLabel('user')}</span>
+                  <span className="console-turn-content">{pending.content}</span>
+                  <span className="console-turn-time">
+                    {pending.state === 'failed' ? 'Not sent' : 'Sending…'}
+                  </span>
+                </li>
+              )}
             </ol>
 
             {!archived && (
@@ -558,7 +645,11 @@ export function Console(props: ConsoleProps): React.JSX.Element {
                   </p>
                 )}
                 {thinking && isConsoleKey(current.key) && (
-                  <p className="console-composer-state">Thinking…</p>
+                  <p className="console-composer-state">
+                    {thinkingLong
+                      ? 'The local model is thinking — this can take a while on this machine…'
+                      : 'Thinking…'}
+                  </p>
                 )}
                 {composer.kind === 'inflight' && (
                   <p className="console-composer-state">On its way…</p>

@@ -130,7 +130,11 @@ test('SP4 — inbox, three-role conversation, takeover, operator reply, session 
   await chatBox.press('Enter')
   // The full pipeline answers (the harness's fake model) — user turn and
   // assistant reply on stage; the human is USER here, never operator.
-  await expect(pane.getByText('hola, ¿me oyes?')).toBeVisible({ timeout: 15_000 })
+  // (pega-2 echo update: the user's turn now echoes instantly, so the text
+  // exists in the composer AND the turn for an instant — scope to the turn.)
+  await expect(
+    pane.locator('.console-turn-content', { hasText: 'hola, ¿me oyes?' }).first(),
+  ).toBeVisible({ timeout: 15_000 })
   await expect(pane.locator('[data-role="assistant"]').first()).toBeVisible({ timeout: 15_000 })
   await expect(pane.locator('[data-role="operator"]')).toHaveCount(0)
   await page.screenshot({ path: CONSOLE_SHOT('09-direct-chat.png'), fullPage: true })

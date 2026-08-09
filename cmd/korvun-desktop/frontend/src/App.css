@@ -1606,13 +1606,23 @@
 .console-turn[data-role='assistant'] .console-turn-role {
   color: var(--ok-t);
 }
-.console-turn[data-role='operator'] {
+.console-turn[data-role='operator'],
+.console-turn[data-side='own'] {
   justify-self: end;
   background: var(--vio-s);
   border-color: var(--vio);
 }
-.console-turn[data-role='operator'] .console-turn-role {
+.console-turn[data-role='operator'] .console-turn-role,
+.console-turn[data-side='own'] .console-turn-role {
   color: var(--vio-t);
+}
+.console-turn[data-send-state='failed'] {
+  border-style: dashed;
+  border-color: var(--warn, var(--vio));
+  opacity: 0.85;
+}
+.console-turn[data-send-state='failed'] .console-turn-time {
+  color: var(--warn-t, var(--capt));
 }
 .console-turn[data-role='system'] {
   justify-self: center;
