@@ -278,6 +278,12 @@ func run() error {
 		"fresh-install mode (SP6c onboarding e2e): HOME/XDG_CONFIG_HOME point at a "+
 			"temp dir and NO config is written or loaded — EnsureDefaultConfig's "+
 			"created=true is real, so the onboarding runs for real")
+	agentConfig := flag.String("agent-config", "",
+		"path to an operator config to run INSTEAD of the scripted default (the "+
+			"governed-tools round harness): it is copied to the isolated HOME's "+
+			"config path verbatim, so a real Ollama and a governed agent brain can "+
+			"drive the real chrome under Playwright. The scripted telegram channel "+
+			"still applies to any telegram entry referencing the harness token env.")
 	flag.Parse()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
@@ -358,8 +364,21 @@ func run() error {
 	if !*fresh {
 		// Non-fresh: write the harness config (scripted channel + fake model)
 		// AT the default path so the chrome's EnsureDefaultConfig sees it
-		// exists (created=false → no onboarding), then load it.
-		if err := writeScriptedConfig(cfgPath, fm.url); err != nil {
+		// exists (created=false → no onboarding), then load it. With
+		// -agent-config, the operator's file is copied verbatim instead — the
+		// governed-tools round rides the real chrome over a real model.
+		if *agentConfig != "" {
+			raw, err := os.ReadFile(*agentConfig)
+			if err != nil {
+				return fmt.Errorf("read -agent-config: %w", err)
+			}
+			if err := os.MkdirAll(filepath.Dir(cfgPath), 0o700); err != nil {
+				return fmt.Errorf("mkdir config dir: %w", err)
+			}
+			if err := os.WriteFile(cfgPath, raw, 0o600); err != nil {
+				return fmt.Errorf("write -agent-config copy: %w", err)
+			}
+		} else if err := writeScriptedConfig(cfgPath, fm.url); err != nil {
 			return err
 		}
 		if err := ctrl.LoadConfig(cfgPath); err != nil {
