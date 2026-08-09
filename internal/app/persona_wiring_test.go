@@ -246,12 +246,14 @@ func TestBuild_agentNoPersona_wireUnchanged(t *testing.T) {
 	if len(msgs) == 0 || msgs[0].Role != "system" {
 		t.Fatalf("wire messages = %+v, want a leading system message", msgs)
 	}
-	// ADR-0042 §5 updated this contract: with the wired (native-capable)
-	// Ollama adapter, no persona means the seed system prompt is EXACTLY the
-	// operator prompt — no persona fragment, no textual grammar (the tools
-	// ride as structured specs on the request).
-	if !strings.HasPrefix(msgs[0].Content, "Operator rules.") {
-		t.Errorf("system prompt = %q, want it to OPEN with the operator prompt (native lane, no persona)", msgs[0].Content)
+	// ADR-0042 §5 (hardened 2026-08-09): the native lane ALWAYS opens with
+	// the base instruction; the operator prompt follows. No persona fragment,
+	// no textual grammar (the tools ride as structured specs).
+	if !strings.HasPrefix(msgs[0].Content, "You are a helpful assistant.") {
+		t.Errorf("system prompt = %q, want it to OPEN with the native base instruction", msgs[0].Content)
+	}
+	if !strings.Contains(msgs[0].Content, "Operator rules.") {
+		t.Errorf("system prompt lost the operator prompt:\n%q", msgs[0].Content)
 	}
 	if strings.Contains(msgs[0].Content, "You can use tools.") {
 		t.Errorf("native lane leaked the textual grammar:\n%q", msgs[0].Content)

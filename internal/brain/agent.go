@@ -35,6 +35,16 @@ const DefaultAgentMaxIterations = 5
 // user message because model.Role has no Tool role (ADR-0009).
 const observationPrefix = "OBSERVATION: "
 
+// nativeBaseInstruction is the native lane's ALWAYS-present system base
+// (ADR-0042 §5, hardened after the 2026-08-09 round): tools are for when the
+// request needs them, never a reflex, and tool-call syntax is never prose.
+const nativeBaseInstruction = "You are a helpful assistant. Use the available tools " +
+	"only when the user's request needs them; for greetings or ordinary conversation, " +
+	"reply normally in the user's language without any tool. If the user asks for a " +
+	"tool or action that is not in your available tools, tell them plainly it is not " +
+	"available here — never invent the call. Never print tool-call " +
+	"syntax or JSON as text in your reply."
+
 // maxArgsLogRunes bounds the tool-args prefix recorded in LOCAL slog lines
 // (ADR-0041 §5): args derive from the message — content — so the bounded
 // debugging prefix lives ONLY in slog, never on the bus, the Activity feed,
@@ -42,12 +52,14 @@ const observationPrefix = "OBSERVATION: "
 const maxArgsLogRunes = 80
 
 // shadowObservation is the honest simulation observation a shadowed tool call
-// feeds back to the model (ADR-0041 §2, exact text fixed there): it makes the
-// absence of real effect unmistakable without killing the loop.
+// feeds back to the model (ADR-0041 §2; hardened 2026-08-09 after the live
+// demo, where a small model read the softer text as a failure and offered to
+// "do it manually"): unmistakably a rehearsal, never an error, and the
+// manual-offer failure mode is forbidden explicitly.
 func shadowObservation(name string) string {
-	return fmt.Sprintf("shadow mode: tool %s was NOT executed (governance rehearsal). "+
-		"No real action or effect occurred. Do not invent or assume a result; "+
-		"if the user's request depended on this action, say it was not performed.", name)
+	return fmt.Sprintf("REHEARSAL: the tool %s is in shadow mode. It was NOT executed by design "+
+		"(not an error, not a failure). Tell the user plainly that the action was "+
+		"simulated, not performed, and do NOT offer to do it manually.", name)
 }
 
 // deniedObservation is the observation a gate-denied tool call feeds back.
@@ -342,7 +354,13 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// NEVER persisted (§5, §6).
 	var sysPrompt string
 	if native {
-		sysPrompt = a.systemPrompt
+		// The native lane ALWAYS seeds a base instruction (2026-08-09 round
+		// catch: with an empty operator prompt, a small model greeted users
+		// with raw tool-call JSON). The operator prompt, when set, follows it.
+		sysPrompt = nativeBaseInstruction
+		if a.systemPrompt != "" {
+			sysPrompt = sysPrompt + "\n\n" + a.systemPrompt
+		}
 	} else {
 		sysPrompt = buildSystemPrompt(advertised, a.systemPrompt)
 	}

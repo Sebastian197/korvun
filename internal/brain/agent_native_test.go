@@ -315,3 +315,148 @@ func TestNativeLane_concurrentHandles(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// The native lane's BASE instruction (the 2026-08-09 round catch: with an
+// empty operator prompt, a small model greeted with raw tool-call JSON).
+// The base rides FIRST on the native lane always; persona still prefixes,
+// operator prompt and skills still follow. The prompt-protocol lane is
+// untouched (AS-4 pins it elsewhere).
+func TestNativeLane_baseInstructionAlwaysPresent(t *testing.T) {
+	t.Parallel()
+	spy := &spyTool{}
+	m := &nativeScriptedModel{name: "n", replies: []model.Message{finalReply("done")}}
+	a := NewAgentBrain(m, spyRegistry(spy), WithAgentLogger(quietLogger()))
+
+	if _, err := a.Handle(context.Background(), inboundText("console", "c", "hola")); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(m.lastReq.Messages) == 0 || m.lastReq.Messages[0].Role != model.RoleSystem {
+		t.Fatalf("native seed must carry a system message: %+v", m.lastReq.Messages)
+	}
+	sys := m.lastReq.Messages[0].Content
+	// The unavailable-tool clause (2026-08-09 channel-denial catch): asked BY
+	// NAME for a tool the gate did not advertise, a small model printed the
+	// call JSON as text to the user — the base must tell it to refuse plainly.
+	for _, want := range []string{
+		"only when the user's request needs them",
+		"Never print tool-call syntax",
+		"not in your available tools",
+	} {
+		if !strings.Contains(sys, want) {
+			t.Errorf("native base instruction missing %q:\n%s", want, sys)
+		}
+	}
+}
+
+func TestNativeLane_baseInstructionOrder(t *testing.T) {
+	t.Parallel()
+	spy := &spyTool{}
+	m := &nativeScriptedModel{name: "n", replies: []model.Message{finalReply("done")}}
+	a := NewAgentBrain(m, spyRegistry(spy),
+		WithAgentLogger(quietLogger()),
+		WithAgentPersona("You are Korvo."),
+		WithAgentSystemPrompt("Operator rules."),
+		WithAgentSkillsBlock("Skills:\n- s: d"))
+
+	if _, err := a.Handle(context.Background(), inboundText("console", "c", "hola")); err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	sys := m.lastReq.Messages[0].Content
+	iPersona := strings.Index(sys, "You are Korvo.")
+	iBase := strings.Index(sys, "only when the user's request needs them")
+	iOperator := strings.Index(sys, "Operator rules.")
+	iSkills := strings.Index(sys, "Skills:")
+	if !(iPersona >= 0 && iBase > iPersona && iOperator > iBase && iSkills > iOperator) {
+		t.Fatalf("order wrong (persona %d, base %d, operator %d, skills %d):\n%s",
+			iPersona, iBase, iOperator, iSkills, sys)
+	}
+}
+
+// 2026-08-09 red (the channel-denial round catch): asked BY NAME for a tool
+// the gate did not advertise, the real 3B printed the tool call as a bare
+// JSON object in its FINAL text — twice, even with the hardened base
+// instruction (real-model evidence in the round log). The user must never
+// receive that blob. The native lane RESCUES a final reply that is exactly a
+// tool-call-shaped JSON object naming a REGISTERED tool: it routes through
+// the same governed runTool (audit + honest observation) and the loop
+// continues so the model authors a real answer.
+
+// rescueGrants: spy is granted everywhere EXCEPT the telegram channel —
+// the channel-denial shape of the round.
+func rescueGrants(channels []string) []policy.ToolGrant {
+	return []policy.ToolGrant{{Name: "spy", Mode: policy.ToolAllow, Channels: channels}}
+}
+
+func TestNativeLane_rescuesDeniedToolCallPrintedAsText(t *testing.T) {
+	t.Parallel()
+	spy := &spyTool{}
+	m := &nativeScriptedModel{name: "n", replies: []model.Message{
+		finalReply(`{"name": "spy", "parameters": {"fn": "nota.txt"}}`),
+		finalReply("no tengo esa herramienta en este canal"),
+	}}
+	a := NewAgentBrain(m, spyRegistry(spy),
+		WithAgentLogger(quietLogger()),
+		WithAgentGovernance(governanceFor(rescueGrants([]string{"console"}), nil, policy.Private, policy.Local)))
+
+	out, err := a.Handle(context.Background(), inboundText("telegram", "c", "usa spy"))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if got := latestText(out[0].Parts); got != "no tengo esa herramienta en este canal" {
+		t.Fatalf("final = %q — the raw JSON blob must never reach the user", got)
+	}
+	if spy.count() != 0 {
+		t.Fatalf("denied tool executed %d times via the text rescue", spy.count())
+	}
+	// The rescue rode the governed path: a denial observation reached the
+	// model as a RoleTool turn before its second pass.
+	foundObs := false
+	for _, msg := range m.lastReq.Messages {
+		if msg.Role == model.RoleTool && msg.ToolName == "spy" {
+			foundObs = true
+		}
+	}
+	if !foundObs {
+		t.Fatalf("no RoleTool denial observation in the retry request: %+v", m.lastReq.Messages)
+	}
+}
+
+func TestNativeLane_rescuedAllowedCallExecutesGoverned(t *testing.T) {
+	t.Parallel()
+	spy := &spyTool{}
+	m := &nativeScriptedModel{name: "n", replies: []model.Message{
+		finalReply(`{"name":"spy","arguments":{"args":"x"}}`),
+		finalReply("hecho"),
+	}}
+	a := NewAgentBrain(m, spyRegistry(spy),
+		WithAgentLogger(quietLogger()),
+		WithAgentGovernance(governanceFor(rescueGrants(nil), nil, policy.Private, policy.Local)))
+
+	out, err := a.Handle(context.Background(), inboundText("console", "c", "usa spy"))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if got := latestText(out[0].Parts); got != "hecho" {
+		t.Fatalf("final = %q, want the model's post-rescue answer", got)
+	}
+	if spy.count() != 1 {
+		t.Fatalf("allowed rescued call executed %d times, want 1", spy.count())
+	}
+}
+
+func TestNativeLane_ordinaryJSONAnswerPassesThrough(t *testing.T) {
+	t.Parallel()
+	spy := &spyTool{}
+	// A JSON object naming NO registered tool is a legitimate final answer.
+	answer := `{"name": "Chano", "city": "Sevilla"}`
+	m := &nativeScriptedModel{name: "n", replies: []model.Message{finalReply(answer)}}
+	a := NewAgentBrain(m, spyRegistry(spy), WithAgentLogger(quietLogger()))
+
+	out, err := a.Handle(context.Background(), inboundText("console", "c", "dame un json"))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if got := latestText(out[0].Parts); got != answer {
+		t.Fatalf("final = %q, want the JSON passed through untouched", got)
+	}
+}

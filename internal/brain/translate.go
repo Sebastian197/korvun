@@ -52,6 +52,14 @@ func requestWithHistory(in *envelope.Envelope, systemPrompt string, history []co
 		msgs = append(msgs, model.Message{Role: model.RoleSystem, Content: systemPrompt})
 	}
 	for _, t := range history {
+		// Stored system turns are operator-facing notices (console command
+		// acks: session triggers, the /tools gatekeeper report) — UI, not
+		// dialogue. Replayed as mid-conversation system messages they hand
+		// the model the tool catalog in text form and it imitates the
+		// syntax instead of calling natively (caught 2026-08-09).
+		if t.Role == conversation.RoleSystem {
+			continue
+		}
 		msgs = append(msgs, model.Message{Role: toModelRole(t.Role), Content: t.Content})
 	}
 	msgs = append(msgs, model.Message{Role: model.RoleUser, Content: text})

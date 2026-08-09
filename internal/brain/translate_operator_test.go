@@ -44,3 +44,31 @@ func TestRequestWithHistory_OperatorTurnArrivesAsAssistant(t *testing.T) {
 		t.Fatalf("operator content mangled: %q", req.Messages[1].Content)
 	}
 }
+
+// 2026-08-09 red (the autonomous round's gatekeeper-leak catch): system turns
+// in the store are OPERATOR-FACING notices persisted by the console ack path
+// ("New session started…", the /tools gatekeeper report). They are UI, not
+// dialogue — replaying them as mid-conversation system messages handed the
+// model the tool catalog in text form and it imitated the syntax instead of
+// calling natively. History system turns must be SKIPPED entirely.
+func TestRequestWithHistory_SystemTurnsAreSkipped(t *testing.T) {
+	in := envelope.New("console", envelope.Inbound, envelope.Participant{ID: "u1"}).
+		AddText("descarga esa página")
+	history := []conversation.Turn{
+		{Role: conversation.RoleUser, Content: "hola"},
+		{Role: conversation.RoleAssistant, Content: "hola, dime"},
+		{Role: conversation.RoleSystem, Content: "Gatekeeper — brain \"default\"\nTools:\n- http_fetch: allow [shield]"},
+	}
+	req, ok := requestWithHistory(in, "", history)
+	if !ok {
+		t.Fatal("requestWithHistory reported nothing to ask")
+	}
+	if len(req.Messages) != 3 {
+		t.Fatalf("messages = %d, want 3 (2 dialogue turns + current; the system notice dropped)", len(req.Messages))
+	}
+	for i, m := range req.Messages {
+		if m.Role == model.RoleSystem {
+			t.Fatalf("message %d is a system turn leaked from history: %q", i, m.Content)
+		}
+	}
+}

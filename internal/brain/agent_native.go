@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/envelope"
@@ -52,7 +53,21 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 					"envelope_id", env.ID, "channel", env.Channel, "iter", iter)
 				return "", false
 			}
-			return content, true // final answer
+			// Small models sometimes print the call as their FINAL text
+			// instead of emitting it natively — verified twice against a
+			// real 3B on 2026-08-09, base instruction notwithstanding. That
+			// blob must never reach the user: when the whole reply is a
+			// tool-call-shaped JSON object naming a REGISTERED tool, rescue
+			// it through the SAME governed runTool (audit + honest
+			// observation) and let the loop continue so the model authors a
+			// real answer.
+			if call, rescued := rescueTextToolCall(a.tools, content); rescued {
+				a.logger.Info("agent: rescued tool call printed as text",
+					"envelope_id", env.ID, "channel", env.Channel, "tool", call.Name, "iter", iter)
+				resp.Message.ToolCalls = []model.ToolCall{call}
+			} else {
+				return content, true // final answer
+			}
 		}
 
 		// The model wants tools: append its own turn, then run every call IN
@@ -61,7 +76,15 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 		// Each result returns as a RoleTool turn per the verified contract.
 		req.Messages = append(req.Messages, resp.Message)
 		for _, call := range resp.Message.ToolCalls {
-			observation := a.runTool(ctx, env, decisions, call.Name, nativeArgs(call))
+			args, argErr := a.nativeCallArgs(advertised, call)
+			var observation string
+			if argErr != nil {
+				// A useful, model-facing field error (the ParamTool contract)
+				// — same failure class as a tool error, loop stays alive.
+				observation = fmt.Sprintf("tool %s failed: %v", call.Name, argErr)
+			} else {
+				observation = a.runTool(ctx, env, decisions, call.Name, args)
+			}
 			req.Messages = append(req.Messages, model.Message{
 				Role:     model.RoleTool,
 				ToolName: call.Name,
@@ -96,7 +119,8 @@ func (a *AgentBrain) callNative(ctx context.Context, tcm model.ToolCallingModel,
 
 // toToolSpecs renders the ADVERTISED registry (the gate's output — a denied
 // tool never reaches here) as the model's spec catalog, sorted by name so
-// the request is deterministic like the textual catalog was.
+// the request is deterministic like the textual catalog was. A ParamTool's
+// declared fields ride as the spec's structured schema.
 func toToolSpecs(reg tool.Registry) []model.ToolSpec {
 	names := make([]string, 0, len(reg))
 	for n := range reg {
@@ -105,9 +129,68 @@ func toToolSpecs(reg tool.Registry) []model.ToolSpec {
 	sort.Strings(names)
 	specs := make([]model.ToolSpec, len(names))
 	for i, n := range names {
-		specs[i] = model.ToolSpec{Name: reg[n].Name(), Description: reg[n].Description()}
+		spec := model.ToolSpec{Name: reg[n].Name(), Description: reg[n].Description()}
+		if pt, ok := reg[n].(tool.ParamTool); ok {
+			for _, p := range pt.Params() {
+				spec.Params = append(spec.Params, model.ToolParamSpec{
+					Name: p.Name, Description: p.Description, Required: p.Required,
+				})
+			}
+		}
+		specs[i] = spec
 	}
 	return specs
+}
+
+// nativeCallArgs resolves the seam args for one native call: a ParamTool
+// reconstructs them from its structured fields (ArgsFromCall — tolerant,
+// useful errors); everything else takes the uniform Arguments["args"], or a
+// verbatim re-serialization as the last resort (the tool owns parsing).
+func (a *AgentBrain) nativeCallArgs(advertised tool.Registry, call model.ToolCall) (string, error) {
+	if t, ok := advertised[call.Name]; ok {
+		if pt, isParam := t.(tool.ParamTool); isParam {
+			return pt.ArgsFromCall(call.Arguments)
+		}
+	}
+	return nativeArgs(call), nil
+}
+
+// rescueTextToolCall recognises a final reply that is EXACTLY one
+// tool-call-shaped JSON object — {"name": <registered tool>, and one of
+// "parameters"/"arguments"/"args"} — and converts it to a ToolCall for the
+// governed path. Anything else (including JSON naming no registered tool)
+// is an ordinary answer and passes through untouched.
+func rescueTextToolCall(reg tool.Registry, content string) (model.ToolCall, bool) {
+	trimmed := strings.TrimSpace(content)
+	if !strings.HasPrefix(trimmed, "{") || !strings.HasSuffix(trimmed, "}") {
+		return model.ToolCall{}, false
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &obj); err != nil {
+		return model.ToolCall{}, false
+	}
+	name, ok := obj["name"].(string)
+	if !ok {
+		return model.ToolCall{}, false
+	}
+	if _, registered := reg[name]; !registered {
+		return model.ToolCall{}, false
+	}
+	for _, key := range []string{"arguments", "parameters", "args"} {
+		raw, present := obj[key]
+		if !present {
+			continue
+		}
+		switch v := raw.(type) {
+		case map[string]any:
+			return model.ToolCall{Name: name, Arguments: v}, true
+		case string:
+			return model.ToolCall{Name: name, Arguments: map[string]any{"args": v}}, true
+		default:
+			return model.ToolCall{Name: name, Arguments: map[string]any{}}, true
+		}
+	}
+	return model.ToolCall{}, false
 }
 
 // nativeArgs extracts the Tool seam's args string from a native call: the
