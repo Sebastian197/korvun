@@ -85,9 +85,76 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-08)
+## Current state (as of 2026-08-09)
 
-> **CURRENT (2026-08-08, session close): the OPERATOR CONSOLE — complete,
+> **CURRENT (2026-08-09, session close): GOVERNED TOOLS + SKILLS — built
+> COMPLETE and DEMONSTRATED LIVE to Chano on his iMac.** All six steps of
+> the acceptance demo, on his real app with his real config and a real
+> local model: caged read audited (`tool_used ok`), SHADOW rehearsal
+> (receiver file empty + the AI itself saying "no se ha enviado"), a
+> truthful `/tools` gatekeeper report, the NETWORK SHIELD stopping
+> example.com at dial time even though it sits on the allow-list
+> (`private_network_shield` — resolved-IP check, Private brain), channel
+> denial from his own phone (`rule=channel`), and HOT PROMOTION with both
+> states back-to-back — the same message simulated under shadow, then
+> executed for real after promotion, verified on three independent
+> surfaces (receiver POST + `korvun_tool_calls_total{outcome="ok"}` +
+> the store's two answers). The native tool-calling lane (ADR-0042) is
+> live: the model calls through the structured channel, not prose.
+>
+> **REAL DEFECTS HUNTED AND FIXED today** (evidence → red test → minimal
+> fix → green, each):
+> - `Start` did not re-read the config from disk (LoadConfig runs once at
+>   app boot; Iniciar only called Start) — config edits between Parar and
+>   Iniciar were silently ignored. Now Start boots the config AS IT IS ON
+>   DISK, and a corrupted file refuses the boot loudly (`343da00`).
+> - The `/tools` gatekeeper report (persisted as a system turn) leaked
+>   into the model's context and poisoned it — the model imitated
+>   tool-call syntax as text. History system turns are operator notices,
+>   now skipped (`96d0e5a`).
+> - The chat's command echo (`/tools`, `/new`) hung on "Sending…" forever
+>   (commands persist no user turn); the system ack now reconciles it.
+>   Plus optimistic echo, own-side-right, honest Thinking… wait.
+> - A tool call printed as the model's FINAL TEXT (verified twice against
+>   the real 3B, hardened prompt notwithstanding) is now RESCUED through
+>   the same governed runTool — audited, honestly observed, never shown
+>   raw to the user (`96d0e5a`).
+>
+> **RULED OUT WITH EVIDENCE:** the suspected session-cut defect did NOT
+> exist — a clean model invents the same content 2/3 of the time; the cut
+> was verified sound at three levels. Master's chat is healthy, with new
+> tripwires. Two new CLAUDE.md laws came out of that episode: diagnosis
+> only with primary evidence, and model-dependent behavior only proven
+> against a REAL model.
+>
+> **WHAT'S MISSING TO CLOSE THE PIECE (acceptance point 7): the
+> BUILDER'S GOVERNANCE PANEL (SP6).** Today grants are edited by hand in
+> the config and promotion needs Parar/Iniciar (the in-app Control API
+> path is sealed by design — per-cycle bearer never leaves the process;
+> ADR-0035 §4). With the panel, promotion is one click inside the app.
+> Gated on MOCKUPS approved by Chano BEFORE any code (house design law).
+>
+> **REPO STATE: local master holds the WHOLE batch (27 commits with the
+> session-close docs commit),
+> `origin/master` untouched at `81bfad8`.** NOTHING is pushed until the
+> piece is closed (panel included if Chano so decides), with a full-green
+> rehearsal and a push prompt of its own (the two-step law).
+>
+> **LIVE PRODUCT DECISIONS:** a COMBINED chat + tools release when the
+> piece closes, with README and the website (bilingual, its own train)
+> updated and the LinkedIn (ES) + X (EN) + clip-script package; Chano
+> wants to download that release's dmg himself. POST-BETA v1.1 MAP: the
+> n8n bridge + a KNOWLEDGE GRAPH (a governed local-search tool over the
+> customer's data); fine-tuning parked as far-off. Next beta piece after
+> this one: minimal memory.
+>
+> **MINOR NOTES:** response STREAMING to the chat is recommended as its
+> own piece — the real latency on his iMac is ~77 s per round (llama3.2
+> 3B, keep-alive on) and no animation fixes that; a ParamTool field error
+> emits no audit event (gap noted); the 3B sometimes writes weak closings
+> (model limitation, not the piece).
+
+> **PREVIOUS (2026-08-08, session close): the OPERATOR CONSOLE — complete,
 > validated on real hardware, and LANDED on master.** `master` =
 > `origin/master` = `origin/ensayo` = **`757a35a`** (triple verification:
 > copilot on-disk review + full-green rehearsal at source + Chano's
