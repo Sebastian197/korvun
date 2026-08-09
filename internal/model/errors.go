@@ -111,10 +111,18 @@ func ValidateRequest(req *Request) error {
 	for _, m := range req.Messages {
 		switch m.Role {
 		case RoleSystem, RoleUser, RoleAssistant:
+		case RoleTool:
+			// A native-lane tool-result turn (ADR-0042 §2): valid only with
+			// its tool attribution; content is the tool's output.
+			if m.ToolName == "" {
+				return ErrInvalidRole
+			}
 		default:
 			return ErrInvalidRole
 		}
-		if m.Content == "" {
+		if m.Content == "" && len(m.ToolCalls) == 0 {
+			// An assistant turn carrying tool_calls is words-free by design
+			// (ADR-0042 §3); everything else still requires content.
 			return ErrEmptyContent
 		}
 	}

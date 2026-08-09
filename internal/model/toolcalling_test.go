@@ -51,6 +51,29 @@ func TestMessage_additiveFieldsZeroByDefault(t *testing.T) {
 	}
 }
 
+// ValidateRequest admits the native cycle turns (assistant with tool_calls
+// and empty content; RoleTool with ToolName) and still rejects the old
+// invalid shapes.
+func TestValidateRequest_nativeCycleTurns(t *testing.T) {
+	t.Parallel()
+	ok := &Request{Model: "m", Messages: []Message{
+		{Role: RoleUser, Content: "lee"},
+		{Role: RoleAssistant, ToolCalls: []ToolCall{{Name: "read_file"}}},
+		{Role: RoleTool, ToolName: "read_file", Content: "ALMENDRA"},
+	}}
+	if err := ValidateRequest(ok); err != nil {
+		t.Fatalf("valid native cycle rejected: %v", err)
+	}
+	bare := &Request{Model: "m", Messages: []Message{{Role: RoleAssistant}}}
+	if err := ValidateRequest(bare); err == nil {
+		t.Fatal("empty assistant with no tool_calls must stay invalid")
+	}
+	anon := &Request{Model: "m", Messages: []Message{{Role: RoleTool, Content: "x"}}}
+	if err := ValidateRequest(anon); err == nil {
+		t.Fatal("RoleTool without ToolName must be invalid")
+	}
+}
+
 func TestToolCall_shape(t *testing.T) {
 	t.Parallel()
 	tc := ToolCall{Name: "read_file", Arguments: map[string]any{"args": "nota.txt"}}
