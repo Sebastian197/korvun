@@ -3,7 +3,12 @@
 
 package tool
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"net/netip"
+	"syscall"
+)
 
 // This file owns the shared surface of the CAGED built-in tools (ADR-0041 §4)
 // — the tools with effects the piece adds behind the §8 bar. A caged tool
@@ -51,7 +56,28 @@ func BuiltinAttrs(name string) (Attrs, bool) {
 		return Attrs{}, true
 	case "read_file":
 		return Attrs{Sensitive: true}, true
+	case "http_fetch":
+		return Attrs{Network: true}, true
 	default:
 		return Attrs{}, false
 	}
+}
+
+// shieldControl is the private-network shield's dial-time check (ADR-0041
+// §3), installed as net.Dialer.Control on a Private brain's network tools.
+// It runs on EVERY connection attempt with the RESOLVED address — after DNS —
+// so a rebound hostname or an off-shield redirect dies at the socket, before
+// a single byte leaves. Private means: IPv4 loopback/RFC1918/link-local,
+// IPv6 loopback/ULA/link-local, with IPv4-mapped-in-IPv6 forms unmapped
+// before classification. An unparseable address fails CLOSED.
+func shieldControl(_, address string, _ syscall.RawConn) error {
+	ap, err := netip.ParseAddrPort(address)
+	if err != nil {
+		return fmt.Errorf("shield: unparseable dial address %q: %w", address, ErrShieldViolation)
+	}
+	a := ap.Addr().Unmap()
+	if a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() {
+		return nil
+	}
+	return fmt.Errorf("shield: %s is not a private address: %w", a, ErrShieldViolation)
 }
