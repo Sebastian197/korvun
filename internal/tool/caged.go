@@ -63,6 +63,34 @@ func BuiltinAttrs(name string) (Attrs, bool) {
 	}
 }
 
+// ToolParam is one structured field a ParamTool advertises to native
+// tool-calling models (the 2026-08-09 demo lesson: a small model cannot
+// compose "URL space JSON" into one string, but fills separate fields
+// reliably). All params are strings in v1.
+type ToolParam struct {
+	// Name is the field name the model fills.
+	Name string
+	// Description tells the model what goes in the field.
+	Description string
+	// Required marks the field as mandatory in the advertised schema.
+	Required bool
+}
+
+// ParamTool is the OPTIONAL structured-params capability of a Tool: the
+// native lane advertises Params() as the tool's schema and reconstructs the
+// Tool seam's args string through ArgsFromCall, so Execute's contract —
+// and therefore the whole gate/cage path — stays single and untouched. A
+// tool without ParamTool keeps the uniform {"args": string} schema.
+type ParamTool interface {
+	Tool
+	// Params declares the structured fields, in advertisement order.
+	Params() []ToolParam
+	// ArgsFromCall reconstructs the seam args from the model's field
+	// values. It validates TOLERANTLY and returns USEFUL errors naming the
+	// missing/broken field — the error becomes a model-facing observation.
+	ArgsFromCall(fields map[string]any) (string, error)
+}
+
 // shieldControl is the private-network shield's dial-time check (ADR-0041
 // §3), installed as net.Dialer.Control on a Private brain's network tools.
 // It runs on EVERY connection attempt with the RESOLVED address — after DNS —

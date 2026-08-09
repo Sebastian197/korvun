@@ -145,24 +145,30 @@ func (a *Adapter) GenerateWithTools(ctx context.Context, req *model.Request, too
 	}, nil
 }
 
-// toWireTools renders the uniform v1 schema (ADR-0042 §1): every tool takes
-// one required string "args", described by the tool's own Description.
+// toWireTools renders each spec's schema: the tool's declared structured
+// fields when present (the ParamTool surface), else the uniform v1
+// {"args": string} schema (ADR-0042 §1).
 func toWireTools(tools []model.ToolSpec) []wireTool {
 	out := make([]wireTool, len(tools))
 	for i, ts := range tools {
+		params := wireParameters{Type: "object"}
+		if len(ts.Params) > 0 {
+			params.Properties = make(map[string]wireProperty, len(ts.Params))
+			for _, p := range ts.Params {
+				params.Properties[p.Name] = wireProperty{Type: "string", Description: p.Description}
+				if p.Required {
+					params.Required = append(params.Required, p.Name)
+				}
+			}
+		} else {
+			params.Required = []string{"args"}
+			params.Properties = map[string]wireProperty{
+				"args": {Type: "string", Description: ts.Description},
+			}
+		}
 		out[i] = wireTool{
-			Type: "function",
-			Function: wireFunction{
-				Name:        ts.Name,
-				Description: ts.Description,
-				Parameters: wireParameters{
-					Type:     "object",
-					Required: []string{"args"},
-					Properties: map[string]wireProperty{
-						"args": {Type: "string", Description: ts.Description},
-					},
-				},
-			},
+			Type:     "function",
+			Function: wireFunction{Name: ts.Name, Description: ts.Description, Parameters: params},
 		}
 	}
 	return out

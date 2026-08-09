@@ -25,6 +25,17 @@ type ToolSpec struct {
 	Name string
 	// Description is the capability line advertised to the model.
 	Description string
+	// Params, when non-empty, declares the tool's structured string fields
+	// (the ParamTool surface — the 2026-08-09 demo lesson). Empty keeps
+	// the uniform {"args": string} schema.
+	Params []ToolParamSpec
+}
+
+// ToolParamSpec is one structured field of a ToolSpec (all strings in v1).
+type ToolParamSpec struct {
+	Name        string
+	Description string
+	Required    bool
 }
 
 // ToolCall is one native tool request returned by the model (ADR-0042 §1).

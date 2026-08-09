@@ -77,6 +77,45 @@ func (w *webhookCallTool) Description() string {
 	return "POSTs a JSON payload to an operator allow-listed webhook. args = the URL, a space, then the JSON body, e.g. https://host/hook {\"event\":\"ping\"}."
 }
 
+// Params declares the structured fields for the native lane (the demo
+// lesson): a URL and a PLAIN-TEXT message — no raw JSON composition asked
+// of the model. An optional json field lets a capable model take control.
+func (w *webhookCallTool) Params() []ToolParam {
+	return []ToolParam{
+		{Name: "url", Description: "the webhook URL, e.g. http://127.0.0.1:8765/aviso", Required: true},
+		{Name: "message", Description: "the plain-text notice to send (the tool wraps it as JSON)", Required: true},
+		{Name: "json", Description: "OPTIONAL: a complete JSON body; overrides message when valid"},
+	}
+}
+
+// ArgsFromCall reconstructs the seam args (URL space JSON) from the fields,
+// tolerantly: an explicit valid json wins; an invalid one degrades to a
+// message body rather than failing; a plain message is marshaled into
+// {"message": ...} so quoting is never the model's problem. Errors name the
+// missing field — they become model-facing observations.
+func (w *webhookCallTool) ArgsFromCall(fields map[string]any) (string, error) {
+	u, _ := fields["url"].(string)
+	if strings.TrimSpace(u) == "" {
+		return "", fmt.Errorf("webhook_call: the url field is required")
+	}
+	if j, ok := fields["json"].(string); ok && strings.TrimSpace(j) != "" {
+		if json.Valid([]byte(j)) {
+			return u + " " + j, nil
+		}
+		// Tolerant degrade: broken JSON rides as a message body instead.
+		fields = map[string]any{"url": u, "message": j}
+	}
+	m, _ := fields["message"].(string)
+	if strings.TrimSpace(m) == "" {
+		return "", fmt.Errorf("webhook_call: the message field is required (the plain text to send)")
+	}
+	body, err := json.Marshal(map[string]string{"message": m})
+	if err != nil {
+		return "", fmt.Errorf("webhook_call: marshal message: %w", err)
+	}
+	return u + " " + string(body), nil
+}
+
 // Execute parses "<url> <json-body>" from args and POSTs through the cage:
 // scheme http/https only, host on the allow-list, no redirects, response
 // capped, the hard timeout bounding the call, and — under the shield — every
