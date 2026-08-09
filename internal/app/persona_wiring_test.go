@@ -216,20 +216,19 @@ func TestBuild_agentPersonaPrefixesProtocol(t *testing.T) {
 		t.Fatalf("wire messages = %+v, want a leading system message", msgs)
 	}
 	sys := msgs[0].Content
-	if !strings.HasPrefix(sys, wantComposed()+"\n\n") {
-		t.Errorf("system prompt does not open with the composed persona + separator:\n%q", sys)
+	if !strings.HasPrefix(sys, wantComposed()) {
+		t.Errorf("system prompt does not open with the composed persona:\n%q", sys)
 	}
-	// The ADR-0021 §3.1 block, in ITS order, after the persona prefix.
-	iGrammar := strings.Index(sys, "You can use tools.")
-	iToolLine := strings.Index(sys, "TOOL: <name>(<args>)")
-	iCatalog := strings.Index(sys, "Available tools:")
+	// ADR-0042 §5 updated this contract: the wired Ollama adapter carries the
+	// native tool-calling capability through retry + WithModelID, so the
+	// production agent seeds the NATIVE prompt — persona prefix + operator
+	// prompt, NO textual grammar/catalog (the tools ride as structured specs).
+	if strings.Contains(sys, "You can use tools.") || strings.Contains(sys, "Available tools:") {
+		t.Errorf("native lane leaked the textual protocol block:\n%q", sys)
+	}
 	iOperator := strings.Index(sys, "Operator rules.")
-	if iGrammar < 0 || iToolLine < 0 || iCatalog < 0 || iOperator < 0 {
-		t.Fatalf("protocol block incomplete (grammar %d, tool-line %d, catalog %d, operator %d):\n%q",
-			iGrammar, iToolLine, iCatalog, iOperator, sys)
-	}
-	if !(len(wantComposed()) < iGrammar && iGrammar < iToolLine && iToolLine < iCatalog && iCatalog < iOperator) {
-		t.Errorf("protocol order broken (persona must be a PREFIX, ADR-0021 order intact):\n%q", sys)
+	if iOperator < 0 || iOperator < len(wantComposed()) {
+		t.Errorf("operator prompt missing or not after the persona prefix:\n%q", sys)
 	}
 }
 
@@ -247,7 +246,14 @@ func TestBuild_agentNoPersona_wireUnchanged(t *testing.T) {
 	if len(msgs) == 0 || msgs[0].Role != "system" {
 		t.Fatalf("wire messages = %+v, want a leading system message", msgs)
 	}
-	if !strings.HasPrefix(msgs[0].Content, "You can use tools.") {
-		t.Errorf("system prompt = %q, want it to OPEN with the protocol grammar (no persona → unchanged)", msgs[0].Content)
+	// ADR-0042 §5 updated this contract: with the wired (native-capable)
+	// Ollama adapter, no persona means the seed system prompt is EXACTLY the
+	// operator prompt — no persona fragment, no textual grammar (the tools
+	// ride as structured specs on the request).
+	if !strings.HasPrefix(msgs[0].Content, "Operator rules.") {
+		t.Errorf("system prompt = %q, want it to OPEN with the operator prompt (native lane, no persona)", msgs[0].Content)
+	}
+	if strings.Contains(msgs[0].Content, "You can use tools.") {
+		t.Errorf("native lane leaked the textual grammar:\n%q", msgs[0].Content)
 	}
 }

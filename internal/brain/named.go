@@ -42,6 +42,33 @@ func (n named) Name() string { return n.inner.Name() }
 // WithModelID binds a model id to a model.Model for use in a fan-out set.
 // Use it to assemble a heterogeneous set where each provider receives its
 // own Request.Model without mutating the shared request.
+//
+// Capability propagation (ADR-0042 §4): when m also does native tool
+// calling, the returned decorator satisfies ToolCallingModel too — the
+// production chain is retry(adapter) → WithModelID, so hiding the
+// capability here would silently disable the native lane for every wired
+// brain.
 func WithModelID(m model.Model, id string) model.Model {
-	return named{inner: m, id: id}
+	n := named{inner: m, id: id}
+	if tcm, ok := m.(model.ToolCallingModel); ok {
+		return namedTool{named: n, tcm: tcm}
+	}
+	return n
+}
+
+// namedTool is the capability-propagating variant of named.
+type namedTool struct {
+	named
+	tcm model.ToolCallingModel
+}
+
+// Compile-time assertion of the propagated capability.
+var _ model.ToolCallingModel = namedTool{}
+
+// GenerateWithTools applies the same copy-don't-mutate id binding Generate
+// does (ADR-0014 §2): the shared request is never written.
+func (n namedTool) GenerateWithTools(ctx context.Context, req *model.Request, tools []model.ToolSpec) (*model.Response, error) {
+	cp := *req // shallow copy: new Model field, shared (read-only) Messages
+	cp.Model = n.id
+	return n.tcm.GenerateWithTools(ctx, &cp, tools)
 }
