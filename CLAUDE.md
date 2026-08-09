@@ -78,6 +78,22 @@ A push to master is NEVER bundled as a conditional step inside another
 task's prompt. It always gets its own prompt, issued after the copilot
 verifies the full-green rehearsal at source.
 
+## Diagnosis discipline (2026-08-09) — CRITICAL
+
+A diagnosis is stated ONLY with primary evidence in hand (raw logs,
+raw model output, the actual bytes). Without it, it is labeled a
+hypothesis and verified BEFORE it is communicated. A diagnosis that
+shifts blame away from our own code gets MORE scrutiny, not less.
+
+## Model-dependent behavior needs a real model (2026-08-09) — CRITICAL
+
+Any piece whose behavior depends on what a model actually emits
+(tool-use protocol, prompt contracts, parsing model output) MUST be
+exercised against a REAL model inside its own sub-phase — never only
+against fakes, and never deferred to a final demo. Fakes prove our
+code; only a real model proves the contract. A green suite over
+fakes does not close a model-dependent criterion.
+
 ## External documentation verification — which tool for what
 
 Never program against an external API, library, or tooling version from memory.
