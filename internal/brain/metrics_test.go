@@ -63,6 +63,8 @@ func (m *recordingMetrics) ObserveTurnsPersisted(n int) {
 func (m *recordingMetrics) IncProviderRetry(string)                {}
 func (m *recordingMetrics) IncProviderRetryBudgetExhausted(string) {}
 
+func (m *recordingMetrics) ObserveToolUse(string, string, time.Duration) {}
+
 // fixedCoord returns a hand-built *fanout.Result so a test controls the exact
 // per-provider outcomes (provider, ok/err, latency) the Brain should instrument.
 type fixedCoord struct{ res *fanout.Result }

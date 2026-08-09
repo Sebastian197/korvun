@@ -39,6 +39,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/envelope"
 )
@@ -59,6 +60,16 @@ const (
 	MessageDropped
 	// HandleFailed: Brain.Handle failed to produce a reply.
 	HandleFailed
+	// ToolUsed: an agent brain executed a governed tool (ADR-0041 §5). The
+	// event carries tool metadata ONLY (Tool, Outcome ok|error, Latency) —
+	// never the tool args, which derive from message content (ADR-0024 §1).
+	ToolUsed
+	// ToolDenied: the policy gate (or a tool cage / the network shield)
+	// refused a tool call. Rule names the denying dimension (ADR-0041 §5).
+	ToolDenied
+	// ToolShadowed: a shadow-mode grant recorded the model's intention
+	// without executing the tool (ADR-0041 §2, §5).
+	ToolShadowed
 )
 
 // String renders the event type for logs, metrics labels, and SSE frames.
@@ -72,6 +83,12 @@ func (t EventType) String() string {
 		return "message_dropped"
 	case HandleFailed:
 		return "handle_failed"
+	case ToolUsed:
+		return "tool_used"
+	case ToolDenied:
+		return "tool_denied"
+	case ToolShadowed:
+		return "tool_shadowed"
 	default:
 		return "unknown"
 	}
@@ -97,6 +114,15 @@ type Event struct {
 	Channel  string
 	Brain    string
 	Err      error // set for MessageDropped / HandleFailed; nil otherwise
+
+	// Tool metadata (ToolUsed / ToolDenied / ToolShadowed only; zero
+	// otherwise, ADR-0041 §5). METADATA-ONLY BY LAW: there is deliberately
+	// NO field for the tool args — they derive from message content, so the
+	// ADR-0024 §1 no-content law holds by construction on every consumer.
+	Tool    string        // the tool's protocol name
+	Outcome string        // ok | error | denied | shadowed
+	Rule    string        // the denying rule dimension (ToolDenied only)
+	Latency time.Duration // Execute wall time (ToolUsed only)
 }
 
 // Handler consumes one Event. It runs on the subscriber's own goroutine; a panic

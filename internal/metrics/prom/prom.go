@@ -32,6 +32,11 @@ import (
 // visible (ADR-0020 §3).
 var providerDurationBuckets = []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30}
 
+// toolDurationBuckets are tool-shaped: a pure tool answers in microseconds,
+// a caged network tool runs to its per-tool timeout (seconds). Buckets span
+// 1ms..10s so both regimes are visible (ADR-0041 §5).
+var toolDurationBuckets = []float64{0.001, 0.005, 0.025, 0.1, 0.25, 0.5, 1, 2.5, 5, 10}
+
 // Metrics is the Prometheus-backed metrics.Metrics. Construct with New; the
 // zero value is not usable. Its instruments are concurrency-safe by
 // construction, satisfying the metrics.Metrics concurrency contract.
@@ -45,6 +50,8 @@ type Metrics struct {
 	retryExhausted *prometheus.CounterVec
 	routerErrors   *prometheus.CounterVec
 	turnsPersisted prometheus.Counter
+	toolCalls      *prometheus.CounterVec
+	toolDur        *prometheus.HistogramVec
 }
 
 // Compile-time assertion that *Metrics satisfies the domain seam.
@@ -90,9 +97,18 @@ func New() *Metrics {
 			Name: "korvun_conversation_turns_persisted_total",
 			Help: "Turns durably appended on a successful reply.",
 		}),
+		toolCalls: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "korvun_tool_calls_total",
+			Help: "Governed tool calls, by tool and outcome (ok|error|denied|shadowed).",
+		}, []string{"tool", "outcome"}),
+		toolDur: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "korvun_tool_call_duration_seconds",
+			Help:    "Governed tool execution latency, by tool and outcome.",
+			Buckets: toolDurationBuckets,
+		}, []string{"tool", "outcome"}),
 	}
 	reg.MustRegister(m.messages, m.providerDur, m.providerFail, m.providerRetry,
-		m.retryExhausted, m.routerErrors, m.turnsPersisted)
+		m.retryExhausted, m.routerErrors, m.turnsPersisted, m.toolCalls, m.toolDur)
 	return m
 }
 
@@ -161,6 +177,18 @@ func (m *Metrics) IncProviderRetryBudgetExhausted(provider string) {
 // IncRouterError counts one asynchronous router failure, by kind.
 func (m *Metrics) IncRouterError(kind string) {
 	m.routerErrors.WithLabelValues(kind).Inc()
+}
+
+// ObserveToolUse records one governed-tool gate outcome under the
+// (tool, outcome) labels: the monotonic call counter always, the latency
+// histogram only for EXECUTED calls (ok|error) — a denied or shadowed call
+// never ran, so a zero-latency observation would poison the distribution
+// (ADR-0041 §5).
+func (m *Metrics) ObserveToolUse(toolName, outcome string, d time.Duration) {
+	m.toolCalls.WithLabelValues(toolName, outcome).Inc()
+	if outcome == "ok" || outcome == "error" {
+		m.toolDur.WithLabelValues(toolName, outcome).Observe(d.Seconds())
+	}
 }
 
 // ObserveTurnsPersisted adds the size of one persisted turn group to the total.

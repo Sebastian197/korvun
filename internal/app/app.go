@@ -149,6 +149,11 @@ type builder struct {
 	// provider|baseURL|modelID.
 	warmupTargets []warmupTarget
 	warmupSeen    map[string]bool
+	// toolBus is the ADR-0023 bus handed to agent brains as their tool-audit
+	// sink (ADR-0041 §5). Kept as the concrete type (never a typed-nil
+	// interface): nil when observability is off, in which case agent brains
+	// audit through metrics only.
+	toolBus *bus.InMemoryBus
 }
 
 // Option configures Build.
@@ -253,6 +258,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	if adminServer != nil {
 		eventBus = bus.New()
 	}
+	b.toolBus = eventBus // nil when observability is off (concrete, no typed-nil)
 
 	// Open the durable store ONCE, before wiring the brains, and share it across
 	// every brain (the Key namespaces by channel::conversation, ADR-0019 §6). A
@@ -773,6 +779,12 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	}
 	if b.store != nil {
 		opts = append(opts, brain.WithAgentConversationStore(b.store, 0))
+	}
+	if b.toolBus != nil {
+		// Tool-use audit events ride the same bus the lifecycle events do
+		// (ADR-0041 §5); when observability is off, metrics remain the only
+		// (Nop) audit surface and nothing publishes.
+		opts = append(opts, brain.WithAgentToolAudit(b.toolBus, bc.Name))
 	}
 	b.logger.Info("agent brain wired", "brain", bc.Name, "tools", bc.Agent.Tools, "max_iterations", bc.Agent.MaxIterations)
 	return brain.NewAgentBrain(selected[0], reg, opts...), nil

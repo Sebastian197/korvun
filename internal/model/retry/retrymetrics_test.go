@@ -39,6 +39,7 @@ func (f *fakeMetrics) ObserveProviderDuration(string, bool, time.Duration) {}
 func (f *fakeMetrics) IncProviderFailure(string)                           {}
 func (f *fakeMetrics) IncRouterError(string)                               {}
 func (f *fakeMetrics) ObserveTurnsPersisted(int)                           {}
+func (f *fakeMetrics) ObserveToolUse(string, string, time.Duration)        {}
 func (f *fakeMetrics) IncProviderRetry(p string) {
 	f.mu.Lock()
 	f.retries[p]++

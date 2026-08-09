@@ -57,6 +57,9 @@ var streamedTypes = []bus.EventType{
 	bus.ReplySent,
 	bus.MessageDropped,
 	bus.HandleFailed,
+	bus.ToolUsed,
+	bus.ToolDenied,
+	bus.ToolShadowed,
 }
 
 // DefaultConnBuffer is the per-connection buffer depth. A client that falls this
@@ -181,6 +184,14 @@ type frame struct {
 	Timestamp  string `json:"timestamp"`
 	EnvelopeID string `json:"envelope_id,omitempty"`
 	Direction  string `json:"direction,omitempty"`
+
+	// Tool metadata (tool_used / tool_denied / tool_shadowed only,
+	// ADR-0041 §5). Metadata ONLY by law: the bus Event has no args field,
+	// so nothing content-derived can reach a frame (ADR-0024 §1 intact).
+	Tool      string `json:"tool,omitempty"`
+	Outcome   string `json:"outcome,omitempty"`
+	Rule      string `json:"rule,omitempty"`
+	LatencyMS int64  `json:"latency_ms,omitempty"`
 }
 
 // toFrame projects an Event onto its secret-free frame. It reads ONLY non-secret
@@ -191,6 +202,10 @@ func (lv *LiveView) toFrame(ev bus.Event) frame {
 		Channel:   ev.Channel,
 		Brain:     ev.Brain,
 		Timestamp: lv.now().UTC().Format(time.RFC3339Nano),
+		Tool:      ev.Tool,
+		Outcome:   ev.Outcome,
+		Rule:      ev.Rule,
+		LatencyMS: ev.Latency.Milliseconds(),
 	}
 	if ev.Envelope != nil {
 		f.EnvelopeID = ev.Envelope.ID

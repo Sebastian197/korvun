@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/Sebastian197/korvun/internal/metrics"
@@ -103,6 +104,20 @@ type AgentBrain struct {
 	// is per-message) and its decisions gate BOTH advertisement and
 	// execution. nil = today's behavior byte-for-byte (spec AS-4).
 	governance *AgentGovernance
+	// audit is the optional tool-audit sink (ADR-0041 §5): every tool
+	// execution, denial, and shadow rehearsal publishes one metadata-only
+	// bus event. nil disables publishing at zero cost (the router's
+	// EventPublisher pattern). brainName labels the events.
+	audit     ToolEventPublisher
+	brainName string
+}
+
+// ToolEventPublisher is the narrow, best-effort audit sink the agent publishes
+// tool events to (ADR-0041 §5) — the same publish-side-only view of the bus
+// the router's EventPublisher carries, so the brain does not hard-depend on a
+// concrete bus and tests can use a fake. Publishing MUST be non-blocking.
+type ToolEventPublisher interface {
+	Publish(ctx context.Context, ev bus.Event)
 }
 
 // AgentGovernance bundles the declared inputs of policy.SelectTools for one
@@ -223,6 +238,20 @@ func WithAgentConversationStore(store conversation.Store, recentTurns int) Agent
 			recentTurns = defaultHistoryTurns
 		}
 		a.historyN = recentTurns
+	}
+}
+
+// WithAgentToolAudit mounts the tool-audit sink and the brain name its events
+// carry (ADR-0041 §5). A nil publisher is ignored, leaving auditing off — the
+// same optionality metrics.Nop carries. The events are METADATA-ONLY by
+// construction (bus.Event has no args field); the bounded args prefix lives
+// exclusively in this brain's slog lines.
+func WithAgentToolAudit(p ToolEventPublisher, brainName string) AgentOption {
+	return func(a *AgentBrain) {
+		if p != nil {
+			a.audit = p
+			a.brainName = brainName
+		}
 	}
 }
 
@@ -396,6 +425,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 			a.logger.Info("agent: tool shadowed",
 				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
 				"args_prefix", boundedArgs(args))
+			a.auditTool(ctx, env, bus.Event{Type: bus.ToolShadowed, Tool: name, Outcome: "shadowed"})
 			return shadowObservation(name)
 		case !decided || d.Mode != policy.ToolAllow:
 			rule := policy.ToolRuleNotGranted
@@ -405,6 +435,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 			a.logger.Warn("agent: tool denied",
 				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
 				"rule", string(rule), "args_prefix", boundedArgs(args))
+			a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: string(rule)})
 			return deniedObservation(name)
 		}
 	}
@@ -414,11 +445,36 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 		toolCtx, cancel = context.WithTimeout(ctx, a.perTool)
 		defer cancel()
 	}
+	start := a.now()
 	result, err := t.Execute(toolCtx, args)
+	latency := a.now().Sub(start)
+	outcome := "ok"
+	if err != nil {
+		outcome = "error"
+	}
+	a.logger.Info("agent: tool used",
+		"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+		"outcome", outcome, "latency", latency, "args_prefix", boundedArgs(args))
+	a.auditTool(ctx, env, bus.Event{Type: bus.ToolUsed, Tool: name, Outcome: outcome, Latency: latency})
 	if err != nil {
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
 	return result
+}
+
+// auditTool completes ev with the routing metadata and pushes it to the metric
+// and (when mounted) the bus sink (ADR-0041 §5). Best-effort and non-blocking
+// by the publisher's contract; the metric always records so an operator
+// without observability wiring still gets counters through metrics.Metrics.
+func (a *AgentBrain) auditTool(ctx context.Context, env *envelope.Envelope, ev bus.Event) {
+	a.metrics.ObserveToolUse(ev.Tool, ev.Outcome, ev.Latency)
+	if a.audit == nil {
+		return
+	}
+	ev.Envelope = env
+	ev.Channel = env.Channel
+	ev.Brain = a.brainName
+	a.audit.Publish(ctx, ev)
 }
 
 // effectiveTools resolves this message's gate (ADR-0041 §2): with no

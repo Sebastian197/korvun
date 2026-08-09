@@ -54,6 +54,13 @@ type Metrics interface {
 	// (FR-A2) — by provider. A non-retryable failure never bumps it (ADR-0031
 	// sub-phase 7).
 	IncProviderRetryBudgetExhausted(provider string)
+	// ObserveToolUse records one governed-tool gate outcome (ADR-0041 §5):
+	// a counter by (tool, outcome) plus a latency histogram under the same
+	// labels. outcome is ok|error for an executed tool, denied for a gate/
+	// cage/shield refusal, shadowed for a shadow-mode rehearsal (d is zero
+	// for the last two). Labels carry the tool name and outcome ONLY —
+	// never args (bounded cardinality AND the ADR-0024 §1 no-content law).
+	ObserveToolUse(toolName, outcome string, d time.Duration)
 }
 
 // Nop is the no-op Metrics: every method does nothing. It is the default
@@ -82,3 +89,6 @@ func (Nop) IncProviderRetry(string) {}
 
 // IncProviderRetryBudgetExhausted does nothing.
 func (Nop) IncProviderRetryBudgetExhausted(string) {}
+
+// ObserveToolUse does nothing.
+func (Nop) ObserveToolUse(string, string, time.Duration) {}
