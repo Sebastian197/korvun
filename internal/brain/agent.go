@@ -111,6 +111,12 @@ type AgentBrain struct {
 	// EventPublisher pattern). brainName labels the events.
 	audit     ToolEventPublisher
 	brainName string
+	// skillsBlock is the pre-composed skills section (skill.PromptBlock
+	// output, ADR-0041 §6) APPENDED after the protocol block + operator
+	// prompt in the seed system message — added, never reordered (the
+	// persona precedent, on the other end). Empty = today's prompt
+	// byte-for-byte.
+	skillsBlock string
 }
 
 // ToolEventPublisher is the narrow, best-effort audit sink the agent publishes
@@ -242,6 +248,16 @@ func WithAgentConversationStore(store conversation.Store, recentTurns int) Agent
 	}
 }
 
+// WithAgentSkillsBlock sets the pre-composed skills section (ADR-0041 §6,
+// R-4) appended AFTER the ADR-0021 §3.1 protocol block and the operator
+// prompt — the §3.1 internal order (grammar, catalog, operator) is untouched,
+// mirroring how the persona rides as a prefix. Composition (budget, omission
+// warnings) is the caller's: brain receives the finished block. An empty
+// block leaves the prompt byte-identical to today.
+func WithAgentSkillsBlock(block string) AgentOption {
+	return func(a *AgentBrain) { a.skillsBlock = block }
+}
+
 // WithAgentToolAudit mounts the tool-audit sink and the brain name its events
 // carry (ADR-0041 §5). A nil publisher is ignored, leaving auditing off — the
 // same optionality metrics.Nop carries. The events are METADATA-ONLY by
@@ -322,6 +338,11 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 		// Persona rides as a PREFIX; buildSystemPrompt's output stays intact
 		// (FR-PERSONA-2 — nothing overwritten, both contributions present).
 		sysPrompt = a.personaPrefix + "\n\n" + sysPrompt
+	}
+	if a.skillsBlock != "" {
+		// Skills ride as a SUFFIX (ADR-0041 §6): the §3.1 protocol order is
+		// untouched, the guidance lands after the catalog it teaches about.
+		sysPrompt = sysPrompt + "\n\n" + a.skillsBlock
 	}
 	req, ok := requestWithHistory(env, sysPrompt, history)
 	if !ok {
