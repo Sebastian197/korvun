@@ -165,16 +165,42 @@ contacted only if the local one failed).
 | `base_url` | string | no | Override the adapter default (e.g. `http://localhost:11434`). |
 | `api_key_env` | string | cloud only | **Name** of the env var holding the API key. **Required for `groq`.** |
 
-### `brains[].agent` (optional, ADR-0021)
+### `brains[].agent` (optional, ADR-0021 + ADR-0041)
 
 Present ⇒ this brain is a bounded tool-use agent instead of the fan-out
-orchestrator. Both satisfy `brain.Brain`, so routing is unchanged.
+orchestrator. Both satisfy `brain.Brain`, so routing is unchanged. Every
+ADR-0041 field below is optional and additive: an agent block written before
+governance existed behaves byte-for-byte as it always did.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `tools` | array of string | **yes** (≥1) | Built-in tools to register: `time`, `echo`, `calc` (the safe, pure set). |
+| `tools` | array of string | **yes** (≥1) | Built-in tools to register. Pure: `time`, `echo`, `calc`. Caged (each REQUIRES its cage block below): `read_file`, `http_fetch`, `webhook_call`. |
 | `max_iterations` | int | no | Hard loop cap. `0` ⇒ the AgentBrain default. |
 | `system_prompt` | string | no | Operator prompt appended after the protocol block. |
+| `governance` | array | no | Tri-state grants (see below). Absent ⇒ ungoverned: every listed tool allowed on every channel. |
+| `tool_attrs` | object | no | Per-tool attrs OVERRIDES over the house defaults (`read_file` sensitive; `http_fetch`/`webhook_call` network). Keys must be listed in `tools`. |
+| `read_file` | object | with the tool | The jail: `root` (**required**), `max_bytes` (`0` ⇒ 64 KiB). |
+| `http_fetch` | object | with the tool | The cage: `allow_hosts` (**required**, exact host, optional `:port`), `max_bytes`, `max_redirects`. |
+| `webhook_call` | object | with the tool | The cage: `allow_hosts` (**required**), `max_bytes`, `timeout_seconds` (`0` ⇒ 10s). |
+| `skills_dir` | string | no | AgentSkills-compatible skills directory. Missing dir ⇒ boot failure; a malformed skill inside ⇒ skipped with a warning. |
+| `skills_body_budget` | int | no | Total rune budget for injected skill bodies (`0` ⇒ 8192). |
+
+Each `governance[]` entry:
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `tool` | string | **yes** | A tool listed in `tools`. One grant per tool. |
+| `mode` | string | **yes** | `allow` \| `shadow` \| `deny`. In `shadow` the tool is ANNOUNCED to the model but never executed — an honest simulation observation returns instead, and the attempt audits as `tool_shadowed`. |
+| `channels` | array of string | no | Restricts the grant to those channels (exact match). Absent ⇒ every channel. |
+
+Each `tool_attrs` value: `sensitive` / `network` (both optional booleans —
+an absent field keeps the house default). A `sensitive` tool is excluded on
+a cloud-model brain; a `network` tool on a **private** brain gets the
+network shield (private addresses only, validated at the dial).
+
+See `docs/TOOLS-AND-SKILLS.md` for the full guide: what each tool can
+reach, how the gate composes, shadow-mode rehearsal, the shield, `/tools`,
+and how to write a skill.
 
 ## `routes[]`
 
