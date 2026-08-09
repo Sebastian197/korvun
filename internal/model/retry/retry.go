@@ -96,7 +96,32 @@ func New(inner model.Model, cfg Config, opts ...Option) model.Model {
 	for _, o := range opts {
 		o(d)
 	}
+	// Capability propagation (ADR-0042 §4): when the wrapped model can do
+	// native tool calling, the returned decorator satisfies ToolCallingModel
+	// too, applying the SAME retry policy to GenerateWithTools — a capability
+	// must not vanish inside a decorator (the http Flusher-wrapper pattern).
+	if tcm, ok := inner.(model.ToolCallingModel); ok {
+		return &toolDecorator{decorator: d, tcm: tcm}
+	}
 	return d
+}
+
+// toolDecorator is the capability-propagating variant: the same retry
+// decorator plus GenerateWithTools under the same policy.
+type toolDecorator struct {
+	*decorator
+	tcm model.ToolCallingModel
+}
+
+// Compile-time assertion of the propagated capability.
+var _ model.ToolCallingModel = (*toolDecorator)(nil)
+
+// GenerateWithTools runs the native call through the identical retry loop
+// Generate uses (same classification order, same budgets, same metrics).
+func (t *toolDecorator) GenerateWithTools(ctx context.Context, req *model.Request, tools []model.ToolSpec) (*model.Response, error) {
+	return t.retryLoop(ctx, func(attemptCtx context.Context) (*model.Response, error) {
+		return t.tcm.GenerateWithTools(attemptCtx, req, tools)
+	})
 }
 
 // Name delegates to the wrapped model, so fan-out attribution stays the provider
@@ -118,8 +143,18 @@ func (d *decorator) Name() string { return d.inner.Name() }
 //  4. ErrProviderUnavailable (fast, not a deadline) -> retry with full jitter.
 //  5. anything else (auth, bad response, validation) -> stop, not retryable.
 func (d *decorator) Generate(ctx context.Context, req *model.Request) (*model.Response, error) {
+	return d.retryLoop(ctx, func(attemptCtx context.Context) (*model.Response, error) {
+		return d.inner.Generate(attemptCtx, req)
+	})
+}
+
+// retryLoop is the shared retry engine: it runs call under the per-attempt
+// deadline and applies the load-bearing classification order above. Both
+// Generate and the propagated GenerateWithTools ride it, so the two lanes
+// can never drift apart in retry semantics.
+func (d *decorator) retryLoop(ctx context.Context, call func(context.Context) (*model.Response, error)) (*model.Response, error) {
 	for attempt := 0; ; attempt++ {
-		resp, err := d.attempt(ctx, req)
+		resp, err := d.attemptCall(ctx, call)
 		if err == nil {
 			return resp, nil
 		}
@@ -163,16 +198,16 @@ func (d *decorator) Generate(ctx context.Context, req *model.Request) (*model.Re
 	}
 }
 
-// attempt runs one underlying Generate under a fresh per-attempt deadline
+// attemptCall runs one underlying call under a fresh per-attempt deadline
 // derived from the parent ctx (PerAttempt <= 0 leaves the call bounded only by
 // the parent, though config always resolves a positive value).
-func (d *decorator) attempt(ctx context.Context, req *model.Request) (*model.Response, error) {
+func (d *decorator) attemptCall(ctx context.Context, call func(context.Context) (*model.Response, error)) (*model.Response, error) {
 	if d.cfg.PerAttempt <= 0 {
-		return d.inner.Generate(ctx, req)
+		return call(ctx)
 	}
 	attemptCtx, cancel := context.WithTimeout(ctx, d.cfg.PerAttempt)
 	defer cancel()
-	return d.inner.Generate(attemptCtx, req)
+	return call(attemptCtx)
 }
 
 // waitFor classifies a retryable error and returns the wait before the next
