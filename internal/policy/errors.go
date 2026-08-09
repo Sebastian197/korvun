@@ -55,4 +55,30 @@ var (
 	// error, not a default. The offending value is wrapped behind this
 	// sentinel via %w so errors.Is keeps working.
 	ErrUnknownSensitivity = errors.New("policy: unknown sensitivity")
+
+	// ErrUnknownLocality is returned by SelectTools when handed a Locality
+	// value it does not recognise — including the zero value of an unwired
+	// query. Same fail-loud posture as ErrUnknownSensitivity: locality is
+	// declared, never guessed (ADR-0015 §3, ADR-0041 §1).
+	ErrUnknownLocality = errors.New("policy: unknown locality")
+
+	// ErrUnknownToolMode is returned by SelectTools when a grant carries a
+	// ToolMode it does not recognise — including the zero value of an
+	// unconfigured grant. A silent default here would either widen the gate
+	// (allow) or hide the misconfiguration (deny); the gate fails loud
+	// instead (ADR-0041 §1).
+	ErrUnknownToolMode = errors.New("policy: unknown tool mode")
+
+	// ErrDuplicateToolGrant is returned by SelectTools when two grants name
+	// the same tool. Last-wins would make the effective mode depend on
+	// config order — an invisible foot-gun for a gatekeeper — so duplicates
+	// fail loud (ADR-0041 §1).
+	ErrDuplicateToolGrant = errors.New("policy: duplicate tool grant")
+
+	// ErrInvalidToolGrant is returned by SelectTools when a grant is
+	// structurally invalid (an empty tool name). Structural config
+	// validation should catch this earlier; the selector still refuses it
+	// so a direct construction cannot slip an unnameable grant past the
+	// gate (ADR-0041 §1).
+	ErrInvalidToolGrant = errors.New("policy: invalid tool grant")
 )

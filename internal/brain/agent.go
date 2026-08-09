@@ -15,6 +15,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/metrics"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/model/fanout"
+	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
 
@@ -31,6 +32,38 @@ const DefaultAgentMaxIterations = 5
 // The parser never treats a line starting with it as a tool call; it rides as a
 // user message because model.Role has no Tool role (ADR-0009).
 const observationPrefix = "OBSERVATION: "
+
+// maxArgsLogRunes bounds the tool-args prefix recorded in LOCAL slog lines
+// (ADR-0041 §5): args derive from the message — content — so the bounded
+// debugging prefix lives ONLY in slog, never on the bus, the Activity feed,
+// or a metric label (the ADR-0024 §1 metadata-only law).
+const maxArgsLogRunes = 80
+
+// shadowObservation is the honest simulation observation a shadowed tool call
+// feeds back to the model (ADR-0041 §2, exact text fixed there): it makes the
+// absence of real effect unmistakable without killing the loop.
+func shadowObservation(name string) string {
+	return fmt.Sprintf("shadow mode: tool %s was NOT executed (governance rehearsal). "+
+		"No real action or effect occurred. Do not invent or assume a result; "+
+		"if the user's request depended on this action, say it was not performed.", name)
+}
+
+// deniedObservation is the observation a gate-denied tool call feeds back.
+// Deliberately rule-silent toward the MODEL (ADR-0041 §2): the rule dimension
+// goes to the audit surfaces, not into the conversation.
+func deniedObservation(name string) string {
+	return fmt.Sprintf("tool %s is not permitted here", name)
+}
+
+// boundedArgs truncates args to maxArgsLogRunes runes for slog (never bytes —
+// a multibyte rune must not be split into invalid UTF-8).
+func boundedArgs(args string) string {
+	runes := []rune(args)
+	if len(runes) <= maxArgsLogRunes {
+		return args
+	}
+	return string(runes[:maxArgsLogRunes])
+}
 
 // AgentBrain is a stateless Brain (ADR-0014 §4) that runs a BOUNDED single-model
 // tool-use loop (ADR-0021): it asks one model, and while the model requests a
@@ -65,6 +98,28 @@ type AgentBrain struct {
 	historyN int
 	// now is the clock seam (fanout.CallOne latency + persisted turn timestamps).
 	now func() time.Time
+	// governance, when non-nil, is the policy gatekeeper over the tool
+	// registry (ADR-0041 §2): SelectTools runs once per Handle (the channel
+	// is per-message) and its decisions gate BOTH advertisement and
+	// execution. nil = today's behavior byte-for-byte (spec AS-4).
+	governance *AgentGovernance
+}
+
+// AgentGovernance bundles the declared inputs of policy.SelectTools for one
+// brain (ADR-0041 §1): the per-brain grants, the declared tool attributes,
+// and the two per-brain facts the filter routes on — the brain's Sensitivity
+// and its single model's Locality (both known at wiring time). Read-only
+// after construction, so it is safe to share across the router's N workers.
+type AgentGovernance struct {
+	// Grants are the per-brain tri-state tool grants.
+	Grants []policy.ToolGrant
+	// Attrs are the declared per-tool attributes (house default + operator
+	// override); a tool absent from the map gets zero attrs.
+	Attrs map[string]policy.ToolAttrs
+	// Sensitivity is the brain's declared tier (ADR-0015).
+	Sensitivity policy.Sensitivity
+	// Locality is where the brain's single model runs (ADR-0015).
+	Locality policy.Locality
 }
 
 // AgentOption configures an AgentBrain at construction.
@@ -171,6 +226,18 @@ func WithAgentConversationStore(store conversation.Store, recentTurns int) Agent
 	}
 }
 
+// WithAgentGovernance mounts the policy gatekeeper over the tool registry
+// (ADR-0041 §2). A nil argument is ignored, leaving the ungoverned default
+// (every registered tool advertised and executable on every channel — spec
+// AS-4). The governance value MUST NOT be mutated after construction.
+func WithAgentGovernance(g *AgentGovernance) AgentOption {
+	return func(a *AgentBrain) {
+		if g != nil {
+			a.governance = g
+		}
+	}
+}
+
 // WithAgentClock overrides the clock (tests inject a deterministic one).
 func WithAgentClock(now func() time.Time) AgentOption {
 	return func(a *AgentBrain) {
@@ -210,11 +277,17 @@ func NewAgentBrain(m model.Model, tools tool.Registry, opts ...AgentOption) *Age
 func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*envelope.Envelope, error) {
 	key, history := a.loadHistory(ctx, env)
 
+	// The gatekeeper decides once per Handle which tools this message may
+	// see and run (ADR-0041 §2): the ADVERTISED registry feeds the system
+	// prompt below, the decisions gate execution in runTool. Both are nil
+	// checks away from today's behavior when no governance is mounted.
+	advertised, decisions := a.effectiveTools(env)
+
 	// The seed system message carries the protocol grammar + tool catalog, then
 	// the operator prompt (ADR-0021 §3.1). req.Messages is the LOOP's local
 	// scratch slice — it grows with assistant:TOOL + user:OBSERVATION turns and is
 	// NEVER persisted (§5, §6).
-	sysPrompt := buildSystemPrompt(a.tools, a.systemPrompt)
+	sysPrompt := buildSystemPrompt(advertised, a.systemPrompt)
 	if a.personaPrefix != "" {
 		// Persona rides as a PREFIX; buildSystemPrompt's output stays intact
 		// (FR-PERSONA-2 — nothing overwritten, both contributions present).
@@ -231,7 +304,7 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// plain text, the history tells the whole truth.
 	userText := envelope.TranscriptText(env.Parts)
 
-	finalText, answered := a.runLoop(ctx, env, req)
+	finalText, answered := a.runLoop(ctx, env, req, decisions)
 	if !answered {
 		// Iteration cap, model failure, or ctx done: a normal product outcome.
 		// The user gets a fallback reply; the (canned) fallback is NOT persisted.
@@ -247,7 +320,8 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 // runLoop runs the bounded model→tool→model loop. It returns the final answer and
 // true, or "" and false when no answer was produced (cap hit, model failure, or
 // ctx done). req is the loop's local scratch; runLoop mutates only req.Messages.
-func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *model.Request) (string, bool) {
+// decisions are this message's gate outcomes (nil = ungoverned, ADR-0041 §2).
+func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *model.Request, decisions map[string]policy.ToolDecision) (string, bool) {
 	for iter := 0; iter < a.maxIters; iter++ {
 		if err := ctx.Err(); err != nil {
 			// Total timeout / cancellation between steps (the Handle ctx is the
@@ -286,7 +360,7 @@ func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *m
 		// Tool call: execute, then feed the model its own request turn + the
 		// result as an OBSERVATION. Appending to req.Messages keeps the trace
 		// LOCAL to this Handle (§5).
-		observation := a.runTool(ctx, name, args)
+		observation := a.runTool(ctx, env, decisions, name, args)
 		req.Messages = append(req.Messages,
 			model.Message{Role: model.RoleAssistant, Content: content},
 			model.Message{Role: model.RoleUser, Content: observationPrefix + observation},
@@ -303,10 +377,36 @@ func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *m
 // or an unknown tool is NOT fatal: it is returned as an observation string so the
 // model can react (ADR-0021 §2). The per-tool timeout (if set) bounds Execute so a
 // hung tool cannot stall the loop.
-func (a *AgentBrain) runTool(ctx context.Context, name, args string) string {
+//
+// Under governance (decisions non-nil, ADR-0041 §2) this is the EXECUTION half
+// of the two-point gate: nonexistence is checked first (honesty about a tool
+// that is not there beats governance theater), then the decision — a shadowed
+// call is NEVER executed and feeds the simulation observation back; a denied or
+// undecided call feeds the denial observation. The bounded args prefix goes to
+// LOCAL slog only (ADR-0024 §1 law).
+func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisions map[string]policy.ToolDecision, name, args string) string {
 	t, ok := a.tools[name]
 	if !ok {
 		return fmt.Sprintf("tool %q not found", name)
+	}
+	if decisions != nil {
+		d, decided := decisions[name]
+		switch {
+		case decided && d.Mode == policy.ToolShadow:
+			a.logger.Info("agent: tool shadowed",
+				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+				"args_prefix", boundedArgs(args))
+			return shadowObservation(name)
+		case !decided || d.Mode != policy.ToolAllow:
+			rule := policy.ToolRuleNotGranted
+			if decided {
+				rule = d.Rule
+			}
+			a.logger.Warn("agent: tool denied",
+				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+				"rule", string(rule), "args_prefix", boundedArgs(args))
+			return deniedObservation(name)
+		}
 	}
 	toolCtx := ctx
 	if a.perTool > 0 {
@@ -319,6 +419,38 @@ func (a *AgentBrain) runTool(ctx context.Context, name, args string) string {
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
 	return result
+}
+
+// effectiveTools resolves this message's gate (ADR-0041 §2): with no
+// governance it returns the full registry and nil decisions (today's behavior
+// byte-for-byte). With governance it runs policy.SelectTools once and returns
+// the ADVERTISED registry (ToolAllow ∪ ToolShadow — shadow is announced so
+// the rehearsal observes the model's real judgment) plus the decisions that
+// gate execution. A misconfigured governance FAILS CLOSED (spec D-6): empty
+// advertisement, non-nil empty decisions so every call is denied, logged — a
+// gatekeeper that fails open is not a gatekeeper.
+func (a *AgentBrain) effectiveTools(env *envelope.Envelope) (tool.Registry, map[string]policy.ToolDecision) {
+	if a.governance == nil {
+		return a.tools, nil
+	}
+	g := a.governance
+	decisions, err := policy.SelectTools(g.Grants, g.Attrs, policy.ToolQuery{
+		Channel:     env.Channel,
+		Sensitivity: g.Sensitivity,
+		Locality:    g.Locality,
+	})
+	if err != nil {
+		a.logger.Error("agent: governance misconfigured, failing closed (deny-all)",
+			"envelope_id", env.ID, "channel", env.Channel, "cause", err)
+		return tool.Registry{}, map[string]policy.ToolDecision{}
+	}
+	advertised := make(tool.Registry, len(a.tools))
+	for name, t := range a.tools {
+		if d, ok := decisions[name]; ok && (d.Mode == policy.ToolAllow || d.Mode == policy.ToolShadow) {
+			advertised[name] = t
+		}
+	}
+	return advertised, decisions
 }
 
 // loadHistory derives the conversation key and loads recent turns when a store is
