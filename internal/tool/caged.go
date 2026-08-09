@@ -56,7 +56,7 @@ func BuiltinAttrs(name string) (Attrs, bool) {
 		return Attrs{}, true
 	case "read_file":
 		return Attrs{Sensitive: true}, true
-	case "http_fetch":
+	case "http_fetch", "webhook_call":
 		return Attrs{Network: true}, true
 	default:
 		return Attrs{}, false
