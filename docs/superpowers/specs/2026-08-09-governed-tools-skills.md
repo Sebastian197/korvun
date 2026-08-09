@@ -406,7 +406,11 @@ progressive-governance ladder (recorded below, no commitment).
   audit stays green.
 - **SP3** — Effectful tools v1 per the R-1 catalog, one tool per commit,
   each with its cage and the FR-GOV-6 dial-time shield (AS-6/AS-10/AS-11),
-  and its audit wiring.
+  and its audit wiring. **House-catalog attrs tripwire (copilot rider,
+  2026-08-09): a test MUST pin that the app wiring declares
+  `http_fetch`/`webhook_call` with `Network: true` and `read_file` with
+  `Sensitive: true` — a forgotten declaration would silently bypass the
+  shield or the locality rule (zero attrs = not sensitive, not network).**
 - **SP4** — Skills: loader + flat-subset parser + validation +
   system-prompt injection under budget (AS-5).
 - **SP5** — Config surface (`AgentConfig` grants/cages/skills, hot-apply
