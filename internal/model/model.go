@@ -35,6 +35,8 @@ func (r Role) String() string {
 		return "user"
 	case RoleAssistant:
 		return "assistant"
+	case RoleTool:
+		return "tool"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(r))
 	}
@@ -48,6 +50,15 @@ func (r Role) String() string {
 type Message struct {
 	Role    Role
 	Content string
+
+	// ToolCalls carries the model's native tool requests on an assistant
+	// turn; ToolName labels a RoleTool result turn (ADR-0042 §2). Both are
+	// ADDITIVE and zero outside the native lane: existing adapters build
+	// their wire structs from Role/Content only, so old-lane requests are
+	// byte-identical — the prohibition on widening model.Model stands, the
+	// DTO merely grew.
+	ToolCalls []ToolCall
+	ToolName  string
 }
 
 // Request is the input to Model.Generate. Model names the
