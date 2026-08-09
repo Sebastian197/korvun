@@ -329,20 +329,30 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// checks away from today's behavior when no governance is mounted.
 	advertised, decisions := a.effectiveTools(env)
 
-	// The seed system message carries the protocol grammar + tool catalog, then
-	// the operator prompt (ADR-0021 §3.1). req.Messages is the LOOP's local
-	// scratch slice — it grows with assistant:TOOL + user:OBSERVATION turns and is
+	// Lane pick (ADR-0042 §5): a model with the native capability gets the
+	// structured lane — no textual grammar, tools as specs; anything else
+	// keeps today's prompt-protocol byte-for-byte.
+	tcm, native := a.model.(model.ToolCallingModel)
+
+	// The seed system message: the prompt-protocol lane carries the grammar
+	// + tool catalog (ADR-0021 §3.1); the native lane drops both (the specs
+	// replace them) and keeps only the operator prompt. Persona (prefix) and
+	// skills (suffix) ride identically on both lanes. req.Messages is the
+	// LOOP's local scratch — it grows with the lane's turn shapes and is
 	// NEVER persisted (§5, §6).
-	sysPrompt := buildSystemPrompt(advertised, a.systemPrompt)
+	var sysPrompt string
+	if native {
+		sysPrompt = a.systemPrompt
+	} else {
+		sysPrompt = buildSystemPrompt(advertised, a.systemPrompt)
+	}
 	if a.personaPrefix != "" {
-		// Persona rides as a PREFIX; buildSystemPrompt's output stays intact
-		// (FR-PERSONA-2 — nothing overwritten, both contributions present).
-		sysPrompt = a.personaPrefix + "\n\n" + sysPrompt
+		// Persona rides as a PREFIX (FR-PERSONA-2).
+		sysPrompt = strings.TrimSpace(a.personaPrefix + "\n\n" + sysPrompt)
 	}
 	if a.skillsBlock != "" {
-		// Skills ride as a SUFFIX (ADR-0041 §6): the §3.1 protocol order is
-		// untouched, the guidance lands after the catalog it teaches about.
-		sysPrompt = sysPrompt + "\n\n" + a.skillsBlock
+		// Skills ride as a SUFFIX (ADR-0041 §6).
+		sysPrompt = strings.TrimSpace(sysPrompt + "\n\n" + a.skillsBlock)
 	}
 	req, ok := requestWithHistory(env, sysPrompt, history)
 	if !ok {
@@ -355,7 +365,13 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// plain text, the history tells the whole truth.
 	userText := envelope.TranscriptText(env.Parts)
 
-	finalText, answered := a.runLoop(ctx, env, req, decisions)
+	var finalText string
+	var answered bool
+	if native {
+		finalText, answered = a.runLoopNative(ctx, env, req, tcm, advertised, decisions)
+	} else {
+		finalText, answered = a.runLoop(ctx, env, req, decisions)
+	}
 	if !answered {
 		// Iteration cap, model failure, or ctx done: a normal product outcome.
 		// The user gets a fallback reply; the (canned) fallback is NOT persisted.
