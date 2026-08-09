@@ -1,0 +1,57 @@
+// Copyright 2026 Sebastián Moreno Saavedra
+// SPDX-License-Identifier: Apache-2.0
+
+package tool
+
+import "errors"
+
+// This file owns the shared surface of the CAGED built-in tools (ADR-0041 §4)
+// — the tools with effects the piece adds behind the §8 bar. A caged tool
+// MUST NOT exist without its operator cage, so it never resolves through the
+// config-less Builtin(name); it is constructed via its typed constructor
+// (ReadFile, HTTPFetch, WebhookCall) at wiring time in internal/app. The
+// safe-toolset boundary stays in exactly this package: the constructors here
+// and the name/attrs catalog below are its single source of truth.
+
+// ErrCageViolation marks a tool error caused by the tool's own cage — a path
+// outside the jail root, a host off the allow-list, a response over the size
+// cap. The AgentBrain classifies an Execute error wrapping it as a DENIAL
+// (audit rule "cage", ADR-0041 §5) rather than an executed-with-error use.
+// The observation fed back to the model is the tool's honest error text; the
+// classification affects only the audit surfaces.
+var ErrCageViolation = errors.New("tool: cage violation")
+
+// ErrShieldViolation marks a connection attempt the private-network shield
+// stopped at the dial (ADR-0041 §3): a Private brain's network tool resolved
+// a public address. Classified as a DENIAL with audit rule
+// "private_network_shield". Like ErrCageViolation, nothing was contacted.
+var ErrShieldViolation = errors.New("tool: private network shield violation")
+
+// Attrs are the HOUSE-DEFAULT gate attributes of a built-in tool (ADR-0041
+// §4, R-2): the declared inputs the policy gate routes on. The operator may
+// override them in config (SP5); this catalog is the default the wiring
+// starts from. Kept as plain bools so this package stays a leaf (the policy
+// package translates them into its own declared types).
+type Attrs struct {
+	// Sensitive restricts the tool to locally-running models.
+	Sensitive bool
+	// Network marks a tool that reaches the network (shield-subject).
+	Network bool
+}
+
+// BuiltinAttrs returns the house-default attributes of a built-in tool by its
+// protocol name — pure and caged alike — and ok=false for any name outside
+// the safe toolset (a dangerous name like "shell" is not known, by decision
+// ADR-0021 §8). This is the attrs half of the single safe-toolset boundary;
+// a forgotten declaration here is exactly what the spec's SP3 attrs tripwire
+// tests guard against.
+func BuiltinAttrs(name string) (Attrs, bool) {
+	switch name {
+	case "time", "echo", "calc":
+		return Attrs{}, true
+	case "read_file":
+		return Attrs{Sensitive: true}, true
+	default:
+		return Attrs{}, false
+	}
+}

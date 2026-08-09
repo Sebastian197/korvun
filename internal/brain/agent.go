@@ -5,6 +5,7 @@ package brain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -448,6 +449,19 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	start := a.now()
 	result, err := t.Execute(toolCtx, args)
 	latency := a.now().Sub(start)
+
+	// A cage/shield breach is a DENIAL, not an executed-with-error use
+	// (ADR-0041 §4/§5): the tool refused before any effect. The model still
+	// receives the tool's honest error observation below; only the audit
+	// classification changes.
+	if rule, breached := cageRule(err); breached {
+		a.logger.Warn("agent: tool denied by its cage",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+			"rule", rule, "args_prefix", boundedArgs(args))
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: rule})
+		return fmt.Sprintf("tool %s failed: %v", name, err)
+	}
+
 	outcome := "ok"
 	if err != nil {
 		outcome = "error"
@@ -460,6 +474,22 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
 	return result
+}
+
+// cageRule classifies a tool error as a cage or shield denial (ADR-0041 §5).
+// The shield sentinel is checked FIRST: a shield stop may ride inside a cage
+// wrapper and its rule is the more specific fact.
+func cageRule(err error) (string, bool) {
+	switch {
+	case err == nil:
+		return "", false
+	case errors.Is(err, tool.ErrShieldViolation):
+		return string(policy.ToolRulePrivateShield), true
+	case errors.Is(err, tool.ErrCageViolation):
+		return string(policy.ToolRuleCage), true
+	default:
+		return "", false
+	}
 }
 
 // auditTool completes ev with the routing metadata and pushes it to the metric
