@@ -156,6 +156,19 @@ func (c *Controller) Start(ctx context.Context) error {
 		return ErrNoConfig
 	}
 
+	// Start boots the config AS IT IS ON DISK (2026-08-09, the hot-promotion
+	// blocker): LoadConfig runs once at app boot and the chrome's Iniciar
+	// only calls Start, so an edit between Parar and Iniciar was silently
+	// ignored. Re-load from the known path; an unparseable file refuses the
+	// boot loudly instead of silently using the stale in-memory copy.
+	if c.path != "" {
+		cfg, err := config.Load(c.path)
+		if err != nil {
+			return fmt.Errorf("shell: reload config %q on start: %w", c.path, err)
+		}
+		c.cfg = cfg
+	}
+
 	// Secret provisioning from the keychain (ADR-0035 §4, SP3): fill every
 	// config-referenced secret variable ABSENT from the environment, before
 	// anything builds. Env always wins; a store failure aborts the boot.

@@ -624,3 +624,77 @@ func TestStatus_reapsDeadCore(t *testing.T) {
 		t.Fatalf("Stop after reap: want ErrNotRunning, got %v", err)
 	}
 }
+
+// 2026-08-09 red (the hot-promotion blocker, caught in the governed round):
+// LoadConfig runs ONCE at app boot and the chrome's Iniciar only calls Start,
+// so an edit to the config file between Parar and Iniciar was silently
+// ignored — the core booted the STALE in-memory config. Start must boot the
+// config AS IT IS ON DISK: re-load from the known path, failing loud when
+// the file no longer parses.
+
+// TestStart_reloadsConfigFromDisk: an edit between LoadConfig and Start is
+// honored — the freshly written admin token-env name is what Status reports.
+func TestStart_reloadsConfigFromDisk(t *testing.T) {
+	srv := fakeOllama(t)
+	t.Setenv(adminTokenEnv, "")
+	t.Setenv("KORVUN_ADMIN_TOKEN_EDITED", "")
+	c := testController(fakeFactory())
+
+	cfg := minimalCfg(srv.URL)
+	path := writeCfg(t, cfg)
+	if err := c.LoadConfig(path); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	// The between-Parar-and-Iniciar edit: same file, new admin env name.
+	cfg.Admin = &config.AdminConfig{TokenEnv: "KORVUN_ADMIN_TOKEN_EDITED"}
+	b, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal edited config: %v", err)
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatalf("rewrite config: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := c.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() {
+		sctx, scancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer scancel()
+		_ = c.Stop(sctx)
+	})
+
+	if got := c.Status().TokenEnv; got != "KORVUN_ADMIN_TOKEN_EDITED" {
+		t.Fatalf("Status().TokenEnv = %q — Start booted the stale in-memory config, not the disk edit", got)
+	}
+}
+
+// TestStart_unparseableEditFailsLoud: if the on-disk config was corrupted
+// after LoadConfig, Start refuses with the load error instead of silently
+// booting the stale copy — honest over convenient.
+func TestStart_unparseableEditFailsLoud(t *testing.T) {
+	srv := fakeOllama(t)
+	t.Setenv(adminTokenEnv, "")
+	c := testController(fakeFactory())
+
+	path := writeCfg(t, minimalCfg(srv.URL))
+	if err := c.LoadConfig(path); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{not json"), 0o600); err != nil {
+		t.Fatalf("corrupt config: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err := c.Start(ctx)
+	if err == nil {
+		t.Fatal("Start succeeded over a corrupted config file — it booted the stale in-memory copy")
+	}
+	if c.Status().Running {
+		t.Fatal("controller reports running after a refused Start")
+	}
+}
