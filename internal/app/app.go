@@ -52,6 +52,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/model/sequential"
 	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/router"
+	"github.com/Sebastian197/korvun/internal/skill"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
 
@@ -701,7 +702,7 @@ func (b *builder) buildBrain(bc config.BrainConfig) (brain.Brain, error) {
 	// ZERO options, keeping today's requests byte-for-byte intact.
 	personaPrompt := composePersonaPrompt(bc.Persona)
 	if bc.Agent != nil {
-		return b.buildAgentBrain(bc, selected, personaPrompt)
+		return b.buildAgentBrain(bc, selected, catalog, sens, personaPrompt)
 	}
 	pol, err := buildPolicy(bc.Policy)
 	if err != nil {
@@ -745,15 +746,32 @@ func composePersonaPrompt(p *config.PersonaConfig) string {
 // lives, so a dangerous name fails loudly at boot (ErrUnknownTool, §8). The shared
 // durable store and metrics are injected like the Orchestrator's; only the FINAL
 // user+assistant pair is persisted (§6).
-func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model, personaPrompt string) (brain.Brain, error) {
+func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model, catalog []policy.CatalogEntry, sens policy.Sensitivity, personaPrompt string) (brain.Brain, error) {
 	if len(selected) != 1 {
 		return nil, fmt.Errorf("%w: brain %q: got %d", ErrAgentModelCount, bc.Name, len(selected))
 	}
+	// Effective attrs: house defaults + declared operator overrides (R-2),
+	// with every override and grant checked against the LISTED tools — a
+	// grant over a tool the brain does not carry is a misconfiguration, not
+	// a silent no-op.
+	attrs, err := effectiveToolAttrs(bc.Agent)
+	if err != nil {
+		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+	}
+	listed := make(map[string]bool, len(bc.Agent.Tools))
+	for _, name := range bc.Agent.Tools {
+		listed[name] = true
+	}
+	for _, g := range bc.Agent.Governance {
+		if !listed[g.Tool] {
+			return nil, fmt.Errorf("app: brain %q: governance grants tool %q which is not in agent.tools", bc.Name, g.Tool)
+		}
+	}
 	reg := make(tool.Registry, len(bc.Agent.Tools))
 	for _, name := range bc.Agent.Tools {
-		tl, ok := tool.Builtin(name)
-		if !ok {
-			return nil, fmt.Errorf("%w: %q (brain %q; available: %v)", ErrUnknownTool, name, bc.Name, tool.BuiltinNames())
+		tl, err := b.agentTool(bc, name, attrs, sens)
+		if err != nil {
+			return nil, err
 		}
 		reg[tl.Name()] = tl
 	}
@@ -786,8 +804,159 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		// (Nop) audit surface and nothing publishes.
 		opts = append(opts, brain.WithAgentToolAudit(b.toolBus, bc.Name))
 	}
+	if len(bc.Agent.Governance) > 0 {
+		grants, err := toolGrants(bc.Agent.Governance)
+		if err != nil {
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
+		loc, err := localityOf(catalog, selected[0])
+		if err != nil {
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
+		opts = append(opts, brain.WithAgentGovernance(&brain.AgentGovernance{
+			Grants:      grants,
+			Attrs:       attrs,
+			Sensitivity: sens,
+			Locality:    loc,
+		}))
+	}
+	if bc.Agent.SkillsDir != "" {
+		skills, err := skill.LoadDir(bc.Agent.SkillsDir, b.logger)
+		if err != nil {
+			// A configured skills dir that cannot be read is a config error
+			// (fail loud at boot); a malformed skill INSIDE it degrades with
+			// warnings inside LoadDir (AS-5).
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
+		block, omitted := skill.PromptBlock(skills, bc.Agent.SkillsBodyBudget)
+		if len(omitted) > 0 {
+			b.logger.Warn("agent skills: bodies omitted over the budget",
+				"brain", bc.Name, "omitted", omitted, "budget", bc.Agent.SkillsBodyBudget)
+		}
+		if block != "" {
+			opts = append(opts, brain.WithAgentSkillsBlock(block))
+		}
+	}
 	b.logger.Info("agent brain wired", "brain", bc.Name, "tools", bc.Agent.Tools, "max_iterations", bc.Agent.MaxIterations)
 	return brain.NewAgentBrain(selected[0], reg, opts...), nil
+}
+
+// agentTool resolves one configured tool name: the pure set through
+// tool.Builtin, the caged set through its typed constructor WITH its config
+// block (ADR-0041 §4) — a caged tool listed without its cage fails loud
+// (ErrMissingToolCage). The network shield is armed here: a network-classed
+// tool on a Private brain dials through the private-address check.
+func (b *builder) agentTool(bc config.BrainConfig, name string, attrs map[string]policy.ToolAttrs, sens policy.Sensitivity) (tool.Tool, error) {
+	if t, ok := tool.Builtin(name); ok {
+		return t, nil
+	}
+	a := bc.Agent
+	shield := attrs[name].Network && sens == policy.Private
+	switch name {
+	case "read_file":
+		if a.ReadFile == nil {
+			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.read_file block", ErrMissingToolCage, name, bc.Name)
+		}
+		t, err := tool.ReadFile(tool.ReadFileConfig{Root: a.ReadFile.Root, MaxBytes: a.ReadFile.MaxBytes})
+		if err != nil {
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
+		return t, nil
+	case "http_fetch":
+		if a.HTTPFetch == nil {
+			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.http_fetch block", ErrMissingToolCage, name, bc.Name)
+		}
+		t, err := tool.HTTPFetch(tool.HTTPFetchConfig{
+			AllowHosts:   a.HTTPFetch.AllowHosts,
+			MaxBytes:     a.HTTPFetch.MaxBytes,
+			MaxRedirects: a.HTTPFetch.MaxRedirects,
+			PrivateOnly:  shield,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
+		return t, nil
+	case "webhook_call":
+		if a.WebhookCall == nil {
+			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.webhook_call block", ErrMissingToolCage, name, bc.Name)
+		}
+		t, err := tool.WebhookCall(tool.WebhookCallConfig{
+			AllowHosts:  a.WebhookCall.AllowHosts,
+			MaxBytes:    a.WebhookCall.MaxBytes,
+			Timeout:     time.Duration(a.WebhookCall.TimeoutSeconds) * time.Second,
+			PrivateOnly: shield,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
+		return t, nil
+	default:
+		return nil, fmt.Errorf("%w: %q (brain %q; pure: %v, caged: read_file, http_fetch, webhook_call)",
+			ErrUnknownTool, name, bc.Name, tool.BuiltinNames())
+	}
+}
+
+// effectiveToolAttrs merges the house defaults (tool.BuiltinAttrs) with the
+// declared per-field operator overrides (R-2) for every LISTED tool. An
+// override naming an unlisted tool fails loud.
+func effectiveToolAttrs(a *config.AgentConfig) (map[string]policy.ToolAttrs, error) {
+	attrs := make(map[string]policy.ToolAttrs, len(a.Tools))
+	listed := make(map[string]bool, len(a.Tools))
+	for _, name := range a.Tools {
+		listed[name] = true
+		if base, ok := tool.BuiltinAttrs(name); ok {
+			attrs[name] = policy.ToolAttrs{Sensitive: base.Sensitive, Network: base.Network}
+		}
+		// An unknown name gets no attrs entry; agentTool fails loud on it.
+	}
+	for name, o := range a.ToolAttrs {
+		if !listed[name] {
+			return nil, fmt.Errorf("app: tool_attrs overrides %q which is not in agent.tools", name)
+		}
+		cur := attrs[name]
+		if o.Sensitive != nil {
+			cur.Sensitive = *o.Sensitive
+		}
+		if o.Network != nil {
+			cur.Network = *o.Network
+		}
+		attrs[name] = cur
+	}
+	return attrs, nil
+}
+
+// toolGrants converts the config grants into the policy package's declared
+// form; modes were validated structurally in config, so an unknown one here
+// is a programming error surfaced loudly.
+func toolGrants(gs []config.ToolGrantConfig) ([]policy.ToolGrant, error) {
+	out := make([]policy.ToolGrant, 0, len(gs))
+	for _, g := range gs {
+		var mode policy.ToolMode
+		switch g.Mode {
+		case "allow":
+			mode = policy.ToolAllow
+		case "shadow":
+			mode = policy.ToolShadow
+		case "deny":
+			mode = policy.ToolDeny
+		default:
+			return nil, fmt.Errorf("unknown grant mode %q for tool %q", g.Mode, g.Tool)
+		}
+		out = append(out, policy.ToolGrant{Name: g.Tool, Mode: mode, Channels: g.Channels})
+	}
+	return out, nil
+}
+
+// localityOf finds the catalog locality of the selected model. SelectModels
+// only returns catalog entries, so a miss is a mechanism bug, not a config
+// error — surfaced loudly rather than silently defaulting.
+func localityOf(catalog []policy.CatalogEntry, m model.Model) (policy.Locality, error) {
+	for _, e := range catalog {
+		if e.Model == m {
+			return e.Locality, nil
+		}
+	}
+	return 0, fmt.Errorf("selected model not found in the catalog")
 }
 
 // buildCatalog constructs one CatalogEntry per model, tagging each with its

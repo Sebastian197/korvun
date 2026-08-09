@@ -36,6 +36,12 @@ var (
 	// a dangerous name like "shell" fails loudly at boot (ADR-0021 §8).
 	ErrUnknownTool = errors.New("app: unknown agent tool")
 
+	// ErrMissingToolCage is returned when a caged tool (read_file,
+	// http_fetch, webhook_call) is listed in agent.tools without its cage
+	// config block (ADR-0041 §4) — a caged tool must not exist without its
+	// cage, so the wiring fails loud instead of improvising defaults.
+	ErrMissingToolCage = errors.New("app: caged tool requires its cage config block")
+
 	// ErrAgentModelCount is returned when an agent brain is configured with a
 	// number of (post-selection) models other than exactly one: the Stage 8 cut
 	// is a SINGLE-model tool-use loop (ADR-0021 §1).

@@ -316,15 +316,77 @@ type PersonaConfig struct {
 	Instructions string `json:"instructions,omitempty"`
 }
 
-// AgentConfig configures a tool-use AgentBrain (ADR-0021). Tools names the
-// built-in tools to register (time, echo, calc — the safe, pure set; resolution
-// and the dangerous-tool boundary live in internal/tool.Builtin, ADR-0021 §8).
-// MaxIterations is the hard loop cap (0 => the AgentBrain default). SystemPrompt
-// is the operator prompt appended after the protocol block.
+// AgentConfig configures a tool-use AgentBrain (ADR-0021, grown additively by
+// ADR-0041). Tools names the built-in tools to register — the pure set (time,
+// echo, calc) plus the caged set (read_file, http_fetch, webhook_call), each
+// of the latter REQUIRING its cage block below; resolution and the
+// dangerous-tool boundary live in internal/tool (ADR-0021 §8, ADR-0041 §4).
+// MaxIterations is the hard loop cap (0 => the AgentBrain default).
+// SystemPrompt is the operator prompt appended after the protocol block.
+//
+// Every ADR-0041 field is optional: an agent block written before governance
+// existed validates and behaves byte-for-byte as it always did (spec AS-4).
 type AgentConfig struct {
 	Tools         []string `json:"tools"`
 	MaxIterations int      `json:"max_iterations"`
 	SystemPrompt  string   `json:"system_prompt"`
+
+	// Governance is the per-brain tri-state grant list (ADR-0041 §1,
+	// spec R-5). Absent = ungoverned: every listed tool advertised and
+	// executable on every channel, exactly as before.
+	Governance []ToolGrantConfig `json:"governance,omitempty"`
+	// ToolAttrs declares per-tool attribute OVERRIDES over the house
+	// defaults (tool.BuiltinAttrs — R-2). Keys must be listed in Tools.
+	ToolAttrs map[string]ToolAttrsConfig `json:"tool_attrs,omitempty"`
+	// ReadFile / HTTPFetch / WebhookCall are the operator cages of the
+	// caged tools (ADR-0041 §4) — REQUIRED when the tool is listed.
+	ReadFile    *ReadFileToolConfig    `json:"read_file,omitempty"`
+	HTTPFetch   *HTTPFetchToolConfig   `json:"http_fetch,omitempty"`
+	WebhookCall *WebhookCallToolConfig `json:"webhook_call,omitempty"`
+	// SkillsDir points at the AgentSkills-compatible skills directory
+	// (ADR-0041 §6); empty = no skills. SkillsBodyBudget caps the total
+	// runes of injected skill bodies (0 => the skill package default).
+	SkillsDir        string `json:"skills_dir,omitempty"`
+	SkillsBodyBudget int    `json:"skills_body_budget,omitempty"`
+}
+
+// ToolGrantConfig is one tri-state tool grant (ADR-0041 §1): mode is
+// allow|shadow|deny; channels, when non-empty, restricts the grant to those
+// channels (exact match).
+type ToolGrantConfig struct {
+	Tool     string   `json:"tool"`
+	Mode     string   `json:"mode"`
+	Channels []string `json:"channels,omitempty"`
+}
+
+// ToolAttrsConfig is a declared per-field attrs override (R-2): a nil field
+// keeps the house default, the ADR-0015 declared-not-inferred discipline.
+type ToolAttrsConfig struct {
+	Sensitive *bool `json:"sensitive,omitempty"`
+	Network   *bool `json:"network,omitempty"`
+}
+
+// ReadFileToolConfig is the read_file cage (ADR-0041 §4): the jail root is
+// required; max_bytes 0 => the tool default.
+type ReadFileToolConfig struct {
+	Root     string `json:"root"`
+	MaxBytes int64  `json:"max_bytes,omitempty"`
+}
+
+// HTTPFetchToolConfig is the http_fetch cage (ADR-0041 §4): the host
+// allow-list is required; caps 0 => the tool defaults.
+type HTTPFetchToolConfig struct {
+	AllowHosts   []string `json:"allow_hosts"`
+	MaxBytes     int64    `json:"max_bytes,omitempty"`
+	MaxRedirects int      `json:"max_redirects,omitempty"`
+}
+
+// WebhookCallToolConfig is the webhook_call cage (ADR-0041 §4): the host
+// allow-list is required; timeout_seconds 0 => the tool default.
+type WebhookCallToolConfig struct {
+	AllowHosts     []string `json:"allow_hosts"`
+	MaxBytes       int64    `json:"max_bytes,omitempty"`
+	TimeoutSeconds int      `json:"timeout_seconds,omitempty"`
 }
 
 // PolicyConfig selects the reducer. Kind is "priority" or "consensus"; Order is
@@ -704,6 +766,57 @@ func validateAgent(brainIdx int, a *AgentConfig) error {
 	}
 	if a.MaxIterations < 0 {
 		return fmt.Errorf("%w: brains[%d].agent.max_iterations: must be >= 0 (0 => default)", ErrInvalidConfig, brainIdx)
+	}
+
+	// ADR-0041 growth — structural checks only; semantic resolution (names
+	// against the safe toolset, roots against the filesystem) stays in
+	// internal/app.
+	seen := make(map[string]bool, len(a.Governance))
+	for j, g := range a.Governance {
+		if g.Tool == "" {
+			return fmt.Errorf("%w: brains[%d].agent.governance[%d].tool: required", ErrInvalidConfig, brainIdx, j)
+		}
+		switch g.Mode {
+		case "allow", "shadow", "deny":
+		default:
+			return fmt.Errorf("%w: brains[%d].agent.governance[%d].mode: unknown mode %q (allow|shadow|deny)", ErrInvalidConfig, brainIdx, j, g.Mode)
+		}
+		if seen[g.Tool] {
+			return fmt.Errorf("%w: brains[%d].agent.governance[%d]: duplicate grant for tool %q", ErrInvalidConfig, brainIdx, j, g.Tool)
+		}
+		seen[g.Tool] = true
+		for k, ch := range g.Channels {
+			if ch == "" {
+				return fmt.Errorf("%w: brains[%d].agent.governance[%d].channels[%d]: channel name is required", ErrInvalidConfig, brainIdx, j, k)
+			}
+		}
+	}
+	if rf := a.ReadFile; rf != nil {
+		if rf.Root == "" {
+			return fmt.Errorf("%w: brains[%d].agent.read_file.root: required", ErrInvalidConfig, brainIdx)
+		}
+		if rf.MaxBytes < 0 {
+			return fmt.Errorf("%w: brains[%d].agent.read_file.max_bytes: must be >= 0 (0 => default)", ErrInvalidConfig, brainIdx)
+		}
+	}
+	if hf := a.HTTPFetch; hf != nil {
+		if len(hf.AllowHosts) == 0 {
+			return fmt.Errorf("%w: brains[%d].agent.http_fetch.allow_hosts: at least one host is required", ErrInvalidConfig, brainIdx)
+		}
+		if hf.MaxBytes < 0 || hf.MaxRedirects < 0 {
+			return fmt.Errorf("%w: brains[%d].agent.http_fetch: caps must be >= 0 (0 => default)", ErrInvalidConfig, brainIdx)
+		}
+	}
+	if wc := a.WebhookCall; wc != nil {
+		if len(wc.AllowHosts) == 0 {
+			return fmt.Errorf("%w: brains[%d].agent.webhook_call.allow_hosts: at least one host is required", ErrInvalidConfig, brainIdx)
+		}
+		if wc.MaxBytes < 0 || wc.TimeoutSeconds < 0 {
+			return fmt.Errorf("%w: brains[%d].agent.webhook_call: caps must be >= 0 (0 => default)", ErrInvalidConfig, brainIdx)
+		}
+	}
+	if a.SkillsBodyBudget < 0 {
+		return fmt.Errorf("%w: brains[%d].agent.skills_body_budget: must be >= 0 (0 => default)", ErrInvalidConfig, brainIdx)
 	}
 	return nil
 }
