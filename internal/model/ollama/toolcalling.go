@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/Sebastian197/korvun/internal/model"
 )
@@ -119,7 +120,16 @@ func (a *Adapter) GenerateWithTools(ctx context.Context, req *model.Request, too
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, mapHTTPError(resp)
+		err := mapHTTPError(resp)
+		// The provider's capability refusal, verified raw (2026-08-15,
+		// ollama 0.30.8, gemma3:270m, 3/3): HTTP 400 with
+		// {"error":"...does not support tools"}. It gets its OWN sentinel so
+		// the agent can degrade to the prompt-protocol lane (RT-3) instead
+		// of treating it as a generic bad response.
+		if resp.StatusCode == http.StatusBadRequest && strings.Contains(err.Error(), "does not support tools") {
+			return nil, fmt.Errorf("%w: %w", model.ErrToolsUnsupported, err)
+		}
+		return nil, err
 	}
 
 	var apiResp nativeChatResponse

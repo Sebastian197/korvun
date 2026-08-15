@@ -6,6 +6,7 @@ package brain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -40,25 +41,32 @@ const maxNativeCallsPerTurn = 8
 const MaxNativeCallsPerTurn = maxNativeCallsPerTurn
 
 // runLoopNative runs the bounded native model→tools→model loop. Same return
-// contract as runLoop: the final answer and true, or "" and false (cap hit,
-// model failure, ctx done → the caller degrades to the fallback).
-func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, req *model.Request, tcm model.ToolCallingModel, advertised tool.Registry, decisions map[string]policy.ToolDecision) (string, bool) {
+// contract as runLoop plus a degrade flag: the final answer and true, or ""
+// and false (cap hit, model failure, ctx done). degraded is true only when
+// the provider refused the tools protocol (ErrToolsUnsupported).
+func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, req *model.Request, tcm model.ToolCallingModel, advertised tool.Registry, decisions map[string]policy.ToolDecision) (string, bool, bool) {
 	specs := toToolSpecs(advertised)
 
 	for iter := 0; iter < a.maxIters; iter++ {
 		if err := ctx.Err(); err != nil {
 			a.logger.Warn("agent: context done mid-loop (native)",
 				"envelope_id", env.ID, "channel", env.Channel, "iter", iter, "cause", err)
-			return "", false
+			return "", false, false
 		}
 
 		resp, latency, err := a.callNative(ctx, tcm, req, specs)
 		a.metrics.ObserveProviderDuration(tcm.Name(), err == nil, latency)
 		if err != nil {
+			// A capability refusal degrades (the caller retries on the text
+			// lane); it is NOT counted as a provider failure — the model is
+			// healthy, it just lacks the tools protocol.
+			if errors.Is(err, model.ErrToolsUnsupported) {
+				return "", false, true
+			}
 			a.metrics.IncProviderFailure(tcm.Name())
 			a.logger.Warn("agent: native model call failed",
 				"envelope_id", env.ID, "channel", env.Channel, "iter", iter, "cause", err)
-			return "", false
+			return "", false, false
 		}
 
 		if len(resp.Message.ToolCalls) == 0 {
@@ -66,7 +74,7 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 			if content == "" {
 				a.logger.Warn("agent: empty native reply, no answer",
 					"envelope_id", env.ID, "channel", env.Channel, "iter", iter)
-				return "", false
+				return "", false, false
 			}
 			// Small models sometimes print the call as their FINAL text
 			// instead of emitting it natively — verified twice against a
@@ -87,7 +95,7 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 				// turn carrying ToolCalls is valid words-free (ADR-0042 §3).
 				resp.Message.Content = ""
 			} else {
-				return content, true // final answer
+				return content, true, false // final answer
 			}
 		}
 
@@ -163,7 +171,7 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 
 	a.logger.Warn("agent: iteration cap reached without an answer (native)",
 		"envelope_id", env.ID, "channel", env.Channel, "max_iters", a.maxIters)
-	return "", false
+	return "", false, false
 }
 
 // callNative is one native model step with the ADR-0011 per-call discipline

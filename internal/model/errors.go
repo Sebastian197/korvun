@@ -54,6 +54,15 @@ var (
 	// (ADR-0010 §1 / §4.)
 	ErrAuthInvalid = errors.New("model: provider authentication failed")
 
+	// ErrToolsUnsupported is returned by a ToolCallingModel adapter when the
+	// underlying MODEL refuses the tools protocol itself — verified raw
+	// against ollama 0.30.8 + gemma3:270m (2026-08-15, deterministic 3/3):
+	// HTTP 400 {"error":"...does not support tools"}. Distinct from
+	// ErrProviderResponse because the caller can DEGRADE: the same model
+	// answers the plain chat lane, so the agent falls back to the
+	// prompt-protocol lane instead of failing the message (RT-3).
+	ErrToolsUnsupported = errors.New("model: model does not support native tool calling")
+
 	// ErrRateLimited is returned by adapter implementations when the
 	// underlying provider rejected the call for exceeding a quota
 	// (typically HTTP 429 on cloud APIs). Recoverable by waiting; a

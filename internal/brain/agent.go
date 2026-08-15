@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/bus"
@@ -92,13 +93,18 @@ func boundedArgs(args string) string {
 // N worker goroutines (§5). The injected tools MUST honor the Tool concurrency
 // contract (tool.Tool godoc): N workers may call one Tool instance at once.
 type AgentBrain struct {
-	model        model.Model
-	tools        tool.Registry
-	maxIters     int
-	perTool      time.Duration
-	perModelCall time.Duration
-	fallback     string
-	systemPrompt string
+	model model.Model
+	tools tool.Registry
+	// nativeDisabled is set once the native lane reports the MODEL does not
+	// support tool calling (RT-3): a sticky process-lifetime flip to the
+	// prompt-protocol lane, so a non-tool model answers instead of failing
+	// every message. Atomic — Handle runs on N router workers.
+	nativeDisabled atomic.Bool
+	maxIters       int
+	perTool        time.Duration
+	perModelCall   time.Duration
+	fallback       string
+	systemPrompt   string
 	// personaPrefix is the composed persona fragment (ComposePersona) prepended
 	// BEFORE the protocol block in the seed system message (builder-canvas spec
 	// FR-PERSONA-2, NC-4). Empty = today's prompt byte-for-byte.
@@ -345,6 +351,12 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// structured lane — no textual grammar, tools as specs; anything else
 	// keeps today's prompt-protocol byte-for-byte.
 	tcm, native := a.model.(model.ToolCallingModel)
+	// A model the adapter advertises as tool-capable in Go but that the
+	// PROVIDER refuses at runtime (RT-3) has flipped this flag on a prior
+	// message: stay on the text lane for the rest of the process.
+	if native && a.nativeDisabled.Load() {
+		native = false
+	}
 
 	// The seed system message: the prompt-protocol lane carries the grammar
 	// + tool catalog (ADR-0021 §3.1); the native lane drops both (the specs
@@ -352,27 +364,7 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// skills (suffix) ride identically on both lanes. req.Messages is the
 	// LOOP's local scratch — it grows with the lane's turn shapes and is
 	// NEVER persisted (§5, §6).
-	var sysPrompt string
-	if native {
-		// The native lane ALWAYS seeds a base instruction (2026-08-09 round
-		// catch: with an empty operator prompt, a small model greeted users
-		// with raw tool-call JSON). The operator prompt, when set, follows it.
-		sysPrompt = nativeBaseInstruction
-		if a.systemPrompt != "" {
-			sysPrompt = sysPrompt + "\n\n" + a.systemPrompt
-		}
-	} else {
-		sysPrompt = buildSystemPrompt(advertised, a.systemPrompt)
-	}
-	if a.personaPrefix != "" {
-		// Persona rides as a PREFIX (FR-PERSONA-2).
-		sysPrompt = strings.TrimSpace(a.personaPrefix + "\n\n" + sysPrompt)
-	}
-	if a.skillsBlock != "" {
-		// Skills ride as a SUFFIX (ADR-0041 §6).
-		sysPrompt = strings.TrimSpace(sysPrompt + "\n\n" + a.skillsBlock)
-	}
-	req, ok := requestWithHistory(env, sysPrompt, history)
+	req, ok := requestWithHistory(env, a.composeSystemPrompt(native, advertised), history)
 	if !ok {
 		return nil, nil // nothing to ask — clean no-reply (ADR-0014 §5)
 	}
@@ -386,7 +378,20 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	var finalText string
 	var answered bool
 	if native {
-		finalText, answered = a.runLoopNative(ctx, env, req, tcm, advertised, decisions)
+		var degraded bool
+		finalText, answered, degraded = a.runLoopNative(ctx, env, req, tcm, advertised, decisions)
+		if degraded {
+			// The provider refused the tools protocol for this model (RT-3):
+			// flip the sticky flag, announce it once on the observable
+			// surfaces, and answer THIS message via the prompt-protocol lane
+			// — a rebuilt request with the text-lane system prompt.
+			a.disableNativeLane(ctx, env)
+			textReq, ok := requestWithHistory(env,
+				a.composeSystemPrompt(false, advertised), history)
+			if ok {
+				finalText, answered = a.runLoop(ctx, env, textReq, decisions)
+			}
+		}
 	} else {
 		finalText, answered = a.runLoop(ctx, env, req, decisions)
 	}
@@ -400,6 +405,46 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// in the loop's local req.Messages and is discarded.
 	a.persistPair(ctx, key, userText, finalText)
 	return decisionToEnvelopes(finalText, env), nil
+}
+
+// composeSystemPrompt builds the seed system message for the chosen lane: the
+// native lane seeds nativeBaseInstruction (the specs replace the grammar), the
+// text lane the ADR-0021 grammar + tool catalog. Persona (prefix) and skills
+// (suffix) ride identically on both, so a mid-Handle degrade to the text lane
+// (RT-3) rebuilds the same envelope of persona/skills around the text prompt.
+func (a *AgentBrain) composeSystemPrompt(native bool, advertised tool.Registry) string {
+	var sysPrompt string
+	if native {
+		// The native lane ALWAYS seeds a base instruction (2026-08-09 round
+		// catch: with an empty operator prompt, a small model greeted users
+		// with raw tool-call JSON). The operator prompt, when set, follows it.
+		sysPrompt = nativeBaseInstruction
+		if a.systemPrompt != "" {
+			sysPrompt = sysPrompt + "\n\n" + a.systemPrompt
+		}
+	} else {
+		sysPrompt = buildSystemPrompt(advertised, a.systemPrompt)
+	}
+	if a.personaPrefix != "" {
+		sysPrompt = strings.TrimSpace(a.personaPrefix + "\n\n" + sysPrompt)
+	}
+	if a.skillsBlock != "" {
+		sysPrompt = strings.TrimSpace(sysPrompt + "\n\n" + a.skillsBlock)
+	}
+	return sysPrompt
+}
+
+// disableNativeLane flips the sticky flag and announces the capability
+// degradation ONCE on the observable surfaces (RT-3): a structured warn
+// naming brain + model, and a single metadata-only audit event with finite
+// labels. Idempotent — a concurrent second caller does not double-announce.
+func (a *AgentBrain) disableNativeLane(ctx context.Context, env *envelope.Envelope) {
+	if a.nativeDisabled.Swap(true) {
+		return
+	}
+	a.logger.Warn("agent: native tool-calling unsupported by the model — degraded to the text lane",
+		"brain", a.brainName, "model", a.model.Name(), "channel", env.Channel)
+	a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: "native_lane", Outcome: "denied", Rule: "tools_unsupported"})
 }
 
 // runLoop runs the bounded model→tool→model loop. It returns the final answer and

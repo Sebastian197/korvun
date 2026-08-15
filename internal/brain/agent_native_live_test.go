@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/model/ollama"
 	"github.com/Sebastian197/korvun/internal/model/retry"
@@ -110,4 +111,49 @@ func TestLive_nativeLane_shadowNeverExecutesWithARealModel(t *testing.T) {
 			t.Fatalf("a shadowed grant produced a tool_used event: %+v", ev)
 		}
 	}
+}
+
+// TestLive_nativeLane_degradesOnNoToolModel is the RT-3 sub-phase proof
+// against a REAL non-tool model (the house law: model-dependent behavior
+// needs a real model). Raw evidence, 2026-08-15, ollama 0.30.8, gemma3:270m,
+// 3/3: GenerateWithTools returns HTTP 400 {"error":"...does not support
+// tools"}. The brain must DEGRADE to the text lane and answer, never fail.
+// Set KORVUN_LIVE_OLLAMA_NOTOOLS=1 with gemma3:270m pulled.
+func TestLive_nativeLane_degradesOnNoToolModel(t *testing.T) {
+	if os.Getenv("KORVUN_LIVE_OLLAMA_NOTOOLS") == "" {
+		t.Skip("live degrade smoke; set KORVUN_LIVE_OLLAMA_NOTOOLS=1 with gemma3:270m pulled")
+	}
+	decorated := retry.New(ollama.New(), retry.Config{PerAttempt: 90 * time.Second, MaxRetries: 1})
+	m := WithModelID(decorated, "gemma3:270m")
+	if _, ok := m.(model.ToolCallingModel); !ok {
+		t.Fatal("production chain lost the tool-calling capability (the adapter always advertises it)")
+	}
+
+	spy := &spyTool{}
+	pub := &spyPublisher{}
+	a := NewAgentBrain(m, spyRegistry(spy),
+		WithAgentLogger(quietLogger()), WithAgentToolAudit(pub, "live-notools"),
+		WithAgentFallback("fallback enlatado"))
+
+	out, err := a.Handle(context.Background(), inboundText("console", "c", "di hola en una palabra"))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(out) != 1 || out[0].Parts[0].Content == "" {
+		t.Fatalf("no usable answer: %+v", out)
+	}
+	if out[0].Parts[0].Content == "fallback enlatado" {
+		t.Fatal("the brain returned the canned fallback — a non-tool model must be answered by the TEXT lane")
+	}
+	// The degradation is announced once, metadata-only, naming the surface.
+	var degradeEvents int
+	for _, ev := range pub.snapshot() {
+		if ev.Type == bus.ToolDenied && ev.Tool == "native_lane" && ev.Rule == "tools_unsupported" {
+			degradeEvents++
+		}
+	}
+	if degradeEvents != 1 {
+		t.Fatalf("degrade audit events = %d, want exactly 1", degradeEvents)
+	}
+	t.Logf("degraded reply from gemma3:270m via the text lane: %q", out[0].Parts[0].Content)
 }
