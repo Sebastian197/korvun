@@ -36,6 +36,17 @@ var (
 	// a dangerous name like "shell" fails loudly at boot (ADR-0021 §8).
 	ErrUnknownTool = errors.New("app: unknown agent tool")
 
+	// ErrSensitiveToolUngoverned is returned when an agent brain lists a
+	// Sensitive-attr tool on a Cloud-locality model WITHOUT a governance
+	// block (estreno E-11). The sensitive×locality rule lives in the gate
+	// (policy.SelectTools), which is only mounted with grants — so the
+	// ungoverned combination would ship the tool's output (e.g. jail file
+	// contents) to the cloud provider with no check anywhere, while the
+	// /tools report asserted the protection. Declared, never inferred: the
+	// operator adds a governance block or overrides the tool's sensitive
+	// attr consciously.
+	ErrSensitiveToolUngoverned = errors.New("app: sensitive tool on a cloud brain requires a governance block")
+
 	// ErrMissingToolCage is returned when a caged tool (read_file,
 	// http_fetch, webhook_call) is listed in agent.tools without its cage
 	// config block (ADR-0041 §4) — a caged tool must not exist without its

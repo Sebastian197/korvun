@@ -784,6 +784,25 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 			return nil, fmt.Errorf("app: brain %q: governance grants tool %q which is not in agent.tools", bc.Name, g.Tool)
 		}
 	}
+	// The sensitive×locality rule is enforced by the gate — which only
+	// mounts WITH governance. Ungoverned, the rule would silently not exist
+	// (estreno E-11): a Sensitive tool feeding a Cloud model is exactly the
+	// egress the attribute declares against, so that combination fails loud
+	// at boot instead.
+	if len(bc.Agent.Governance) == 0 {
+		loc, err := localityOf(catalog, selected[0])
+		if err != nil {
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
+		if loc == policy.Cloud {
+			for _, name := range bc.Agent.Tools {
+				if attrs[name].Sensitive {
+					return nil, fmt.Errorf("%w: brain %q, tool %q (add a governance block, or override the tool's sensitive attr consciously)",
+						ErrSensitiveToolUngoverned, bc.Name, name)
+				}
+			}
+		}
+	}
 	reg := make(tool.Registry, len(bc.Agent.Tools))
 	for _, name := range bc.Agent.Tools {
 		tl, err := b.agentTool(bc, name, attrs, sens)
