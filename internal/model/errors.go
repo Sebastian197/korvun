@@ -109,18 +109,31 @@ func ValidateRequest(req *Request) error {
 		return ErrEmptyMessages
 	}
 	for _, m := range req.Messages {
+		// Per-role field invariants (estreno E-10): the tool-calling fields
+		// are role-bound — only the assistant emits ToolCalls, only a tool
+		// turn carries ToolName. Ambiguous shapes would serialize to the
+		// provider on the native lane while old adapters ignore them (role
+		// confusion, provider-dependent failures).
 		switch m.Role {
-		case RoleSystem, RoleUser, RoleAssistant:
+		case RoleSystem, RoleUser:
+			if len(m.ToolCalls) > 0 || m.ToolName != "" {
+				return fmt.Errorf("%w: %s turn carries tool-calling fields", ErrInvalidRole, m.Role)
+			}
+		case RoleAssistant:
+			if m.ToolName != "" {
+				return fmt.Errorf("%w: assistant turn carries a tool result attribution", ErrInvalidRole)
+			}
 		case RoleTool:
 			// A native-lane tool-result turn (ADR-0042 §2): valid only with
-			// its tool attribution; content is the tool's output.
-			if m.ToolName == "" {
+			// its tool attribution; content is the tool's output — and it
+			// never emits calls of its own.
+			if m.ToolName == "" || len(m.ToolCalls) > 0 {
 				return ErrInvalidRole
 			}
 		default:
 			return ErrInvalidRole
 		}
-		if m.Content == "" && len(m.ToolCalls) == 0 {
+		if m.Content == "" && !(m.Role == RoleAssistant && len(m.ToolCalls) > 0) {
 			// An assistant turn carrying tool_calls is words-free by design
 			// (ADR-0042 §3); everything else still requires content.
 			return ErrEmptyContent
