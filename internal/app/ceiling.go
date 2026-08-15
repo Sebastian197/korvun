@@ -11,6 +11,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/model/retry"
 	"github.com/Sebastian197/korvun/internal/policy"
+	"github.com/Sebastian197/korvun/internal/tool"
 )
 
 // The router-ceiling derivation (ADR-0031 Decision 2). The app derives the
@@ -91,6 +92,34 @@ func deriveBrainCeiling(spec brainCeilingSpec) time.Duration {
 	}
 }
 
+// agentToolBudget derives the worst-case tool time ONE agent iteration may
+// legitimately spend (re-review follow-up F4): the per-turn call cap times
+// the widest hard bound among the LISTED tools — http_fetch and webhook_call
+// carry their own defaults, local tools get a 1s allowance. No tools, no
+// budget. Deliberately static (the tools' default bounds, not per-config
+// refinements): the ceiling errs generous, never guillotines (ADR-0031).
+func agentToolBudget(bc config.BrainConfig) time.Duration {
+	if bc.Agent == nil || len(bc.Agent.Tools) == 0 {
+		return 0
+	}
+	var worst time.Duration
+	for _, name := range bc.Agent.Tools {
+		var bound time.Duration
+		switch name {
+		case "http_fetch":
+			bound = tool.DefaultFetchTimeout
+		case "webhook_call":
+			bound = tool.DefaultWebhookTimeout
+		default:
+			bound = time.Second // local, in-process tools
+		}
+		if bound > worst {
+			worst = bound
+		}
+	}
+	return time.Duration(brain.MaxNativeCallsPerTurn) * worst
+}
+
 // backoffAt reads the i-th backoff budget, tolerating a nil/short slice (0).
 func backoffAt(budget []time.Duration, i int) time.Duration {
 	if i < len(budget) {
@@ -164,8 +193,13 @@ func ceilingForBrain(cfg *config.Config, bc config.BrainConfig) time.Duration {
 			shape:        shapeAgent,
 			perAttempt:   []time.Duration{cfg.EffectiveRequestTimeout(m)},
 			agentMaxIter: maxIter,
-			// perToolTimeout is 0: the agent's per-tool bound is not wired today.
-			margin: defaultCeilingMargin,
+			// The per-iteration TOOL budget (re-review follow-up F4): the
+			// native lane runs up to brain.MaxNativeCallsPerTurn tools per
+			// response, each bounded by its own hard timeout — a legitimate
+			// multi-tool exchange must never be guillotined by a ceiling
+			// that only counted model attempts (ADR-0031 Decision 2).
+			perToolTimeout: agentToolBudget(bc),
+			margin:         defaultCeilingMargin,
 		})
 	}
 	perAttempt := make([]time.Duration, len(bc.Models))

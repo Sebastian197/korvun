@@ -34,6 +34,11 @@ import (
 // follow-up), and the discard is announced once, aggregated.
 const maxNativeCallsPerTurn = 8
 
+// MaxNativeCallsPerTurn exports the per-turn cap for the wiring layer: the
+// ceiling derivation multiplies it into the agent's tool-time budget
+// (re-review follow-up F4), so runtime and derivation share one constant.
+const MaxNativeCallsPerTurn = maxNativeCallsPerTurn
+
 // runLoopNative runs the bounded native model→tools→model loop. Same return
 // contract as runLoop: the final answer and true, or "" and false (cap hit,
 // model failure, ctx done → the caller degrades to the fallback).
