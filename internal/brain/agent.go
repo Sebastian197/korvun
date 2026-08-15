@@ -474,11 +474,16 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	if !ok {
 		// A hallucinated tool name is exactly the behavior the audit
 		// surfaces exist to observe (estreno E-3 / red-team): a denial with
-		// its own rule, on the same grammar the cages emit.
+		// its own rule, on the same grammar the cages emit. The MODEL
+		// controls this name, so the shared surfaces (metric labels, bus,
+		// /tools, SSE) carry the FINITE category "unknown" — the raw name
+		// would be unbounded label cardinality and could smuggle prompt
+		// content into metadata-only surfaces; it stays in the LOCAL log
+		// only, bounded (re-review follow-up).
 		a.logger.Warn("agent: tool denied",
-			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name),
 			"rule", "unknown_tool", "args_prefix", boundedArgs(args))
-		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: "unknown_tool"})
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: "unknown", Outcome: "denied", Rule: "unknown_tool"})
 		return fmt.Sprintf("tool %q not found", name)
 	}
 	if decisions != nil {

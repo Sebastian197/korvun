@@ -132,4 +132,14 @@ func TestNativeLane_unknownToolAuditsDenied(t *testing.T) {
 	if len(events) != 1 || events[0].Type != bus.ToolDenied || events[0].Rule != "unknown_tool" {
 		t.Fatalf("audit = %+v, want exactly one tool_denied rule=unknown_tool", events)
 	}
+	// The MODEL controls the hallucinated name: shared surfaces (metrics
+	// labels, bus, /tools, SSE) must see a FINITE category, never the raw
+	// name — unbounded label cardinality and prompt content in a
+	// metadata-only surface (re-review follow-up).
+	if events[0].Tool != "unknown" {
+		t.Fatalf("event Tool = %q, want the finite category %q", events[0].Tool, "unknown")
+	}
+	if got := met.toolUseSnapshot(); len(got) != 1 || got[0].tool != "unknown" {
+		t.Fatalf("metric tool label = %+v, want [unknown]", got)
+	}
 }

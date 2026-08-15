@@ -29,8 +29,9 @@ import (
 // may execute (estreno E-5 / red-team): the model — not the operator —
 // controls the slice's length, and the text lane is structurally one call
 // per iteration, so without this bound a single Handle could run
-// maxIters × N governed executions with N unbounded. Excess calls receive
-// an honest per-call observation and are not executed.
+// maxIters × N governed executions with N unbounded. The slice is TRUNCATED
+// before it enters the history (bounded memory and context too — re-review
+// follow-up), and the discard is announced once, aggregated.
 const maxNativeCallsPerTurn = 8
 
 // runLoopNative runs the bounded native model→tools→model loop. Same return
@@ -89,26 +90,20 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 		// ORDER through the SAME runTool the prompt-protocol lane uses —
 		// governance, shadow, cages, shield, and audit are one code path.
 		// Each result returns as a RoleTool turn per the verified contract.
+		// The model, not the operator, controls how many calls one response
+		// carries. TRUNCATE before the message enters the history (re-review
+		// follow-up of E-5): appending the full slice kept O(N) model-
+		// controlled memory and replayed it as context on every following
+		// call. The discard is announced once, aggregated, and audited with
+		// a FINITE label.
+		discarded := 0
+		if len(resp.Message.ToolCalls) > maxNativeCallsPerTurn {
+			discarded = len(resp.Message.ToolCalls) - maxNativeCallsPerTurn
+			resp.Message.ToolCalls = resp.Message.ToolCalls[:maxNativeCallsPerTurn]
+		}
 		req.Messages = append(req.Messages, resp.Message)
-		for callIdx, call := range resp.Message.ToolCalls {
+		for _, call := range resp.Message.ToolCalls {
 			var observation string
-			if callIdx >= maxNativeCallsPerTurn {
-				// The model, not the operator, controls how many calls one
-				// response carries; without a cap a single turn could run
-				// maxIters × N governed executions (estreno E-5 / red-team).
-				// The excess gets an honest per-call observation, no
-				// execution.
-				a.logger.Warn("agent: per-turn tool budget exceeded",
-					"envelope_id", env.ID, "channel", env.Channel, "tool", call.Name,
-					"call_index", callIdx, "cap", maxNativeCallsPerTurn)
-				req.Messages = append(req.Messages, model.Message{
-					Role:     model.RoleTool,
-					ToolName: call.Name,
-					Content: fmt.Sprintf("tool %s skipped: per-turn tool budget exceeded (%d calls max per reply)",
-						call.Name, maxNativeCallsPerTurn),
-				})
-				continue
-			}
 			if gated := decisions != nil && func() bool {
 				d, ok := decisions[call.Name]
 				return !ok || d.Mode != policy.ToolAllow
@@ -142,6 +137,21 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 				Role:     model.RoleTool,
 				ToolName: call.Name,
 				Content:  observation,
+			})
+		}
+		if discarded > 0 {
+			// ONE aggregated announcement for the whole discard: honest to
+			// the model, audited on the shared surfaces with a FINITE label
+			// (the raw names are model-controlled), counted in the log.
+			a.logger.Warn("agent: per-turn tool budget exceeded",
+				"envelope_id", env.ID, "channel", env.Channel,
+				"discarded", discarded, "cap", maxNativeCallsPerTurn)
+			a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: "overflow", Outcome: "denied", Rule: "per_turn_budget"})
+			req.Messages = append(req.Messages, model.Message{
+				Role:     model.RoleTool,
+				ToolName: "budget",
+				Content: fmt.Sprintf("%d tool call(s) skipped: per-turn tool budget exceeded (%d calls max per reply)",
+					discarded, maxNativeCallsPerTurn),
 			})
 		}
 	}

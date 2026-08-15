@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
@@ -94,6 +95,7 @@ func TestNativeLane_rescuedCallBlanksItsRawJSONInContext(t *testing.T) {
 func TestNativeLane_perTurnToolCallCap(t *testing.T) {
 	t.Parallel()
 	spy := &spyTool{}
+	pub := &spyPublisher{}
 	calls := make([]model.ToolCall, maxNativeCallsPerTurn+2)
 	for i := range calls {
 		calls[i] = model.ToolCall{Name: "spy", Arguments: map[string]any{"a": fmt.Sprintf("%d", i)}}
@@ -101,7 +103,8 @@ func TestNativeLane_perTurnToolCallCap(t *testing.T) {
 	m := &nativeScriptedModel{name: "n", replies: []model.Message{
 		{Role: model.RoleAssistant, ToolCalls: calls}, finalReply("done"),
 	}}
-	a := NewAgentBrain(m, spyRegistry(spy), WithAgentLogger(quietLogger()))
+	a := NewAgentBrain(m, spyRegistry(spy), WithAgentLogger(quietLogger()),
+		WithAgentToolAudit(pub, "agent-1"))
 
 	if _, err := a.Handle(context.Background(), inboundText("console", "c", "go")); err != nil {
 		t.Fatalf("Handle: %v", err)
@@ -109,9 +112,13 @@ func TestNativeLane_perTurnToolCallCap(t *testing.T) {
 	if got := spy.count(); got != maxNativeCallsPerTurn {
 		t.Fatalf("executed %d calls in one turn, want the cap (%d)", got, maxNativeCallsPerTurn)
 	}
-	// Every call — executed or skipped — gets its honest RoleTool feedback.
-	var toolTurns, budgetNotes int
+	// The HISTORY is bounded too (re-review follow-up): the assistant turn
+	// keeps exactly the cap, and the discard is ONE aggregated note.
+	var assistantCalls, toolTurns, budgetNotes int
 	for _, msg := range m.lastReq.Messages {
+		if msg.Role == model.RoleAssistant && len(msg.ToolCalls) > 0 {
+			assistantCalls = len(msg.ToolCalls)
+		}
 		if msg.Role == model.RoleTool {
 			toolTurns++
 			if strings.Contains(msg.Content, "budget") {
@@ -119,8 +126,20 @@ func TestNativeLane_perTurnToolCallCap(t *testing.T) {
 			}
 		}
 	}
-	if toolTurns != maxNativeCallsPerTurn+2 || budgetNotes != 2 {
-		t.Fatalf("tool turns = %d (budget notes %d), want %d turns with 2 budget notes",
-			toolTurns, budgetNotes, maxNativeCallsPerTurn+2)
+	if assistantCalls != maxNativeCallsPerTurn {
+		t.Fatalf("assistant turn in history carries %d calls, want the cap (%d)", assistantCalls, maxNativeCallsPerTurn)
+	}
+	if toolTurns != maxNativeCallsPerTurn+1 || budgetNotes != 1 {
+		t.Fatalf("tool turns = %d (budget notes %d), want cap+1 with ONE aggregated note", toolTurns, budgetNotes)
+	}
+	// The discard audits once, with FINITE labels.
+	var overflowEvents int
+	for _, ev := range pub.snapshot() {
+		if ev.Type == bus.ToolDenied && ev.Rule == "per_turn_budget" && ev.Tool == "overflow" {
+			overflowEvents++
+		}
+	}
+	if overflowEvents != 1 {
+		t.Fatalf("per_turn_budget audits = %d, want exactly 1", overflowEvents)
 	}
 }
