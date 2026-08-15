@@ -80,7 +80,11 @@ describe('immediate echo (pega 2)', () => {
       const echo = await screen.findByText('envía un aviso', { selector: '.console-turn-content' })
       expect(echo).toBeTruthy()
       // Reconciliation: when the real pair lands, exactly ONE user turn.
-      await waitFor(() => expect(screen.getByText('aviso enviado', { selector: '.console-turn-content' })).toBeTruthy())
+      await waitFor(() =>
+        expect(
+          screen.getByText('aviso enviado', { selector: '.console-turn-content' }),
+        ).toBeTruthy(),
+      )
       await waitFor(() =>
         expect(
           screen.getAllByText('envía un aviso', { selector: '.console-turn-content' }),
@@ -114,11 +118,15 @@ describe('own side (pega 3)', () => {
     const { fetcher, cleanup } = realisticFetch()
     try {
       await openDraftAndSend(fetcher, 'hola')
-      const turn = (
-        await screen.findByText('hola', { selector: '.console-turn-content' })
-      ).closest('.console-turn')
+      const turn = (await screen.findByText('hola', { selector: '.console-turn-content' })).closest(
+        '.console-turn',
+      )
       expect(turn?.getAttribute('data-side')).toBe('own')
-      await waitFor(() => expect(screen.getByText('aviso enviado', { selector: '.console-turn-content' })).toBeTruthy())
+      await waitFor(() =>
+        expect(
+          screen.getByText('aviso enviado', { selector: '.console-turn-content' }),
+        ).toBeTruthy(),
+      )
       const reply = screen
         .getByText('aviso enviado', { selector: '.console-turn-content' })
         .closest('.console-turn')
@@ -141,9 +149,7 @@ describe('honest wait (pega 4-UI)', () => {
       await act(async () => {
         vi.advanceTimersByTime(11_000)
       })
-      await waitFor(() =>
-        expect(screen.getByText(/local model is thinking/i)).toBeTruthy(),
-      )
+      await waitFor(() => expect(screen.getByText(/local model is thinking/i)).toBeTruthy())
     } finally {
       cleanup()
     }
@@ -167,7 +173,7 @@ describe('switching conversations (the duplicated-conversation bug)', () => {
     // Conversation A already holds a "hola" pair; the user opens a NEW chat
     // and sends "hola" again. The echo MUST paint (the old conversation's
     // content must not suppress it) and A's turns must not bleed into B.
-    let turns = [
+    const turns = [
       { role: 'user', content: 'hola', timestamp: '2026-08-09T17:00:00Z', seq: 0 },
       { role: 'assistant', content: 'respuesta vieja', timestamp: '2026-08-09T17:00:30Z', seq: 1 },
     ]
@@ -205,9 +211,7 @@ describe('switching conversations (the duplicated-conversation bug)', () => {
     // New chat: the pane MUST be clean IMMEDIATELY (no stale turns), even
     // while the new conversation's detail fetch is still in flight.
     fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
-    expect(
-      screen.queryByText('respuesta vieja', { selector: '.console-turn-content' }),
-    ).toBeNull()
+    expect(screen.queryByText('respuesta vieja', { selector: '.console-turn-content' })).toBeNull()
     // Send "hola" INSIDE the stale window — same text as A's history: the
     // echo must still paint.
     const box = await screen.findByRole('textbox', { name: 'Message Korvun' })
@@ -231,7 +235,12 @@ describe('system-command echo (the /tools Sending… hang)', () => {
         // A system command: only the SYSTEM ack persists — never the user turn.
         setTimeout(() => {
           turns = [
-            { role: 'system', content: 'Gatekeeper — brain "default"', timestamp: '2026-08-09T18:00:01Z', seq: 0 },
+            {
+              role: 'system',
+              content: 'Gatekeeper — brain "default"',
+              timestamp: '2026-08-09T18:00:01Z',
+              seq: 0,
+            },
           ]
         }, 30)
         return json({}, 202)
@@ -240,7 +249,17 @@ describe('system-command echo (the /tools Sending… hang)', () => {
         return json(
           turns.length === 0
             ? []
-            : [{ key: 'console::chat-1', active_session: 1, session_count: 1, turn_count: turns.length, last_activity: '2026-08-09T18:00:01Z', last_role: 'system', taken_over: false }],
+            : [
+                {
+                  key: 'console::chat-1',
+                  active_session: 1,
+                  session_count: 1,
+                  turn_count: turns.length,
+                  last_activity: '2026-08-09T18:00:01Z',
+                  last_role: 'system',
+                  taken_over: false,
+                },
+              ],
         )
       if (url.endsWith('/sessions') && method === 'GET')
         return json([{ id: 1, turn_count: turns.length }])

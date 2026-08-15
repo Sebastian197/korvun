@@ -9,9 +9,7 @@ const SHOT = (name: string): string => `../../../design-drafts/console/${name}`
 test('direct chat echoes instantly, thinks honestly, reconciles cleanly', async ({ page }) => {
   await installBindings(page)
   await page.goto('/')
-  await page.request
-    .post('/__test/bindings/Start', { data: [] })
-    .catch(() => undefined)
+  await page.request.post('/__test/bindings/Start', { data: [] }).catch(() => undefined)
   await page.getByRole('button', { name: 'Chat' }).click()
   await page.getByRole('button', { name: 'New chat' }).click()
 
