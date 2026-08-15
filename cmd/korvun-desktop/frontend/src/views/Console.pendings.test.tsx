@@ -12,7 +12,7 @@ type Turn = { role: string; content: string; timestamp: string; seq: number }
 
 // A fetch fake where the brain pair for each send lands only when the test
 // RELEASES it — full control of the reconciliation order, no timers.
-function gatedFetch() {
+function gatedFetch(opts?: { failTexts?: Set<string> }) {
   let turns: Turn[] = []
   const gates: Array<() => void> = []
   const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -22,6 +22,7 @@ function gatedFetch() {
       new Response(JSON.stringify(v), { status, headers: { 'Content-Type': 'application/json' } })
     if (url.endsWith('/message') && method === 'POST') {
       const text = (JSON.parse(String(init?.body)) as { text: string }).text
+      if (opts?.failTexts?.has(text)) return json({ error: 'not wired' }, 409)
       gates.push(() => {
         turns = text.startsWith('/')
           ? [
@@ -174,5 +175,46 @@ describe('re-review candidates (E-14 follow-up)', () => {
 
     releaseNext()
     await waitFor(() => expect(screen.queryAllByText('Sending…')).toHaveLength(0))
+  })
+})
+
+describe('failed-echo retention (re-review F6)', () => {
+  it('a successful retry supersedes the failed copy of the same text', async () => {
+    const failTexts = new Set(['hola'])
+    const { fetcher, releaseNext } = gatedFetch({ failTexts })
+    await openChat(fetcher)
+
+    send('hola')
+    await waitFor(() => {
+      const turn = screen
+        .getByText('hola', { selector: '.console-turn-content' })
+        .closest('.console-turn')
+      expect(turn?.getAttribute('data-send-state')).toBe('failed')
+    })
+
+    // The retry succeeds: its pair lands and the stale failed copy retires.
+    failTexts.delete('hola')
+    send('hola')
+    releaseNext()
+    await waitFor(() => expect(screen.queryAllByText('Not sent')).toHaveLength(0))
+    await waitFor(() => expect(screen.queryAllByText('Sending…')).toHaveLength(0))
+    expect(screen.getAllByText('hola', { selector: '.console-turn-content' })).toHaveLength(1)
+  })
+
+  it('a long outage cannot grow the echo list without bound', async () => {
+    const failTexts = new Set<string>()
+    const { fetcher } = gatedFetch({ failTexts })
+    await openChat(fetcher)
+
+    for (let i = 0; i < 25; i++) {
+      const text = `intento ${i}`
+      failTexts.add(text)
+      send(text)
+    }
+    await waitFor(() => {
+      const marks = screen.queryAllByText('Not sent')
+      expect(marks.length).toBeGreaterThan(0)
+      expect(marks.length).toBeLessThanOrEqual(20)
+    })
   })
 })

@@ -83,6 +83,9 @@ function roleLabel(role: string): string {
  * The `live` flip counts as a change on purpose: the stream opening late
  * (core just started) must trigger a catch-up re-fetch for the events it
  * never saw. */
+/** Hard cap on optimistic echoes kept in state/DOM (re-review F6). */
+const MAX_PENDING_ECHOES = 20
+
 type PendingEcho = {
   id: number
   key: string
@@ -108,7 +111,17 @@ function retiredPendingIds(pendings: PendingEcho[], turns: TurnLike[], key: stri
   let claimedSys = 0
   const sysCount = turns.filter((t) => t.role === 'system').length
   for (const p of pendings) {
-    if (p.state !== 'sending' || p.key !== key) continue
+    if (p.key !== key) continue
+    if (p.state === 'failed') {
+      // A failed echo is SUPERSEDED once any turn with its content lands
+      // beyond its own baseline (the retry succeeded): keeping a "Not sent"
+      // next to the identical delivered message is stale, and failed
+      // entries otherwise never retire at all (re-review follow-up F6).
+      const covered = turns.filter((t) => t.role === 'user' && t.content === p.content).length
+      if (covered > p.baseline) out.add(p.id)
+      continue
+    }
+    if (p.state !== 'sending') continue
     if (p.content.startsWith('/')) {
       // A system command never persists a user turn — its SYSTEM ack is the
       // reconciliation signal, one ack per command.
@@ -356,10 +369,27 @@ export function Console(props: ConsoleProps): React.JSX.Element {
       const pendingId = ++nextPendingId.current
       const baseline = turns.filter((t) => t.role === 'user' && t.content === text).length
       const sysBaseline = turns.filter((t) => t.role === 'system').length
-      setPendings((p) => [
-        ...p,
-        { id: pendingId, key: selected, content: text, state: 'sending', baseline, sysBaseline },
-      ])
+      setPendings((p) => {
+        // Hard retention cap (re-review follow-up F6): a long outage with
+        // retries must not grow state and DOM without bound. Oldest FAILED
+        // entries evict first; sending ones only under a pathological pile.
+        const next = [
+          ...p,
+          {
+            id: pendingId,
+            key: selected,
+            content: text,
+            state: 'sending' as const,
+            baseline,
+            sysBaseline,
+          },
+        ]
+        if (next.length > MAX_PENDING_ECHOES) {
+          const failedIdx = next.findIndex((x) => x.state === 'failed')
+          next.splice(failedIdx >= 0 ? failedIdx : 0, 1)
+        }
+        return next
+      })
       setThinking(true)
       setThinkingSince(Date.now())
       pinnedRef.current = true
