@@ -203,7 +203,13 @@ func (s *Supervisor) Run(ctx context.Context) error {
 
 	for {
 		reason, req, serveErr := s.serve(ctx, app)
-		_ = s.shutdownApp(app)
+		if shutdownErr := s.shutdownApp(app); shutdownErr != nil {
+			// The cutover proceeds regardless (availability first), but a
+			// failed drain must never be INVISIBLE (estreno E-15): it is the
+			// signal that the old app may still hold workers or the store.
+			s.logger.Warn("supervisor: old app shutdown reported an error before cutover",
+				"error", shutdownErr)
+		}
 
 		switch reason {
 		case reasonShutdown:

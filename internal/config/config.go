@@ -480,13 +480,6 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Validate enforces the schema invariants, returning the first violation as an
-// error wrapping ErrInvalidConfig with the offending field path. It checks
-// structure and enum membership only; semantic wiring (resolving secrets,
-// reaching providers) happens in internal/app. One normalization rides it
-// (NC-1 companion): a valid config never carries nil Channels/Routes — an
-// OMITTED key must behave, re-serve, and re-persist exactly like an empty
-// list ("channels": null through GET /api/config would crash the builder).
 // SupportedSchemaVersion is the config schema version this binary reads.
 const SupportedSchemaVersion = 1
 
@@ -500,6 +493,13 @@ func (c *Config) EffectiveSchemaVersion() int {
 	return c.SchemaVersion
 }
 
+// Validate enforces the schema invariants, returning the first violation as an
+// error wrapping ErrInvalidConfig with the offending field path. It checks
+// structure and enum membership only; semantic wiring (resolving secrets,
+// reaching providers) happens in internal/app. One normalization rides it
+// (NC-1 companion): a valid config never carries nil Channels/Routes — an
+// OMITTED key must behave, re-serve, and re-persist exactly like an empty
+// list ("channels": null through GET /api/config would crash the builder).
 func (c *Config) Validate() error {
 	if v := c.EffectiveSchemaVersion(); v != SupportedSchemaVersion {
 		return fmt.Errorf("%w: %d (this binary reads version %d)",

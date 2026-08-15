@@ -9,7 +9,7 @@ license: Apache-2.0
 When the user asks what a page says, or asks you to check or summarize a
 site, and the host is one the operator allow-listed:
 
-1. Call the tool with the full URL: `TOOL: http_fetch(https://host/path)`
+1. Call the `http_fetch` tool with the full URL as its argument (for example `https://host/path`).
 2. Read the OBSERVATION. If it is an error naming the allow-list, tell the
    user that host is not permitted — do not retry other hosts.
 3. Answer from the fetched content only. Quote sparingly; summarize in your

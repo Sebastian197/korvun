@@ -312,6 +312,10 @@ func (r *Router) maybeHandleToolsCommand(env *envelope.Envelope, brainName strin
 		out.Meta[k] = v
 	}
 	out.Meta[envelope.MetaAck] = envelope.AckToolsReport
+	// The handled inbound is announced like every accepted message (estreno
+	// E-15): without this, the live view showed the REPLY materializing with
+	// no corresponding received event.
+	r.publishReceived(env, brainName)
 	r.sendReply(out)
 	return true
 }
