@@ -70,6 +70,14 @@ Everything below is **on `master` today** — no roadmap item is counted as pres
   optional boot warmup that resolves the cold-start model-load stall.
 - **No-code builder** — configure brains, models, and routes visually in the
   browser, no JSON by hand ([BUILDER.md](docs/BUILDER.md)).
+- **Operator console** — a multi-channel inbox with takeover, sessions (`/new`),
+  real deletion, and a direct chat to every brain.
+- **Governed tools & skills** ([ADR-0041](docs/adr/0041-governed-tools-shadow-shield-skills.md)) — an
+  agent-brain tool catalogue (`read_file`, `http_fetch`, `webhook_call`, and the
+  built-ins) behind a tri-state **allow / rehearsal / deny** gate, a private-brain
+  network shield validated at the dial, per-tool cages, and AgentSkills-compatible
+  skills that inform the model without granting it authority. Native tool calling on
+  Ollama, with an honest text-lane fallback ([ADR-0042](docs/adr/0042-native-tool-calling-lane.md)).
 - **Observability** — structured `slog`, a Prometheus `/metrics` endpoint, and a
   `/healthz` liveness probe on a loopback admin server.
 - **Durable memory** — per-conversation history that survives restarts, graceful
@@ -103,6 +111,20 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 **Download v0.4.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
+
+## New in v0.7.0 — governed tools
+
+Give an agent brain tools, and keep the operator in charge of every one. The gate has
+three states, and the middle one — **rehearsal** — lets a tool be announced to the
+model and audited **without ever running**: you see the call the model *chose* to make
+before you let it touch the world, then promote it to *allowed* live, from the Builder,
+with nothing restarted.
+
+| <img src="docs/assets/readme/governed-tools-panel.png" width="264" alt="The Builder's governance panel: webhook_call set to Rehearsal, with the derived network-shield pill and the allow-listed host cage."> | <img src="docs/assets/readme/governed-tools-rehearsal.png" width="264" alt="Chat: the brain reports the webhook was simulated, not run, because the tool is in rehearsal mode — and the receiver stays empty."> | <img src="docs/assets/readme/governed-tools-live.png" width="264" alt="Chat: after promoting the tool to allowed, the same request is really sent and the brain confirms the webhook went through."> |
+|:--:|:--:|:--:|
+| **Rehearsal in the panel** — the tool announced, the network shield derived, the host caged. | **Simulated** — the model calls it, the gate holds, nothing leaves the machine. | **Promoted** — one hot Apply later, the same call really runs. |
+
+See [governed tools & skills](docs/BUILDER.md) and the [v0.7.0 release notes](docs/releases/v0.7.0.md).
 
 ## Quick start
 
