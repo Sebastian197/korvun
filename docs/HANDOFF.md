@@ -34,6 +34,30 @@
 
 ---
 
+## Ciclo de revisión cruzada con Codex (vigente desde 2026-08-15)
+
+En fases estructurales, tras quality gate verde y ANTES del push:
+
+1. Lanzar `/codex:adversarial-review --base master` con texto de foco
+   sobre los riesgos de la fase (concurrencia, auth, pérdida de datos,
+   rollback). En ramas grandes, con `--background`.
+2. Triaje de hallazgos: se aceptan solo los que traen archivo +
+   evidencia reproducible + impacto en comportamiento, seguridad o
+   concurrencia, con corrección mínima. Se rechazan estilo y
+   afirmaciones sin soporte. Codex también se equivoca.
+3. Implementar los aceptados, re-correr el gate, push. Máximo UNA
+   re-review de seguimiento salvo hallazgo material.
+4. El informe de cierre de fase incluye: hallazgos de Codex, triaje
+   (aceptado/rechazado y por qué), para revisión del copilot.
+5. Se mantienen: revisión final del copilot sobre la rama completa y
+   merge exclusivamente de Chano.
+
+Prohibido: `/codex:rescue` (rompe el role-split) y el review gate
+automático. Secret-scan pre-uso: completado en verde (2026-08-15).
+En fases mecánicas pequeñas el ciclo es opcional.
+
+---
+
 ## Objectives
 
 ### Project (one line)
