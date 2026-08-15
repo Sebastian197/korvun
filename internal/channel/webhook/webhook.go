@@ -140,6 +140,12 @@ func (a *Adapter) Send(ctx context.Context, env *envelope.Envelope) error {
 	return nil
 }
 
+// maxIdempotencyKeyBytes caps the sender-controlled X-Idempotency-Key
+// (estreno E-9): the key feeds the router's 4096-entry dedup window, so an
+// unbounded length would let one sender balloon that memory. 128 bytes is
+// generous for any real idempotency scheme (UUIDs are 36).
+const maxIdempotencyKeyBytes = 128
+
 // InboundHandler returns an http.Handler that accepts incoming webhook POST
 // requests, parses the JSON payload, and converts it to an Envelope.
 func (a *Adapter) InboundHandler() http.Handler {
@@ -178,8 +184,16 @@ func (a *Adapter) InboundHandler() http.Handler {
 		// X-Idempotency-Key opts the SENDER into router-side dedup of its
 		// retries (audit R-1): the header value becomes the provider event
 		// id. No header ⇒ no event id ⇒ no dedup — the documented fail-open
-		// contract; the router never invents identity for an event.
+		// contract; the router never invents identity for an event. The key
+		// is sender-controlled and feeds a bounded window, so its length is
+		// capped (estreno E-9): oversize is a loud sender bug, never a
+		// silent truncation (two keys sharing a truncated prefix would
+		// silently dedup each other).
 		if key := r.Header.Get("X-Idempotency-Key"); key != "" {
+			if len(key) > maxIdempotencyKeyBytes {
+				http.Error(w, fmt.Sprintf("X-Idempotency-Key exceeds %d bytes", maxIdempotencyKeyBytes), http.StatusBadRequest)
+				return
+			}
 			env.Meta[envelope.MetaProviderEventID] = key
 		}
 

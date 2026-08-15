@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,5 +60,57 @@ func TestInbound_NoIdempotencyKeyMeansNoEventID(t *testing.T) {
 	if got, ok := env.Meta[envelope.MetaProviderEventID]; ok {
 		t.Errorf("Meta[%q] = %q, want absent (no header, no dedup)",
 			envelope.MetaProviderEventID, got)
+	}
+}
+
+func TestInbound_oversizedIdempotencyKeyRejected(t *testing.T) {
+	// Estreno E-9: the key is sender-controlled and feeds a 4096-entry
+	// window — unbounded lengths turn the dedup memory into a balloon. An
+	// oversized key is a loud sender bug (400), never a silent truncation.
+	a := New("test-webhook", defaultMapping())
+	body, _ := json.Marshal(map[string]string{
+		"sender_id": "user-1", "sender_name": "Ana", "text": "hola",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Idempotency-Key", strings.Repeat("k", maxIdempotencyKeyBytes+1))
+	rec := httptest.NewRecorder()
+	a.InboundHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("oversized key: status = %d, want 400", rec.Code)
+	}
+}
+
+func TestInbound_maxLengthIdempotencyKeyAccepted(t *testing.T) {
+	a := New("test-webhook", defaultMapping())
+	key := strings.Repeat("k", maxIdempotencyKeyBytes)
+	env := postInboundWithKey(t, a, key)
+	if got := env.Meta[envelope.MetaProviderEventID]; got != key {
+		t.Fatalf("Meta id length = %d, want the full %d-byte key", len(got), maxIdempotencyKeyBytes)
+	}
+}
+
+// postInboundWithKey mirrors postInbound for arbitrary keys.
+func postInboundWithKey(t *testing.T, a *Adapter, key string) *envelope.Envelope {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{
+		"sender_id": "user-1", "sender_name": "Ana", "text": "hola",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Idempotency-Key", key)
+	rec := httptest.NewRecorder()
+	a.InboundHandler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	select {
+	case env := <-a.Inbound():
+		return env
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for envelope")
+		return nil
 	}
 }
