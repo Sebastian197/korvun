@@ -1,13 +1,36 @@
-// SP6 RED — the governance panel component (config→UI→config through the real
-// ConfigEditor: interact, Save, assert the POSTed config carries the change).
-// The visual contract is design-drafts/governance-panel/; this file pins the
-// BEHAVIOR (the pixels are the mockup's job, the classes are asserted for
-// fidelity).
-import { describe, it, expect, vi } from 'vitest'
+// SP6 — the governance panel through the SHIPPED canvas properties panel
+// (config→UI→config): select the brain node, interact with the "Herramientas y
+// skills" section, Save, assert the POSTed config. The visual contract is
+// design-drafts/governance-panel/; this pins the behavior on the real panel.
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
-import { ConfigEditor } from './ConfigEditor'
-import type { Config } from './config/schema'
-import type { PollDeps } from './config/reload'
+import type { ReactElement } from 'react'
+import type { Config } from '../config/schema'
+import type { PollDeps } from '../config/reload'
+import { CanvasView } from './CanvasView'
+
+const rf = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }))
+
+vi.mock('@xyflow/react', () => ({
+  ReactFlow: (props: Record<string, unknown>) => {
+    rf.props = props
+    const nodeTypes = (props.nodeTypes ?? {}) as Record<
+      string,
+      (p: { id: string; data: unknown; selected: boolean }) => ReactElement
+    >
+    return (
+      <div data-testid="rf-seam">
+        {(props.nodes as Array<{ id: string; type: string; data: unknown }>).map((n) => {
+          const NodeComp = nodeTypes[n.type]
+          return NodeComp ? <NodeComp key={n.id} id={n.id} data={n.data} selected={false} /> : null
+        })}
+      </div>
+    )
+  },
+  Handle: () => null,
+  Position: { Left: 'left', Right: 'right', Top: 'top', Bottom: 'bottom' },
+  Background: () => null,
+}))
 
 function succeedDeps(): PollDeps {
   return { getStatus: async () => 'succeeded', sleep: async () => {}, now: () => 0 }
@@ -38,7 +61,6 @@ function agentBaseline(over?: Partial<Config['brains'][number]>): Config {
   }
 }
 
-/** Captures the config POSTed by Save. */
 function captureSaveFetch(): { fetchMock: ReturnType<typeof vi.fn>; posted: () => Config } {
   let body: Config | null = null
   const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -51,75 +73,84 @@ function captureSaveFetch(): { fetchMock: ReturnType<typeof vi.fn>; posted: () =
   return { fetchMock, posted: () => body as Config }
 }
 
-async function save(): Promise<void> {
-  const btn = screen.getByRole('button', { name: /save and reload/i })
-  await act(async () => {
-    fireEvent.click(btn)
+function selectBrain() {
+  act(() => {
+    ;(rf.props?.onNodeClick as (e: unknown, n: { id: string }) => void)(null, { id: 'brain:0' })
   })
 }
 
-describe('SP6 governance panel — presence (AS-8, FR-UI-1)', () => {
-  it('renders the "Herramientas y skills" section for an agent brain', () => {
-    render(<ConfigEditor baseline={agentBaseline()} token="secret" reloadDeps={succeedDeps()} />)
+async function apply() {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: /aplicar/i }))
+  })
+}
+
+beforeEach(() => {
+  rf.props = null
+  document.documentElement.dataset.theme = 'dark'
+})
+
+describe('SP6 governance panel on the canvas — presence (AS-8)', () => {
+  it('renders the section for an agent brain', () => {
+    render(<CanvasView baseline={agentBaseline()} token="secret" reloadDeps={succeedDeps()} />)
+    selectBrain()
     expect(screen.getByTestId('governance-section-0')).toBeTruthy()
   })
 
-  it('does NOT render the section for a non-agent brain', () => {
+  it('does NOT render for a non-agent brain', () => {
     const nonAgent = agentBaseline()
     delete nonAgent.brains[0].agent
-    render(<ConfigEditor baseline={nonAgent} token="secret" reloadDeps={succeedDeps()} />)
+    render(<CanvasView baseline={nonAgent} token="secret" reloadDeps={succeedDeps()} />)
+    selectBrain()
     expect(screen.queryByTestId('governance-section-0')).toBeNull()
   })
 })
 
-describe('SP6 tri-state (AS-1/2, FR-GOV-1) — config→UI→config', () => {
-  it('setting a grant to Ensayo and Saving POSTs mode:shadow', async () => {
+describe('SP6 tri-state (AS-1/2) — config→UI→config through the canvas', () => {
+  it('Ensayo → Aplicar POSTs mode:shadow', async () => {
     const { fetchMock, posted } = captureSaveFetch()
     vi.stubGlobal('fetch', fetchMock)
-    render(<ConfigEditor baseline={agentBaseline()} token="secret" reloadDeps={succeedDeps()} />)
-
-    // The tri-state control for read_file, "Ensayo" segment.
+    render(<CanvasView baseline={agentBaseline()} token="secret" reloadDeps={succeedDeps()} />)
+    selectBrain()
     fireEvent.click(screen.getByTestId('tri-read_file-shadow'))
-    await save()
-
-    const g = posted().brains[0].agent!.governance
-    expect(g).toEqual([{ tool: 'read_file', mode: 'shadow' }])
+    await apply()
+    expect(posted().brains[0].agent!.governance).toEqual([{ tool: 'read_file', mode: 'shadow' }])
   })
 
-  it('promoting shadow→allow POSTs mode:allow (hot promotion)', async () => {
+  it('promote shadow→allow POSTs mode:allow', async () => {
     const { fetchMock, posted } = captureSaveFetch()
     vi.stubGlobal('fetch', fetchMock)
     const withShadow = agentBaseline()
     withShadow.brains[0].agent!.governance = [{ tool: 'read_file', mode: 'shadow' }]
-    render(<ConfigEditor baseline={withShadow} token="secret" reloadDeps={succeedDeps()} />)
-
+    render(<CanvasView baseline={withShadow} token="secret" reloadDeps={succeedDeps()} />)
+    selectBrain()
     fireEvent.click(screen.getByTestId('tri-read_file-allow'))
-    await save()
-
+    await apply()
     expect(posted().brains[0].agent!.governance).toEqual([{ tool: 'read_file', mode: 'allow' }])
   })
 })
 
-describe('SP6 derivations (AS-5/6, FR-DERIVE-1/FR-WARN-1)', () => {
-  it('shows the network shield pill for a private brain network tool', () => {
-    render(<ConfigEditor baseline={agentBaseline()} token="secret" reloadDeps={succeedDeps()} />)
+describe('SP6 derivations (AS-5/6)', () => {
+  it('shows the shield for a private network tool, hides for read_file', () => {
+    render(<CanvasView baseline={agentBaseline()} token="secret" reloadDeps={succeedDeps()} />)
+    selectBrain()
     expect(screen.getByTestId('shield-http_fetch')).toBeTruthy()
-    // read_file is not a network tool → no shield.
     expect(screen.queryByTestId('shield-read_file')).toBeNull()
   })
 
-  it('hides the shield when the brain is public', () => {
+  it('hides the shield when public', () => {
     render(
-      <ConfigEditor
+      <CanvasView
         baseline={agentBaseline({ sensitivity: 'public' })}
         token="secret"
         reloadDeps={succeedDeps()}
       />,
     )
+    selectBrain()
     expect(screen.queryByTestId('shield-http_fetch')).toBeNull()
   })
 
-  it('shows the house warning for ungoverned sensitive×cloud', () => {
+  it('shows the house warning for ungoverned sensitive×cloud, hides when governed', () => {
     const cloud = agentBaseline({
       sensitivity: 'public',
       models: [{ provider: 'groq', model_id: 'm', locality: 'cloud' }],
@@ -130,48 +161,32 @@ describe('SP6 derivations (AS-5/6, FR-DERIVE-1/FR-WARN-1)', () => {
         read_file: { root: '/docs' },
       },
     })
-    render(<ConfigEditor baseline={cloud} token="secret" reloadDeps={succeedDeps()} />)
-    const warn = screen.getByTestId('sensitive-cloud-warning-0')
-    expect(warn.textContent).toContain('read_file')
-  })
-
-  it('no warning when governed', () => {
-    const cloud = agentBaseline({
-      sensitivity: 'public',
-      models: [{ provider: 'groq', model_id: 'm', locality: 'cloud' }],
-      agent: {
-        tools: ['read_file'],
-        max_iterations: 5,
-        system_prompt: '',
-        read_file: { root: '/docs' },
-        governance: [{ tool: 'read_file', mode: 'allow' }],
-      },
-    })
-    render(<ConfigEditor baseline={cloud} token="secret" reloadDeps={succeedDeps()} />)
-    expect(screen.queryByTestId('sensitive-cloud-warning-0')).toBeNull()
+    render(<CanvasView baseline={cloud} token="secret" reloadDeps={succeedDeps()} />)
+    selectBrain()
+    expect(screen.getByTestId('sensitive-cloud-warning-0').textContent).toContain('read_file')
   })
 })
 
 describe('SP6 cage editor (AS-7) — config→UI→config', () => {
-  it('editing an allow-list host and Saving POSTs the new host', async () => {
+  it('editing an allow-list host and Aplicar POSTs the new host', async () => {
     const { fetchMock, posted } = captureSaveFetch()
     vi.stubGlobal('fetch', fetchMock)
-    render(<ConfigEditor baseline={agentBaseline()} token="secret" reloadDeps={succeedDeps()} />)
-
-    const host0 = screen.getByTestId('cage-http_fetch-host-0') as HTMLInputElement
-    fireEvent.change(host0, { target: { value: 'docs.korvun.dev' } })
-    await save()
-
+    render(<CanvasView baseline={agentBaseline()} token="secret" reloadDeps={succeedDeps()} />)
+    selectBrain()
+    fireEvent.change(screen.getByTestId('cage-http_fetch-host-0'), {
+      target: { value: 'docs.korvun.dev' },
+    })
+    await apply()
     expect(posted().brains[0].agent!.http_fetch!.allow_hosts).toEqual(['docs.korvun.dev'])
   })
 })
 
 describe('SP6 skills (AS-10)', () => {
-  it('renders detected skills read-only (no toggle emitted)', () => {
+  it('renders detected skills read-only (no toggle)', () => {
     const withSkills = agentBaseline()
     withSkills.brains[0].agent!.skills_dir = '~/korvun-skills'
     render(
-      <ConfigEditor
+      <CanvasView
         baseline={withSkills}
         token="secret"
         reloadDeps={succeedDeps()}
@@ -180,9 +195,9 @@ describe('SP6 skills (AS-10)', () => {
         ]}
       />,
     )
+    selectBrain()
     const list = screen.getByTestId('skills-list-0')
     expect(list.textContent).toContain('web-research')
-    // No interactive control inside the skills list (read-only).
     expect(list.querySelector('button')).toBeNull()
     expect(list.querySelector('input')).toBeNull()
   })

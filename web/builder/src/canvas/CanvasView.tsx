@@ -39,6 +39,7 @@ import {
   pendingChangeCount,
   type ConfigAction,
 } from '../config/edit'
+import { GovernancePanel, type DetectedSkill } from '../GovernancePanel'
 import { graphFromConfig, canConnect, type GraphNode } from './graph'
 import { postConfig, getConfig, getReloadStatus, HttpError } from '../api'
 import { pollReload, type ReloadStatus, type PollDeps } from '../config/reload'
@@ -310,7 +311,19 @@ function ChannelPanel({ c, index, dispatch }: { c: Config['channels'][number]; i
   )
 }
 
-function BrainPanel({ b, index, dispatch }: { b: Config['brains'][number]; index: number; dispatch: Dispatch<ConfigAction> }) {
+function BrainPanel({
+  b,
+  index,
+  dispatch,
+  channelNames,
+  detectedSkills,
+}: {
+  b: Config['brains'][number]
+  index: number
+  dispatch: Dispatch<ConfigAction>
+  channelNames: string[]
+  detectedSkills: DetectedSkill[]
+}) {
   const set = (field: 'name' | 'sensitivity' | 'dispatch') => (value: string) =>
     dispatch({ kind: 'setBrainField', brain: index, field, value })
   const persona = (field: 'display_name' | 'tone' | 'language' | 'instructions') => (value: string) =>
@@ -332,6 +345,14 @@ function BrainPanel({ b, index, dispatch }: { b: Config['brains'][number]; index
       <Field label="tone" value={b.persona?.tone ?? ''} onChange={persona('tone')} />
       <Field label="language" value={b.persona?.language ?? ''} onChange={persona('language')} />
       <Field label="instructions" value={b.persona?.instructions ?? ''} onChange={persona('instructions')} />
+      {/* SP6: the governed-tools section, only for agent brains (ADR-0041). */}
+      <GovernancePanel
+        b={b}
+        index={index}
+        dispatch={dispatch}
+        channelNames={channelNames}
+        detectedSkills={detectedSkills}
+      />
     </>
   )
 }
@@ -381,11 +402,13 @@ function PropertiesPanel({
   cfg,
   dispatch,
   onDeleted,
+  detectedSkills,
 }: {
   selected: string
   cfg: Config
   dispatch: Dispatch<ConfigAction>
   onDeleted: () => void
+  detectedSkills: DetectedSkill[]
 }) {
   const kind = kindOf(selected)
   let body = null
@@ -398,7 +421,15 @@ function PropertiesPanel({
   } else if (kind === 'brain') {
     const i = indexOf(selected)
     const b = cfg.brains[i]
-    body = b ? <BrainPanel b={b} index={i} dispatch={dispatch} /> : null
+    body = b ? (
+      <BrainPanel
+        b={b}
+        index={i}
+        dispatch={dispatch}
+        channelNames={cfg.channels.map((c) => c.type)}
+        detectedSkills={detectedSkills}
+      />
+    ) : null
     if (b) deleteAction = { kind: 'removeBrain', brain: i }
   } else {
     const [b, m] = selected.split(':')[1].split('.').map(Number)
@@ -449,11 +480,13 @@ export function CanvasView({
   token,
   reloadDeps = realReloadDeps,
   onAuthError,
+  detectedSkills = [],
 }: {
   baseline: Config
   token: string
   reloadDeps?: PollDeps
   onAuthError?: () => void
+  detectedSkills?: DetectedSkill[]
 }) {
   const [base, setBase] = useState<Config>(baseline)
   const [wc, dispatch] = useReducer(configReducer, baseline, clone)
@@ -613,6 +646,7 @@ export function CanvasView({
               cfg={wc}
               dispatch={dispatch}
               onDeleted={() => setSelected(null)}
+              detectedSkills={detectedSkills}
             />
           )}
         </div>
