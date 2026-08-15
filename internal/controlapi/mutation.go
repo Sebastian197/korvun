@@ -13,6 +13,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -111,14 +112,31 @@ func configHandler(rl Reloader) http.Handler {
 		// Cap the body BEFORE decoding so an oversized document is cut at the reader,
 		// never fully buffered (a MaxBytesError surfaces from Decode as a 413).
 		r.Body = http.MaxBytesReader(w, r.Body, maxConfigBodyBytes)
+		// Strict decode, mirroring config.Load (audit A-1 / estreno E-2): a
+		// typo'd key must fail LOUDLY naming the key — before this, an
+		// unknown key was silently dropped, the reload succeeded, and the
+		// persisted file lost the typo ("governence" => an ungoverned agent
+		// brain the operator believed governed).
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
 		var cfg config.Config
-		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		if err := dec.Decode(&cfg); err != nil {
 			var maxErr *http.MaxBytesError
 			if errors.As(err, &maxErr) {
 				writeError(w, http.StatusRequestEntityTooLarge, "config document exceeds the 1 MiB limit")
 				return
 			}
+			if strings.Contains(err.Error(), "unknown field") {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			writeError(w, http.StatusBadRequest, "malformed config JSON")
+			return
+		}
+		// json.Unmarshal rejected trailing garbage; the streaming decoder
+		// must not regress that (config.Load parity).
+		if err := dec.Decode(new(json.RawMessage)); err != io.EOF {
+			writeError(w, http.StatusBadRequest, "trailing data after the config document")
 			return
 		}
 		if err := cfg.Validate(); err != nil {
