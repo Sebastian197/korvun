@@ -97,6 +97,24 @@ against fakes, and never deferred to a final demo. Fakes prove our
 code; only a real model proves the contract. A green suite over
 fakes does not close a model-dependent criterion.
 
+## govulncheck before every rehearsal (2026-08-15) — CRITICAL
+
+A green rehearsal EXPIRES: stdlib and dependency advisories land between
+runs. Before every batch rehearsal (the push to `ensayo`), run
+`govulncheck ./...` locally with the pinned version. New reachable
+advisories are remedied at the source — bump the Go toolchain to the
+patch that fixes them, or the dependency to its fixed version — never by
+silencing the scanner or excluding a finding. Only then push the
+rehearsal.
+
+## One live Claude Code session at a time (2026-08-15) — CRITICAL
+
+Only ONE Claude Code session runs against this repo at a time. Two
+coexisted on 2026-08-15 and one overwrote the other's report. Before
+starting work, confirm no other session is live; a second session shares
+the working tree, the branches and the copilot report paths, and will
+step on them.
+
 ## External documentation verification — which tool for what
 
 Never program against an external API, library, or tooling version from memory.

@@ -109,9 +109,53 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-09)
+## Current state (as of 2026-08-15)
 
-> **CURRENT (2026-08-09, session close): GOVERNED TOOLS + SKILLS — built
+> **CURRENT (2026-08-15, session close): v0.7.0 PUBLISHED — the SEVENTH
+> release, the COMBINED one: Operator Console + Governed Tools & Skills +
+> the Builder governance panel + the native tool-calling lane.** Published
+> 2026-08-15 19:05 UTC (verified by the copilot via API): draft-until-complete
+> for the FOURTH time, 21 signed assets (6 binaries + 6 SBOMs + cosign
+> checksums, both families), curated notes rendered. `origin/master` =
+> `origin/ensayo` = **`3e18df6`**; tag `v0.7.0` (annotated) → `3e18df6`; 65
+> commits landed on the batch base `81bfad8`. Chano downloaded the PUBLISHED
+> dmg to his machine and its SHA-256 matched the signed manifest.
+>
+> **THE DAY.** A full MASTER AUDIT (5 tandas, a 2,752-line report at
+> `design-drafts/audit/AUDIT-2026-08.md`): 0 P0, 2 P1 — BOTH killed today
+> (G-1 branch protection, closed by Chano's clicks and verified `protected:true`;
+> R-1 inbound dedup, in the batch), 15 P2 (6 remediated today), verdict "a high
+> C stepping on D — the core defends itself before a Staff Engineer". The CODEX
+> cross-review CYCLE premiered (Phase 0 secret-scan 468/468 green; protocol in
+> HANDOFF `b63d3d3`; the estreno: ~40 findings → 19 implemented, including the
+> privacy CRITICAL E-11 and the shield's link-local hole E-8; a comparative
+> experiment — the double review justified with evidence). RT-3 closed under
+> the real-model law (honest degrade to the text lane, `ErrToolsUnsupported`).
+> SP6 governance panel built on Chano-approved mockups + a LIVE round FILMED
+> (material in `design-drafts/media/sp6-round/`; three PNGs already in the
+> README). The batch REHEARSAL: 2 legitimate reds (5 stdlib CVEs → `go1.26.6`;
+> `prefer-const` + prettier) → full green → 65 commits landed → release.
+>
+> **NORTH STAR adopted:** the Execution Trust Layer blueprint, versioned in
+> `docs/blueprints/` (commit `73cbdff`), with the sequence: the beta is
+> untouchable first; Stage 1 "Action Kernel" is the first post-beta piece.
+>
+> **NEW LAWS today (CLAUDE.md):** `govulncheck` locally before every rehearsal
+> (a green rehearsal expires); and one operational rule — only ONE live Claude
+> Code session at a time (two coexisted today and one stepped on the other's
+> report).
+>
+> **LIVE PENDING:** LinkedIn/X posts drafted (publish on the day Chano picks;
+> the single cartridge intact); the bilingual website train (chat + tools pages,
+> EN+ES mirror); the clip fabrication (v0.6.0-pattern prompts when Chano wants);
+> the audit backlog (33 tasks, cajón 3); minor notes (chat streaming ~77 s/round,
+> S-9/TOCTOU documented, gstack cleanup, the activity ledger does not survive a
+> reload (RT-8), Gatekeeper/social-preview/rotate Chano's PAT).
+>
+> **NEXT PIECE: MINIMAL MEMORY — the last of the beta.** After it: beta
+> declared → the single cartridge (Show HN + r/selfhosted + Product Hunt).
+
+> **PREVIOUS (2026-08-09, session close): GOVERNED TOOLS + SKILLS — built
 > COMPLETE and DEMONSTRATED LIVE to Chano on his iMac.** All six steps of
 > the acceptance demo, on his real app with his real config and a real
 > local model: caged read audited (`tool_used ok`), SHADOW rehearsal
