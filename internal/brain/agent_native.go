@@ -25,6 +25,14 @@ import (
 // through the SAME runTool — two-point gate, shadow simulation, cages,
 // dial-time shield, and the three-surface metadata-only audit included.
 
+// maxNativeCallsPerTurn caps how many tool calls ONE native model response
+// may execute (estreno E-5 / red-team): the model — not the operator —
+// controls the slice's length, and the text lane is structurally one call
+// per iteration, so without this bound a single Handle could run
+// maxIters × N governed executions with N unbounded. Excess calls receive
+// an honest per-call observation and are not executed.
+const maxNativeCallsPerTurn = 8
+
 // runLoopNative runs the bounded native model→tools→model loop. Same return
 // contract as runLoop: the final answer and true, or "" and false (cap hit,
 // model failure, ctx done → the caller degrades to the fallback).
@@ -66,6 +74,12 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 				a.logger.Info("agent: rescued tool call printed as text",
 					"envelope_id", env.ID, "channel", env.Channel, "tool", call.Name, "iter", iter)
 				resp.Message.ToolCalls = []model.ToolCall{call}
+				// Blank the printed JSON before the turn is replayed into the
+				// context (estreno E-5 / red-team): leaving it as the model's
+				// "own words" invites it to print the syntax again — the exact
+				// failure mode the clean-context fix targeted. An assistant
+				// turn carrying ToolCalls is valid words-free (ADR-0042 §3).
+				resp.Message.Content = ""
 			} else {
 				return content, true // final answer
 			}
@@ -76,8 +90,25 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 		// governance, shadow, cages, shield, and audit are one code path.
 		// Each result returns as a RoleTool turn per the verified contract.
 		req.Messages = append(req.Messages, resp.Message)
-		for _, call := range resp.Message.ToolCalls {
+		for callIdx, call := range resp.Message.ToolCalls {
 			var observation string
+			if callIdx >= maxNativeCallsPerTurn {
+				// The model, not the operator, controls how many calls one
+				// response carries; without a cap a single turn could run
+				// maxIters × N governed executions (estreno E-5 / red-team).
+				// The excess gets an honest per-call observation, no
+				// execution.
+				a.logger.Warn("agent: per-turn tool budget exceeded",
+					"envelope_id", env.ID, "channel", env.Channel, "tool", call.Name,
+					"call_index", callIdx, "cap", maxNativeCallsPerTurn)
+				req.Messages = append(req.Messages, model.Message{
+					Role:     model.RoleTool,
+					ToolName: call.Name,
+					Content: fmt.Sprintf("tool %s skipped: per-turn tool budget exceeded (%d calls max per reply)",
+						call.Name, maxNativeCallsPerTurn),
+				})
+				continue
+			}
 			if gated := decisions != nil && func() bool {
 				d, ok := decisions[call.Name]
 				return !ok || d.Mode != policy.ToolAllow
@@ -98,6 +129,14 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 				observation = fmt.Sprintf("tool %s failed: %v", call.Name, argErr)
 			} else {
 				observation = a.runTool(ctx, env, decisions, call.Name, args)
+			}
+			// An empty observation (http_fetch on a 200-empty body, read_file
+			// of a 0-byte file) must not become an empty RoleTool turn: the
+			// next real-adapter call would refuse the WHOLE request
+			// (ValidateRequest ErrEmptyContent) and the user would get the
+			// canned fallback for a tool that actually worked (estreno E-4).
+			if observation == "" {
+				observation = "(the tool returned an empty result)"
 			}
 			req.Messages = append(req.Messages, model.Message{
 				Role:     model.RoleTool,

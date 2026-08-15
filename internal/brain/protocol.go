@@ -93,6 +93,12 @@ func firstMeaningfulLine(content string) (string, bool) {
 // (sorted by name) so the prompt is reproducible. The operator's own system
 // prompt, if any, is appended after the protocol block.
 func buildSystemPrompt(reg tool.Registry, operatorPrompt string) string {
+	// An EMPTY registry (deny-all governance, or the fail-closed gate) must
+	// not teach the tool grammar — that would invite the model to hallucinate
+	// calls that can only answer "not found" (estreno E-5 / adversarial H7).
+	if len(reg) == 0 {
+		return strings.TrimSpace(operatorPrompt)
+	}
 	names := make([]string, 0, len(reg))
 	for n := range reg {
 		names = append(names, n)
