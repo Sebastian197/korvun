@@ -115,11 +115,28 @@ func (r readFileTool) Execute(_ context.Context, args string) (string, error) {
 		return "", fmt.Errorf("read_file: path %q resolves outside the configured directory: %w", args, ErrCageViolation)
 	}
 
+	// Only REGULAR files are readable (estreno E-6): opening a FIFO blocks
+	// in the kernel with no ctx to save the worker, and devices/sockets are
+	// not jail content. Checked BEFORE the open (the realistic accidental-
+	// FIFO case never blocks) and re-verified on the open descriptor (an
+	// fstat cannot be raced). The check-to-open symlink-swap window remains
+	// a documented residual: it requires a local writer inside the jail,
+	// outside the current threat model (estreno triage, Codex C-3).
+	fi, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("read_file: stat: %w", err)
+	}
+	if !fi.Mode().IsRegular() {
+		return "", fmt.Errorf("read_file: %q is not a regular file: %w", args, ErrCageViolation)
+	}
 	f, err := os.Open(resolved)
 	if err != nil {
 		return "", fmt.Errorf("read_file: open: %w", err)
 	}
 	defer f.Close() //nolint:errcheck // read-only descriptor
+	if ofi, err := f.Stat(); err != nil || !ofi.Mode().IsRegular() {
+		return "", fmt.Errorf("read_file: %q is not a regular file: %w", args, ErrCageViolation)
+	}
 	// Read through a hard limit rather than trusting a pre-Stat size (the
 	// file can grow between the stat and the read): one byte past the cap
 	// proves the breach.
