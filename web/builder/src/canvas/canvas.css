@@ -173,7 +173,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  width: 280px;
+  /* The governance section (SP6) needs the mocked contract width so no
+     tri-state label truncates ("Denegar") and section headers read in full
+     ("PRESUP. CUERPOS"). The canvas surface is flex:1 and absorbs the delta,
+     so fitView/scroll are unaffected. */
+  width: 372px;
+  flex: none;
   padding: var(--space-md);
   border-left: 1px solid var(--border);
   background: var(--surface);

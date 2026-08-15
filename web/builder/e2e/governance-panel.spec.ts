@@ -81,3 +81,34 @@ test('hot promotion: Ensayo → Aplicar → shadow persisted → Permitir → Ap
 
   expect(posts.at(-1)!.brains[0].agent!.governance).toEqual([{ tool: 'read_file', mode: 'allow' }])
 })
+
+test('the widened panel shows every label untruncated (SP6 polish)', async ({ page }) => {
+  let served = structuredClone(AGENT_CONFIG)
+  await loadAgentBrain(page, () => served, (cfg) => (served = structuredClone(cfg)))
+
+  // The panel is the mocked contract width.
+  const panel = page.getByTestId('properties-panel')
+  const width = await panel.evaluate((el) => Math.round(el.getBoundingClientRect().width))
+  expect(width).toBe(372)
+
+  // No tri-state button clips its label (scrollWidth <= clientWidth), and
+  // "Denegar" reads in full.
+  const denyBtns = page.locator('.tri button', { hasText: 'Denegar' })
+  const n = await denyBtns.count()
+  expect(n).toBeGreaterThan(0)
+  for (let i = 0; i < n; i++) {
+    const b = denyBtns.nth(i)
+    await expect(b).toHaveText('Denegar')
+    const clipped = await b.evaluate((el) => el.scrollWidth > el.clientWidth + 1)
+    expect(clipped).toBe(false)
+  }
+
+  // Section labels are not clipped either (the "PRESUP. CUERPOS" case).
+  const labels = page.locator('.lbl')
+  const lc = await labels.count()
+  for (let i = 0; i < lc; i++) {
+    const el = labels.nth(i)
+    const clipped = await el.evaluate((n) => n.scrollWidth > n.clientWidth + 1)
+    expect(clipped).toBe(false)
+  }
+})
