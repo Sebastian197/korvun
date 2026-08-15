@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // DefaultFetchMaxBytes caps a fetched response when the operator does not set
@@ -37,7 +38,17 @@ type HTTPFetchConfig struct {
 	// from ToolDecision.Shield — a network tool on a Private brain. The
 	// dialer then validates the RESOLVED IP of every connection.
 	PrivateOnly bool
+	// Timeout is the hard per-call bound (0 => DefaultFetchTimeout). Parity
+	// with webhook_call's own bound (estreno E-7): without it, a slow
+	// allow-listed host pinned the agent loop for the whole brain handler
+	// ceiling.
+	Timeout time.Duration
 }
+
+// DefaultFetchTimeout is the hard per-call bound when unset. Wider than
+// webhook_call's 10s: that tool POSTs to the operator's own endpoint, while
+// a page fetch over the public internet needs headroom.
+const DefaultFetchTimeout = 30 * time.Second
 
 // httpFetchTool is the caged GET-only fetcher. The http.Client is built once
 // at construction (it is safe for concurrent use, honoring the Tool
@@ -45,6 +56,7 @@ type HTTPFetchConfig struct {
 // environment proxy would carry the request around both the allow-list and
 // the shield.
 type httpFetchTool struct {
+	timeout  time.Duration
 	allow    allowList
 	maxBytes int64
 	client   *http.Client
@@ -66,7 +78,11 @@ func HTTPFetch(cfg HTTPFetchConfig) (Tool, error) {
 		maxRedirects = DefaultFetchMaxRedirects
 	}
 
-	f := &httpFetchTool{allow: allow, maxBytes: maxBytes}
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = DefaultFetchTimeout
+	}
+	f := &httpFetchTool{allow: allow, maxBytes: maxBytes, timeout: timeout}
 	f.client = newCagedClient(allow, maxRedirects, cfg.PrivateOnly)
 	return f, nil
 }
@@ -82,6 +98,11 @@ func (f *httpFetchTool) Description() string {
 // space. Cage/shield breaches wrap their sentinels (audited as denials); an
 // HTTP error status or a network failure is an ordinary tool error.
 func (f *httpFetchTool) Execute(ctx context.Context, args string) (string, error) {
+	// The tool owns its per-call bound (estreno E-7): the brain's per-tool
+	// timeout is optional wiring, and the handler ceiling is a last resort,
+	// not a fetch budget.
+	ctx, cancel := context.WithTimeout(ctx, f.timeout)
+	defer cancel()
 	raw := strings.TrimSpace(args)
 	if raw == "" {
 		return "", fmt.Errorf("http_fetch: a URL is required")
