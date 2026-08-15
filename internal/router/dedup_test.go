@@ -245,3 +245,69 @@ func TestDedup_HouseConstants(t *testing.T) {
 		t.Errorf("DedupTTL = %v, want 10m (house constant)", router.DedupTTL)
 	}
 }
+
+func TestDedup_FailedEnqueueDoesNotPoisonTheID(t *testing.T) {
+	// Audit E-1 (Codex C-1): a delivery that the router could NOT accept
+	// (saturated queue) must not leave its event id recorded — otherwise a
+	// legitimate re-delivery within the TTL is dropped as a duplicate and
+	// the message is lost for good.
+	release := make(chan struct{})
+	fb := newFakeBrain()
+	fb.releaseCh = release
+
+	r := router.New(
+		router.WithQueueCapacity(1),
+		router.WithEnqueueTimeout(30*time.Millisecond),
+	)
+	t.Cleanup(func() { shutdown(t, r) })
+	_ = r.RegisterChannel(newFakeChannel("ch"))
+	_ = r.RegisterBrain("brain", fb)
+	_ = r.Route("ch", "brain")
+
+	// Block the worker, fill the cap-1 queue, then saturate with the id
+	// under test.
+	if err := r.DispatchInbound(context.Background(), mkInboundWithEventID("ch", "c", "a", "blocker-1")); err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	if err := r.DispatchInbound(context.Background(), mkInboundWithEventID("ch", "c", "b", "blocker-2")); err != nil {
+		t.Fatalf("second (fills the queue): %v", err)
+	}
+	err := r.DispatchInbound(context.Background(), mkInboundWithEventID("ch", "c", "x", "lost-42"))
+	if !errors.Is(err, router.ErrBrainSaturated) {
+		t.Fatalf("third dispatch err = %v, want ErrBrainSaturated", err)
+	}
+
+	// Unblock and drain, then RE-DELIVER the saturated id: it must be
+	// accepted and handled, never dropped as a duplicate of its own failure.
+	close(release)
+	waitHandled(t, fb, 2)
+	if err := r.DispatchInbound(context.Background(), mkInboundWithEventID("ch", "c", "x", "lost-42")); err != nil {
+		t.Fatalf("re-delivery after failure: %v", err)
+	}
+	waitHandled(t, fb, 3)
+}
+
+func TestDedup_ConcurrentSameIDHandledExactlyOnce(t *testing.T) {
+	// E-13 rider: the window's concurrency claim, pinned under -race.
+	fb := newFakeBrain()
+	r := router.New()
+	t.Cleanup(func() { shutdown(t, r) })
+	_ = r.RegisterChannel(newFakeChannel("ch"))
+	_ = r.RegisterBrain("brain", fb)
+	_ = r.Route("ch", "brain")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = r.DispatchInbound(context.Background(), mkInboundWithEventID("ch", "c", "x", "same-77"))
+		}()
+	}
+	wg.Wait()
+	waitHandled(t, fb, 1)
+	time.Sleep(50 * time.Millisecond)
+	if got := len(fb.Handled()); got != 1 {
+		t.Fatalf("brain handled %d, want exactly 1 under 16 concurrent duplicates", got)
+	}
+}

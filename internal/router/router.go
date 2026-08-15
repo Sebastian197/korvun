@@ -284,7 +284,8 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 	// counted, observable drop — MessageDropped with ErrDuplicateEvent plus
 	// the dedup counter — and a nil return: the channel did nothing wrong.
 	// An envelope without a provider event id is never deduplicated.
-	if key := dedupKey(env); key != "" {
+	key := dedupKey(env)
+	if key != "" {
 		r.dedupOnce.Do(func() {
 			r.dedup = newDedupWindow(DedupCapacity, DedupTTL, r.clock)
 		})
@@ -311,12 +312,17 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 		return nil
 	}
 
+	// A delivery the router does NOT accept must not stay in the dedup
+	// window (E-1): forget the id on every failure path below so a
+	// legitimate re-delivery is not dropped as a duplicate of its own
+	// failure.
 	if r.enqueueTimeout <= 0 {
 		select {
 		case bw.queue <- env:
 			r.publishReceived(env, brainName)
 			return nil
 		case <-ctx.Done():
+			r.dedupForget(key)
 			return ctx.Err()
 		}
 	}
@@ -327,10 +333,21 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 		r.publishReceived(env, brainName)
 		return nil
 	case <-ctx.Done():
+		r.dedupForget(key)
 		return ctx.Err()
 	case <-timer.C:
+		r.dedupForget(key)
 		return ErrBrainSaturated
 	}
+}
+
+// dedupForget removes key from the dedup window on a failed dispatch;
+// nil-safe and no-op for the empty key (no event id).
+func (r *Router) dedupForget(key string) {
+	if key == "" || r.dedup == nil {
+		return
+	}
+	r.dedup.forget(key)
 }
 
 // Shutdown stops every brain worker and channel worker and waits for

@@ -109,6 +109,22 @@ func (w *dedupWindow) seen(key string) bool {
 	return false
 }
 
+// forget removes key from the window, if present. It is the failure-path
+// companion of seen (audit E-1 / Codex C-1): a delivery the router could NOT
+// accept (saturated queue, cancelled enqueue) must not leave its id recorded,
+// or a legitimate re-delivery within the TTL would be dropped as a duplicate
+// of its own failure — message loss. Best-effort by design: a concurrent
+// duplicate arriving while the first attempt is failing may still be dropped
+// once (the window is an in-memory bound, not a ledger).
+func (w *dedupWindow) forget(key string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if el, ok := w.byKey[key]; ok {
+		w.order.Remove(el)
+		delete(w.byKey, key)
+	}
+}
+
 // dedupKey builds the window key for an envelope, or "" when the envelope
 // carries no provider event id (meaning: do not deduplicate).
 func dedupKey(env *envelope.Envelope) string {
