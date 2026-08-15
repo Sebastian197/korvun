@@ -23,16 +23,26 @@ function gatedFetch() {
     if (url.endsWith('/message') && method === 'POST') {
       const text = (JSON.parse(String(init?.body)) as { text: string }).text
       gates.push(() => {
-        turns = [
-          ...turns,
-          { role: 'user', content: text, timestamp: '2026-08-15T12:00:00Z', seq: turns.length },
-          {
-            role: 'assistant',
-            content: `eco de ${text}`,
-            timestamp: '2026-08-15T12:00:30Z',
-            seq: turns.length + 1,
-          },
-        ]
+        turns = text.startsWith('/')
+          ? [
+              ...turns,
+              {
+                role: 'system',
+                content: `ack ${text}`,
+                timestamp: '2026-08-15T12:00:00Z',
+                seq: turns.length,
+              },
+            ]
+          : [
+              ...turns,
+              { role: 'user', content: text, timestamp: '2026-08-15T12:00:00Z', seq: turns.length },
+              {
+                role: 'assistant',
+                content: `eco de ${text}`,
+                timestamp: '2026-08-15T12:00:30Z',
+                seq: turns.length + 1,
+              },
+            ]
       })
       return json({}, 202)
     }
@@ -123,5 +133,46 @@ describe('pending echoes are a list (E-14)', () => {
     await waitFor(() =>
       expect(screen.getAllByText('hola', { selector: '.console-turn-content' })).toHaveLength(2),
     )
+  })
+})
+
+describe('re-review candidates (E-14 follow-up)', () => {
+  it('one system ack retires exactly ONE pending command, oldest first', async () => {
+    const { fetcher, releaseNext } = gatedFetch()
+    await openChat(fetcher)
+
+    send('/tools')
+    await waitFor(() => expect(screen.getAllByText('Sending…')).toHaveLength(1))
+    send('/tools')
+    await waitFor(() => expect(screen.getAllByText('Sending…')).toHaveLength(2))
+
+    // ONE system ack lands: exactly one command pending retires — the old
+    // last-turn-is-system heuristic dropped BOTH here.
+    releaseNext()
+    await waitFor(() => expect(screen.getAllByText('Sending…')).toHaveLength(1))
+
+    releaseNext()
+    await waitFor(() => expect(screen.queryAllByText('Sending…')).toHaveLength(0))
+  })
+
+  it('an identical turn already in history does not swallow a new echo', async () => {
+    const { fetcher, releaseNext } = gatedFetch()
+    await openChat(fetcher)
+
+    // First 'hola' completes fully: the store now HOLDS a user turn 'hola'.
+    send('hola')
+    releaseNext()
+    await waitFor(() => expect(screen.queryAllByText('Sending…')).toHaveLength(0))
+
+    // A NEW 'hola': its echo must survive until ITS OWN pair lands — the
+    // historical turn must not count as its reconciliation.
+    send('hola')
+    await waitFor(() => expect(screen.getAllByText('Sending…')).toHaveLength(1))
+    // Give the reconcile effect a tick to (wrongly) retire it.
+    await new Promise((r) => setTimeout(r, 100))
+    expect(screen.getAllByText('Sending…')).toHaveLength(1)
+
+    releaseNext()
+    await waitFor(() => expect(screen.queryAllByText('Sending…')).toHaveLength(0))
   })
 })

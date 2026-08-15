@@ -83,26 +83,54 @@ function roleLabel(role: string): string {
  * The `live` flip counts as a change on purpose: the stream opening late
  * (core just started) must trigger a catch-up re-fetch for the events it
  * never saw. */
-type PendingEcho = { id: number; key: string; content: string; state: 'sending' | 'failed' }
+type PendingEcho = {
+  id: number
+  key: string
+  content: string
+  state: 'sending' | 'failed'
+  /** User turns with this content ALREADY in the store at send time: only
+   * turns beyond this baseline reconcile this echo — a historical identical
+   * message must never swallow a new send (re-review follow-up). */
+  baseline: number
+  /** System turns in the store at send time; one NEW system ack retires ONE
+   * pending command, oldest first — never all of them at once. */
+  sysBaseline: number
+}
 type TurnLike = { role: string; content: string }
 
-// visiblePendings applies the SAME one-store-turn-covers-one-pending rule the
-// reconcile effect uses, at render time — so an already-covered echo never
-// double-renders in the frame between the store update and the effect run
-// (estreno E-14).
-function visiblePendings(pendings: PendingEcho[], turns: TurnLike[], key: string): PendingEcho[] {
+// retiredPendingIds is the single reconciliation rule, shared by the effect
+// and the render filter (estreno E-14 + its re-review follow-up): each NEW
+// store turn beyond a pending's own baseline retires exactly ONE pending,
+// oldest first — per content for messages, per system ack for commands.
+function retiredPendingIds(pendings: PendingEcho[], turns: TurnLike[], key: string): Set<number> {
+  const out = new Set<number>()
   const claimed = new Map<string, number>()
-  return pendings.filter((p) => {
-    if (p.key !== key) return false
-    if (p.state !== 'sending') return true
+  let claimedSys = 0
+  const sysCount = turns.filter((t) => t.role === 'system').length
+  for (const p of pendings) {
+    if (p.state !== 'sending' || p.key !== key) continue
+    if (p.content.startsWith('/')) {
+      // A system command never persists a user turn — its SYSTEM ack is the
+      // reconciliation signal, one ack per command.
+      if (sysCount >= p.sysBaseline + claimedSys + 1) {
+        out.add(p.id)
+        claimedSys++
+      }
+      continue
+    }
     const covered = turns.filter((t) => t.role === 'user' && t.content === p.content).length
     const used = claimed.get(p.content) ?? 0
-    if (used < covered) {
+    if (covered >= p.baseline + used + 1) {
+      out.add(p.id)
       claimed.set(p.content, used + 1)
-      return false
     }
-    return true
-  })
+  }
+  return out
+}
+
+function visiblePendings(pendings: PendingEcho[], turns: TurnLike[], key: string): PendingEcho[] {
+  const retired = retiredPendingIds(pendings, turns, key)
+  return pendings.filter((p) => p.key === key && !retired.has(p.id))
 }
 
 function useLiveFeedVersion(): number {
@@ -140,9 +168,7 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   // pair — a second rapid send must not overwrite the first (the
   // single-slot bug); a failed send stays visible, marked — never a
   // silent vanish.
-  const [pendings, setPendings] = useState<
-    Array<{ id: number; key: string; content: string; state: 'sending' | 'failed' }>
-  >([])
+  const [pendings, setPendings] = useState<PendingEcho[]>([])
   const nextPendingId = useRef(0)
   const [nowMs, setNowMs] = useState(() => Date.now())
 
@@ -237,28 +263,14 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     }
   }, [turns])
 
-  // Reconcile the optimistic echoes: each store user turn retires exactly
-  // ONE pending with that content, oldest first — two identical rapid
-  // sends keep their own echoes until each pair lands (E-14).
+  // Reconcile the optimistic echoes with the shared per-baseline rule
+  // (retiredPendingIds): each NEW store turn retires exactly one pending.
   useEffect(() => {
     setPendings((prev) => {
-      if (prev.length === 0) return prev
-      const lastIsSystem = turns.length > 0 && turns[turns.length - 1].role === 'system'
-      const claimed = new Map<string, number>()
-      const survivors = prev.filter((p) => {
-        if (p.state !== 'sending' || p.key !== selected) return true
-        // A system command ("/new", "/tools"…) never persists a user turn —
-        // its SYSTEM ack is the reconciliation signal instead.
-        if (p.content.startsWith('/') && lastIsSystem) return false
-        const covered = turns.filter((t) => t.role === 'user' && t.content === p.content).length
-        const used = claimed.get(p.content) ?? 0
-        if (used < covered) {
-          claimed.set(p.content, used + 1)
-          return false
-        }
-        return true
-      })
-      return survivors.length === prev.length ? prev : survivors
+      if (prev.length === 0 || selected === null) return prev
+      const retired = retiredPendingIds(prev, turns, selected)
+      if (retired.size === 0) return prev
+      return prev.filter((p) => !retired.has(p.id))
     })
   }, [turns, selected])
 
@@ -342,7 +354,12 @@ export function Console(props: ConsoleProps): React.JSX.Element {
       const text = draft
       setComposer({ kind: 'idle' })
       const pendingId = ++nextPendingId.current
-      setPendings((p) => [...p, { id: pendingId, key: selected, content: text, state: 'sending' }])
+      const baseline = turns.filter((t) => t.role === 'user' && t.content === text).length
+      const sysBaseline = turns.filter((t) => t.role === 'system').length
+      setPendings((p) => [
+        ...p,
+        { id: pendingId, key: selected, content: text, state: 'sending', baseline, sysBaseline },
+      ])
       setThinking(true)
       setThinkingSince(Date.now())
       pinnedRef.current = true
