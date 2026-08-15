@@ -20,10 +20,56 @@ export interface PolicyConfig {
   order?: string[]
 }
 
+// ToolGrantConfig mirrors config.ToolGrantConfig (ADR-0041 §1): one tri-state
+// grant. mode is allow|shadow|deny; channels, when present, restricts the grant
+// to those channels. Absence of a grant for a listed tool is the ungoverned
+// advertise+execute default — deny is NOT absence.
+export interface ToolGrantConfig {
+  tool: string
+  mode: string
+  channels?: string[]
+}
+
+// ToolAttrsConfig mirrors config.ToolAttrsConfig (ADR-0015 declared-not-inferred):
+// a per-tool attribute OVERRIDE. An undefined field keeps the house default; the
+// Go *bool round-trips as `boolean | undefined`.
+export interface ToolAttrsConfig {
+  sensitive?: boolean
+  network?: boolean
+}
+
+// The three tool cages mirror config.{ReadFile,HTTPFetch,WebhookCall}ToolConfig
+// (ADR-0041 §4): required when the tool is listed; the caps 0 => tool default,
+// so they ride omitempty (undefined here).
+export interface ReadFileToolConfig {
+  root: string
+  max_bytes?: number
+}
+export interface HTTPFetchToolConfig {
+  allow_hosts: string[]
+  max_bytes?: number
+  max_redirects?: number
+}
+export interface WebhookCallToolConfig {
+  allow_hosts: string[]
+  max_bytes?: number
+  timeout_seconds?: number
+}
+
+// AgentConfig mirrors config.AgentConfig (internal/config/config.go:342-408)
+// EXACTLY. The governed-tools fields (ADR-0041) are all optional: an agent block
+// written before governance validates byte-for-byte as before (AS-4).
 export interface AgentConfig {
   tools: string[]
   max_iterations: number
   system_prompt: string
+  governance?: ToolGrantConfig[]
+  tool_attrs?: Record<string, ToolAttrsConfig>
+  read_file?: ReadFileToolConfig
+  http_fetch?: HTTPFetchToolConfig
+  webhook_call?: WebhookCallToolConfig
+  skills_dir?: string
+  skills_body_budget?: number
 }
 
 // PersonaConfig mirrors config.PersonaConfig (builder-canvas SP1, NC-4): the
