@@ -18,8 +18,10 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -35,6 +37,18 @@ const DefaultRequestTimeout = 120 * time.Second
 // Config is the root deployment descriptor: the channels to run, the brains to
 // orchestrate, the routes binding the two, and optional durable storage.
 type Config struct {
+	// SchemaVersion is the OPTIONAL config schema version. Absent (0) means
+	// version 1 — every config written before the field existed. The only
+	// accepted explicit value today is 1; anything else fails loud at Load
+	// with ErrUnsupportedSchemaVersion, so the day the schema must break, an
+	// old binary refuses a new file instead of misreading it (A-1). Resolve
+	// via EffectiveSchemaVersion.
+	SchemaVersion int `json:"schema_version,omitempty"`
+	// Comment is the sanctioned root-level annotation slot: JSON has no
+	// comments, so the shipped profiles document themselves with a
+	// "_comment" key. It is decoded (the strict decoder would otherwise
+	// refuse it) and ignored by the runtime.
+	Comment string `json:"_comment,omitempty"`
 	// RequestTimeout is the top-level default per-attempt provider timeout, a
 	// duration string (e.g. "120s"). A per-model ModelConfig.RequestTimeout
 	// overrides it; when both are empty, DefaultRequestTimeout applies
@@ -442,9 +456,23 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %q: %w", ErrConfigRead, path, err)
 	}
+	// Strict decode (A-1): unknown keys are refused NAMING the key, so a
+	// typo ("sesion", "enable") can never silently become a default. The
+	// decoder's own message carries the quoted key; classify it behind
+	// ErrUnknownField so callers can errors.Is it apart from broken JSON.
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	if err := dec.Decode(&cfg); err != nil {
+		if strings.Contains(err.Error(), "unknown field") {
+			return nil, fmt.Errorf("%w: %q: %w", ErrUnknownField, path, err)
+		}
 		return nil, fmt.Errorf("%w: %q: %w", ErrConfigParse, path, err)
+	}
+	// json.Unmarshal rejected trailing garbage; the streaming decoder must
+	// not regress that (a second document is a broken file, not a config).
+	if err := dec.Decode(new(json.RawMessage)); err != io.EOF {
+		return nil, fmt.Errorf("%w: %q: trailing data after the config document", ErrConfigParse, path)
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -459,7 +487,24 @@ func Load(path string) (*Config, error) {
 // (NC-1 companion): a valid config never carries nil Channels/Routes — an
 // OMITTED key must behave, re-serve, and re-persist exactly like an empty
 // list ("channels": null through GET /api/config would crash the builder).
+// SupportedSchemaVersion is the config schema version this binary reads.
+const SupportedSchemaVersion = 1
+
+// EffectiveSchemaVersion resolves the declared schema version: an absent
+// field (0) means version 1, exactly like every config written before the
+// field existed.
+func (c *Config) EffectiveSchemaVersion() int {
+	if c.SchemaVersion == 0 {
+		return SupportedSchemaVersion
+	}
+	return c.SchemaVersion
+}
+
 func (c *Config) Validate() error {
+	if v := c.EffectiveSchemaVersion(); v != SupportedSchemaVersion {
+		return fmt.Errorf("%w: %d (this binary reads version %d)",
+			ErrUnsupportedSchemaVersion, v, SupportedSchemaVersion)
+	}
 	// Note: Storage is intentionally NOT validated here. storage.path is resolved
 	// and checked at boot (internal/app openStore, which returns a named fatal
 	// error) because resolving the default path and verifying writability depend
