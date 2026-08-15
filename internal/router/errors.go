@@ -121,6 +121,13 @@ const (
 	// turn). The dispatch FAILS OPEN: the message continues to the brain
 	// untouched rather than being dropped (operator-console spec SP2).
 	ErrKindSession
+
+	// ErrKindUnknownReplyChannel indicates a brain produced a reply whose
+	// Channel names no registered channel; the reply was dropped. This is a
+	// reply-construction bug (ours), not operator misconfiguration, and it
+	// was the router's only discard path without a hook notification before
+	// audit finding R-7 closed it. The wrapped error is ErrUnknownChannel.
+	ErrKindUnknownReplyChannel
 )
 
 // String returns the short human-readable name of the error kind.
@@ -134,6 +141,8 @@ func (k ErrorKind) String() string {
 		return "outbound_saturated"
 	case ErrKindInboundDispatch:
 		return "inbound_dispatch"
+	case ErrKindUnknownReplyChannel:
+		return "unknown_reply_channel"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(k))
 	}

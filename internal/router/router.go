@@ -474,6 +474,16 @@ func (r *Router) sendReply(env *envelope.Envelope) {
 	cw, ok := r.channels[env.Channel]
 	r.mu.RUnlock()
 	if !ok {
+		// A reply naming an unregistered channel is a reply-construction bug
+		// in the brain. It was the router's only silent discard (audit R-7):
+		// surface it to the hook — the app's generic RouterError→event
+		// mapping turns it into an observable MessageDropped.
+		r.notifyError(RouterError{
+			Kind:     ErrKindUnknownReplyChannel,
+			Channel:  env.Channel,
+			Envelope: env,
+			Err:      fmt.Errorf("%w: %q (reply dropped)", ErrUnknownChannel, env.Channel),
+		})
 		return
 	}
 
