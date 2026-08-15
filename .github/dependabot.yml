@@ -27,3 +27,50 @@ updates:
       github-actions:
         patterns:
           - "*"
+
+  # npm trees (audit S-3): the three package.json roots were previously
+  # unwatched, so npm advisories accumulated without remediation PRs (the
+  # four 2026-08 vite/esbuild alerts). Lockfile-regen law applies to every
+  # npm PR: `npm install --include=optional` + `npm ci` twice clean
+  # (CLAUDE.md, frontend lockfiles).
+  - package-ecosystem: "npm"
+    directory: "/website"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    groups:
+      website-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/builder"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    groups:
+      builder-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/cmd/korvun-desktop/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    groups:
+      desktop-frontend-npm:
+        patterns:
+          - "*"
