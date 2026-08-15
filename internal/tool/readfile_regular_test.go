@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -67,5 +68,45 @@ func TestReadFile_regularFileStillReads(t *testing.T) {
 	out, err := rf.Execute(context.Background(), "ok.txt")
 	if err != nil || out != "hola" {
 		t.Fatalf("Execute = (%q, %v), want (hola, nil)", out, err)
+	}
+}
+
+// Estreno E-13: the documented info-leak guard on NONEXISTENT paths — an
+// out-of-jail path that does not exist answers ErrCageViolation, never
+// "not found" ("existence outside the jail is not information this tool
+// leaks") — was untested; so was the ordinary in-jail not-found form.
+func TestReadFile_nonexistentOutsideJailLeaksNothing(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	rf, err := ReadFile(ReadFileConfig{Root: root})
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	outside := filepath.Join(t.TempDir(), "no-such-file.txt")
+	_, execErr := rf.Execute(context.Background(), outside)
+	if !errors.Is(execErr, ErrCageViolation) {
+		t.Fatalf("err = %v, want ErrCageViolation (never a not-found that leaks existence)", execErr)
+	}
+	if strings.Contains(execErr.Error(), "not found") {
+		t.Fatalf("error %q leaks existence information", execErr)
+	}
+}
+
+func TestReadFile_nonexistentInsideJailIsOrdinaryNotFound(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	rf, err := ReadFile(ReadFileConfig{Root: root})
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	_, execErr := rf.Execute(context.Background(), "missing.txt")
+	if execErr == nil {
+		t.Fatal("want a not-found error")
+	}
+	if errors.Is(execErr, ErrCageViolation) {
+		t.Fatalf("err = %v; an in-jail miss is an ordinary tool error, not a cage refusal", execErr)
+	}
+	if !strings.Contains(execErr.Error(), "not found") {
+		t.Fatalf("error %q is not the not-found form", execErr)
 	}
 }
