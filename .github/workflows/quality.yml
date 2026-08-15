@@ -31,7 +31,10 @@ jobs:
         shell: bash
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
-          go install golang.org/x/tools/cmd/goimports@latest
+          # Pinned (audit S-4): a floating goimports is a FORMAT GATE that can
+          # turn red on an upstream opinion change. Verified at golang/tools
+          # tags on 2026-08-15.
+          go install golang.org/x/tools/cmd/goimports@v0.49.0
 
       # Raw `./...` walks node_modules (npm ships stray Go files; junk there
       # aborts the whole listing — see the Makefile header). CI checkouts are
@@ -140,7 +143,9 @@ jobs:
       - name: Govulncheck
         shell: bash
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Pinned (audit S-4): the vuln DB stays current server-side; only the
+          # TOOL is pinned. Verified at golang/vuln tags on 2026-08-15.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           GO_PKGS=$(go list -e -f "{{if not .Error}}{{.ImportPath}}{{end}}" $(find . \( -name node_modules -o -name .git \) -prune -o -type f -name "*.go" -print | sed "s|/[^/]*$||" | sort -u) | grep -v "^$")
           $(go env GOPATH)/bin/govulncheck $GO_PKGS
 

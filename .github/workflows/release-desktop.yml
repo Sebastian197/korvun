@@ -175,7 +175,9 @@ jobs:
       - name: govulncheck (desktop tags, native GOOS)
         shell: bash
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Pinned (audit S-4), same version as quality.yml — verified at
+          # golang/vuln tags on 2026-08-15.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
           TAGS="desktop,production"
           if [ "${{ runner.os }}" = "Linux" ]; then TAGS="desktop,production,webkit2_41"; fi
           "$(go env GOPATH)/bin/govulncheck" -tags "$TAGS" ./cmd/korvun-desktop
