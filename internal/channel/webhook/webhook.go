@@ -175,6 +175,14 @@ func (a *Adapter) InboundHandler() http.Handler {
 			return
 		}
 
+		// X-Idempotency-Key opts the SENDER into router-side dedup of its
+		// retries (audit R-1): the header value becomes the provider event
+		// id. No header ⇒ no event id ⇒ no dedup — the documented fail-open
+		// contract; the router never invents identity for an event.
+		if key := r.Header.Get("X-Idempotency-Key"); key != "" {
+			env.Meta[envelope.MetaProviderEventID] = key
+		}
+
 		a.enqueue(w, r, env)
 	})
 }

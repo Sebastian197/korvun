@@ -52,6 +52,7 @@ type Metrics struct {
 	turnsPersisted prometheus.Counter
 	toolCalls      *prometheus.CounterVec
 	toolDur        *prometheus.HistogramVec
+	deduped        *prometheus.CounterVec
 }
 
 // Compile-time assertion that *Metrics satisfies the domain seam.
@@ -106,9 +107,14 @@ func New() *Metrics {
 			Help:    "Governed tool execution latency, by tool and outcome.",
 			Buckets: toolDurationBuckets,
 		}, []string{"tool", "outcome"}),
+		deduped: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "korvun_deduped_total",
+			Help: "Inbound events dropped as duplicates by the router's dedup window, by channel.",
+		}, []string{"channel"}),
 	}
 	reg.MustRegister(m.messages, m.providerDur, m.providerFail, m.providerRetry,
-		m.retryExhausted, m.routerErrors, m.turnsPersisted, m.toolCalls, m.toolDur)
+		m.retryExhausted, m.routerErrors, m.turnsPersisted, m.toolCalls, m.toolDur,
+		m.deduped)
 	return m
 }
 
@@ -166,6 +172,12 @@ func (m *Metrics) IncProviderFailure(provider string) {
 // sub-phase 7).
 func (m *Metrics) IncProviderRetry(provider string) {
 	m.providerRetry.WithLabelValues(provider).Inc()
+}
+
+// IncDeduped counts one inbound event dropped as a duplicate by the router's
+// dedup window (audit R-1), by channel.
+func (m *Metrics) IncDeduped(channel string) {
+	m.deduped.WithLabelValues(channel).Inc()
 }
 
 // IncProviderRetryBudgetExhausted counts one retry budget exhausted without

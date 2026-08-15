@@ -70,6 +70,14 @@ type Router struct {
 	takeoverMu    sync.RWMutex
 	takeover      map[conversation.Key]struct{}
 
+	// Inbound dedup window (audit R-1) and its optional per-channel counter
+	// seam (WithDedupCounter). The window is created lazily on first use so
+	// it reads the FINAL clock (WithClock is an option and may run after
+	// construction).
+	dedupOnce    sync.Once
+	dedup        *dedupWindow
+	dedupCounter func(channel string)
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
@@ -270,6 +278,30 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 		return fmt.Errorf("%w: %q", ErrUnknownBrain, brainName)
 	}
 	r.mu.RUnlock()
+
+	// Inbound dedup (audit R-1), BEFORE any session side effect: a replayed
+	// delivery must not re-trigger session logic either. A duplicate is a
+	// counted, observable drop — MessageDropped with ErrDuplicateEvent plus
+	// the dedup counter — and a nil return: the channel did nothing wrong.
+	// An envelope without a provider event id is never deduplicated.
+	if key := dedupKey(env); key != "" {
+		r.dedupOnce.Do(func() {
+			r.dedup = newDedupWindow(DedupCapacity, DedupTTL, r.clock)
+		})
+		if r.dedup.seen(key) {
+			r.publishEvent(bus.Event{
+				Type:     bus.MessageDropped,
+				Envelope: env,
+				Channel:  env.Channel,
+				Brain:    brainName,
+				Err:      ErrDuplicateEvent,
+			})
+			if r.dedupCounter != nil {
+				r.dedupCounter(env.Channel)
+			}
+			return nil
+		}
+	}
 
 	// SP2 (operator-console spec): lazy session expiry → reset triggers →
 	// the takeover gate — all BEFORE the brain enqueue. A fully-handled

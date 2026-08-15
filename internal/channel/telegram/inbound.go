@@ -47,6 +47,21 @@ func InboundFromUpdate(u *models.Update) (*envelope.Envelope, error) {
 	if u == nil {
 		return nil, ErrNoMessage
 	}
+	env, err := inboundFromUpdateKind(u)
+	if err != nil {
+		return nil, err
+	}
+	// Stamp the UPDATE id as the provider event id (audit R-1): it is the
+	// per-DELIVERY identifier the router's dedup window matches on. The
+	// message id is deliberately NOT used — an edit arrives as a NEW update
+	// carrying the SAME message id, and must not deduplicate against the
+	// original.
+	env.Meta[envelope.MetaProviderEventID] = strconv.FormatInt(u.ID, 10)
+	return env, nil
+}
+
+// inboundFromUpdateKind dispatches on the update kind, unchanged behavior.
+func inboundFromUpdateKind(u *models.Update) (*envelope.Envelope, error) {
 	if u.CallbackQuery != nil {
 		return inboundFromCallbackQuery(u.CallbackQuery)
 	}

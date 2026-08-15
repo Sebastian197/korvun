@@ -54,6 +54,11 @@ type Metrics interface {
 	// (FR-A2) — by provider. A non-retryable failure never bumps it (ADR-0031
 	// sub-phase 7).
 	IncProviderRetryBudgetExhausted(provider string)
+	// IncDeduped counts one inbound event dropped as a duplicate by the
+	// router's dedup window (audit R-1), by channel. It mirrors the drop
+	// counters of the channels: dedup is a drop CLASS, and every drop class
+	// is observable.
+	IncDeduped(channel string)
 	// ObserveToolUse records one governed-tool gate outcome (ADR-0041 §5):
 	// a counter by (tool, outcome) plus a latency histogram under the same
 	// labels. outcome is ok|error for an executed tool, denied for a gate/
@@ -92,3 +97,6 @@ func (Nop) IncProviderRetryBudgetExhausted(string) {}
 
 // ObserveToolUse does nothing.
 func (Nop) ObserveToolUse(string, string, time.Duration) {}
+
+// IncDeduped does nothing.
+func (Nop) IncDeduped(string) {}

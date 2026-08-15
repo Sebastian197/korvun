@@ -140,6 +140,12 @@ func mapMessageCreate(data []byte, selfID string) (*envelope.Envelope, dropReaso
 		Name: name,
 	})
 	env.Meta[conversation.MetaConversationID] = m.ChannelID
+	// The Discord message id is the provider event id (audit R-1): a Gateway
+	// resume replays the gap's dispatches verbatim, and this id is what lets
+	// the router's dedup window drop the replay. No id ⇒ no stamp (fail-open).
+	if m.ID != "" {
+		env.Meta[envelope.MetaProviderEventID] = m.ID
+	}
 	env.AddText(m.Content)
 	return env, keep
 }

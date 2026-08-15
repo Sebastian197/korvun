@@ -59,6 +59,8 @@ type auditMetrics struct {
 	toolUses []toolUseRecord
 }
 
+func (m *auditMetrics) IncDeduped(string) {}
+
 func (m *auditMetrics) ObserveToolUse(toolName, outcome string, _ time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

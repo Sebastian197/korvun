@@ -284,6 +284,9 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// the Handle ctx, so removing the coordinator/adapter timeouts below leaves
 		// no path without a deadline.
 		router.WithBrainHandlerTimeout(ceiling),
+		// Inbound dedup drops are a drop CLASS (audit R-1): counted like every
+		// other drop. b.metrics is never nil (Nop default).
+		router.WithDedupCounter(b.metrics.IncDeduped),
 	}
 	if eventBus != nil {
 		ropts = append(ropts, router.WithEventPublisher(eventBus))
