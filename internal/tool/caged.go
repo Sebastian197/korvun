@@ -95,16 +95,20 @@ type ParamTool interface {
 // §3), installed as net.Dialer.Control on a Private brain's network tools.
 // It runs on EVERY connection attempt with the RESOLVED address — after DNS —
 // so a rebound hostname or an off-shield redirect dies at the socket, before
-// a single byte leaves. Private means: IPv4 loopback/RFC1918/link-local,
-// IPv6 loopback/ULA/link-local, with IPv4-mapped-in-IPv6 forms unmapped
-// before classification. An unparseable address fails CLOSED.
+// a single byte leaves. Private means: IPv4 loopback/RFC1918, IPv6
+// loopback/ULA, with IPv4-mapped-in-IPv6 forms unmapped before
+// classification. Link-local unicast is deliberately EXCLUDED (estreno E-8):
+// 169.254.169.254 / fe80::/10 includes the cloud metadata service — a
+// credential-theft SSRF target a rebound allow-listed hostname could reach
+// under the shield; genuine link-local use is exotic enough to refuse. An
+// unparseable address fails CLOSED.
 func shieldControl(_, address string, _ syscall.RawConn) error {
 	ap, err := netip.ParseAddrPort(address)
 	if err != nil {
 		return fmt.Errorf("shield: unparseable dial address %q: %w", address, ErrShieldViolation)
 	}
 	a := ap.Addr().Unmap()
-	if a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast() {
+	if a.IsLoopback() || a.IsPrivate() {
 		return nil
 	}
 	return fmt.Errorf("shield: %s is not a private address: %w", a, ErrShieldViolation)
