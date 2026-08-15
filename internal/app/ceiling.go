@@ -10,6 +10,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/model/retry"
+	"github.com/Sebastian197/korvun/internal/policy"
 )
 
 // The router-ceiling derivation (ADR-0031 Decision 2). The app derives the
@@ -136,9 +137,28 @@ func ceilingForBrain(cfg *config.Config, bc config.BrainConfig) time.Duration {
 		if maxIter <= 0 {
 			maxIter = brain.DefaultAgentMaxIterations
 		}
+		// Budget the model that SURVIVES the privacy selector — the one
+		// buildAgentBrain actually runs (estreno E-12): a Private brain
+		// listing a fast cloud model first would otherwise derive a ceiling
+		// below one real attempt of its local survivor and guillotine every
+		// cold call. Mirrors brainSummary's Public-keeps-all /
+		// Private-keeps-local rule; on any parse failure fall back to
+		// Models[0] conservatively — the build itself fails loud later.
 		var m config.ModelConfig
 		if len(bc.Models) > 0 {
 			m = bc.Models[0]
+			if sens, err := parseSensitivity(bc.Sensitivity); err == nil {
+				for _, cand := range bc.Models {
+					loc, err := parseLocality(cand.Locality)
+					if err != nil {
+						continue
+					}
+					if sens == policy.Public || loc == policy.Local {
+						m = cand
+						break
+					}
+				}
+			}
 		}
 		return deriveBrainCeiling(brainCeilingSpec{
 			shape:        shapeAgent,

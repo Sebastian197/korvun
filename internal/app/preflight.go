@@ -41,6 +41,16 @@ func Preflight(cfg *config.Config, opts ...Option) error {
 	for _, o := range opts {
 		o(b)
 	}
+	// Preflight validates the SAME surface Build does (estreno E-12): the
+	// config is installed on the builder (per-model timeouts resolve
+	// identically) and the router ceiling is derived here too — a too-low
+	// brain_handler_timeout override is exactly the class of construction
+	// error that must fail cheaply while the old app still serves, not
+	// inside the cutover's rollback path.
+	b.cfg = cfg
+	if _, err := deriveRouterCeiling(cfg); err != nil {
+		return err
+	}
 
 	// Brains: catalog construction (secret resolution) + privacy selector + the
 	// agent single-model check — all pure, no store injected, no router, no workers.
