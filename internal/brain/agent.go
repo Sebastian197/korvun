@@ -472,6 +472,13 @@ func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *m
 func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisions map[string]policy.ToolDecision, name, args string) string {
 	t, ok := a.tools[name]
 	if !ok {
+		// A hallucinated tool name is exactly the behavior the audit
+		// surfaces exist to observe (estreno E-3 / red-team): a denial with
+		// its own rule, on the same grammar the cages emit.
+		a.logger.Warn("agent: tool denied",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+			"rule", "unknown_tool", "args_prefix", boundedArgs(args))
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: "unknown_tool"})
 		return fmt.Sprintf("tool %q not found", name)
 	}
 	if decisions != nil {

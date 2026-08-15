@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/policy"
@@ -76,11 +77,24 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 		// Each result returns as a RoleTool turn per the verified contract.
 		req.Messages = append(req.Messages, resp.Message)
 		for _, call := range resp.Message.ToolCalls {
-			args, argErr := a.nativeCallArgs(advertised, call)
 			var observation string
-			if argErr != nil {
+			if gated := decisions != nil && func() bool {
+				d, ok := decisions[call.Name]
+				return !ok || d.Mode != policy.ToolAllow
+			}(); gated {
+				// Governance rules BEFORE argument parsing (estreno E-3): a
+				// shadowed/denied call must produce the gate's observation
+				// and audit even when its args would not parse — a field
+				// error must never smuggle the attempt past the gate.
+				observation = a.runTool(ctx, env, decisions, call.Name, nativeArgs(call))
+			} else if args, argErr := a.nativeCallArgs(advertised, call); argErr != nil {
 				// A useful, model-facing field error (the ParamTool contract)
-				// — same failure class as a tool error, loop stays alive.
+				// — same failure class as a tool error, loop stays alive, and
+				// the attempt is AUDITED like any errored use (closes the
+				// known ParamTool audit gap).
+				a.logger.Warn("agent: tool args rejected",
+					"envelope_id", env.ID, "channel", env.Channel, "tool", call.Name, "cause", argErr)
+				a.auditTool(ctx, env, bus.Event{Type: bus.ToolUsed, Tool: call.Name, Outcome: "error"})
 				observation = fmt.Sprintf("tool %s failed: %v", call.Name, argErr)
 			} else {
 				observation = a.runTool(ctx, env, decisions, call.Name, args)
