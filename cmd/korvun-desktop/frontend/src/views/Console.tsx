@@ -83,6 +83,28 @@ function roleLabel(role: string): string {
  * The `live` flip counts as a change on purpose: the stream opening late
  * (core just started) must trigger a catch-up re-fetch for the events it
  * never saw. */
+type PendingEcho = { id: number; key: string; content: string; state: 'sending' | 'failed' }
+type TurnLike = { role: string; content: string }
+
+// visiblePendings applies the SAME one-store-turn-covers-one-pending rule the
+// reconcile effect uses, at render time — so an already-covered echo never
+// double-renders in the frame between the store update and the effect run
+// (estreno E-14).
+function visiblePendings(pendings: PendingEcho[], turns: TurnLike[], key: string): PendingEcho[] {
+  const claimed = new Map<string, number>()
+  return pendings.filter((p) => {
+    if (p.key !== key) return false
+    if (p.state !== 'sending') return true
+    const covered = turns.filter((t) => t.role === 'user' && t.content === p.content).length
+    const used = claimed.get(p.content) ?? 0
+    if (used < covered) {
+      claimed.set(p.content, used + 1)
+      return false
+    }
+    return true
+  })
+}
+
 function useLiveFeedVersion(): number {
   const feed = useFeed()
   const c = feed.counters
@@ -113,14 +135,15 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   // can turn plain-words after ~10s of a slow local model.
   const [thinkingSince, setThinkingSince] = useState<number | null>(null)
   const [thinkingLong, setThinkingLong] = useState(false)
-  // Optimistic echo (pega 2): the user's turn paints the instant Send is
-  // pressed and reconciles with the store's real pair; a failed send stays
-  // visible, marked — never a silent vanish.
-  const [pending, setPending] = useState<{
-    key: string
-    content: string
-    state: 'sending' | 'failed'
-  } | null>(null)
+  // Optimistic echoes (pega 2, list since estreno E-14): EVERY in-flight
+  // send paints the instant Send is pressed and reconciles with ITS real
+  // pair — a second rapid send must not overwrite the first (the
+  // single-slot bug); a failed send stays visible, marked — never a
+  // silent vanish.
+  const [pendings, setPendings] = useState<
+    Array<{ id: number; key: string; content: string; state: 'sending' | 'failed' }>
+  >([])
+  const nextPendingId = useRef(0)
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   const turnsRef = useRef<HTMLOListElement | null>(null)
@@ -214,24 +237,30 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     }
   }, [turns])
 
-  // Reconcile the optimistic echo: once the store carries the user turn,
-  // the local copy retires (no duplicates, no flicker).
+  // Reconcile the optimistic echoes: each store user turn retires exactly
+  // ONE pending with that content, oldest first — two identical rapid
+  // sends keep their own echoes until each pair lands (E-14).
   useEffect(() => {
-    if (pending === null || pending.state !== 'sending') return
-    if (pending.key !== selected) return
-    // A system command ("/new", "/tools"…) never persists a user turn — its
-    // SYSTEM ack is the reconciliation signal instead (no eternal Sending…).
-    if (pending.content.startsWith('/') && turns.length > 0 && turns[turns.length - 1].role === 'system') {
-      setPending(null)
-      return
-    }
-    for (let i = turns.length - 1; i >= 0; i--) {
-      if (turns[i].role === 'user' && turns[i].content === pending.content) {
-        setPending(null)
-        return
-      }
-    }
-  }, [turns, pending, selected])
+    setPendings((prev) => {
+      if (prev.length === 0) return prev
+      const lastIsSystem = turns.length > 0 && turns[turns.length - 1].role === 'system'
+      const claimed = new Map<string, number>()
+      const survivors = prev.filter((p) => {
+        if (p.state !== 'sending' || p.key !== selected) return true
+        // A system command ("/new", "/tools"…) never persists a user turn —
+        // its SYSTEM ack is the reconciliation signal instead.
+        if (p.content.startsWith('/') && lastIsSystem) return false
+        const covered = turns.filter((t) => t.role === 'user' && t.content === p.content).length
+        const used = claimed.get(p.content) ?? 0
+        if (used < covered) {
+          claimed.set(p.content, used + 1)
+          return false
+        }
+        return true
+      })
+      return survivors.length === prev.length ? prev : survivors
+    })
+  }, [turns, selected])
 
   // The honest-wait tick: after ~10s of thinking, say it in plain words.
   useEffect(() => {
@@ -284,7 +313,7 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     // optimistic echo via the same-content reconciliation).
     setTurns([])
     setSessions([])
-    setPending(null)
+    setPendings([])
     setThinking(false)
     setThinkingSince(null)
   }
@@ -312,7 +341,8 @@ export function Console(props: ConsoleProps): React.JSX.Element {
       // final pair reconciles both later.
       const text = draft
       setComposer({ kind: 'idle' })
-      setPending({ key: selected, content: text, state: 'sending' })
+      const pendingId = ++nextPendingId.current
+      setPendings((p) => [...p, { id: pendingId, key: selected, content: text, state: 'sending' }])
       setThinking(true)
       setThinkingSince(Date.now())
       pinnedRef.current = true
@@ -324,7 +354,7 @@ export function Console(props: ConsoleProps): React.JSX.Element {
         return
       }
       // The echo NEVER vanishes silently: it stays, marked as not sent.
-      setPending({ key: selected, content: text, state: 'failed' })
+      setPendings((p) => p.map((x) => (x.id === pendingId ? { ...x, state: 'failed' } : x)))
       setThinking(false)
       setThinkingSince(null)
       setComposer({
@@ -585,7 +615,7 @@ export function Console(props: ConsoleProps): React.JSX.Element {
               </div>
             )}
 
-            {turns.length === 0 && (archived || pending === null) && (
+            {turns.length === 0 && (archived || pendings.length === 0) && (
               <p className="console-empty">
                 {archived ? 'This session is empty.' : 'No messages in this session yet.'}
               </p>
@@ -604,31 +634,28 @@ export function Console(props: ConsoleProps): React.JSX.Element {
                   className="console-turn"
                   data-role={t.role}
                   data-seq={t.seq}
-                  data-side={
-                    isConsoleKey(current.key) && t.role === 'user' ? 'own' : undefined
-                  }
+                  data-side={isConsoleKey(current.key) && t.role === 'user' ? 'own' : undefined}
                 >
                   <span className="console-turn-role">{roleLabel(t.role)}</span>
                   <span className="console-turn-content">{t.content}</span>
                   <span className="console-turn-time">{relTime(t.timestamp, nowMs)}</span>
                 </li>
               ))}
-              {pending !== null &&
-                pending.key === current.key &&
-                !turns.some((t) => t.role === 'user' && t.content === pending.content) && (
+              {visiblePendings(pendings, turns, current.key).map((p) => (
                 <li
+                  key={`pending-${p.id}`}
                   className="console-turn"
                   data-role="user"
                   data-side="own"
-                  data-send-state={pending.state}
+                  data-send-state={p.state}
                 >
                   <span className="console-turn-role">{roleLabel('user')}</span>
-                  <span className="console-turn-content">{pending.content}</span>
+                  <span className="console-turn-content">{p.content}</span>
                   <span className="console-turn-time">
-                    {pending.state === 'failed' ? 'Not sent' : 'Sending…'}
+                    {p.state === 'failed' ? 'Not sent' : 'Sending…'}
                   </span>
                 </li>
-              )}
+              ))}
             </ol>
 
             {!archived && (
