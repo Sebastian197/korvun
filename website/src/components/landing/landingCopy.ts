@@ -24,6 +24,7 @@ export type LandingCopy = {
     copy: string
     copied: string
     guide: string
+    terminalAria: string
   }
   capabilities: {
     kicker: string
@@ -90,6 +91,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       copy: 'Copy commands',
       copied: 'Copied',
       guide: 'Read the complete install and verification guide',
+      terminalAria: 'Install commands',
     },
     capabilities: {
       kicker: 'Product map',
@@ -199,6 +201,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       copy: 'Copiar comandos',
       copied: 'Copiado',
       guide: 'Leer la guía completa de instalación y verificación',
+      terminalAria: 'Comandos de instalación',
     },
     capabilities: {
       kicker: 'Mapa del producto',

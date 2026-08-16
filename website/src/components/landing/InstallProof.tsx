@@ -28,7 +28,7 @@ export function InstallProof({
   return (
     <section className={styles.section} data-k-section="install">
       <div className={styles.shell}>
-        <div className={styles.sectionIntro}>
+        <div className={styles.sectionIntro} data-motion>
           <p className={styles.kicker}>{copy.kicker}</p>
           <h2>{copy.title}</h2>
           <p>{copy.body}</p>
@@ -59,7 +59,7 @@ export function InstallProof({
                 {copied ? copy.copied : copy.copy}
               </button>
             </div>
-            <pre>
+            <pre aria-label={copy.terminalAria} role="region" tabIndex={0}>
               <code>{installCommands}</code>
             </pre>
             <div className={styles.terminalStatus}>
