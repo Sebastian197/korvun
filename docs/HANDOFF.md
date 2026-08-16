@@ -111,7 +111,28 @@ explicit decision.
 
 ## Current state (as of 2026-08-16)
 
-> **CURRENT (2026-08-16, session close): MINIMAL MEMORY piece OPENED —
+> **CURRENT (2026-08-16, piece close): MINIMAL MEMORY CLOSED — the last
+> piece of the beta.** Spec v1.3 + ADR-0043 + SP-A (recall) and SP-B
+> (notes) on master (`6f73436`, green) and the REAL-MODEL DEMO executed
+> and accepted by the copilot — both lanes of `memory_note`, the honest
+> shadow rehearsal, and `/recall` end-to-end from a real channel; full
+> evidence in `design-drafts/demo-memoria/DEMO.md`. Master green: the red
+> on run 31953474408 was the Discord fake's flake
+> (`TestGateway_FatalCloseCodeTerminates`, gateway_test.go:790) on
+> Windows — the gate annotation named the STEP («Coverage gate»), not the
+> cause; diagnosed and rerun green, same SHA.
+>
+> **CANDIDATE QUEUE (with evidence, for ordering):** deflake the Discord
+> gateway fake (gateway_test.go:790); the website-toolchain lote
+> (vite ≥ 6.4.3 via Context7 — the 4 Dependabot alerts); an app coverage
+> tanda (88.4%); post-hoc review of Codex's PR #21/#23 + the dual-deploy
+> decision GH Pages vs Cloudflare Pages (Chano's); note dedupe
+> (post-beta, from the demo's redundant re-store finding).
+>
+> **NEXT: BETA declaration + version + the single cartridge — Chano's
+> decision.**
+
+> **PREVIOUS (2026-08-16, session close): MINIMAL MEMORY piece OPENED —
 > spec v1.3 on disk with the copilot's sign-off:
 > `docs/superpowers/specs/2026-08-16-minimal-memory.md` (Chano's product
 > decisions D1-D4 + P1-P4 recorded in its header).** The review cycle ran
