@@ -102,6 +102,11 @@ type SessionConfig struct {
 	Triggers []string `json:"triggers,omitempty"`
 	DailyAt  string   `json:"daily_at,omitempty"`
 	IdleMin  int      `json:"idle_min,omitempty"`
+
+	// RecallMax enables the /recall command and caps how many archived turns
+	// one recall may import (minimal-memory spec FR-CFG-A1): 0 disables the
+	// command; 1..50 valid; anything else fails validation loudly.
+	RecallMax int `json:"recall_max,omitempty"`
 }
 
 // DefaultSessionTriggers is the trigger set a present session block gets when
@@ -116,6 +121,7 @@ type SessionSettings struct {
 	DailyHour int
 	DailyMin  int
 	IdleMin   int
+	RecallMax int
 }
 
 // AdminConfig names the env-var holding the admin bearer token (ADR-0028 §1). The
@@ -579,6 +585,14 @@ func (c *Config) validateSession() error {
 		if strings.TrimSpace(trig) == "" {
 			return fmt.Errorf("%w: session.triggers[%d]: empty trigger", ErrInvalidConfig, i)
 		}
+		// The reserved command tokens: triggers run FIRST in the dispatch
+		// and would silently shadow the commands (minimal-memory FR-CFG-A1).
+		if trig == "/recall" || trig == "/notes" {
+			return fmt.Errorf("%w: session.triggers[%d]: %q is a reserved command token", ErrInvalidConfig, i, trig)
+		}
+	}
+	if s.RecallMax < 0 || s.RecallMax > 50 {
+		return fmt.Errorf("%w: session.recall_max: must be in 0..50 (0 disables /recall), got %d", ErrInvalidConfig, s.RecallMax)
 	}
 	if s.DailyAt != "" {
 		if _, _, err := parseDailyAt(s.DailyAt); err != nil {
@@ -609,7 +623,7 @@ func (c *Config) SessionSettings() SessionSettings {
 	if s == nil {
 		return SessionSettings{}
 	}
-	out := SessionSettings{IdleMin: s.IdleMin}
+	out := SessionSettings{IdleMin: s.IdleMin, RecallMax: s.RecallMax}
 	out.Triggers = s.Triggers
 	if len(out.Triggers) == 0 {
 		out.Triggers = append([]string(nil), DefaultSessionTriggers...)
