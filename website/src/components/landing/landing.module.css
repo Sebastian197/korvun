@@ -331,6 +331,7 @@
 
 .textLink {
   display: inline-flex;
+  min-height: 44px;
   align-items: center;
   gap: 9px;
   margin-top: 26px;
@@ -382,6 +383,7 @@
 }
 
 .terminalBar button {
+  min-height: 44px;
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -485,6 +487,7 @@
 
 .capabilityCard a {
   display: inline-flex;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
   margin-top: 22px;
