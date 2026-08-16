@@ -553,19 +553,24 @@ Verificar en disco: estado real del protocolo de tool use en el AgentBrain
 (Etapa 8) y qué contrato expone hoy el motor de políticas.
 
 ### Pieza — Memoria mínima
-> 🔶 **ACTIVA (2026-08-16)** — spec v1.3 **approved for TDD** con sign-off
-> del copiloto: `docs/superpowers/specs/2026-08-16-minimal-memory.md`.
-> Dos sub-fases secuenciales: **SP-A recall** (`/recall`: un único bloque
-> citado, solo hacia una sesión activa vacía) → **SP-B notas**
-> (`memory_note` gobernada + `/notes`). Siguiente: ADR de la pieza →
-> RED de SP-A.
+> ✅ **ENTREGADA (2026-08-16)** — spec v1.3
+> (`docs/superpowers/specs/2026-08-16-minimal-memory.md`) + **ADR-0043**;
+> **SP-A (recall)** y **SP-B (notas)** en master (`6f73436`, verde) con el
+> ciclo completo (/plan-eng-review + cross-review Codex H1-H24 adjudicado,
+> RED-contrato, GREEN, gate con los seams ≥90). **Demo de modelo real**
+> el 2026-08-16 en el iMac — ambos lanes de `memory_note`, ensayo shadow
+> honesto y `/recall` end-to-end; evidencia íntegra en
+> `design-drafts/demo-memoria/DEMO.md`. Adjudicación de hallazgos de la
+> demo: flake del fake de Discord (gateway_test.go:790) → tanda encolada;
+> re-almacenado redundante de notas por el modelo → post-beta; suelo de
+> modelos (~270M no sostiene el protocolo textual; 3B sí el nativo) →
+> documentado; percance de procedencia de instancias → lección de ops.
 Objetivo: que un cerebro conserve contexto más allá de la conversación en curso.
 Alcance: historial recuperable + notas persistentes por cerebro, sujetos al
 motor de políticas (lo sensible no sale de la máquina).
 Fuera de la beta: recuperación semántica y embeddings.
 
-De esta ampliación, consola, personalidad y herramientas quedaron cerradas;
-la memoria mínima es la única pieza abierta (spec enlazado en su banner).
+Las cuatro piezas de esta ampliación están cerradas (banners arriba).
 
 ## Track paralelo — Sitio web + documentación (GitHub Pages)
 
@@ -697,18 +702,21 @@ escribir una sola línea.
       COMPLETO — pieza **Herramientas gobernadas + skills** (ADR-0041 +
       ADR-0042), demostrada en hardware 2026-08-09, publicada en **v0.7.0**
       (2026-08-15).
-- [ ] **Un cerebro conserva contexto entre conversaciones con memoria mínima, y la
-      memoria respeta la política de privacidad.**
+- [x] **Un cerebro conserva contexto entre conversaciones con memoria mínima, y la
+      memoria respeta la política de privacidad.** COMPLETO — pieza **Memoria
+      mínima** (2026-08-16): `/recall` deliberado + notas gobernadas
+      (`memory_note` + `/notes`), privacidad estructural (scope declarado,
+      guard brain×cloud en boot, e2e AS-B1 de no-egress), demo de modelo
+      real en hardware.
 
-**Próximo paso:** **Piezas 1–5 ✅ cerradas** (la 5 el 2026-07-26:
-`v0.4.0` publicada con Korvun Desktop), **canal Webhook ✅**,
+**Próximo paso:** **TODOS los criterios de beta están cumplidos.**
+Piezas 1–5 ✅ (la 5 el 2026-07-26 con `v0.4.0`), **canal Webhook ✅**,
 **Builder-lienzo ✅** (con la personalidad por cerebro dentro),
-**Consola de operador ✅** (2026-08-08, validada en hardware) y
-**Herramientas gobernadas + skills ✅** (v0.7.0, publicada 2026-08-15).
-**EN CURSO: Memoria mínima** — spec v1.3 approved for TDD (2026-08-16),
-sub-fases SP-A recall → SP-B notas. Después: cierre de beta y el
-cartucho único del estreno. La puerta universal de modelos sigue en
-cola, reordenable por Chano.
+**Consola de operador ✅** (2026-08-08), **Herramientas gobernadas +
+skills ✅** (v0.7.0, 2026-08-15) y **Memoria mínima ✅** (2026-08-16, con
+demo de modelo real). **BETA LISTA — la declaración, la versión y el
+cartucho único del estreno son decisión de Chano.** La puerta universal
+de modelos sigue en cola, reordenable por Chano.
 
 ---
 
