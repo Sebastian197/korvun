@@ -13,7 +13,7 @@ export function PrivacyDiagram({
     <section className={`${styles.section} ${styles.privacy}`} data-k-section="privacy">
       <div className={styles.shell}>
         <div className={styles.privacyLayout}>
-          <div className={styles.sectionIntro}>
+          <div className={styles.sectionIntro} data-motion>
             <p className={styles.kicker}>{copy.kicker}</p>
             <h2>{copy.title}</h2>
             <p>{copy.body}</p>

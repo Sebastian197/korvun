@@ -2,17 +2,11 @@ import Link from '@docusaurus/Link'
 import type { LandingCopy } from './landingCopy'
 import styles from './landing.module.css'
 
-export function Capabilities({
-  copy,
-  localize,
-}: {
-  copy: LandingCopy['capabilities']
-  localize: (route: string) => string
-}) {
+export function Capabilities({ copy }: { copy: LandingCopy['capabilities'] }) {
   return (
     <section className={`${styles.section} ${styles.capabilities}`} data-k-section="capabilities">
       <div className={styles.shell}>
-        <div className={styles.sectionIntro}>
+        <div className={styles.sectionIntro} data-motion>
           <p className={styles.kicker}>{copy.kicker}</p>
           <h2>{copy.title}</h2>
           <p>{copy.body}</p>
@@ -24,7 +18,7 @@ export function Capabilities({
               <div className={styles.cardNumber}>{item.number}</div>
               <h3>{item.title}</h3>
               <p>{item.body}</p>
-              <Link to={localize(item.to)}>
+              <Link to={item.to}>
                 {item.linkLabel} <span aria-hidden="true">↗</span>
               </Link>
             </article>

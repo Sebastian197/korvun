@@ -312,7 +312,6 @@
   align-items: center;
   padding: 20px 0;
   border-bottom: 1px solid var(--line);
-  animation: rise 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .proofItem:first-child {
@@ -450,7 +449,6 @@
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.035), transparent 52%),
     var(--surface);
-  animation: rise 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transition: transform 180ms ease;
 }
 
@@ -523,7 +521,6 @@
   border-radius: 12px;
   background: rgba(12, 12, 15, 0.86);
   box-shadow: 0 32px 90px rgba(0, 0, 0, 0.34);
-  animation: rise 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .routeRow {
@@ -572,11 +569,16 @@
   inset: 0;
   background: linear-gradient(90deg, var(--teal), var(--violet));
   transform-origin: left;
-  animation: route-line 800ms 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: transform 800ms cubic-bezier(0.22, 1, 0.36, 1) 220ms;
 }
 
 .routeRowExcluded {
   opacity: 0.74;
+}
+
+/* Compensate the row dim so the label still meets WCAG AA contrast. */
+.routeRowExcluded .routeNode small {
+  color: #c2c2cd;
 }
 
 .routeRowExcluded .routeLine {
@@ -617,7 +619,6 @@
   border-radius: 12px;
   background: #08080a;
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.4);
-  animation: rise 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .videoChrome {
@@ -658,7 +659,6 @@
 .finalInner {
   max-width: 820px;
   margin: 0 auto;
-  animation: rise 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .finalInner .kicker,
@@ -682,12 +682,60 @@
   }
 }
 
-@keyframes route-line {
-  from {
+@media (prefers-reduced-motion: no-preference) {
+  .heroMark {
+    animation: hero-float 7s ease-in-out 1.6s infinite;
+  }
+
+  /* Gate on .k-reveal alone: the class is only ever added by armStorytelling
+     when IntersectionObserver exists and reduced motion is off. Do NOT gate on
+     an html-level class — Docusaurus rewrites the <html> class attribute after
+     hydration and clobbers any flag placed there. */
+  :global(.k-reveal:not(.k-in)) {
+    opacity: 0;
+    transform: translateY(34px);
+  }
+
+  /* Transition on .k-in only: arming hides instantly (no fade-out on load),
+     revealing animates. */
+  :global(.k-reveal.k-in) {
+    transition:
+      opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--k-motion-delay, 0ms);
+  }
+
+  .routingDiagram:global(.k-reveal:not(.k-in)) .routeLine i {
     transform: scaleX(0);
   }
+
+  @supports (animation-timeline: view()) {
+    :global(html.k-motion) .videoFrame video {
+      animation: video-approach linear both;
+      animation-range: entry 0% entry 75%;
+      animation-timeline: view();
+    }
+  }
+}
+
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes video-approach {
+  from {
+    opacity: 0.45;
+    transform: scale(0.965) translateY(8px);
+  }
   to {
-    transform: scaleX(1);
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 

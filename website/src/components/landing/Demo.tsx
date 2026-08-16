@@ -11,7 +11,7 @@ export function Demo({ copy }: { copy: LandingCopy['demo'] }) {
     <section className={styles.section} data-k-section="demo">
       <div className={styles.shell}>
         <div className={styles.demoHeader}>
-          <div className={styles.sectionIntro}>
+          <div className={styles.sectionIntro} data-motion>
             <p className={styles.kicker}>{copy.kicker}</p>
             <h2>{copy.title}</h2>
             <p>{copy.body}</p>

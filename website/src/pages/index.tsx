@@ -15,7 +15,7 @@ export default function Home() {
         <meta property="og:description" content={copy.metaDescription} />
         <meta name="twitter:description" content={copy.metaDescription} />
       </Head>
-      <LandingPage copy={copy} locale={locale} />
+      <LandingPage copy={copy} />
     </Layout>
   )
 }
