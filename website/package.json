@@ -11,7 +11,7 @@
     "build": "docusaurus build --out-dir .vitepress/dist",
     "preview": "docusaurus serve --dir .vitepress/dist",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --test src/theme/storytelling.test.mjs scripts/webpackbar-compat.test.mjs",
+    "test:unit": "node --test src/theme/storytelling.test.mjs src/redirect-legacy-host.test.mjs scripts/webpackbar-compat.test.mjs",
     "test:e2e": "playwright test",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:dist": "node scripts/check-dist.mjs",
