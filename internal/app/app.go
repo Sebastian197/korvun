@@ -310,6 +310,16 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 				}))
 		}
 	}
+	// The /notes commands (minimal-memory FR-RECALL-2) mount when any brain
+	// has memory configured — the router only ever sees the app-composed
+	// closures, never the memory config.
+	if b.store != nil {
+		if ns, ok := b.store.(conversation.NoteStore); ok {
+			if list, clear, any := notesClosures(cfg, ns); any {
+				ropts = append(ropts, router.WithNotesCommands(list, clear))
+			}
+		}
+	}
 	// The /tools gatekeeper command (ADR-0041 FR-CHAT-1) mounts on the
 	// console channel when the bus exists to feed its activity ring —
 	// without observability the command stays off rather than serving an
@@ -804,6 +814,34 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 			}
 		}
 	}
+	// Minimal-memory boot guards (ADR-0043 §4/§6). P2: memory_note without a
+	// governance grant COVERING IT fails loud (the E-11 molde) — D1 is never
+	// vacuously ungoverned.
+	if listed["memory_note"] {
+		covered := false
+		for _, g := range bc.Agent.Governance {
+			if g.Tool == "memory_note" {
+				covered = true
+			}
+		}
+		if !covered {
+			return nil, fmt.Errorf("%w: brain %q, tool \"memory_note\" (P2 — add a governance grant covering it)",
+				ErrMemoryToolUngoverned, bc.Name)
+		}
+	}
+	// FR-PRIV-1: brain-global scope requires the SELECTED model to be Local
+	// (the localityOf precedent — not the raw catalog): cross-conversation
+	// content must never ride to a cloud provider.
+	if bc.Agent.Memory != nil && bc.Agent.Memory.Settings().BrainGlobal {
+		loc, err := localityOf(catalog, selected[0])
+		if err != nil {
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
+		if loc == policy.Cloud {
+			return nil, fmt.Errorf("%w: brain %q: agent.memory.scope \"brain\" with a cloud-selected model",
+				ErrMemoryScopeCloud, bc.Name)
+		}
+	}
 	reg := make(tool.Registry, len(bc.Agent.Tools))
 	for _, name := range bc.Agent.Tools {
 		tl, err := b.agentTool(bc, name, attrs, sens)
@@ -820,6 +858,28 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	opts := []brain.AgentOption{
 		brain.WithAgentLogger(b.logger),
 		brain.WithAgentMetrics(b.metrics),
+		// ALWAYS set — scope-aware tools need the brain's own name even
+		// with observability off (minimal-memory FR-TOOL-2; the audit
+		// option's brainName only mounts with a bus).
+		brain.WithAgentName(bc.Name),
+	}
+	if bc.Agent.Memory != nil {
+		if ns, ok := b.store.(conversation.NoteStore); ok {
+			mem := bc.Agent.Memory.Settings()
+			scopeCfg := noteScopeOf(mem)
+			brainName := bc.Name
+			loader := func(ctx context.Context, key conversation.Key) ([]conversation.Note, error) {
+				scope, ekey, err := conversation.EffectiveNoteScope(scopeCfg, key)
+				if err != nil {
+					// No conversation identity on a conversation-scoped
+					// brain: nothing to load — not an error (the write path
+					// refuses loudly; the read path simply has no notes).
+					return nil, nil
+				}
+				return ns.ListNotes(ctx, brainName, scope, ekey)
+			}
+			opts = append(opts, brain.WithAgentMemory(loader, mem.BudgetRunes))
+		}
 	}
 	if bc.Agent.MaxIterations > 0 {
 		opts = append(opts, brain.WithAgentMaxIterations(bc.Agent.MaxIterations))
@@ -890,6 +950,33 @@ func (b *builder) agentTool(bc config.BrainConfig, name string, attrs map[string
 	a := bc.Agent
 	shield := attrs[name].Network && sens == policy.Private
 	switch name {
+	case "memory_note":
+		// The governed notes writer (minimal-memory FR-TOOL-1, ADR-0043 §4):
+		// app-constructed over the SINGLE derivation + the shared NoteStore,
+		// so the write path can never drift from the read path (H2).
+		if a.Memory == nil {
+			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.memory block", ErrMissingToolCage, name, bc.Name)
+		}
+		ns, ok := b.store.(conversation.NoteStore)
+		if !ok {
+			return nil, fmt.Errorf("app: brain %q: memory_note requires the storage block (no note store available)", bc.Name)
+		}
+		mem := a.Memory.Settings()
+		scopeCfg := noteScopeOf(mem)
+		writer := func(ctx context.Context, sc tool.Scope, note string) error {
+			scope, key, err := conversation.EffectiveNoteScope(scopeCfg, conversation.Key(sc.Conversation))
+			if err != nil {
+				return fmt.Errorf("%w: %v", tool.ErrNoteNeedsConversation, err)
+			}
+			if _, err := ns.AppendNote(ctx, sc.Brain, scope, key, note, mem.MaxNotes); err != nil {
+				if errors.Is(err, conversation.ErrNotesFull) {
+					return fmt.Errorf("%w: %v", tool.ErrNoteBoxFull, err)
+				}
+				return err
+			}
+			return nil
+		}
+		return tool.NewMemoryNote(writer, mem.MaxNoteRunes), nil
 	case "read_file":
 		if a.ReadFile == nil {
 			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.read_file block", ErrMissingToolCage, name, bc.Name)

@@ -53,6 +53,18 @@ var (
 	// cage, so the wiring fails loud instead of improvising defaults.
 	ErrMissingToolCage = errors.New("app: caged tool requires its cage config block")
 
+	// ErrMemoryToolUngoverned is returned when memory_note is listed without
+	// a governance grant covering it (minimal-memory P2, the E-11 molde):
+	// D1 — "the model writes notes via a GOVERNED tool" — must never be
+	// vacuously ungoverned.
+	ErrMemoryToolUngoverned = errors.New("app: memory_note requires a governance grant covering it")
+
+	// ErrMemoryScopeCloud is returned when memory.scope is "brain" but the
+	// brain's SELECTED model is cloud (minimal-memory FR-PRIV-1, the
+	// localityOf precedent): cross-conversation content must never ride to
+	// a cloud provider.
+	ErrMemoryScopeCloud = errors.New("app: memory scope \"brain\" requires a locally-selected model")
+
 	// ErrAgentModelCount is returned when an agent brain is configured with a
 	// number of (post-selection) models other than exactly one: the Stage 8 cut
 	// is a SINGLE-model tool-use loop (ADR-0021 §1).
