@@ -131,10 +131,14 @@ explicit decision.
 > `codex/website-redesign` branch — Codex's exclusive lane; copilot
 > review and Chano's merge when it lands.
 >
-> **NEXT: SP-A (recall) GREEN + full quality gate DONE locally (the RED
-> suite is contract, untouched; gate green over the whole suite, 92.5%
-> global) — pending copilot review → push (the ensayo green path,
-> `govulncheck ./...` first) → SP-B (notes) RED suite.** Dependabot triaged — all 4 alerts live
+> **NEXT: SP-B (notes) GREEN + full quality gate DONE locally — the whole
+> minimal-memory piece is code-complete (SP-A shipped 2b1e70e; SP-B local:
+> notes domain, memory_note, composition, config, guards, /notes; gate
+> green, 90.3% global, every spec seam ≥ 90 incl. sqlite 90.2 via the
+> adjudicated tanda) — pending copilot review → push (the ensayo green
+> path, `govulncheck ./...` first) → the mandatory REAL-MODEL demo on
+> Chano's iMac (both lanes, CLAUDE.md law) before the piece closes.**
+> Dependabot triaged — all 4 alerts live
 > in the website dev toolchain (3× vite, 1× esbuild), unreachable in
 > production: the published site is a static dist (the dev toolchain never
 > travels to the artifact) and CI never runs a dev server; the HIGH (#21)
