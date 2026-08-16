@@ -70,7 +70,7 @@ Everything below is **on `master` today** — no roadmap item is counted as pres
   optional boot warmup that resolves the cold-start model-load stall.
 - **No-code builder** — configure brains, models, and routes visually in the
   browser, no JSON by hand ([BUILDER.md](docs/BUILDER.md)).
-- **Operator console** — a multi-channel inbox with takeover, sessions (`/new`),
+- **Operator console** (the Chat tab in Korvun Desktop) — a multi-channel inbox with takeover, sessions (`/new`),
   real deletion, and a direct chat to every brain.
 - **Governed tools & skills** ([ADR-0041](docs/adr/0041-governed-tools-shadow-shield-skills.md)) — an
   agent-brain tool catalogue (`read_file`, `http_fetch`, `webhook_call`, and the
@@ -80,8 +80,11 @@ Everything below is **on `master` today** — no roadmap item is counted as pres
   Ollama, with an honest text-lane fallback ([ADR-0042](docs/adr/0042-native-tool-calling-lane.md)).
 - **Observability** — structured `slog`, a Prometheus `/metrics` endpoint, and a
   `/healthz` liveness probe on a loopback admin server.
-- **Durable memory** — per-conversation history that survives restarts, graceful
-  shutdown included (SQLite by default, behind a `Store` seam).
+- **Durable, governed memory** — per-conversation history that survives restarts
+  (SQLite by default, behind a `Store` seam), plus deliberate recall (`/recall`
+  quotes the previous session's tail back into an empty one) and per-brain notes
+  the model writes through a policy-gated `memory_note` tool — conversation-scoped
+  by default, operator-managed with `/notes` / `/notes clear`.
 - **Cross-platform** — one static, pure-Go binary (no cgo) for Linux, macOS, and
   Windows on x86-64 and ARM64.
 - **Signed releases** — each release ships cosign keyless signatures over the
@@ -108,11 +111,27 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
-**Download v0.4.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.8.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
-## New in v0.7.0 — governed tools
+## New in v0.8.0 — memory, on purpose
+
+An agent brain can now remember across sessions — deliberately, and governed like
+everything else. The model writes bounded notes through a `memory_note` tool that
+goes through the same tri-state gate (announce it in rehearsal first, watch what it
+*would* store, then promote it live); notes ride the system prompt only within
+their scope, and `/notes` / `/notes clear` keep the operator in charge. Privacy is
+structural: brain-global memory refuses to boot with a cloud model, and a private
+brain's notes never leave the machine — proven by an end-to-end test.
+
+History stays honest too: `/new` still cuts hard, and `/recall` imports the
+previous session's tail as ONE clearly-quoted block — provenance visible,
+duplication impossible, only into an empty session, and only because you asked.
+
+See the [v0.8.0 release notes](docs/releases/v0.8.0.md).
+
+## Governed tools (v0.7.0)
 
 Give an agent brain tools, and keep the operator in charge of every one. The gate has
 three states, and the middle one — **rehearsal** — lets a tool be announced to the
@@ -180,14 +199,12 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.4.0` is the current release.** It ships **Korvun Desktop** — the same
-in-process core as a native, double-click app (first-run onboarding, OS-keychain
-secrets, the embedded builder) on macOS, Windows, and Linux, cosign-signed on the
-free chain — alongside the unchanged headless binary, which is still the way to run
-Korvun on a server. Validated end to end on real hardware — see
-[the release notes](docs/releases/v0.4.0.md). `master` builds on toward a production
-beta; see [ROADMAP-V1.md](docs/ROADMAP-V1.md) and
-[ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md) for what is closed and what comes next.
+**`v0.8.0` — Beta — is the current release.** Every beta criterion is now met:
+channels, multi-brain routing, the policy engine, resilience, the no-code builder,
+the operator console, governed tools & skills, and governed memory — each validated
+on real hardware. See [the release notes](docs/releases/v0.8.0.md),
+[ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
+for what is closed and what comes next.
 
 ## Contributing
 
