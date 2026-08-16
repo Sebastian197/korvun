@@ -13,7 +13,8 @@ const locales = [
       'Korvun in 27 seconds.',
       'Run it today.',
     ],
-    quickstart: '/korvun/guide/quickstart',
+    quickstart: '/korvun/guide/quickstart/',
+    mediaPrefix: '/korvun/media/',
   },
   {
     label: 'ES',
@@ -26,7 +27,8 @@ const locales = [
       'Korvun en 27 segundos.',
       'Ponlo en marcha hoy.',
     ],
-    quickstart: '/korvun/es/guide/quickstart',
+    quickstart: '/korvun/es/guide/quickstart/',
+    mediaPrefix: '/korvun/es/media/',
   },
 ] as const
 
@@ -41,7 +43,10 @@ for (const locale of locales) {
 
       const sections = page.locator('main [data-k-section]')
       await expect(sections).toHaveCount(6)
-      await expect(sections).toHaveAttribute('data-k-section', /.+/)
+      const sectionNames = await sections.evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute('data-k-section') ?? ''),
+      )
+      expect(sectionNames.every((name) => name.length > 0)).toBe(true)
 
       const headings = await page.locator('main h2').allTextContents()
       expect(headings.map((heading) => heading.replace(/\s+/g, ' ').trim())).toEqual(
@@ -51,7 +56,9 @@ for (const locale of locales) {
 
     test('publishes current, verifiable release facts', async ({ page }) => {
       await page.goto(locale.path)
-      const main = await page.locator('main').innerText()
+      // textContent, not innerText: the source facts are asserted as authored,
+      // independent of CSS text-transform (badges render uppercase).
+      const main = (await page.locator('main').textContent()) ?? ''
 
       expect(main).toContain('v0.7.0')
       expect(main).toContain('Apache-2.0')
@@ -81,12 +88,16 @@ for (const locale of locales) {
     })
 
     test('uses same-origin media and passes the WCAG A/AA scan', async ({ page }) => {
+      // Audit the settled page: with reduced motion the reveal system stays
+      // off, so axe measures final colors instead of mid-transition blends.
+      await page.emulateMedia({ reducedMotion: 'reduce' })
       await page.goto(locale.path)
       const video = page.locator('main video')
       await expect(video).toHaveCount(1)
       await expect(video).toHaveAttribute('controls', '')
       const source = await video.locator('source').getAttribute('src')
-      expect(source).toMatch(/^\/korvun\/media\//)
+      // Docusaurus serves static assets under each locale's baseUrl.
+      expect(source?.startsWith(locale.mediaPrefix)).toBe(true)
 
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
@@ -132,6 +143,39 @@ test('reduced motion removes meaningful animation', async ({ page }) => {
       transitionDuration: styles.transitionDuration,
     }
   })
-  expect(timing.animationDuration).toMatch(/^(0s|0\.001s|0\.01ms)$/)
-  expect(timing.transitionDuration).toMatch(/^(0s|0\.001s|0\.01ms)$/)
+  // Chromium serializes 0.01ms as "1e-05s"; compare numerically in seconds.
+  expect(parseFloat(timing.animationDuration)).toBeLessThanOrEqual(0.001)
+  expect(parseFloat(timing.transitionDuration)).toBeLessThanOrEqual(0.001)
+})
+
+test('below-fold storytelling reveals once on viewport entry', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/korvun/')
+
+  const hero = page.locator('[data-k-section="hero"] [data-motion]').first()
+  const firstCapability = page
+    .locator('[data-k-section="capabilities"] [data-motion]')
+    .first()
+
+  await expect
+    .poll(() =>
+      firstCapability.evaluate((element) => element.classList.contains('k-reveal')),
+    )
+    .toBe(true)
+  // The reveal CSS must actually apply (regression: an html-level gate that
+  // Docusaurus clobbered left below-fold content visible with no animation).
+  expect(
+    await firstCapability.evaluate((element) => getComputedStyle(element).opacity),
+  ).toBe('0')
+  expect(
+    await hero.evaluate((element) => element.classList.contains('k-reveal')),
+  ).toBe(false)
+  expect(
+    await firstCapability.evaluate((element) => element.classList.contains('k-in')),
+  ).toBe(false)
+
+  await firstCapability.scrollIntoViewIfNeeded()
+  await expect
+    .poll(() => firstCapability.evaluate((element) => element.classList.contains('k-in')))
+    .toBe(true)
 })

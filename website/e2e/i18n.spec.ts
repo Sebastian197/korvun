@@ -14,10 +14,13 @@ const mirroredPages = [
 
 test('the locale switcher connects both real homepages', async ({ page }) => {
   await page.goto('/korvun/')
+  // The locale links live inside the navbar dropdown; open it first.
+  await page.locator('nav .dropdown').hover()
   await page.locator('nav a[href="/korvun/es/"]').click()
   await expect(page).toHaveURL(/\/korvun\/es\/$/)
   await expect(page.locator('main h1')).toContainText('Un binario')
 
+  await page.locator('nav .dropdown').hover()
   await page.locator('nav a[href="/korvun/"]').click()
   await expect(page).toHaveURL(/\/korvun\/$/)
   await expect(page.locator('main h1')).toContainText('One binary')
