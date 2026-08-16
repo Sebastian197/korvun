@@ -21,3 +21,8 @@ const AckToolsReport = "tools-report"
 // (minimal-memory spec FR-RECALL-1, ADR-0043): a system response the
 // console persists as a SYSTEM turn like any ack.
 const AckRecall = "session-recall"
+
+// AckNotesReport is the MetaAck value for the /notes report and its acks
+// (minimal-memory spec FR-AUD-1, ADR-0043 §7 — the /tools molde):
+// sanctioned conversation content the console persists as a SYSTEM turn.
+const AckNotesReport = "notes-report"

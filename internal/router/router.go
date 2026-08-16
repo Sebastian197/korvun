@@ -55,9 +55,13 @@ type Router struct {
 	// toolsChannel/toolsReport wire the /tools first-token command (ADR-0041
 	// FR-CHAT-1): on toolsChannel, "/tools" answers with toolsReport's text
 	// as a system response. nil toolsReport (the default) disables the
-	// command at zero cost. Set via WithToolsCommand.
+	// command at zero cost. Set via WithToolsCommand. notesList/notesClear
+	// are the app-composed /notes closures (minimal-memory FR-RECALL-2),
+	// set via WithNotesCommands; nil disables the /notes commands.
 	toolsChannel string
 	toolsReport  ToolsReporter
+	notesList    NotesLister
+	notesClear   NotesClearer
 
 	// SP2 (operator-console spec): session dispatch + takeover + operator
 	// outbound. sessionStore nil disables session behavior entirely; clock

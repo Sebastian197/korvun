@@ -202,6 +202,13 @@ func (r *Router) sessionPreDispatch(ctx context.Context, env *envelope.Envelope,
 		}
 	}
 
+	// /notes rides beside /recall (FR-RECALL-2) but needs no session store:
+	// the app-composed closures own the notes; an unconfigured brain lets
+	// the token fall through to the model.
+	if r.maybeHandleNotes(ctx, key, env, brainName) {
+		return nil, true
+	}
+
 	// The /tools gatekeeper report (FR-CHAT-1) answers BEFORE the takeover
 	// gate: it is a system command, so it works whether or not a human has
 	// silenced the brain.
