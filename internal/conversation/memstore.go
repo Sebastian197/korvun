@@ -8,13 +8,16 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
-// Compile-time assertions: *MemStore satisfies the Store seam and its
-// sessionful superset (operator-console spec SP1).
+// Compile-time assertions: *MemStore satisfies the Store seam, its
+// sessionful superset (operator-console spec SP1) and the notes seam
+// (minimal-memory FR-STORE-1).
 var (
 	_ Store        = (*MemStore)(nil)
 	_ SessionStore = (*MemStore)(nil)
+	_ NoteStore    = (*MemStore)(nil)
 )
 
 // memSession is one session of one key: its id and its ordered turns.
@@ -40,11 +43,22 @@ type memSession struct {
 type MemStore struct {
 	mu sync.Mutex
 	m  map[Key][]*memSession
+	// notes holds the persistent notes per (brain, effective key) scope
+	// (minimal-memory FR-STORE-1) — the brain-global scope is the empty
+	// key, unreachable by accident (CheckNotePair guards every write).
+	notes map[noteScopeKey][]Note
+}
+
+// noteScopeKey identifies one notes scope: the owning brain plus the
+// EFFECTIVE key ("" = brain-global).
+type noteScopeKey struct {
+	brain string
+	key   Key
 }
 
 // NewMemStore returns an empty, ready-to-use in-memory SessionStore.
 func NewMemStore() *MemStore {
-	return &MemStore{m: make(map[Key][]*memSession)}
+	return &MemStore{m: make(map[Key][]*memSession), notes: make(map[noteScopeKey][]Note)}
 }
 
 // activeLocked returns the key's active session, creating session 1 when the
@@ -240,6 +254,45 @@ func (s *MemStore) LoadSessionTail(_ context.Context, key Key, session, n int) (
 		}
 	}
 	return nil, nil
+}
+
+// AppendNote implements NoteStore (minimal-memory FR-STORE-1): pair
+// validation, then the count cap and the insert under the SAME mutex hold —
+// the cap is atomic by construction. The store stamps Timestamp.
+func (s *MemStore) AppendNote(_ context.Context, brain string, scope NoteScope, key Key, content string, maxNotes int) (Note, error) {
+	if err := CheckNotePair(scope, key); err != nil {
+		return Note{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sk := noteScopeKey{brain: brain, key: key}
+	existing := s.notes[sk]
+	if maxNotes > 0 && len(existing) >= maxNotes {
+		return Note{}, ErrNotesFull
+	}
+	note := Note{Seq: len(existing) + 1, Content: content, Timestamp: time.Now().UTC()}
+	s.notes[sk] = append(existing, note)
+	return note, nil
+}
+
+// ListNotes implements NoteStore (minimal-memory FR-STORE-1): a copy of the
+// scope's notes, oldest-first. An unknown scope returns an empty slice.
+func (s *MemStore) ListNotes(_ context.Context, brain string, _ NoteScope, key Key) ([]Note, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	notes := s.notes[noteScopeKey{brain: brain, key: key}]
+	out := make([]Note, len(notes))
+	copy(out, notes)
+	return out, nil
+}
+
+// ClearNotes implements NoteStore (minimal-memory FR-STORE-1): the scope's
+// notes gone; an unknown scope is a no-op.
+func (s *MemStore) ClearNotes(_ context.Context, brain string, _ NoteScope, key Key) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.notes, noteScopeKey{brain: brain, key: key})
+	return nil
 }
 
 // DeleteConversation atomically removes every session and turn of key

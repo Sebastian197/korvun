@@ -244,6 +244,14 @@ CREATE TABLE IF NOT EXISTS turns (
     content TEXT    NOT NULL,
     ts      INTEGER NOT NULL,
     PRIMARY KEY (key, session, seq)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS notes (
+    brain   TEXT    NOT NULL,
+    key     TEXT    NOT NULL,
+    seq     INTEGER NOT NULL,
+    content TEXT    NOT NULL,
+    ts      INTEGER NOT NULL,
+    PRIMARY KEY (brain, key, seq)
 ) WITHOUT ROWID;`
 
 // migrateV1Stmt upgrades a pre-session database (the 2026-08 v1 schema:
@@ -597,6 +605,87 @@ func (s *SqliteStore) LoadSessionTail(ctx context.Context, key conversation.Key,
 	return desc, nil
 }
 
+// AppendNote implements conversation.NoteStore (minimal-memory FR-STORE-1/2):
+// pair validation, then count + insert in ONE transaction — the serialized
+// single writer makes the cap race-free (ADR-0019 §3). The store stamps ts.
+func (s *SqliteStore) AppendNote(ctx context.Context, brain string, scope conversation.NoteScope, key conversation.Key, content string, maxNotes int) (conversation.Note, error) {
+	if err := conversation.CheckNotePair(scope, key); err != nil {
+		return conversation.Note{}, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return conversation.Note{}, fmt.Errorf("sqlite: AppendNote begin %q/%q: %w", brain, key, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var count int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM notes WHERE brain = ? AND key = ?`, brain, string(key)).Scan(&count); err != nil {
+		return conversation.Note{}, fmt.Errorf("sqlite: AppendNote count %q/%q: %w", brain, key, err)
+	}
+	if maxNotes > 0 && count >= maxNotes {
+		return conversation.Note{}, conversation.ErrNotesFull
+	}
+	var next int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(seq), 0) + 1 FROM notes WHERE brain = ? AND key = ?`, brain, string(key)).Scan(&next); err != nil {
+		return conversation.Note{}, fmt.Errorf("sqlite: AppendNote seq %q/%q: %w", brain, key, err)
+	}
+	now := time.Now().UTC()
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO notes (brain, key, seq, content, ts) VALUES (?, ?, ?, ?, ?)`,
+		brain, string(key), next, content, now.UnixNano()); err != nil {
+		return conversation.Note{}, fmt.Errorf("sqlite: AppendNote insert %q/%q: %w", brain, key, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return conversation.Note{}, fmt.Errorf("sqlite: AppendNote commit %q/%q: %w", brain, key, err)
+	}
+	return conversation.Note{Seq: next, Content: content, Timestamp: now}, nil
+}
+
+// ListNotes implements conversation.NoteStore (minimal-memory FR-STORE-1/2):
+// the scope's notes oldest-first; an unknown scope returns an empty slice.
+func (s *SqliteStore) ListNotes(ctx context.Context, brain string, _ conversation.NoteScope, key conversation.Key) ([]conversation.Note, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT seq, content, ts FROM notes WHERE brain = ? AND key = ? ORDER BY seq ASC`,
+		brain, string(key))
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: ListNotes %q/%q: %w", brain, key, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []conversation.Note
+	for rows.Next() {
+		var (
+			seq     int
+			content string
+			tsNanos int64
+		)
+		if err := rows.Scan(&seq, &content, &tsNanos); err != nil {
+			return nil, fmt.Errorf("sqlite: ListNotes scan %q/%q: %w", brain, key, err)
+		}
+		var ts time.Time
+		if tsNanos != 0 {
+			ts = time.Unix(0, tsNanos).UTC()
+		}
+		out = append(out, conversation.Note{Seq: seq, Content: content, Timestamp: ts})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: ListNotes rows %q/%q: %w", brain, key, err)
+	}
+	return out, nil
+}
+
+// ClearNotes implements conversation.NoteStore (minimal-memory FR-STORE-1/2):
+// the scope's notes gone; an unknown scope is a no-op.
+func (s *SqliteStore) ClearNotes(ctx context.Context, brain string, _ conversation.NoteScope, key conversation.Key) error {
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM notes WHERE brain = ? AND key = ?`, brain, string(key)); err != nil {
+		return fmt.Errorf("sqlite: ClearNotes %q/%q: %w", brain, key, err)
+	}
+	return nil
+}
+
 // DeleteConversation implements conversation.SessionStore (FR-DEL-1): every
 // turn and session row of key gone in ONE transaction — really deleted, not
 // hidden. An unknown key is a no-op.
@@ -611,6 +700,13 @@ func (s *SqliteStore) DeleteConversation(ctx context.Context, key conversation.K
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE key = ?`, string(key)); err != nil {
 		return fmt.Errorf("sqlite: DeleteConversation sessions %q: %w", key, err)
+	}
+	// The key's notes go with the conversation, across all brains — FR-DEL-1
+	// "really gone" stays true (minimal-memory FR-STORE-2). Brain-global
+	// notes live under the EMPTY key and are not the conversation's: a
+	// non-empty key match never touches them, stated to the face.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM notes WHERE key = ?`, string(key)); err != nil {
+		return fmt.Errorf("sqlite: DeleteConversation notes %q: %w", key, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("sqlite: DeleteConversation commit %q: %w", key, err)
