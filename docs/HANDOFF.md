@@ -131,8 +131,10 @@ explicit decision.
 > `codex/website-redesign` branch — Codex's exclusive lane; copilot
 > review and Chano's merge when it lands.
 >
-> **NEXT: ADR-0043 on disk → SP-A (recall) RED suite (`govulncheck ./...`
-> local antes del primer ensayo).** Dependabot triaged — all 4 alerts live
+> **NEXT: SP-A (recall) GREEN + full quality gate DONE locally (the RED
+> suite is contract, untouched; gate green over the whole suite, 92.5%
+> global) — pending copilot review → push (the ensayo green path,
+> `govulncheck ./...` first) → SP-B (notes) RED suite.** Dependabot triaged — all 4 alerts live
 > in the website dev toolchain (3× vite, 1× esbuild), unreachable in
 > production: the published site is a static dist (the dev toolchain never
 > travels to the artifact) and CI never runs a dev server; the HIGH (#21)
