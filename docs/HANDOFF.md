@@ -131,8 +131,12 @@ explicit decision.
 > `codex/website-redesign` branch — Codex's exclusive lane; copilot
 > review and Chano's merge when it lands.
 >
-> **NEXT: the piece's ADR → SP-A (recall) RED suite.** `govulncheck ./...`
-> locally before the batch's first rehearsal (the rehearsal law). Notes:
+> **NEXT: ADR-0043 on disk → SP-A (recall) RED suite (`govulncheck ./...`
+> local antes del primer ensayo).** Dependabot triaged — all 4 alerts live
+> in the website dev toolchain, unreachable in production (static dist, CI
+> never runs dev, Windows-only vector, requires --host); one "website
+> toolchain" lote queued (vite ≥ 6.4.3 via Context7) at the first natural
+> gap; none of the 5 dependabot branches remediates any alert. Notes:
 > understand-anything stays deferred; the Codex-estreno report is archived
 > as `design-drafts/claude-code-report-estreno-codex.md`.
 
