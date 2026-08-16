@@ -17,7 +17,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const BASE = '/korvun/'
+const BASE = process.env.SITE_BASE_URL ?? '/korvun/'
 const DIST = fileURLToPath(new URL('../.vitepress/dist/', import.meta.url))
 
 if (!existsSync(DIST)) {
@@ -36,7 +36,23 @@ const walk = (dir) => {
 }
 walk(DIST)
 
-for (const entry of ['index.html', 'es/index.html']) {
+const requiredPages = [
+  'index.html',
+  'guide/what-is-korvun/index.html',
+  'guide/install/index.html',
+  'guide/quickstart/index.html',
+  'guide/builder/index.html',
+  'channels/telegram/index.html',
+  'channels/discord/index.html',
+  'channels/webhook/index.html',
+  'reference/configuration/index.html',
+  'releases/index.html',
+]
+
+for (const entry of [
+  ...requiredPages,
+  ...requiredPages.map((entry) => `es/${entry}`),
+]) {
   if (!files.has(entry)) {
     console.error(`FAIL: expected locale root page missing in dist: ${entry}`)
     process.exit(1)
@@ -77,9 +93,96 @@ for (const file of htmlFiles) {
         path.posix.join(path.posix.dirname(file), url),
       )
     }
+    if (
+      file.endsWith('404.html') &&
+      (target === '404/' || target === 'es/404/')
+    ) {
+      continue
+    }
     if (!resolves(decodeURIComponent(target))) {
       violations.push(`${file}: broken internal link/asset: ${raw}`)
     }
+  }
+}
+
+// The two locale roots are a product surface, not only a collection of
+// resolvable files. Assert the selected landing story on the rendered HTML so
+// this contract still runs where a browser server cannot bind a local port.
+const landingContracts = [
+  {
+    file: 'index.html',
+    headings: [
+      'One binary. Your models. Your rules.',
+      'Install with proof, not promises.',
+      'Seven pillars. One binary.',
+      'Sensitive data never leaves the machine.',
+      'Korvun in 27 seconds.',
+      'Run it today.',
+    ],
+  },
+  {
+    file: 'es/index.html',
+    headings: [
+      'Un binario. Tus modelos. Tus reglas.',
+      'Instala con pruebas, no promesas.',
+      'Siete pilares. Un binario.',
+      'Los datos sensibles no salen de tu equipo.',
+      'Korvun en 27 segundos.',
+      'Ponlo en marcha hoy.',
+    ],
+  },
+]
+
+const renderedText = (html) =>
+  html
+    .replace(/<script[\s\S]*?<\/script>/g, ' ')
+    .replace(/<style[\s\S]*?<\/style>/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&#160;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+for (const contract of landingContracts) {
+  const html = readFileSync(path.join(DIST, contract.file), 'utf-8')
+  const text = renderedText(html)
+  let cursor = -1
+  for (const heading of contract.headings) {
+    const next = text.indexOf(heading, cursor + 1)
+    if (next < 0) {
+      violations.push(`${contract.file}: missing landing heading: ${heading}`)
+      continue
+    }
+    if (next < cursor) {
+      violations.push(`${contract.file}: landing heading out of order: ${heading}`)
+    }
+    cursor = next
+  }
+
+  for (const fact of ['v0.7.0', 'Apache-2.0', 'cosign', 'SBOM']) {
+    if (!text.includes(fact)) {
+      violations.push(`${contract.file}: missing verified release fact: ${fact}`)
+    }
+  }
+  for (const claim of [
+    'MIT',
+    'install.sh',
+    'brew install',
+    'apt-get install',
+    'scoop install',
+  ]) {
+    if (text.includes(claim)) {
+      violations.push(`${contract.file}: unverified landing claim: ${claim}`)
+    }
+  }
+  if ((html.match(/data-k-section=/g) ?? []).length !== 6) {
+    violations.push(`${contract.file}: expected 6 landing story sections`)
+  }
+  const landingHtml = html.match(/<main\b[\s\S]*?<\/main>/)?.[0] ?? ''
+  if (/href=["']#["']/.test(landingHtml)) {
+    violations.push(`${contract.file}: placeholder landing link: href="#"`)
   }
 }
 
