@@ -530,6 +530,13 @@ Objetivo: identidad configurable por cerebro (nombre, tono, idioma,
 instrucciones de sistema), editable desde el panel.
 
 ### Pieza — Herramientas gobernadas por políticas + skills
+> ✅ **ENTREGADA (v0.7.0, publicada 2026-08-15)** — ADR-0041 + ADR-0042:
+> catálogo de herramientas de serie con gate del motor de políticas
+> (permitir/sombrear/denegar por cerebro y por canal, sensibles restringidas
+> a modelos locales, escudo de red privada, jaulas por herramienta y
+> auditoría de cada uso) + lane nativo de tool-calling + skills en markdown
+> de solo lectura. Demostrada en hardware real el 2026-08-09; publicada
+> como v0.7.0 el 2026-08-15 (ver HANDOFF).
 Objetivo: que los agentes tengan herramientas útiles de serie y que el motor
 de políticas decida cuáles ve el modelo en cada petición.
 Alcance:
@@ -546,13 +553,19 @@ Verificar en disco: estado real del protocolo de tool use en el AgentBrain
 (Etapa 8) y qué contrato expone hoy el motor de políticas.
 
 ### Pieza — Memoria mínima
+> 🔶 **ACTIVA (2026-08-16)** — spec v1.3 **approved for TDD** con sign-off
+> del copiloto: `docs/superpowers/specs/2026-08-16-minimal-memory.md`.
+> Dos sub-fases secuenciales: **SP-A recall** (`/recall`: un único bloque
+> citado, solo hacia una sesión activa vacía) → **SP-B notas**
+> (`memory_note` gobernada + `/notes`). Siguiente: ADR de la pieza →
+> RED de SP-A.
 Objetivo: que un cerebro conserve contexto más allá de la conversación en curso.
 Alcance: historial recuperable + notas persistentes por cerebro, sujetos al
 motor de políticas (lo sensible no sale de la máquina).
 Fuera de la beta: recuperación semántica y embeddings.
 
-Todas estas piezas quedan pendientes de design spec
-(docs/superpowers/specs/TEMPLATE.md).
+De esta ampliación, consola, personalidad y herramientas quedaron cerradas;
+la memoria mínima es la única pieza abierta (spec enlazado en su banner).
 
 ## Track paralelo — Sitio web + documentación (GitHub Pages)
 
@@ -676,19 +689,26 @@ escribir una sola línea.
       canal desde la app de escritorio, y el cerebro respeta la toma de control.**
       COMPLETO — **pieza Consola de operador** (2026-08-08), validada en hardware
       real (smoke a–l de Chano: iMac + Telegram + ollama local; ver HANDOFF).
-- [ ] **Cada cerebro tiene personalidad configurable desde el panel.**
-- [ ] **Los agentes disponen de herramientas de serie cuya visibilidad decide el
+- [x] **Cada cerebro tiene personalidad configurable desde el panel.**
+      COMPLETO — dentro del **Builder-lienzo** (NC-4): `brains[i].persona`
+      compuesta como prefijo del system prompt en ambos tipos de brain.
+- [x] **Los agentes disponen de herramientas de serie cuya visibilidad decide el
       motor de políticas, con auditoría, y el sistema carga skills en markdown.**
+      COMPLETO — pieza **Herramientas gobernadas + skills** (ADR-0041 +
+      ADR-0042), demostrada en hardware 2026-08-09, publicada en **v0.7.0**
+      (2026-08-15).
 - [ ] **Un cerebro conserva contexto entre conversaciones con memoria mínima, y la
       memoria respeta la política de privacidad.**
 
 **Próximo paso:** **Piezas 1–5 ✅ cerradas** (la 5 el 2026-07-26:
 `v0.4.0` publicada con Korvun Desktop), **canal Webhook ✅**,
-**Builder-lienzo ✅** (con la personalidad por cerebro dentro) y
-**Consola de operador ✅** (2026-08-08, validada en hardware). Siguiente
-en la cola: **Herramientas gobernadas por políticas + skills** → Memoria
-mínima. La puerta universal de modelos sigue en cola, reordenable por
-Chano.
+**Builder-lienzo ✅** (con la personalidad por cerebro dentro),
+**Consola de operador ✅** (2026-08-08, validada en hardware) y
+**Herramientas gobernadas + skills ✅** (v0.7.0, publicada 2026-08-15).
+**EN CURSO: Memoria mínima** — spec v1.3 approved for TDD (2026-08-16),
+sub-fases SP-A recall → SP-B notas. Después: cierre de beta y el
+cartucho único del estreno. La puerta universal de modelos sigue en
+cola, reordenable por Chano.
 
 ---
 
