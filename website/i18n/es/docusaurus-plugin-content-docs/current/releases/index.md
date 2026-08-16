@@ -4,7 +4,7 @@ Cada release de Korvun trae **binarios firmados para seis plataformas**
 (Linux, macOS, Windows × x86-64, ARM64) más las apps de escritorio: cada
 artefacto está cubierto por un manifiesto de checksums firmado con cosign y
 un SBOM. Cómo descargar y verificar está en la
-[guía de instalación](/es/guide/install).
+[guía de instalación](/guide/install).
 
 **Todas las releases viven en GitHub:**
 [github.com/Sebastian197/korvun/releases](https://github.com/Sebastian197/korvun/releases)

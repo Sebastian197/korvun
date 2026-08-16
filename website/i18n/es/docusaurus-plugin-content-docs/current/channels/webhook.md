@@ -142,5 +142,5 @@ server {
 
 ## Siguiente
 
-- [Telegram](/es/channels/telegram) · [Discord](/es/channels/discord)
-- Cada campo del webhook → [referencia de configuración](/es/reference/configuration)
+- [Telegram](/channels/telegram) · [Discord](/channels/discord)
+- Cada campo del webhook → [referencia de configuración](/reference/configuration)

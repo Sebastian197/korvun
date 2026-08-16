@@ -37,14 +37,14 @@ todo como políticas de un mismo motor:
 Todo lo de esta página está en la release actual — nada es hoja de ruta:
 
 - **Canales**: Telegram (polling), Discord (Gateway de entrada, REST de
-  salida) y un [endpoint webhook genérico](/es/channels/webhook) para
+  salida) y un [endpoint webhook genérico](/channels/webhook) para
   cualquier cosa que sepa hacer POST de JSON.
 - **Modelos**: [Ollama](https://ollama.com) local y Groq en la nube,
   mezclables en un mismo cerebro.
 - **Cerebros**: conviven varios, cada uno con fan-out en paralelo o
   fail-over secuencial que ahorra coste.
 - **El builder sin código**: configura canales, cerebros y modelos
-  [visualmente en el navegador](/es/guide/builder) — lienzo de arrastrar y
+  [visualmente en el navegador](/guide/builder) — lienzo de arrastrar y
   soltar incluido — con recarga en vivo segura, sin reiniciar.
 - **Korvun Desktop**: el mismo núcleo tras una ventana nativa para macOS,
   Windows y Linux — con onboarding y los secretos en el llavero del
@@ -58,6 +58,6 @@ Todo lo de esta página está en la release actual — nada es hoja de ruta:
 
 ## Por dónde seguir
 
-- Un bot respondiendo con un modelo local en minutos → [Inicio rápido](/es/guide/quickstart)
-- Instalar el binario o la app de escritorio → [Instalación](/es/guide/install)
-- Cada campo de configuración, explicado → [Referencia de configuración](/es/reference/configuration)
+- Un bot respondiendo con un modelo local en minutos → [Inicio rápido](/guide/quickstart)
+- Instalar el binario o la app de escritorio → [Instalación](/guide/install)
+- Cada campo de configuración, explicado → [Referencia de configuración](/reference/configuration)

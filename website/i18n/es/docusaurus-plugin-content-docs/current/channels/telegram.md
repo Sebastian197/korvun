@@ -34,7 +34,7 @@ Añade un canal `telegram` y una ruta a tu configuración. `token_env` es el
 
 `mode` es siempre `"polling"`, y `routes[].channel` es el **nombre de
 tipo** del canal (`telegram`). El cerebro es el que tengas configurado — el
-[inicio rápido](/es/guide/quickstart) trae un fichero mínimo completo.
+[inicio rápido](/guide/quickstart) trae un fichero mínimo completo.
 
 ## Paso 3 — Exporta el token y arranca
 
@@ -57,5 +57,5 @@ contestada por los modelos que corra el cerebro enrutado.
 
 ## Siguiente
 
-- [Discord](/es/channels/discord) · [Webhook](/es/channels/webhook)
-- Cada campo de canal → [referencia de configuración](/es/reference/configuration)
+- [Discord](/channels/discord) · [Webhook](/channels/webhook)
+- Cada campo de canal → [referencia de configuración](/reference/configuration)

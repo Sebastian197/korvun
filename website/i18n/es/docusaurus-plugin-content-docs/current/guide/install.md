@@ -143,4 +143,4 @@ aparte — una actualización nunca los toca.
 
 ## Siguiente
 
-Un bot respondiendo con un modelo local → [Inicio rápido](/es/guide/quickstart)
+Un bot respondiendo con un modelo local → [Inicio rápido](/guide/quickstart)

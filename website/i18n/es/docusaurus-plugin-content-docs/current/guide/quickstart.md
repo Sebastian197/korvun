@@ -7,7 +7,7 @@ el mismo en Linux, macOS y Windows.
 ## Antes de empezar
 
 - **El binario `korvun` instalado** — la
-  [guía de instalación](/es/guide/install) cubre descarga y verificación.
+  [guía de instalación](/guide/install) cubre descarga y verificación.
   Confírmalo con `korvun --version`.
 - **[Ollama](https://ollama.com)** para el modelo local (paso 1).
 - **Un token de bot de Telegram**, de [@BotFather](https://t.me/BotFather)
@@ -64,7 +64,7 @@ Los campos que más importan:
   una etiqueta inventada.
 
 Cada campo está documentado en la
-[referencia de configuración](/es/reference/configuration).
+[referencia de configuración](/reference/configuration).
 
 ## Paso 3 — Exporta el token
 
@@ -132,7 +132,7 @@ make build          # or: go build ./cmd/korvun
 
 ## Siguientes pasos
 
-- Configúralo **visualmente, sin JSON** → [el builder](/es/guide/builder)
-- Añade [Discord](/es/channels/discord) o un
-  [webhook](/es/channels/webhook)
-- Qué hace cada campo → [referencia de configuración](/es/reference/configuration)
+- Configúralo **visualmente, sin JSON** → [el builder](/guide/builder)
+- Añade [Discord](/channels/discord) o un
+  [webhook](/channels/webhook)
+- Qué hace cada campo → [referencia de configuración](/reference/configuration)

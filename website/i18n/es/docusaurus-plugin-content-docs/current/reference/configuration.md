@@ -56,7 +56,7 @@ referencian las `routes`.
 ```
 
 Discord necesita un interruptor manual en el Developer Portal — la
-[guía de Discord](/es/channels/discord) lo recorre paso a paso.
+[guía de Discord](/channels/discord) lo recorre paso a paso.
 
 ### El bloque `webhook`
 
@@ -70,7 +70,7 @@ Discord necesita un interruptor manual en el Developer Portal — la
 
 Validación en el borde en cada petición: solo `POST` (405),
 `application/json` (415), cuerpo ≤ 1 MiB (413), buffer lleno responde 503
-(reintenta luego). La [guía del webhook](/es/channels/webhook) es el camino
+(reintenta luego). La [guía del webhook](/channels/webhook) es el camino
 de cero al round-trip.
 
 ## `brains[]`
@@ -155,7 +155,7 @@ auth/TLS/cortafuegos de tu lado.
 | `token_env` | string | **sí** (si el bloque está) | **Nombre** de la variable con el token bearer de administración. |
 
 El bloque `admin` enciende la superficie de escritura y el
-[builder visual](/es/guide/builder) en `/builder`. Sin bloque, o con la
+[builder visual](/guide/builder) en `/builder`. Sin bloque, o con la
 variable sin definir ⇒ solo lectura: el builder ni se monta. El token viaja
 como `Authorization: Bearer` (comparación en tiempo constante, nunca una
 cookie) y solo es seguro sobre el bind loopback por defecto o tras TLS.

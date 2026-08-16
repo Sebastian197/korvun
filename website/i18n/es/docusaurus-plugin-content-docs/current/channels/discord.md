@@ -92,4 +92,4 @@ verificado en hardware de punta a punta.
 
 ## Siguiente
 
-- [Telegram](/es/channels/telegram) · [Webhook](/es/channels/webhook)
+- [Telegram](/channels/telegram) · [Webhook](/channels/webhook)

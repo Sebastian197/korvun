@@ -98,5 +98,5 @@ Pulsa **Discard** para tirar los cambios sin aplicar.
 
 ## Siguiente
 
-- Escribir la configuración a mano → [referencia de configuración](/es/reference/configuration)
-- Poner Korvun en marcha primero → [inicio rápido](/es/guide/quickstart)
+- Escribir la configuración a mano → [referencia de configuración](/reference/configuration)
+- Poner Korvun en marcha primero → [inicio rápido](/guide/quickstart)
