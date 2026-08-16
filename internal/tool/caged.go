@@ -54,6 +54,13 @@ func BuiltinAttrs(name string) (Attrs, bool) {
 	switch name {
 	case "time", "echo", "calc":
 		return Attrs{}, true
+	case "memory_note":
+		// Deliberately NEITHER Sensitive nor Network (minimal-memory
+		// FR-TOOL-1): a Sensitive attr would deny it on cloud-locality
+		// brains via sensitive×locality, contradicting conversation-scope
+		// validity; privacy is enforced structurally (scope + the
+		// brain-global boot guard). The operator can tighten via tool_attrs.
+		return Attrs{}, true
 	case "read_file":
 		return Attrs{Sensitive: true}, true
 	case "http_fetch", "webhook_call":
