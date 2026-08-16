@@ -109,9 +109,34 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-15)
+## Current state (as of 2026-08-16)
 
-> **CURRENT (2026-08-15, session close): v0.7.0 PUBLISHED — the SEVENTH
+> **CURRENT (2026-08-16, session close): MINIMAL MEMORY piece OPENED —
+> spec v1.3 on disk with the copilot's sign-off:
+> `docs/superpowers/specs/2026-08-16-minimal-memory.md` (Chano's product
+> decisions D1-D4 + P1-P4 recorded in its header).** The review cycle ran
+> on the SPEC itself this time: /plan-eng-review + the Codex cross-review
+> over v1.2 — 1 blocker + 13 majors + 9 minors (H1-H24), ALL adjudicated
+> into v1.3 (adjudication in `design-drafts/claude-code-report.md`,
+> 2026-08-16) — and the pre-RED SSE gate was verified and PASSED: the
+> liveview serialization of `ReplySent` is content-free by construction
+> AND test-asserted (liveview.go:176-215; liveview_test.go:106-140 injects
+> a sentinel body + secret Meta and asserts no frame carries them). The
+> recall was REDESIGNED in adjudication: ONE quoted context block,
+> imported only into an EMPTY active session — provenance visible,
+> duplication impossible by construction. Two sequential sub-phases:
+> SP-A recall → SP-B notes.
+>
+> **PARALLEL FRONT:** Codex works the website redesign on the
+> `codex/website-redesign` branch — Codex's exclusive lane; copilot
+> review and Chano's merge when it lands.
+>
+> **NEXT: the piece's ADR → SP-A (recall) RED suite.** `govulncheck ./...`
+> locally before the batch's first rehearsal (the rehearsal law). Notes:
+> understand-anything stays deferred; the Codex-estreno report is archived
+> as `design-drafts/claude-code-report-estreno-codex.md`.
+
+> **PREVIOUS (2026-08-15, session close): v0.7.0 PUBLISHED — the SEVENTH
 > release, the COMBINED one: Operator Console + Governed Tools & Skills +
 > the Builder governance panel + the native tool-calling lane.** Published
 > 2026-08-15 19:05 UTC (verified by the copilot via API): draft-until-complete
