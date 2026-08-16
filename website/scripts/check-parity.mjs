@@ -1,101 +1,76 @@
-// The locale-parity gate (SP4b — Chano's 2026-08-02 decision: the ES
-// locale is a FULL MIRROR of EN, not a layer). Permanent: a future page
-// added without its ES twin goes red HERE, forever. Stdlib Node only;
-// run from website/ after the build.
-//
-// Three laws over the built dist:
-//   1. BIJECTION — every non-es page has an es/ twin and vice versa
-//      (404.html exempt: VitePress emits a single global one).
-//   2. NO "(EN)" residue — the mirror is complete, so no ES page may
-//      still mark a link as English-only.
-//   3. TECHNICAL TRUTH — the fenced code blocks of each page pair are
-//      byte-identical, in order: commands, paths, ports and env-var
-//      names do not translate.
-
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const DIST = fileURLToPath(new URL('../.vitepress/dist/', import.meta.url))
+const ROOT = fileURLToPath(new URL('../', import.meta.url))
+const EN = path.join(ROOT, 'docs')
+const ES = path.join(ROOT, 'i18n/es/docusaurus-plugin-content-docs/current')
 
-const pages = []
-const walk = (dir) => {
-  for (const e of readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, e.name)
-    if (e.isDirectory()) walk(full)
-    else if (e.name.endsWith('.html')) {
-      pages.push(path.relative(DIST, full).split(path.sep).join('/'))
+const markdownFiles = (root) => {
+  if (!existsSync(root)) return []
+  const result = []
+  const walk = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name)
+      if (entry.isDirectory()) walk(absolute)
+      else if (/\.mdx?$/.test(entry.name)) {
+        result.push(path.relative(root, absolute).split(path.sep).join('/'))
+      }
     }
   }
+  walk(root)
+  return result.sort()
 }
-walk(DIST)
 
-const en = new Set(
-  pages.filter((p) => !p.startsWith('es/') && p !== '404.html'),
-)
-const es = new Set(
-  pages.filter((p) => p.startsWith('es/')).map((p) => p.slice(3)),
-)
-
+const en = markdownFiles(EN)
+const es = markdownFiles(ES)
+const enSet = new Set(en)
+const esSet = new Set(es)
 const violations = []
-for (const p of en) {
-  if (!es.has(p)) violations.push(`missing ES twin: es/${p}`)
+
+if (en.length === 0) violations.push('English Docusaurus docs tree is missing or empty')
+if (es.length === 0) violations.push('Spanish Docusaurus docs tree is missing or empty')
+
+for (const file of en) {
+  if (!esSet.has(file)) violations.push(`missing ES twin: ${file}`)
 }
-for (const p of es) {
-  if (!en.has(p)) violations.push(`ES page without an EN twin: es/${p}`)
+for (const file of es) {
+  if (!enSet.has(file)) violations.push(`ES page without an EN twin: ${file}`)
 }
 
-// Fenced code blocks as rendered text (pre > code, highlight spans
-// stripped, entities decoded) — inline <code> in prose is NOT covered,
-// only blocks.
-const codeBlocks = (file) => {
-  const html = readFileSync(path.join(DIST, file), 'utf-8')
-  const blocks = []
-  for (const m of html.matchAll(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/g)) {
-    blocks.push(
-      m[1]
-        .replace(/<[^>]+>/g, '')
-        .replaceAll('&lt;', '<')
-        .replaceAll('&gt;', '>')
-        .replaceAll('&quot;', '"')
-        .replaceAll('&#39;', "'")
-        .replaceAll('&amp;', '&'),
-    )
-  }
-  return blocks
-}
+const fencedBlocks = (source) =>
+  [...source.matchAll(/```[^\n]*\n([\s\S]*?)```/g)].map((match) => match[1])
 
-for (const p of en) {
-  if (!es.has(p)) continue
-  const esFile = `es/${p}`
-  // 2. "(EN)" residue.
-  const esHtml = readFileSync(path.join(DIST, esFile), 'utf-8')
-  if (esHtml.includes('(EN)')) {
-    violations.push(`${esFile}: residual "(EN)" marker — the mirror is complete`)
+for (const file of en) {
+  if (!esSet.has(file)) continue
+  const enSource = readFileSync(path.join(EN, file), 'utf8')
+  const esSource = readFileSync(path.join(ES, file), 'utf8')
+
+  if (esSource.includes('(EN)')) {
+    violations.push(`${file}: residual "(EN)" marker in Spanish mirror`)
   }
-  // 3. code-block parity, ordered.
-  const a = codeBlocks(p)
-  const b = codeBlocks(esFile)
-  if (a.length !== b.length) {
+
+  const enBlocks = fencedBlocks(enSource)
+  const esBlocks = fencedBlocks(esSource)
+  if (enBlocks.length !== esBlocks.length) {
     violations.push(
-      `${p} ↔ ${esFile}: code-block count differs (${a.length} vs ${b.length})`,
+      `${file}: code-block count differs (${enBlocks.length} vs ${esBlocks.length})`,
     )
     continue
   }
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) {
-      violations.push(
-        `${p} ↔ ${esFile}: code block #${i + 1} differs — technical truth must be byte-identical`,
-      )
+  enBlocks.forEach((block, index) => {
+    if (block !== esBlocks[index]) {
+      violations.push(`${file}: code block #${index + 1} differs between locales`)
     }
-  }
+  })
 }
 
 if (violations.length > 0) {
   console.error(`FAIL: ${violations.length} locale-parity violation(s):`)
-  for (const v of violations) console.error(`  - ${v}`)
+  for (const violation of violations) console.error(`  - ${violation}`)
   process.exit(1)
 }
+
 console.log(
-  `check-parity: ${en.size} page pairs — full ES mirror, zero "(EN)" residue, code blocks byte-identical — OK`,
+  `check-parity: ${en.length} source page pairs — full ES mirror and byte-identical technical blocks — OK`,
 )
