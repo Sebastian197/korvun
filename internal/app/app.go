@@ -306,6 +306,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 					DailyHour: s.DailyHour,
 					DailyMin:  s.DailyMin,
 					IdleMin:   s.IdleMin,
+					RecallMax: s.RecallMax,
 				}))
 		}
 	}
