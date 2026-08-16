@@ -112,3 +112,7 @@ graphify-out/
 
 # Design mockup drafts (Chano) — deliberately unversioned (SP2 rider)
 design-drafts/
+
+# Copilot report mirror at the repo root (a hook re-creates it; canonical
+# copy lives in design-drafts/, which is already ignored).
+/claude-code-report.md
