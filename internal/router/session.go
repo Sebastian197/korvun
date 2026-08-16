@@ -55,6 +55,12 @@ type SessionPolicy struct {
 	// IdleMin, when > 0, expires the active session at the first inbound
 	// arriving more than IdleMin minutes after the session's last activity.
 	IdleMin int
+
+	// RecallMax, when > 0, enables the /recall command and caps how many
+	// archived turns one recall may import (minimal-memory spec
+	// FR-RECALL-1/FR-CFG-A1; 0 disables — the token falls through like any
+	// unknown command).
+	RecallMax int
 }
 
 // WithSessionStore wires the sessionful conversation store into the dispatch
@@ -187,6 +193,12 @@ func (r *Router) sessionPreDispatch(ctx context.Context, env *envelope.Envelope,
 		}
 		if out != nil {
 			env = out
+		}
+		// /recall runs AFTER the lazy expiry and the triggers by
+		// construction (FR-RECALL-1): a /recall following an idle/daily cut
+		// recovers from the just-archived session — the primary case.
+		if r.maybeHandleRecall(ctx, key, env, brainName) {
+			return nil, true
 		}
 	}
 

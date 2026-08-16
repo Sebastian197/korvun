@@ -16,3 +16,8 @@ const AckSessionReset = "session-reset"
 // (ADR-0041, FR-CHAT-1): a system response the console persists as a SYSTEM
 // turn like any ack.
 const AckToolsReport = "tools-report"
+
+// AckRecall is the MetaAck value for the /recall acknowledgement
+// (minimal-memory spec FR-RECALL-1, ADR-0043): a system response the
+// console persists as a SYSTEM turn like any ack.
+const AckRecall = "session-recall"
