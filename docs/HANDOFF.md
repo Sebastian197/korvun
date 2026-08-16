@@ -111,7 +111,40 @@ explicit decision.
 
 ## Current state (as of 2026-08-16)
 
-> **CURRENT (2026-08-16, piece close): MINIMAL MEMORY CLOSED — the last
+> **CURRENT (2026-08-16, session close): THE BETA IS OUT.** DONE today:
+> the Minimal Memory piece closed end-to-end (spec v1.3 three-voice
+> adjudicated, ADR-0043, SP-A + SP-B via TDD contracts, the real-model demo
+> PLUS the live test witnessed by Chano from his own Telegram); **BETA
+> DECLARED** — every criterion met; **v0.8.0 «Korvun v0.8.0 — Beta»
+> PUBLISHED and API-verified** (21/21 signed assets, draft-until-complete
+> 5/5); README + `docs/releases/v0.8.0.md` + the user docs
+> (CONFIGURATION/CHAT/TOOLS-AND-SKILLS) updated for the new fields and
+> commands; the public-surfaces checklist is now a PERMANENT copilot rule
+> (born from Chano's feedback).
+>
+> **Domain:** korvun.dev BOUGHT (registered ~12:52 UTC), DNS propagating —
+> recheck after 2026-08-17 12:52 UTC. Cloudflare Pages = canonical for the
+> domain; GitHub Pages = legacy redirector. **PR #24** (legacy-host
+> redirect → korvun.dev): copilot-APPROVED, still DRAFT on purpose — merge
+> ONLY after the domain resolves (order: domain live → Ready for review →
+> checks green → Chano merges).
+>
+> **Codex lane:** the website migrated VitePress → Docusaurus 3.9.2
+> (PRs #21/#23, merged by Chano); harness + EN/ES parity intact.
+> GOVERNANCE DEBT: an ADR superseding ADR-0040 + a full post-hoc copilot
+> review of both PRs.
+>
+> **NEXT SESSION queue:** (1) verify korvun.dev → merge #24 → swap
+> README/site links to the domain; (2) día D del cartucho (Chano's call;
+> kit at `design-drafts/kit-estreno-v0.8.0.md`; warm-up LinkedIn/X posts
+> authorized post-push); (3) candidates with evidence: Discord fake
+> deflake (gateway_test.go:790), website-toolchain lote (vite ≥ 6.4.3 via
+> Context7), app coverage tanda (88.4), Codex PRs post-hoc review +
+> Docusaurus ADR, notes dedupe (post-beta); (4) Chano personal: revoke the
+> exposed Telegram bot token; (5) post-beta: blueprint Etapa 1 «Action
+> Kernel».
+
+> **PREVIOUS (2026-08-16, piece close): MINIMAL MEMORY CLOSED — the last
 > piece of the beta.** Spec v1.3 + ADR-0043 + SP-A (recall) and SP-B
 > (notes) on master (`6f73436`, green) and the REAL-MODEL DEMO executed
 > and accepted by the copilot — both lanes of `memory_note`, the honest
