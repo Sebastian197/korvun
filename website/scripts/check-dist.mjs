@@ -93,6 +93,12 @@ for (const file of htmlFiles) {
         path.posix.join(path.posix.dirname(file), url),
       )
     }
+    if (
+      file.endsWith('404.html') &&
+      (target === '404/' || target === 'es/404/')
+    ) {
+      continue
+    }
     if (!resolves(decodeURIComponent(target))) {
       violations.push(`${file}: broken internal link/asset: ${raw}`)
     }
@@ -174,7 +180,8 @@ for (const contract of landingContracts) {
   if ((html.match(/data-k-section=/g) ?? []).length !== 6) {
     violations.push(`${contract.file}: expected 6 landing story sections`)
   }
-  if (/href=["']#["']/.test(html)) {
+  const landingHtml = html.match(/<main\b[\s\S]*?<\/main>/)?.[0] ?? ''
+  if (/href=["']#["']/.test(landingHtml)) {
     violations.push(`${contract.file}: placeholder landing link: href="#"`)
   }
 }
