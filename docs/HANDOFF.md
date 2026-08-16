@@ -133,10 +133,13 @@ explicit decision.
 >
 > **NEXT: ADR-0043 on disk → SP-A (recall) RED suite (`govulncheck ./...`
 > local antes del primer ensayo).** Dependabot triaged — all 4 alerts live
-> in the website dev toolchain, unreachable in production (static dist, CI
-> never runs dev, Windows-only vector, requires --host); one "website
-> toolchain" lote queued (vite ≥ 6.4.3 via Context7) at the first natural
-> gap; none of the 5 dependabot branches remediates any alert. Notes:
+> in the website dev toolchain (3× vite, 1× esbuild), unreachable in
+> production: the published site is a static dist (the dev toolchain never
+> travels to the artifact) and CI never runs a dev server; the HIGH (#21)
+> is additionally Windows-only and requires an exposed dev server
+> (--host). One "website toolchain" lote queued (vite ≥ 6.4.3 via
+> Context7) at the first natural gap; none of the 5 dependabot branches
+> remediates any alert. Notes:
 > understand-anything stays deferred; the Codex-estreno report is archived
 > as `design-drafts/claude-code-report-estreno-codex.md`.
 
