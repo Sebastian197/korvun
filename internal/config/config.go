@@ -368,6 +368,103 @@ type AgentConfig struct {
 	// runes of injected skill bodies (0 => the skill package default).
 	SkillsDir        string `json:"skills_dir,omitempty"`
 	SkillsBodyBudget int    `json:"skills_body_budget,omitempty"`
+
+	// Memory is the persistent-notes block (minimal-memory spec FR-CFG-1,
+	// ADR-0043 §6): presence-detected, REQUIRED when memory_note is listed
+	// in Tools and rejected when the tool is absent (the read_file-cage
+	// precedent). It requires the storage block and a coherent budget
+	// (budget_runes >= max_notes × max_note_runes — P4).
+	Memory *MemoryConfig `json:"memory,omitempty"`
+}
+
+// MemoryConfig is the brains[i].agent.memory block (FR-CFG-1): scope
+// "conversation"|"brain" (default conversation), max_notes 1..100 (default
+// 10), max_note_runes 1..2000 (default 200), budget_runes (default 2000).
+type MemoryConfig struct {
+	Scope        string `json:"scope,omitempty"`
+	MaxNotes     int    `json:"max_notes,omitempty"`
+	MaxNoteRunes int    `json:"max_note_runes,omitempty"`
+	BudgetRunes  int    `json:"budget_runes,omitempty"`
+}
+
+// MemorySettings is the resolved, validated view of MemoryConfig the app
+// wires into the brain and its closures (the SessionSettings molde).
+type MemorySettings struct {
+	// BrainGlobal is true for scope "brain" (the all-local opt-in).
+	BrainGlobal  bool
+	MaxNotes     int
+	MaxNoteRunes int
+	BudgetRunes  int
+}
+
+// Settings resolves the block's defaults (10/200/2000, scope conversation —
+// minimal-memory FR-CFG-1, the SessionSettings molde).
+func (m *MemoryConfig) Settings() MemorySettings {
+	s := MemorySettings{
+		BrainGlobal:  m.Scope == "brain",
+		MaxNotes:     m.MaxNotes,
+		MaxNoteRunes: m.MaxNoteRunes,
+		BudgetRunes:  m.BudgetRunes,
+	}
+	if s.MaxNotes == 0 {
+		s.MaxNotes = 10
+	}
+	if s.MaxNoteRunes == 0 {
+		s.MaxNoteRunes = 200
+	}
+	if s.BudgetRunes == 0 {
+		s.BudgetRunes = 2000
+	}
+	return s
+}
+
+// validateAgentMemory checks the brains[i].agent.memory block (minimal-memory
+// FR-CFG-1, AS-B14): presence pairing with the memory_note tool (the
+// read_file-cage precedent), the storage requirement (the session
+// precedent), ranges, and the P4 coherence bound — everything fail-loud
+// naming the field path.
+func (c *Config) validateAgentMemory(brainIdx int, a *AgentConfig) error {
+	if a == nil {
+		return nil
+	}
+	hasTool := false
+	for _, name := range a.Tools {
+		if name == "memory_note" {
+			hasTool = true
+		}
+	}
+	if hasTool && a.Memory == nil {
+		return fmt.Errorf("%w: brains[%d].agent.memory: required when memory_note is listed in agent.tools", ErrInvalidConfig, brainIdx)
+	}
+	if !hasTool && a.Memory != nil {
+		return fmt.Errorf("%w: brains[%d].agent.memory: memory_note is not listed in agent.tools", ErrInvalidConfig, brainIdx)
+	}
+	m := a.Memory
+	if m == nil {
+		return nil
+	}
+	if c.Storage == nil {
+		return fmt.Errorf("%w: brains[%d].agent.memory: requires the storage block (notes live in the durable conversation store)", ErrInvalidConfig, brainIdx)
+	}
+	switch m.Scope {
+	case "", "conversation", "brain":
+	default:
+		return fmt.Errorf("%w: brains[%d].agent.memory.scope: %q (conversation|brain)", ErrInvalidConfig, brainIdx, m.Scope)
+	}
+	if m.MaxNotes < 0 || m.MaxNotes > 100 {
+		return fmt.Errorf("%w: brains[%d].agent.memory.max_notes: must be in 1..100 (0 => default 10), got %d", ErrInvalidConfig, brainIdx, m.MaxNotes)
+	}
+	if m.MaxNoteRunes < 0 || m.MaxNoteRunes > 2000 {
+		return fmt.Errorf("%w: brains[%d].agent.memory.max_note_runes: must be in 1..2000 (0 => default 200), got %d", ErrInvalidConfig, brainIdx, m.MaxNoteRunes)
+	}
+	if m.BudgetRunes < 0 {
+		return fmt.Errorf("%w: brains[%d].agent.memory.budget_runes: must be >= 0 (0 => default 2000), got %d", ErrInvalidConfig, brainIdx, m.BudgetRunes)
+	}
+	if s := m.Settings(); s.BudgetRunes < s.MaxNotes*s.MaxNoteRunes {
+		return fmt.Errorf("%w: brains[%d].agent.memory.budget_runes: %d is below max_notes × max_note_runes = %d — everything stored must always fit the prompt (P4)",
+			ErrInvalidConfig, brainIdx, s.BudgetRunes, s.MaxNotes*s.MaxNoteRunes)
+	}
+	return nil
 }
 
 // ToolGrantConfig is one tri-state tool grant (ADR-0041 §1): mode is
@@ -771,6 +868,9 @@ func (c *Config) validateBrains() (map[string]bool, error) {
 			return nil, err
 		}
 		if err := validateAgent(i, b.Agent); err != nil {
+			return nil, err
+		}
+		if err := c.validateAgentMemory(i, b.Agent); err != nil {
 			return nil, err
 		}
 		if err := validatePersona(i, b.Persona); err != nil {
