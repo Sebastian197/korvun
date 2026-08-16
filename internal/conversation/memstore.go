@@ -219,6 +219,29 @@ func (s *MemStore) LoadSession(_ context.Context, key Key, session int) ([]Turn,
 	return nil, nil
 }
 
+// LoadSessionTail returns a copy of the LAST n turns of the given session of
+// key, oldest-first among themselves (SessionStore, minimal-memory
+// FR-STORE-A1). n <= 0 or an unknown key/session returns no turns, no error.
+func (s *MemStore) LoadSessionTail(_ context.Context, key Key, session, n int) ([]Turn, error) {
+	if n <= 0 {
+		return nil, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, sess := range s.m[key] {
+		if sess.id == session {
+			turns := sess.turns
+			if len(turns) > n {
+				turns = turns[len(turns)-n:]
+			}
+			out := make([]Turn, len(turns))
+			copy(out, turns)
+			return out, nil
+		}
+	}
+	return nil, nil
+}
+
 // DeleteConversation atomically removes every session and turn of key
 // (SessionStore, FR-DEL-1): really gone from the map. An unknown key is a
 // no-op.

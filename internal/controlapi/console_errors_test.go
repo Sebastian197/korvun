@@ -41,6 +41,9 @@ func (failingStore) ListSessions(context.Context, conversation.Key) ([]conversat
 func (failingStore) LoadSession(context.Context, conversation.Key, int) ([]conversation.Turn, error) {
 	return nil, errStore
 }
+func (failingStore) LoadSessionTail(context.Context, conversation.Key, int, int) ([]conversation.Turn, error) {
+	return nil, errStore
+}
 
 func failingServer(t *testing.T) *httptest.Server {
 	t.Helper()

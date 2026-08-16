@@ -545,6 +545,58 @@ func (s *SqliteStore) Close() error {
 	return s.db.Close()
 }
 
+// LoadSessionTail returns the LAST n turns of the given session of key,
+// oldest-first among themselves (conversation.SessionStore, minimal-memory
+// FR-STORE-A1). It is LoadRecent's exact pattern (ORDER BY seq DESC LIMIT n
+// + reverse) scoped to the REQUESTED session instead of the active one.
+// n <= 0 or an unknown key/session returns no turns, no error.
+func (s *SqliteStore) LoadSessionTail(ctx context.Context, key conversation.Key, session, n int) ([]conversation.Turn, error) {
+	if n <= 0 {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT role, content, ts, seq FROM turns
+		 WHERE key = ? AND session = ?
+		 ORDER BY seq DESC LIMIT ?`,
+		string(key), session, n)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: LoadSessionTail %q/%d: %w", key, session, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var desc []conversation.Turn
+	for rows.Next() {
+		var (
+			role, content string
+			tsNanos       int64
+			seq           int
+		)
+		if err := rows.Scan(&role, &content, &tsNanos, &seq); err != nil {
+			return nil, fmt.Errorf("sqlite: LoadSessionTail scan %q/%d: %w", key, session, err)
+		}
+		// ts == 0 is the zero-Timestamp sentinel (see AppendTurns/LoadRecent).
+		var ts time.Time
+		if tsNanos != 0 {
+			ts = time.Unix(0, tsNanos).UTC()
+		}
+		desc = append(desc, conversation.Turn{
+			Role:      conversation.Role(role),
+			Content:   content,
+			Timestamp: ts,
+			Seq:       seq,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sqlite: LoadSessionTail rows %q/%d: %w", key, session, err)
+	}
+
+	// Reverse in place to oldest-first.
+	for i, j := 0, len(desc)-1; i < j; i, j = i+1, j-1 {
+		desc[i], desc[j] = desc[j], desc[i]
+	}
+	return desc, nil
+}
+
 // DeleteConversation implements conversation.SessionStore (FR-DEL-1): every
 // turn and session row of key gone in ONE transaction — really deleted, not
 // hidden. An unknown key is a no-op.

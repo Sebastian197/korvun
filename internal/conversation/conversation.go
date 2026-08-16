@@ -184,6 +184,13 @@ type SessionStore interface {
 	// first. An unknown key or session returns an empty slice, not an error.
 	LoadSession(ctx context.Context, key Key, session int) ([]Turn, error)
 
+	// LoadSessionTail returns the LAST n turns of the given session of key,
+	// oldest-first among themselves (minimal-memory spec FR-STORE-A1). n
+	// larger than the session returns the whole session; an unknown key or
+	// session returns an empty slice, not an error; n <= 0 returns no turns
+	// and no error (the LoadRecent contract).
+	LoadSessionTail(ctx context.Context, key Key, session, n int) ([]Turn, error)
+
 	// DeleteConversation atomically removes EVERY turn and EVERY session of
 	// key — really gone, not hidden (FR-DEL-1). An unknown key is a no-op,
 	// not an error.
