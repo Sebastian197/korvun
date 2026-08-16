@@ -20,12 +20,15 @@ its tools; they never grant anything.
 | `read_file` | Reads a text file. | ONLY under your configured `root` (symlink escapes die at the resolved-path check); size-capped. | **sensitive** (local models only) |
 | `http_fetch` | HTTP GET. | ONLY your `allow_hosts`; response-capped; redirects only to listed hosts, hop-capped. | **network** |
 | `webhook_call` | HTTP POST of a JSON payload — your no-code tool factory (n8n flows, home automation, any webhook). | ONLY your `allow_hosts`; response-capped; hard timeout; NO redirects. | **network** |
+| `memory_note` | Stores one short note the brain will remember in its scope (single required field `note`; single-line normalization; refuses when the box is full — the operator clears with `/notes clear`). | ONLY the conversation store, within the brain's declared scope (per-conversation by default; `brain` is an all-local opt-in). REQUIRES the `brains[].agent.memory` block AND a `governance` grant covering it. | — (deliberate: a `sensitive` attr would deny it on cloud-locality brains; privacy is structural — see the [minimal-memory spec](superpowers/specs/2026-08-16-minimal-memory.md) and [ADR-0043](adr/0043-minimal-memory-notes-and-recall.md)) |
 
 Shell execution does not exist and will not resolve — by decision, not
 omission (ADR-0021 §8).
 
 A caged tool cannot exist without its cage: listing `read_file` without the
-`read_file` config block is a boot error, never a default.
+`read_file` config block is a boot error, never a default — and listing
+`memory_note` without its `memory` block, or without a governance grant
+covering it, refuses the boot the same way.
 
 ## The gatekeeper
 

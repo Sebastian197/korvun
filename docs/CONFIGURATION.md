@@ -174,7 +174,7 @@ governance existed behaves byte-for-byte as it always did.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `tools` | array of string | **yes** (≥1) | Built-in tools to register. Pure: `time`, `echo`, `calc`. Caged (each REQUIRES its cage block below): `read_file`, `http_fetch`, `webhook_call`. |
+| `tools` | array of string | **yes** (≥1) | Built-in tools to register. Pure: `time`, `echo`, `calc`. Caged (each REQUIRES its cage block below): `read_file`, `http_fetch`, `webhook_call`, `memory_note`. |
 | `max_iterations` | int | no | Hard loop cap. `0` ⇒ the AgentBrain default. |
 | `system_prompt` | string | no | Operator prompt appended after the protocol block. |
 | `governance` | array | no | Tri-state grants (see below). Absent ⇒ ungoverned: every listed tool allowed on every channel. |
@@ -182,6 +182,7 @@ governance existed behaves byte-for-byte as it always did.
 | `read_file` | object | with the tool | The jail: `root` (**required**), `max_bytes` (`0` ⇒ 64 KiB). |
 | `http_fetch` | object | with the tool | The cage: `allow_hosts` (**required**, exact host, optional `:port`), `max_bytes`, `max_redirects`. |
 | `webhook_call` | object | with the tool | The cage: `allow_hosts` (**required**), `max_bytes`, `timeout_seconds` (`0` ⇒ 10s). |
+| `memory` | object | with the tool | The memory block for `memory_note`: `scope` (`"conversation"` default \| `"brain"`), `max_notes` (`0` ⇒ 10, 1..100), `max_note_runes` (`0` ⇒ 200, 1..2000), `budget_runes` (`0` ⇒ 2000, must be ≥ `max_notes × max_note_runes`). Requires the `storage` block; `memory_note` also requires a `governance` grant covering it; `scope: "brain"` requires the brain's selected model to be **local**. |
 | `skills_dir` | string | no | AgentSkills-compatible skills directory. Missing dir ⇒ boot failure; a malformed skill inside ⇒ skipped with a warning. |
 | `skills_body_budget` | int | no | Total rune budget for injected skill bodies (`0` ⇒ 8192). |
 
@@ -231,6 +232,7 @@ graceful shutdown). Absent ⇒ stateless. Under the hardened systemd unit, set
 | `triggers` | string[] | no | Exact-match first-token reset commands. Omitted ⇒ `["/new", "/reset"]`. |
 | `daily_at` | string | no | Local-time `"HH:MM"` boundary for daily expiry. Empty ⇒ no daily expiry. |
 | `idle_min` | int | no | Idle expiry in whole minutes. `0` ⇒ no idle expiry. |
+| `recall_max` | int | no | Enables `/recall` (`0` ⇒ disabled; 1..50): imports the previous session's tail as ONE quoted block — only into an empty session, only on demand. |
 
 Present ⇒ session dispatch is on: a conversation is a series of **sessions**,
 the newest one active. A trigger (or a lazy daily/idle expiry, evaluated at the

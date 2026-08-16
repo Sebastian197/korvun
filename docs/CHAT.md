@@ -46,6 +46,24 @@ only the active one is the brain's context. A session ends when:
 Old sessions stay stored: the session tabs above the transcript navigate
 them read-only. Resetting never deletes anything — it only cuts the context.
 
+The cut is recoverable **on purpose, never by accident**: `/recall` (enabled
+by `session.recall_max`) quotes the previous session's tail back into the
+active one as ONE clearly-marked block — the header names its source
+session, the acknowledgement names how many turns came back. It only works
+on an EMPTY active session; on a non-empty one it refuses and points you to
+`/new` first. Deliberate recovery, provenance visible, duplication
+impossible.
+
+### Notes and `/notes`
+
+A brain with memory configured also keeps **notes** — short facts the model
+stores through the governed `memory_note` tool (`docs/TOOLS-AND-SKILLS.md`).
+Notes are not history: they SURVIVE session resets on purpose, riding the
+brain's context only within their scope (per-conversation by default).
+`/notes` lists them numbered; `/notes clear` wipes the scope — both are
+instant system commands, no model call, and clearing notes never touches
+the transcript.
+
 ## Answering as the operator (takeover)
 
 On a network channel (telegram, discord, webhook), replying by hand first
