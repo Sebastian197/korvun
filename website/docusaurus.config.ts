@@ -98,6 +98,13 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
+      logo: {
+        alt: 'Korvun',
+        src: 'brand/korvun-logo-mono.svg',
+        href: '/',
+        width: 30,
+        height: 30,
+      },
       links: [
         {
           title: 'Build',

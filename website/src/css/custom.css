@@ -103,7 +103,71 @@ a {
 }
 
 .footer {
+  /* Infima's .footer--dark redefines the background var locally; pin it. */
+  background: #08080a;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 4.5rem 0 2.5rem;
+}
+
+.footer__links {
+  margin-bottom: 3.5rem;
+}
+
+.footer__title {
+  color: #8a8a96;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  margin-bottom: 1.1rem;
+  text-transform: uppercase;
+}
+
+.footer__item {
+  line-height: 2.1;
+}
+
+.footer__link-item {
+  color: #b8b8c3;
+  font-size: 0.875rem;
+}
+
+.footer__link-item:hover {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.footer__link-item svg {
+  opacity: 0.55;
+}
+
+.footer__bottom {
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  padding-top: 2rem;
+  text-align: left;
+}
+
+.footer__bottom .margin-bottom--sm {
+  margin-bottom: 0 !important;
+}
+
+.footer__logo {
+  display: block;
+  height: 30px;
+  opacity: 0.9;
+  width: 30px;
+}
+
+.footer__copyright {
+  color: #8a8a96;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
 }
 
 @media (prefers-reduced-motion: reduce) {
