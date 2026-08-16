@@ -2,17 +2,40 @@
   "name": "korvun-website",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview",
-    "test:e2e": "playwright test"
+    "start": "docusaurus start",
+    "dev": "docusaurus start",
+    "build": "docusaurus build --out-dir .vitepress/dist",
+    "preview": "docusaurus serve --dir .vitepress/dist",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:dist": "node scripts/check-dist.mjs",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:motion": "node scripts/check-motion.mjs",
+    "check:parity": "node scripts/check-parity.mjs",
+    "check": "npm run typecheck && npm run check:parity && npm run build && npm run check:dist && npm run check:docs && npm run check:contrast && npm run check:motion"
+  },
+  "dependencies": {
+    "@docusaurus/core": "3.9.2",
+    "@docusaurus/preset-classic": "3.9.2",
+    "@fontsource/geist-mono": "5.3.0",
+    "@fontsource/geist-sans": "5.3.0",
+    "@mdx-js/react": "^3.0.0",
+    "clsx": "^2.0.0",
+    "prism-react-renderer": "^2.3.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
-    "@fontsource/geist-mono": "5.3.0",
-    "@fontsource/geist-sans": "5.3.0",
+    "@docusaurus/module-type-aliases": "3.9.2",
+    "@docusaurus/tsconfig": "3.9.2",
+    "@docusaurus/types": "3.9.2",
     "@playwright/test": "1.61.1",
-    "vitepress": "1.6.4"
+    "typescript": "5.9.3"
   }
 }
