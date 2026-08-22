@@ -130,12 +130,24 @@ explicit decision.
 > docs `7ca8d08`/`d8e522e` + the feat/docs commits of this batch), SIN
 > push — the rehearsal law applies before master.
 >
-> **NEXT (in order): (1) copilot review of the GREEN batch; (2) the
-> ensayo green path → push (govulncheck first, per the law); (3) the
-> AS-5 real-model demo on Chano's iMac (LM Studio or llama.cpp server,
-> plus a cloud compat if a key is at hand) with its REDACTED record in
-> the demo report; (4) Chano's SP-B decision (native tools over the same
-> wire; the `tool_call_id` DTO question is SP-B's, prohibited in SP-A).**
+> **UPDATE (same day, later): SP-A pushed to master (`7eae654`, ensayo +
+> master green), the AS-5 demo EXECUTED (llama.cpp local round-trip 2.1s
+> + OpenRouter cloud 4.1s; DeepSeek/Kimi as live honest errors on
+> zero-balance accounts — record in `design-drafts/demo-pasarela/DEMO.md`),
+> and SP-B (native tools) went FRs → RED → GREEN locally: additive
+> `ToolCall.ID`/`Message.ToolCallID`, the agent threads the id, the
+> compat adapter's tools lane on ONE shared engine with SP-A, and
+> `quotaExhaustedCodes` gained Moonshot's `exceeded_current_quota_error`
+> (the demo finding, double-cited). Coverage: openaicompat 94.7 / brain
+> 94.6 / model 100; `make quality` 92.4% global.**
+>
+> **NEXT (in order): (1) copilot review of the SP-B GREEN batch; (2) the
+> ensayo green path → push (govulncheck first, per the law); (3) LA
+> SESIÓN: the AS-B-demo witnessed by Chano (a real tool round-trip
+> against OpenRouter — chosen model `openai/gpt-4o-mini`, ~$0.15/$0.60
+> per M, session estimated under one cent, per Chano's good-and-cheap
+> rule) plus the video shoot; (4) post-gateway: Chano's Execution Trust
+> Layer Stage 1 blueprint.**
 
 > **PREVIOUS (2026-08-22, morning): the security batch SHIPPED, the P1 test leak
 > closed, the launch date set.** The website carries v0.8.0 — Beta on
