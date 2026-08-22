@@ -59,6 +59,10 @@ type Message struct {
 	// DTO merely grew.
 	ToolCalls []ToolCall
 	ToolName  string
+	// ToolCallID correlates a RoleTool result turn with the ToolCall.ID it
+	// answers, on wires that thread ids (ADR-0044 SP-B FR-GWB-1). ADDITIVE:
+	// zero on the ollama lane, threaded by the agent loop when present.
+	ToolCallID string
 }
 
 // Request is the input to Model.Generate. Model names the

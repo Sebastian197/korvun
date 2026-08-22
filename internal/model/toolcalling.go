@@ -40,6 +40,11 @@ type ToolParamSpec struct {
 
 // ToolCall is one native tool request returned by the model (ADR-0042 §1).
 type ToolCall struct {
+	// ID is the provider's call identifier, used by wires that correlate
+	// tool results by id (the OpenAI-compatible lane, ADR-0044 SP-B
+	// FR-GWB-1). ADDITIVE: zero for providers without ids (ollama neither
+	// populates nor reads it — its wire has no id field).
+	ID string
 	// Name is the requested tool's name.
 	Name string
 	// Arguments is the raw JSON object the provider returned. Under the
