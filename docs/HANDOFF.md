@@ -111,7 +111,33 @@ explicit decision.
 
 ## Current state (as of 2026-08-22)
 
-> **CURRENT (2026-08-22): the security batch SHIPPED, the P1 test leak
+> **CURRENT (2026-08-22, evening): UNIVERSAL MODEL GATEWAY SP-A GREEN —
+> local, NOT pushed.** The gateway piece opened and closed its first
+> sub-phase in one day: spec FINAL — Accepted for TDD (two Codex
+> adversarial passes absorbed: the 13-finding triage + the scoped
+> re-review's minimal list N2-N5) at
+> `docs/superpowers/specs/2026-08-22-universal-model-gateway.md`;
+> **ADR-0044** accepted; the RED suite (54 assertion-red rows across
+> adapter/config/app, zero existing tests touched) and then the GREEN:
+> `internal/model/openaicompat` (the full adapter — zero-magic suffix,
+> FR-GW-4 matrix with the closed `quotaExhaustedCodes`, redirect refusal,
+> 4 MiB success cap, H8 redaction belt), the config provider case +
+> canonical-triplet guard, the `buildModel` wiring, and
+> `docs/CONFIGURATION.md` with the per-provider `base_url` table in the
+> SAME batch. Quality: suite green with `-race`, `make quality` passed
+> (global 92.3%), coverage openaicompat **98.3%** / config 98.1% / app
+> 88.4%. Everything is in LOCAL commits over the CI batch (`d7c02c7` +
+> docs `7ca8d08`/`d8e522e` + the feat/docs commits of this batch), SIN
+> push — the rehearsal law applies before master.
+>
+> **NEXT (in order): (1) copilot review of the GREEN batch; (2) the
+> ensayo green path → push (govulncheck first, per the law); (3) the
+> AS-5 real-model demo on Chano's iMac (LM Studio or llama.cpp server,
+> plus a cloud compat if a key is at hand) with its REDACTED record in
+> the demo report; (4) Chano's SP-B decision (native tools over the same
+> wire; the `tool_call_id` DTO question is SP-B's, prohibited in SP-A).**
+
+> **PREVIOUS (2026-08-22, morning): the security batch SHIPPED, the P1 test leak
 > closed, the launch date set.** The website carries v0.8.0 — Beta on
 > korvun.dev (previous batches this session: the menu fix + the three
 > piece pages EN/ES at `45567ba`, direct domain links at `5032cbd`).
