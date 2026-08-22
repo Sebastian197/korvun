@@ -57,9 +57,26 @@ a {
 }
 
 .navbar {
-  backdrop-filter: blur(18px) saturate(150%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow: none;
+}
+
+/* The glass blur lives on a pseudo-element, NOT on .navbar itself: any
+   filter/backdrop-filter on .navbar makes it the containing block for its
+   fixed-position descendants, and the mobile drawer (.navbar-sidebar +
+   backdrop) is a fixed child of the navbar — top/bottom then resolve
+   against the 60px bar and the drawer collapses to an empty sliver. */
+.navbar::before {
+  backdrop-filter: blur(18px) saturate(150%);
+  content: '';
+  inset: 0;
+  position: absolute;
+  z-index: -1;
+}
+
+.navbar-sidebar {
+  /* Opaque: the drawer no longer sits behind the navbar's blur layer. */
+  background: #0a0a0c;
 }
 
 .navbar__brand {
