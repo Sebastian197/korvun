@@ -11,6 +11,9 @@ const sidebars: SidebarsConfig = {
         'guide/install',
         'guide/quickstart',
         'guide/builder',
+        'guide/chat',
+        'guide/tools-and-skills',
+        'guide/memory',
       ],
     },
     {

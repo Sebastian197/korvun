@@ -109,10 +109,25 @@ de cero al round-trip.
 
 ### `brains[].agent` (opcional)
 
-Presente ⇒ el cerebro es un agente acotado con herramientas. `tools`
-(obligatorio, ≥1) elige del conjunto seguro integrado `time`, `echo`,
-`calc`; `max_iterations` limita el bucle; `system_prompt` añade
-instrucciones del operador.
+Presente ⇒ el cerebro es un agente acotado con herramientas.
+
+| Campo | Tipo | Obligatorio | Significado |
+|---|---|---|---|
+| `tools` | array | **sí** (≥1) | Herramientas integradas a registrar. Puras: `time`, `echo`, `calc`. Enjauladas (cada una EXIGE su bloque de jaula): `read_file`, `http_fetch`, `webhook_call`, `memory_note`. |
+| `max_iterations` | int | no | Tope duro del bucle. |
+| `system_prompt` | string | no | Prompt del operador añadido tras el bloque de protocolo. |
+| `governance` | array | no | Permisos tri-estado — `tool`, `mode` (`allow` \| `shadow` \| `deny`), `channels` opcional. Ausente ⇒ sin gobernar: toda herramienta listada, permitida en todos los canales. |
+| `read_file` | object | con la herramienta | La jaula: `root` (**obligatorio**), `max_bytes`. |
+| `http_fetch` | object | con la herramienta | La jaula: `allow_hosts` (**obligatorio**), `max_bytes`, `max_redirects`. |
+| `webhook_call` | object | con la herramienta | La jaula: `allow_hosts` (**obligatorio**), `max_bytes`, `timeout_seconds`. |
+| `memory` | object | con la herramienta | El bloque de memoria de `memory_note`: `scope` (`conversation` por defecto \| `brain`), `max_notes`, `max_note_runes`, `budget_runes`. Requiere `storage`; `scope: "brain"` exige que el modelo seleccionado del cerebro sea **local**. |
+| `skills_dir` | string | no | Directorio de skills compatible con AgentSkills. |
+| `skills_body_budget` | int | no | Presupuesto total en runas para los cuerpos de skills inyectados. |
+
+La guía operativa completa — el alcance de cada herramienta, el ensayo en
+shadow, el escudo de red, `/tools`, cómo escribir una skill — está en
+[herramientas y skills gobernadas](/guide/tools-and-skills); las notas y el
+recall, en [memoria gobernada](/guide/memory).
 
 ## `routes[]`
 
@@ -134,6 +149,24 @@ instrucciones del operador.
 Presente ⇒ memoria durable por conversación que sobrevive a reinicios.
 Ausente ⇒ sin estado. Bajo la unidad systemd endurecida, usa
 `/var/lib/korvun/korvun.db`.
+
+## `session` (opcional)
+
+| Campo | Tipo | Obligatorio | Significado |
+|---|---|---|---|
+| `triggers` | array | no | Comandos de reinicio por primer token exacto. Omitido ⇒ `["/new", "/reset"]`. |
+| `daily_at` | string | no | Frontera `"HH:MM"` en hora local para la expiración diaria. Vacía ⇒ ninguna. |
+| `idle_min` | int | no | Expiración por inactividad en minutos enteros. `0` ⇒ ninguna. |
+| `recall_max` | int | no | Habilita `/recall` (`0` ⇒ deshabilitado; 1..50): importa la cola de la sesión anterior como UN bloque citado — solo en una sesión vacía, solo bajo demanda. |
+
+Presente ⇒ el despacho por sesiones está activo: una conversación es una
+serie de sesiones, la más nueva activa, y un disparador (o una expiración
+perezosa diaria/por inactividad) corta el contexto en seco. **Requiere el
+bloque `storage`.** Ausente ⇒ ningún comportamiento de sesión. Un bloque
+vacío (`"session": {}`) habilita los disparadores por defecto sin
+expiración automática — es lo que aprovisiona el escritorio. La vista del
+operador sobre sesiones, `/recall` y `/notes` está en
+[la consola del operador](/guide/chat).
 
 ## `observability` (opcional)
 
