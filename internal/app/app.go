@@ -48,6 +48,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/model/fanout"
 	"github.com/Sebastian197/korvun/internal/model/groq"
 	"github.com/Sebastian197/korvun/internal/model/ollama"
+	"github.com/Sebastian197/korvun/internal/model/openaicompat"
 	"github.com/Sebastian197/korvun/internal/model/retry"
 	"github.com/Sebastian197/korvun/internal/model/sequential"
 	"github.com/Sebastian197/korvun/internal/policy"
@@ -1195,6 +1196,27 @@ func (b *builder) buildModel(m config.ModelConfig) (model.Model, error) {
 			return nil, fmt.Errorf("app: groq model %q: %w", m.ModelID, err)
 		}
 		return g, nil
+	case "openai-compatible":
+		// ADR-0044 / FR-GW-6. api_key_env is OPTIONAL (D2): absent means a
+		// no-auth endpoint (no Authorization header); named-but-empty is the
+		// fail-loud ErrMissingSecret naming the VARIABLE, never key material.
+		// The env-var NAME also rides as the non-secret auth label so a 401
+		// diagnostic can point the operator at the right variable (H7).
+		// No WithRequestTimeout, for the same single-owner reason as above
+		// (ADR-0031 Decision 2).
+		opts := []openaicompat.Option{openaicompat.WithBaseURL(m.BaseURL)}
+		if m.APIKeyEnv != "" {
+			key := os.Getenv(m.APIKeyEnv)
+			if key == "" {
+				return nil, fmt.Errorf("%w: %q (openai-compatible API key for model %q)", ErrMissingSecret, m.APIKeyEnv, m.ModelID)
+			}
+			opts = append(opts, openaicompat.WithAPIKey(key), openaicompat.WithAuthLabel(m.APIKeyEnv))
+		}
+		oc, err := openaicompat.New(opts...)
+		if err != nil {
+			return nil, fmt.Errorf("app: openai-compatible model %q: %w", m.ModelID, err)
+		}
+		return oc, nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnknownProvider, m.Provider)
 	}
