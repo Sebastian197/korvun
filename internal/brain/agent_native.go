@@ -149,7 +149,11 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 			req.Messages = append(req.Messages, model.Message{
 				Role:     model.RoleTool,
 				ToolName: call.Name,
-				Content:  observation,
+				// ToolCallID threads the provider's call id into the result
+				// turn (ADR-0044 SP-B FR-GWB-1): wires that correlate results
+				// by id (the compat lane) need it; zero on wires without ids.
+				ToolCallID: call.ID,
+				Content:    observation,
 			})
 		}
 		if discarded > 0 {
