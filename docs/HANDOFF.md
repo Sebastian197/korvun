@@ -111,8 +111,62 @@ explicit decision.
 
 ## Current state (as of 2026-08-22)
 
-> **CURRENT (2026-08-22, evening): UNIVERSAL MODEL GATEWAY SP-A GREEN —
-> local, NOT pushed.** The gateway piece opened and closed its first
+> **CURRENT (2026-08-22, session close): v0.9.0 IS OUT — the one-day arc,
+> closed end to end.**
+>
+> **DONE today, the one-day arc:** korvun.dev LIVE (Cloudflare canonical)
+> + PR #24 merged (github.io redirects) + repo links direct; security
+> lote SHIPPED (10/13 alerts dead; image-size ×2 open-on-purpose, NO
+> upstream patch, + Scorecard #23 chained to them until upstream
+> publishes); surgical P1 lote (sandboxUserDir + the TestMain guard
+> protecting the real profile); CI pre-estreno lote (website-pr.yml
+> non-required + the Builder coverage gate 83/74/72/83 + job timeouts +
+> the first-time-contributor gate verified); the external report 8.6/10
+> fully triaged (points 1, 2, 4, 5 CLOSED with evidence; 3 = the KNOWN
+> RISK bind, explicitly ACCEPTED by Chano 2026-08-22, copilot spec due
+> ≤ 2026-08-28; 6 split into two named pre-1.0 lotes: fuzzing and
+> benchmarks).
+>
+> **THE PIECE — the universal model gateway, COMPLETE IN ONE DAY:** spec
+> FINAL (three-voice, two Codex passes + the N-list absorbed, 13+5
+> findings), ADR-0044, SP-A shipped (`7eae654`; the AS-5 demo: llama.cpp
+> 2.1 s local + OpenRouter cloud + DeepSeek 402 / Kimi 429 validating
+> the matrix LIVE), SP-B shipped (`ce1a979`; native tools +
+> `exceeded_current_quota_error`), the AS-B demo FILMED in the Korvun
+> desktop app (gpt-4o-mini via OpenRouter, real cost $0.000115, zero
+> failures on camera), the release lote deployed (`b15e23c`: README +
+> gif + release notes + the site video at
+> korvun.dev/media/gateway-demo.mp4), and **the v0.9.0 release
+> PUBLISHED and API-verified** (tag annotated «Korvun v0.9.0» →
+> `b15e23c`; 21/21 signed assets, cosign keyless, draft-until-complete;
+> body = docs/releases/v0.9.0.md verbatim + changelog).
+>
+> **Media ready** in `design-drafts/demo-pasarela-b/media-app/` (web +
+> readme + social-vertical); social posting = Chano's hand; register the
+> links when posted.
+>
+> **KNOWN RISK, named:** LaLiga/Cloudflare Spain weekend match-window IP
+> blocks — korvun.dev unreachable for Spanish users during matches (the
+> rest of the world unaffected; verified live 2026-08-22 with sources —
+> the underlying korvun.pages.dev and the github.io mirror stayed up and
+> serving v0.9.0 throughout). Evaluate mitigations POST-estreno.
+>
+> **NEXT queue: (1) DÍA D MARTES 25** — the single cartucho (Show HN
+> ~15:00 UTC → r/selfhosted → Product Hunt from 00:01 PT) with
+> korvun.dev + the freshly-out v0.9.0 as the talking point; the
+> copilot's kit TO BE REGENERATED; captures = shots-app +
+> docs/assets/readme. *(The closing mandate arrived truncated at this
+> point; items (2)+ below are reconstructed from this session's own
+> record — VETABLE.)* (2) the copilot spec for the admin-bind KNOWN RISK
+> (due ≤ 2026-08-28); (3) the two named pre-1.0 lotes: fuzzing and
+> benchmarks, each with its own spec; (4) post-gateway product track per
+> Chano's sealed decision: the Execution Trust Layer, Stage 1 (Action
+> Kernel) blueprint; (5) Chano personal: revoke the exposed Telegram bot
+> token; (6) Chano's call on the two impeccable-hook landing findings
+> (grid L46 / gradient L111 — pre-existing approved design, recorded).
+
+> **PREVIOUS (2026-08-22, evening): UNIVERSAL MODEL GATEWAY SP-A GREEN —
+> local, NOT pushed (since shipped; see CURRENT).** The gateway piece opened and closed its first
 > sub-phase in one day: spec FINAL — Accepted for TDD (two Codex
 > adversarial passes absorbed: the 13-finding triage + the scoped
 > re-review's minimal list N2-N5) at
