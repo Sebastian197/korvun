@@ -87,7 +87,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       kicker: 'Verified delivery',
       title: 'Install with proof, not promises.',
       body:
-        'v0.8.0 — Beta publishes six headless OS/architecture archives. The release also includes a cosign-signed checksum manifest and an SBOM for every archive.',
+        'v0.9.0 — Beta publishes six headless OS/architecture archives. The release also includes a cosign-signed checksum manifest and an SBOM for every archive.',
       proof: ['6 headless archives', 'cosign-signed checksums', 'SBOM per archive'],
       copy: 'Copy commands',
       copied: 'Copied',
@@ -172,12 +172,12 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
     },
     demo: {
       kicker: 'Product proof',
-      title: 'Korvun in 27 seconds.',
+      title: 'A cloud model, governed tools, one config.',
       body:
-        'A 27-second recording of the v0.6.0 visual builder: channels, brains, models, and their connections on the canvas.',
+        'Sixty seconds inside the Korvun desktop app: gpt-4o-mini — reached through the v0.9.0 universal gateway — is asked to remember something, the governance gate authorizes the memory tool, /notes shows the stored note, and the model answers from memory.',
       ariaLabel:
-        'Korvun v0.6.0 visual builder demo showing channels, brains, models, and canvas connections',
-      release: 'Read the v0.6.0 release notes',
+        'Korvun v0.9.0 desktop app demo: a cloud model driving the governed memory tool through the universal gateway',
+      release: 'Read the v0.9.0 release notes',
     },
     final: {
       kicker: 'Build your first route',
@@ -204,7 +204,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       kicker: 'Entrega verificable',
       title: 'Instala con pruebas, no promesas.',
       body:
-        'v0.8.0 — Beta publica seis archivos headless para distintas combinaciones de sistema y arquitectura. La release incluye un manifiesto de checksums firmado con cosign y un SBOM por archivo.',
+        'v0.9.0 — Beta publica seis archivos headless para distintas combinaciones de sistema y arquitectura. La release incluye un manifiesto de checksums firmado con cosign y un SBOM por archivo.',
       proof: ['6 archivos headless', 'checksums firmados con cosign', 'SBOM por archivo'],
       copy: 'Copiar comandos',
       copied: 'Copiado',
@@ -289,12 +289,12 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
     },
     demo: {
       kicker: 'Prueba de producto',
-      title: 'Korvun en 27 segundos.',
+      title: 'Un modelo de nube, herramientas gobernadas, una sola config.',
       body:
-        'Una grabación de 27 segundos del builder visual de v0.6.0: canales, cerebros, modelos y sus conexiones sobre el lienzo.',
+        'Sesenta segundos dentro de la app de escritorio de Korvun: a gpt-4o-mini — conectado por la pasarela universal de v0.9.0 — se le pide recordar algo, la puerta de gobernanza autoriza la herramienta de memoria, /notes muestra la nota guardada y el modelo responde desde la memoria.',
       ariaLabel:
-        'Demo del builder visual de Korvun v0.6.0 con canales, cerebros, modelos y conexiones sobre el lienzo',
-      release: 'Leer las notas de v0.6.0',
+        'Demo de la app de escritorio de Korvun v0.9.0: un modelo de nube usando la herramienta de memoria gobernada por la pasarela universal',
+      release: 'Leer las notas de v0.9.0',
     },
     final: {
       kicker: 'Crea tu primera ruta',

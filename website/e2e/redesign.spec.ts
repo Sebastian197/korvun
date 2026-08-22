@@ -10,7 +10,7 @@ const locales = [
       'Install with proof, not promises.',
       'Eight pillars. One binary.',
       'Sensitive data never leaves the machine.',
-      'Korvun in 27 seconds.',
+      'A cloud model, governed tools, one config.',
       'Run it today.',
     ],
     quickstart: '/korvun/guide/quickstart/',
@@ -24,7 +24,7 @@ const locales = [
       'Instala con pruebas, no promesas.',
       'Ocho pilares. Un binario.',
       'Los datos sensibles no salen de tu equipo.',
-      'Korvun en 27 segundos.',
+      'Un modelo de nube, herramientas gobernadas, una sola config.',
       'Ponlo en marcha hoy.',
     ],
     quickstart: '/korvun/es/guide/quickstart/',
@@ -60,7 +60,7 @@ for (const locale of locales) {
       // independent of CSS text-transform (badges render uppercase).
       const main = (await page.locator('main').textContent()) ?? ''
 
-      expect(main).toContain('v0.8.0')
+      expect(main).toContain('v0.9.0')
       expect(main).toContain('Beta')
       expect(main).toContain('Apache-2.0')
       expect(main).toContain('6')
