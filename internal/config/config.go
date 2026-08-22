@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -984,13 +985,32 @@ func validateModels(brainIdx int, models []ModelConfig) error {
 	if len(models) == 0 {
 		return fmt.Errorf("%w: brains[%d].models: at least one model is required", ErrInvalidConfig, brainIdx)
 	}
+	// Canonical-triplet collision guard (ADR-0044, FR-GW-1/H9), SCOPED to
+	// openai-compatible entries in SP-A: two entries in one brain with the
+	// same (provider, normalized base_url, model_id) are the same backend
+	// model wired twice — indistinguishable to rank, attribution, and
+	// warmup, never a legitimate shape. Normalization for compat is the
+	// trailing-slash trim (no provider defaults apply: base_url is
+	// required). Extension to ollama/groq is the named follow-up
+	// triplet-guard-existing-providers.
+	compatSeen := make(map[string]int)
 	for j, m := range models {
 		switch m.Provider {
 		case "ollama", "groq":
+		case "openai-compatible":
+			if err := validateCompatBaseURL(brainIdx, j, m.BaseURL); err != nil {
+				return err
+			}
+			key := strings.TrimRight(m.BaseURL, "/") + "|" + m.ModelID
+			if k, dup := compatSeen[key]; dup {
+				return fmt.Errorf("%w: brains[%d].models[%d] and brains[%d].models[%d]: duplicate openai-compatible entry (same base_url and model_id after normalization)",
+					ErrInvalidConfig, brainIdx, k, brainIdx, j)
+			}
+			compatSeen[key] = j
 		case "":
 			return fmt.Errorf("%w: brains[%d].models[%d].provider: required", ErrInvalidConfig, brainIdx, j)
 		default:
-			return fmt.Errorf("%w: brains[%d].models[%d].provider: unknown provider %q (ollama|groq)", ErrInvalidConfig, brainIdx, j, m.Provider)
+			return fmt.Errorf("%w: brains[%d].models[%d].provider: unknown provider %q (ollama|groq|openai-compatible)", ErrInvalidConfig, brainIdx, j, m.Provider)
 		}
 		if m.ModelID == "" {
 			return fmt.Errorf("%w: brains[%d].models[%d].model_id: required", ErrInvalidConfig, brainIdx, j)
@@ -1030,6 +1050,38 @@ func validateModels(brainIdx int, models []ModelConfig) error {
 		if m.Warmup && m.Locality != "local" {
 			return fmt.Errorf("%w: brains[%d].models[%d].warmup: only valid for local models, got locality %q", ErrInvalidConfig, brainIdx, j, m.Locality)
 		}
+	}
+	return nil
+}
+
+// validateCompatBaseURL enforces the FR-GW-1 base_url rules for the
+// openai-compatible provider (ADR-0044): REQUIRED, absolute http/https,
+// non-empty host, and no userinfo, query, or fragment (H4) — each
+// violation fail-loud naming the field. The operator supplies the FULL
+// prefix (zero-magic rule: Korvun appends exactly "/chat/completions").
+func validateCompatBaseURL(brainIdx, j int, baseURL string) error {
+	field := fmt.Sprintf("brains[%d].models[%d].base_url", brainIdx, j)
+	if baseURL == "" {
+		return fmt.Errorf("%w: %s: required for provider \"openai-compatible\" (the full endpoint prefix, e.g. https://api.example.com/v1)", ErrInvalidConfig, field)
+	}
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return fmt.Errorf("%w: %s: not a valid URL: %v", ErrInvalidConfig, field, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("%w: %s: scheme must be http or https, got %q", ErrInvalidConfig, field, u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("%w: %s: host must not be empty", ErrInvalidConfig, field)
+	}
+	if u.User != nil {
+		return fmt.Errorf("%w: %s: must not carry userinfo (credentials ride api_key_env, never the URL)", ErrInvalidConfig, field)
+	}
+	if u.RawQuery != "" {
+		return fmt.Errorf("%w: %s: must not carry a query", ErrInvalidConfig, field)
+	}
+	if u.Fragment != "" {
+		return fmt.Errorf("%w: %s: must not carry a fragment", ErrInvalidConfig, field)
 	}
 	return nil
 }
