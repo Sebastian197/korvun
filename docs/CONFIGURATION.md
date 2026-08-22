@@ -222,9 +222,15 @@ public brains:
 }
 ```
 
-Not in scope today (they fail or degrade per the spec): streaming,
+Native tool calling IS supported over this provider (agent brains use it
+automatically): choose a **tools-capable** model — Korvun does not probe
+capability, so a model without tools support answers with the provider's
+own honest 400 error. Every provider in the table above supports
+OpenAI-style tools (llama.cpp needs its server started with `--jinja`).
+
+Not in scope today (they fail or degrade per the spec): streaming and
 models that require OpenAI's `developer` instruction role (the o1
-family), and native tool calling over this provider (SP-B).
+family).
 
 ### `brains[].agent` (optional, ADR-0021 + ADR-0041)
 

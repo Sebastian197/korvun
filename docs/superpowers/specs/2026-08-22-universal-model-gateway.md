@@ -27,7 +27,9 @@
 > minimal list — N2 (compat-scoped guard positives), N3 (deadline
 > tripwire through adapter+decorator), N4 (auth diagnostics pinned by a
 > Then), N5 (the no-Authorization proof exercises a real request) — all
-> absorbed below.
+> absorbed below. SP-B FRs adjudicated by the copilot 2026-08-22 — the
+> deferred DTO decision resolved as additive ID threading; the sketch was
+> adversarially reviewed (H13), no new cycle.
 
 ## Goal
 
@@ -254,10 +256,13 @@ prefix.
   retrofit to groq/ollama is a named additive follow-up,
   **`bounded-success-body-retrofit`** (OUT of SP-A). Non-2xx bodies keep
   the mold's 1 KiB cap (groq.go:25, 208; ollama.go:168).
-  **Malformed 2xx, ENUMERATED (H12)** — each row ⇒
+  **Malformed 2xx, ENUMERATED (H12; the empty-content rule amended with
+  precision by SP-B/FR-GWB-3)** — each row ⇒
   `model.ErrProviderResponse`: empty body; invalid JSON; valid JSON
   followed by trailing garbage (the decoder DEMANDS EOF — one extra token
-  fails); empty `choices`; empty `content` without `refusal`. `usage`
+  fails); empty `choices`; empty `content` WITHOUT `refusal` AND WITHOUT
+  `tool_calls` (an empty content CARRYING tool calls is a valid
+  calls-bearing reply on the tools lane — FR-GWB-3). `usage`
   stays tolerated-optional (not modelled, the groq.go:267-274
   discipline); response reads `choices[0].message` (groq.go:183-189).
 - **FR-GW-4 (error grammar — the explicit matrix, H6)** — The ADR-0010 §4
@@ -297,7 +302,14 @@ prefix.
     prepaid credits remaining";
   - `organization_spend_limit_exceeded`, `project_spend_limit_exceeded`,
     `organization_usage_limit_exceeded` — the `error.code` values OpenAI
-    documents for enforced spend/usage limits (all ride HTTP 429).
+    documents for enforced spend/usage limits (all ride HTTP 429);
+  - `exceeded_current_quota_error` — Moonshot/Kimi's quota-exhaustion
+    `error.type` (FR-GWB-4), DOUBLE-cited: observed LIVE in the AS-5 demo
+    (a real Moonshot 429 with this type on an insufficient-balance
+    account, 2026-08-22 — `design-drafts/demo-pasarela/DEMO.md`) AND
+    documented at the official Kimi help center
+    (kimi.ai/help/kimi-api/api-troubleshooting: "insufficient balance, an
+    overdue account, or an expired voucher"; verified 2026-08-22).
 
   Every additional code enters the list ONLY with its source cited in
   this spec; the list is extensible in one line. Any 429 whose envelope
@@ -349,24 +361,103 @@ prefix.
   hazard, not a convenience. Pinned by AS-6 (Stage-16-class e2e: the spy
   server must receive NOTHING).
 
-## SP-B — native tools (sketch; full FRs at its own RED)
+## SP-B — native tools (FULL FRs; adjudicated 2026-08-22)
 
-Same wire, additive fields: `tools` on the request, `tool_calls` on the
-assistant message, `role:"tool"` result turns — the seam already carries
-`Message.ToolCalls`/`ToolName` (model.go:50-62), `RoleTool`
-(model.go:38-39), `ToolCallingModel` (internal/model/toolcalling.go) and
-the `ErrToolsUnsupported` degrade lane (errors.go:66). CORRECTED (H13):
-the current seam does NOT transport `tool_call_id` — `ToolCall` is
-`{Name, Arguments}` only (toolcalling.go:41-49) and the `role:"tool"`
-turn is labeled by `ToolName`, not by a call id (model.go:50-62), while
-the OpenAI wire correlates tool results by `tool_call_id`. Whether and
-how the DTO evolves is a DEFERRED SP-B decision (additive, at SP-B's
-RED); SP-A's out-of-scope PROHIBITS touching it. Feasibility per the
-table: every verified target supports OpenAI-style tools (llama.cpp behind
-`--jinja`; Gemini compat mode in beta). Demo criterion sketch: at least one
-real tool round-trip (request → `tool_calls` → `role:"tool"` result →
-final answer) against a real compat server, per the model-dependent-behavior
-law. Scope and FRs close at SP-B's RED.
+The H13 finding stands as diagnosis: the seam did NOT transport
+`tool_call_id` (`ToolCall` was `{Name, Arguments}`, toolcalling.go:41-49;
+the `role:"tool"` turn labeled by `ToolName`, model.go:50-62) while the
+OpenAI wire correlates results by id. The deferred DTO decision is
+RESOLVED as ADDITIVE ID THREADING (below). Feasibility per the table:
+every verified target supports OpenAI-style tools (llama.cpp behind
+`--jinja`; Gemini compat mode in beta).
+
+- **FR-GWB-1 (additive DTO + threading)** — `model.ToolCall` gains
+  `ID string`; `model.Message` gains `ToolCallID string`. Both ADDITIVE:
+  zero by default, and the ollama lane neither populates nor reads them —
+  its wire structs carry no id (wireToolCall, ollama/toolcalling.go:67-74;
+  toNativeChatMessages, :189-205), so ollama's bytes do not change. The
+  agent loop THREADS the id: when building the result turn for call i
+  (the `model.Message{Role: RoleTool, ToolName: call.Name, ...}` at
+  internal/brain/agent_native.go:149-153, inside the
+  `for _, call := range resp.Message.ToolCalls` loop, :118), it sets
+  `ToolCallID = call.ID` when present — ONE line at that exact site.
+- **FR-GWB-2 (outbound wire)** — `GenerateWithTools` on
+  `internal/model/openaicompat` (satisfying `model.ToolCallingModel`,
+  toolcalling.go:55-62): the request gains
+  `tools: [{type:"function","function":{name,description,parameters}}]`
+  mapped from `model.ToolSpec` (fields Name/Description/Params —
+  toolcalling.go:23-39; the uniform v1 `{"args": string}` schema and the
+  ParamTool surface, exactly the ollama `toWireTools` mold,
+  ollama/toolcalling.go:161-185). HISTORY REPLAY: assistant turns
+  CARRYING `ToolCalls` re-serialize to the wire as
+  `tool_calls: [{id, type:"function", function:{name, arguments}}]` with
+  `arguments` as a JSON STRING; `RoleTool` turns go out as
+  `{role:"tool", "tool_call_id": <Message.ToolCallID>, "content": ...}`.
+  NO capability auto-detection: SP-B does not probe whether the model
+  supports tools — the operator chooses tools-capable models
+  (documented); a server 400 flows through the FR-GW-4 matrix as an
+  HONEST permanent error. The ADR-0042 RT-3 degrade stays reserved for
+  whoever triggers it via `ErrToolsUnsupported` (errors.go:66, the
+  ollama-verified refusal) — no new detection here.
+- **FR-GWB-3 (inbound wire)** — parse
+  `choices[0].message.tool_calls: [{id, type, function:{name, arguments}}]`.
+  On THIS wire `arguments` arrives as a JSON STRING (unlike ollama's
+  OBJECT, ollama/toolcalling.go:71-74): the adapter normalizes it to the
+  seam's type — `json.Unmarshal` of the string into `map[string]any`
+  (`ToolCall.Arguments`, toolcalling.go:48); an arguments string that is
+  not a JSON object ⇒ `model.ErrProviderResponse` (malformed).
+  `finish_reason == "tool_calls"` is VALID. The empty-content rule is
+  AMENDED with precision: empty `content` + non-empty `tool_calls` is a
+  VALID calls-bearing reply; the FR-GW-3 malformed row is conditioned to
+  "without refusal AND without tool_calls" (edited there).
+- **FR-GWB-4 (the Kimi extension — the AS-5 demo finding)** —
+  `quotaExhaustedCodes` gains `exceeded_current_quota_error`, DOUBLE-cited
+  (the live demo record in `design-drafts/demo-pasarela/DEMO.md` + the
+  official Kimi help-center doc, both 2026-08-22 — the entry added to the
+  FR-GW-4 list above): the one-line extension the closed list was built
+  for, plus its own matrix test row.
+
+### Acceptance scenarios — SP-B (Given / When / Then)
+
+- **AS-B-1 (outbound tools)** Given a ToolSpec catalog, When
+  `GenerateWithTools` runs, Then the request body carries `tools` with
+  `type:"function"` and name/description/parameters per spec (uniform v1
+  args schema), alongside `{model, messages, stream:false}`.
+- **AS-B-2 (inbound calls)** Given a 200 with
+  `tool_calls:[{id,type,function:{name,arguments:"<json string>"}}]`,
+  `finish_reason:"tool_calls"` and EMPTY content, When it parses, Then
+  the `model.Response` carries `ToolCalls` with `ID`, `Name`, and
+  `Arguments` normalized from the string — a VALID response, no error
+  (the amendment pinned).
+- **AS-B-3 (history replay)** Given a request whose Messages include an
+  assistant turn WITH ToolCalls (ids set) and a `RoleTool` turn with
+  `ToolCallID` and content, When `GenerateWithTools` runs, Then the wire
+  shows the assistant turn's `tool_calls` (id + type + function with
+  STRING arguments) and the tool turn as
+  `{role:"tool", tool_call_id, content}`.
+- **AS-B-4 (the FULL agent loop)** Given an AgentBrain wired with the
+  REAL openaicompat adapter against an httptest compat server scripting
+  call → observation → final answer (the ollama native-test mold at the
+  brain level), When one inbound message is handled, Then the tool
+  executes exactly once with the parsed args, the SECOND request carries
+  the replayed assistant turn AND the `role:"tool"` turn whose
+  `tool_call_id` equals the call's id (FR-GWB-1 threading proven at the
+  wire), and the final answer reaches the reply.
+- **AS-B-5 (capability propagation)** Given the production decorator
+  chain, When a compat adapter is wrapped by retry and `WithModelID`,
+  Then the result still satisfies `model.ToolCallingModel` — ADR-0042 §4
+  applies with ZERO new wiring code (retry propagates,
+  retry/retry.go:100-121; `WithModelID` propagates,
+  brain/named.go:44-56) — pinned by assertion.
+- **AS-B-6 (the Kimi matrix row)** Given a 429 whose envelope carries
+  `type=exceeded_current_quota_error`, When it maps, Then the result is
+  permanent `model.ErrProviderResponse` (quota), NOT a `RateLimitError`.
+- **AS-B-demo (the law)** A REAL tool round-trip against OpenRouter with
+  a tools-capable model — chosen from the LIVE catalog with tools support
+  and cents-level pricing confirmed, and the choice + estimated cost
+  reported BEFORE the first call — WITNESSED by Chano, with its REDACTED
+  artifact in the demo report. A green suite over fakes does NOT close
+  this criterion.
 
 ## Acceptance scenarios — SP-A (Given / When / Then)
 
