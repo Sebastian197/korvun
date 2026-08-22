@@ -35,8 +35,8 @@ jobs:
       run:
         working-directory: web/builder
     steps:
-      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
+      - uses: actions/checkout@v7 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v7 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
         with:
           node-version: "22"
           cache: npm
@@ -58,8 +58,8 @@ jobs:
       run:
         working-directory: web/builder
     steps:
-      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
+      - uses: actions/checkout@v7 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v7 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
         with:
           node-version: "22"
           cache: npm
@@ -77,8 +77,8 @@ jobs:
       run:
         working-directory: cmd/korvun-desktop/frontend
     steps:
-      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
+      - uses: actions/checkout@v7 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v7 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
         with:
           node-version: "22"
           cache: npm
@@ -100,15 +100,15 @@ jobs:
       run:
         working-directory: cmd/korvun-desktop/frontend
     steps:
-      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
+      - uses: actions/checkout@v7 # GitHub-owned, repo major-tag convention
+      - uses: actions/setup-node@v7 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: cmd/korvun-desktop/frontend/package-lock.json
       # The e2e webServer is the Go harness (built chrome + SP4 proxy + the
       # SP5 channel-less template on a real Controller) — Go is required.
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: npm ci
