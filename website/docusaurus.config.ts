@@ -13,6 +13,12 @@ const siteUrl = (process.env.SITE_URL ?? 'https://sebastian197.github.io').repla
 )
 const baseUrl = normalizeBaseUrl(process.env.SITE_BASE_URL ?? '/korvun/')
 
+// The legacy GitHub Pages deployment forwards visitors to the canonical
+// https://korvun.dev (see src/redirect-legacy-host.ts). The module and its
+// no-JS fallback are only included when this build targets that host, so
+// the Cloudflare Pages build stays untouched.
+const targetsLegacyGithubPages = new URL(siteUrl).hostname.endsWith('.github.io')
+
 const config: Config = {
   title: 'Korvun',
   tagline: 'One binary. Your models. Your rules.',
@@ -22,6 +28,19 @@ const config: Config = {
   organizationName: 'Sebastian197',
   projectName: 'korvun',
   trailingSlash: true,
+  clientModules: targetsLegacyGithubPages ? ['./src/redirect-legacy-host.ts'] : [],
+  headTags: targetsLegacyGithubPages
+    ? [
+        // No-JS fallback: loses the path (a static tag cannot preserve it),
+        // but still lands the visitor on the canonical host.
+        {
+          tagName: 'noscript',
+          attributes: {},
+          innerHTML:
+            '<meta http-equiv="refresh" content="0; url=https://korvun.dev/">',
+        },
+      ]
+    : [],
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'throw',
   i18n: {
