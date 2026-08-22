@@ -306,6 +306,10 @@ func postConfigReload(t *testing.T, client *http.Client, baseURL string, body []
 // zero-channel state — all in one shell cycle, clean Stop at the end.
 func TestFirstRun_builderAddsFirstChannel(t *testing.T) {
 	t.Setenv("KORVUN_ADMIN_TOKEN", "")
+	// The template ships storage with an empty path, which resolves to
+	// <os.UserConfigDir>/korvun/korvun.db at boot — sandbox the user dir
+	// so this test never opens a real user's database.
+	root := sandboxUserDir(t)
 	path := filepath.Join(t.TempDir(), "korvun.json")
 	if _, err := EnsureDefaultConfig(path); err != nil {
 		t.Fatalf("EnsureDefaultConfig: %v", err)
@@ -327,6 +331,20 @@ func TestFirstRun_builderAddsFirstChannel(t *testing.T) {
 			_ = c.Stop(sctx)
 		}
 	})
+	// Regression pin: the boot's storage resolution landed INSIDE the
+	// sandbox — the database file exists under root, not the real profile.
+	resolvedDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatalf("UserConfigDir after boot: %v", err)
+	}
+	dbPath := filepath.Join(resolvedDir, "korvun", "korvun.db")
+	if !strings.HasPrefix(dbPath, root+string(os.PathSeparator)) {
+		t.Fatalf("resolved storage %q escaped the sandbox %q", dbPath, root)
+	}
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Fatalf("boot did not create the sandboxed korvun.db at %q: %v", dbPath, err)
+	}
+
 	srv := httptest.NewServer(c.ProxyHandler())
 	defer srv.Close()
 
