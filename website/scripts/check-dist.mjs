@@ -114,7 +114,7 @@ const landingContracts = [
     headings: [
       'One binary. Your models. Your rules.',
       'Install with proof, not promises.',
-      'Seven pillars. One binary.',
+      'Eight pillars. One binary.',
       'Sensitive data never leaves the machine.',
       'Korvun in 27 seconds.',
       'Run it today.',
@@ -125,7 +125,7 @@ const landingContracts = [
     headings: [
       'Un binario. Tus modelos. Tus reglas.',
       'Instala con pruebas, no promesas.',
-      'Siete pilares. Un binario.',
+      'Ocho pilares. Un binario.',
       'Los datos sensibles no salen de tu equipo.',
       'Korvun en 27 segundos.',
       'Ponlo en marcha hoy.',
@@ -161,7 +161,7 @@ for (const contract of landingContracts) {
     cursor = next
   }
 
-  for (const fact of ['v0.7.0', 'Apache-2.0', 'cosign', 'SBOM']) {
+  for (const fact of ['v0.8.0', 'Apache-2.0', 'cosign', 'SBOM']) {
     if (!text.includes(fact)) {
       violations.push(`${contract.file}: missing verified release fact: ${fact}`)
     }

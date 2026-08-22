@@ -64,6 +64,7 @@ const sharedRoutes = {
   install: '/guide/install',
   quickstart: '/guide/quickstart',
   builder: '/guide/builder',
+  memory: '/guide/memory',
   configuration: '/reference/configuration',
   telegram: '/channels/telegram',
   releases: '/releases',
@@ -86,7 +87,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       kicker: 'Verified delivery',
       title: 'Install with proof, not promises.',
       body:
-        'v0.7.0 publishes six headless OS/architecture archives. The release also includes a cosign-signed checksum manifest and an SBOM for every archive.',
+        'v0.8.0 — Beta publishes six headless OS/architecture archives. The release also includes a cosign-signed checksum manifest and an SBOM for every archive.',
       proof: ['6 headless archives', 'cosign-signed checksums', 'SBOM per archive'],
       copy: 'Copy commands',
       copied: 'Copied',
@@ -95,7 +96,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
     },
     capabilities: {
       kicker: 'Product map',
-      title: 'Seven pillars. One binary.',
+      title: 'Eight pillars. One binary.',
       body:
         'Each part solves a concrete step between an incoming message and a governed model response.',
       items: [
@@ -143,6 +144,13 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
         },
         {
           number: '07',
+          title: 'Governed memory',
+          body: 'Brains store bounded notes through a governed tool and recall a session deliberately — nothing is remembered by accident.',
+          linkLabel: 'Meet governed memory',
+          to: sharedRoutes.memory,
+        },
+        {
+          number: '08',
           title: 'Signed releases',
           body: 'Verify the checksum manifest and inspect the supplied SBOM before running a binary.',
           linkLabel: 'Browse releases',
@@ -196,7 +204,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       kicker: 'Entrega verificable',
       title: 'Instala con pruebas, no promesas.',
       body:
-        'v0.7.0 publica seis archivos headless para distintas combinaciones de sistema y arquitectura. La release incluye un manifiesto de checksums firmado con cosign y un SBOM por archivo.',
+        'v0.8.0 — Beta publica seis archivos headless para distintas combinaciones de sistema y arquitectura. La release incluye un manifiesto de checksums firmado con cosign y un SBOM por archivo.',
       proof: ['6 archivos headless', 'checksums firmados con cosign', 'SBOM por archivo'],
       copy: 'Copiar comandos',
       copied: 'Copiado',
@@ -205,7 +213,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
     },
     capabilities: {
       kicker: 'Mapa del producto',
-      title: 'Siete pilares. Un binario.',
+      title: 'Ocho pilares. Un binario.',
       body:
         'Cada pieza resuelve un paso concreto entre un mensaje entrante y una respuesta gobernada del modelo.',
       items: [
@@ -253,6 +261,13 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
         },
         {
           number: '07',
+          title: 'Memoria gobernada',
+          body: 'Los cerebros guardan notas acotadas mediante una herramienta gobernada y recuperan una sesión de forma deliberada — nada se recuerda por accidente.',
+          linkLabel: 'Conocer la memoria gobernada',
+          to: sharedRoutes.memory,
+        },
+        {
+          number: '08',
           title: 'Releases firmadas',
           body: 'Verifica el manifiesto de checksums y revisa el SBOM suministrado antes de ejecutar un binario.',
           linkLabel: 'Ver releases',

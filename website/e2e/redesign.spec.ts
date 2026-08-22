@@ -8,7 +8,7 @@ const locales = [
     hero: ['One binary.', 'Your models.', 'Your rules.'],
     headings: [
       'Install with proof, not promises.',
-      'Seven pillars. One binary.',
+      'Eight pillars. One binary.',
       'Sensitive data never leaves the machine.',
       'Korvun in 27 seconds.',
       'Run it today.',
@@ -22,7 +22,7 @@ const locales = [
     hero: ['Un binario.', 'Tus modelos.', 'Tus reglas.'],
     headings: [
       'Instala con pruebas, no promesas.',
-      'Siete pilares. Un binario.',
+      'Ocho pilares. Un binario.',
       'Los datos sensibles no salen de tu equipo.',
       'Korvun en 27 segundos.',
       'Ponlo en marcha hoy.',
@@ -60,7 +60,8 @@ for (const locale of locales) {
       // independent of CSS text-transform (badges render uppercase).
       const main = (await page.locator('main').textContent()) ?? ''
 
-      expect(main).toContain('v0.7.0')
+      expect(main).toContain('v0.8.0')
+      expect(main).toContain('Beta')
       expect(main).toContain('Apache-2.0')
       expect(main).toContain('6')
       expect(main).toMatch(/cosign/i)

@@ -41,9 +41,9 @@ export function Hero({ copy, quickstart }: Props) {
                 <span aria-hidden="true">↗</span>
               </Link>
             </div>
-            <div className={styles.releaseLine} aria-label={`${copy.releaseLabel} v0.7.0`}>
+            <div className={styles.releaseLine} aria-label={`${copy.releaseLabel} v0.8.0 — Beta`}>
               <span>{copy.releaseLabel}</span>
-              <strong>v0.7.0</strong>
+              <strong>v0.8.0 — Beta</strong>
               <span>Apache-2.0</span>
             </div>
           </div>
@@ -51,7 +51,7 @@ export function Hero({ copy, quickstart }: Props) {
           <div className={styles.heroMarkWrap} data-motion aria-hidden="true">
             <div className={styles.heroOrbit} />
             <img className={styles.heroMark} src={mark} alt="" width="640" height="640" />
-            <div className={styles.heroBadge}>01 · 07</div>
+            <div className={styles.heroBadge}>01 · 08</div>
           </div>
         </div>
       </div>
