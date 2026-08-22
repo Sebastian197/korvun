@@ -61,15 +61,15 @@ jobs:
           echo "::error::Manual dispatch supports dry_run=true only; publish a real release by pushing a v* tag."
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history + tags: git describe (dry-run VERSION) and the Makefile's PRODUCT_VERSION need them
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime
+      - uses: actions/setup-node@v7 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime
         with:
           node-version: "22"
 
