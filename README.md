@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <a href="https://sebastian197.github.io/korvun/"><strong>Website &amp; docs</strong></a>
-  · <a href="https://sebastian197.github.io/korvun/es/">en español</a>
+  <a href="https://korvun.dev"><strong>Website &amp; docs</strong></a>
+  · <a href="https://korvun.dev/es/">en español</a>
 </p>
 
 <p align="center">
