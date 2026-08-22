@@ -111,11 +111,34 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
-**Download v0.8.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.9.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
-## New in v0.8.0 — memory, on purpose
+## New in v0.9.0 — the universal model gateway
+
+Any OpenAI-compatible endpoint — cloud or local — is now a first-class
+Korvun model by CONFIG ALONE. Point `provider: "openai-compatible"` at
+DeepSeek, Moonshot/Kimi, Gemini's compat mode, OpenRouter, LM Studio or a
+llama.cpp server (you declare the full `base_url`; Korvun guesses no
+prefixes), and it rides the same policy engine, the same declared-locality
+privacy filter, and the same governed tools and memory as every native
+adapter. The house guarantees came along for the ride: the API key never
+surfaces anywhere — a hostile server echoing it back gets `[REDACTED]` —,
+redirects are refused outright so your conversation cannot be silently
+re-routed, quota exhaustion is told apart from genuine rate limits, and a
+duplicated entry fails loud at boot. Native tool calling included: a cloud
+model can drive `memory_note` and friends through the gateway, watched by
+the same governance gate — filmed live in the Korvun desktop app below.
+
+<p align="center">
+  <img src="docs/assets/readme/gateway-demo.gif" width="880"
+       alt="A cloud model driving a governed tool through the universal gateway, in the Korvun desktop app">
+</p>
+
+See the [v0.9.0 release notes](docs/releases/v0.9.0.md).
+
+## Governed memory (v0.8.0)
 
 An agent brain can now remember across sessions — deliberately, and governed like
 everything else. The model writes bounded notes through a `memory_note` tool that
@@ -199,10 +222,11 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.8.0` — Beta — is the current release.** Every beta criterion is now met:
-channels, multi-brain routing, the policy engine, resilience, the no-code builder,
-the operator console, governed tools & skills, and governed memory — each validated
-on real hardware. See [the release notes](docs/releases/v0.8.0.md),
+**`v0.9.0` — Beta — is the current release.** Every beta criterion is met and the
+platform keeps growing: channels, multi-brain routing, the policy engine,
+resilience, the no-code builder, the operator console, governed tools & skills,
+governed memory, and the universal model gateway — each validated on real
+hardware. See [the release notes](docs/releases/v0.9.0.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 
