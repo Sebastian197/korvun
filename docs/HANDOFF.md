@@ -109,9 +109,68 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-16)
+## Current state (as of 2026-08-22)
 
-> **CURRENT (2026-08-16, session close): THE BETA IS OUT.** DONE today:
+> **CURRENT (2026-08-22): the security batch SHIPPED, the P1 test leak
+> closed, the launch date set.** The website carries v0.8.0 — Beta on
+> korvun.dev (previous batches this session: the menu fix + the three
+> piece pages EN/ES at `45567ba`, direct domain links at `5032cbd`).
+>
+> **Security batch SHIPPED (`8675155`, API-verified): 10 of 13 alerts
+> dead** — npm overrides serialize-javascript 7.0.5 / uuid 11.1.1 /
+> nanoid 3.3.18 (`npm ls`: overridden ×3), the pages.yml SHA-pinning
+> validated LIVE on its own push (run 32558115684 build+deploy green),
+> and CodeQL #57 dismissed won't-fix with the documented rationale.
+> **The npm point is IMPLEMENTED, pending VERIFIED** — verification
+> requires the npm-audit photo (in the 2026-08-22 session report)
+> matching the expected residual (ONLY image-size ×2 + Scorecard #23)
+> and zero new advisories.
+>
+> **image-size #32/#33: OPEN ON PURPOSE** (no upstream patch;
+> `first_patched_version: NONE`, latest published 2.0.2 is inside the
+> vulnerable range) to keep the Dependabot signal alive. RECLASSIFIED as
+> BUILD exposure: with the future website-PR workflow, external PRs
+> become an untrusted-image vector → the CI batch (points 4+5 below)
+> MUST include an explicit job timeout and document the
+> first-time-contributor approval gate. Residual: bounded DoS in CI
+> minutes. Scorecard #23/#52–#56 clear on their next scan.
+>
+> **The P1 test leak (external report finding 1) is CLOSED in this
+> batch** (`test(shell)`, local): TestFirstRun_builderAddsFirstChannel
+> booted the real Controller with the template's empty storage.path and
+> could open/create/migrate the developer's REAL korvun.db. Red first
+> (the run resolving the real Application Support, captured), then a
+> reusable `sandboxUserDir(t)` + a package TestMain tripwire that fails
+> the whole run if any test touches the real profile — the pattern
+> cannot regress silently. Repo sweep: no other offender (every other
+> Start-in-test config is stateless or already sandboxed). Zero
+> production changes; `make quality` green (-race, 91.5%).
+>
+> **EXTERNAL TECHNICAL REPORT (8.6/10, over `5032cbd`) — copilot
+> triage:** (1) the firstrun test → THIS batch, done; (2) npm →
+> `8675155`, IMPLEMENTED pending VERIFIED; (3) the admin bind vs the
+> `NO AUTH ⇔ LOOPBACK ONLY` invariant → KNOWN RISK, decision pending —
+> the decision is Chano's, and the interim risk was EXPLICITLY ACCEPTED
+> by Chano (2026-08-22); copilot spec due ≤ 2026-08-28; (4)+(5) → ONE
+> small PRE-LAUNCH CI batch (website validation on PRs + Builder
+> coverage gate + job timeouts); (6) fuzzing and benchmarks SEPARATE —
+> two pre-1.0 batches with their own specs. The external prompt is NOT
+> executed as-is — lane amendments recorded.
+>
+> **PRODUCT DECISION (Chano, 2026-08-22): post-beta = FIRST the
+> universal model gateway** (a generic OpenAI-compatible adapter,
+> generalizing the Groq mold; the `model.Model` seam intact; locality
+> stays declared), **THEN the Execution Trust Layer starting at Stage 1
+> (Action Kernel). The gateway piece OPENS after this batch.**
+>
+> **LAUNCH: TUESDAY 25** — the single cartridge (Show HN ~15:00 UTC →
+> r/selfhosted → Product Hunt) with korvun.dev; the kit needs
+> regenerating with the domain URLs; the PH captures are the 7 under
+> `docs/assets/readme/`.
+>
+> **Chano personal pending:** revoke the exposed Telegram bot token.
+
+> **PREVIOUS (2026-08-16, session close): THE BETA IS OUT.** DONE today:
 > the Minimal Memory piece closed end-to-end (spec v1.3 three-voice
 > adjudicated, ADR-0043, SP-A + SP-B via TDD contracts, the real-model demo
 > PLUS the live test witnessed by Chano from his own Telegram); **BETA
