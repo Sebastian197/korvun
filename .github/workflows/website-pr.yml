@@ -1,0 +1,63 @@
+# Validate the public website (website/, ADR-0040) on pull requests.
+#
+# SAME SOURCE OF TRUTH as the deploy: the single job runs `make website-check`
+# — the full site harness (base-path integrity, WCAG AA contrast, the
+# motion-property law, the docs map, locale parity, and the e2e suite) — so a
+# PR is validated by exactly the gates the Pages deploy runs (pages.yml build
+# job). NO deploy steps here: this workflow checks, nothing else.
+#
+# Security posture (image-size alerts #32/#33 reclassified as BUILD exposure,
+# 2026-08-22): a PR from an external fork can carry a crafted image that the
+# site toolchain processes at build time. Mitigations here: permissions are
+# `contents: read` and nothing else, and an explicit timeout-minutes bounds
+# the worst case to a fixed cost in CI minutes. The repo-level "require
+# approval for first-time contributors" gate is the other half.
+#
+# Branch-protection note: this check is intentionally NOT required in the
+# ruleset. A required check behind a path filter would leave every PR that
+# does not touch website/** stuck on an eternally "expected" status. Whether
+# and how to make it required (e.g. a path-agnostic gate job) is a later
+# decision for Chano.
+#
+# Action pinning (house convention): full commit SHA + version comment,
+# SHAs resolved from each action's repo via the GitHub API (2026-08-22).
+name: Website PR
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'website/**'
+      - '.github/workflows/website-pr.yml'
+
+permissions:
+  contents: read
+
+# One validation per PR: a new push to the PR cancels the in-flight run —
+# unlike the production deploy (pages.yml), there is nothing here worth
+# letting finish.
+concurrency:
+  group: website-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: website (full harness via make website-check)
+    runs-on: ubuntu-latest
+    # Bounded cost: recent green runs of the same harness on master finish in
+    # ~2.5 minutes end to end; 15 is headroom, not budget.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install the site toolchain + the e2e browser
+        run: |
+          cd website
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Site gates — the full harness (AS-1/2/3/4/5/8/9/perf)
+        run: make website-check
