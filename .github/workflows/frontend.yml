@@ -44,7 +44,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm test
+      # Coverage (v8) with thresholds instead of a bare run — untested builder
+      # code fails the job, not just the reader (same rule as the chrome job).
+      - run: npm run coverage
       # The build regenerates dist/ fresh (never trusts a committed one, ADR-0029 §6)
       # and is the artifact the Go binary embeds via go:embed.
       - run: npm run build

@@ -23,5 +23,16 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    coverage: {
+      provider: 'v8',
+      // Production code only: tests and declaration files are out; config
+      // files (vite/eslint/playwright) live outside src/ already.
+      include: ['src/**'],
+      exclude: ['src/**/*.{test,spec}.{ts,tsx}', 'src/**/*.d.ts'],
+      // Same rule as the desktop chrome (SP6b): floors sit just under the
+      // measured baseline (86.09/78.53/76.88/86.83, 2026-08-22) and only
+      // ratchet up — a real regression fails CI, noise does not.
+      thresholds: { statements: 83, branches: 74, functions: 72, lines: 83 },
+    },
   },
 })

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "e2e": "playwright test",
     "preview": "vite preview"
   },
