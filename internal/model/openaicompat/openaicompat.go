@@ -39,6 +39,10 @@ var quotaExhaustedCodes = map[string]bool{
 	"organization_spend_limit_exceeded": true,
 	"project_spend_limit_exceeded":      true,
 	"organization_usage_limit_exceeded": true,
+	// Moonshot/Kimi's quota-exhaustion error.type (FR-GWB-4), double-cited
+	// in the spec: observed live in the AS-5 demo (2026-08-22) and
+	// documented at the official Kimi help center.
+	"exceeded_current_quota_error": true,
 }
 
 // Adapter is the openai-compatible implementation of model.Model. Safe for
@@ -139,8 +143,18 @@ func (a *Adapter) redact(s string) string {
 // Generate implements model.Model per the FR-GW-2/3/4/7 contract: POST
 // {model, messages, stream:false} to EXACTLY baseURL+"/chat/completions",
 // Bearer only with a non-empty key, the FR-GW-4 error matrix, redirect
-// refusal, and the bounded, order-fixed 2xx processing.
+// refusal, and the bounded, order-fixed 2xx processing. It rides the
+// shared chat engine (the retryLoop precedent: one engine, two lanes —
+// the tools lane can never drift in semantics).
 func (a *Adapter) Generate(ctx context.Context, req *model.Request) (*model.Response, error) {
+	return a.chat(ctx, req, nil)
+}
+
+// chat is the SHARED engine for both lanes (FR-GWB-2: HTTP construction,
+// redirect refusal, caps, EOF-demanding decode, the error matrix, and the
+// H8 belt are ONE code path). A nil/empty tools slice is the plain chat
+// lane; a non-empty one adds the tools catalog to the request.
+func (a *Adapter) chat(ctx context.Context, req *model.Request, tools []model.ToolSpec) (*model.Response, error) {
 	if err := model.ValidateRequest(req); err != nil {
 		return nil, err
 	}
@@ -155,6 +169,9 @@ func (a *Adapter) Generate(ctx context.Context, req *model.Request) (*model.Resp
 		Model:    req.Model,
 		Messages: toChatMessages(req.Messages),
 		Stream:   false,
+	}
+	if len(tools) > 0 {
+		payload.Tools = toWireTools(tools)
 	}
 	body, err := json.Marshal(&payload)
 	if err != nil {
@@ -241,28 +258,64 @@ func (a *Adapter) decodeSuccess(resp *http.Response) (*model.Response, error) {
 		return nil, fmt.Errorf("%w: response carried no choices", model.ErrProviderResponse)
 	}
 	choice := apiResp.Choices[0]
-	// (2) finish_reason=="error" is the second embedded-error form (H1).
+	// (2) finish_reason=="error" is the second embedded-error form (H1);
+	// finish_reason=="tool_calls" is VALID (FR-GWB-3).
 	if choice.FinishReason == "error" {
 		return nil, fmt.Errorf("%w: response finished with reason %q", model.ErrProviderResponse, "error")
 	}
-	// (3) A non-empty refusal with empty content IS the assistant reply (H2).
+	// (3) Tool calls (FR-GWB-3): ids ride ToolCall.ID; arguments arrive as
+	// a JSON STRING on this wire (unlike ollama's object) and normalize to
+	// the seam's map via json.Unmarshal — a string that is not a JSON
+	// object is malformed.
+	toolCalls, err := fromWireToolCalls(choice.Message.ToolCalls, a)
+	if err != nil {
+		return nil, err
+	}
+	// (4) A non-empty refusal with empty content IS the assistant reply (H2).
 	content := choice.Message.Content
 	if content == "" && choice.Message.Refusal != "" {
 		content = choice.Message.Refusal
 	}
-	// (4) Otherwise empty content is malformed (H12).
-	if content == "" {
-		return nil, fmt.Errorf("%w: response had empty assistant content and no refusal", model.ErrProviderResponse)
+	// (5) The AMENDED empty-content rule (FR-GW-3 conditioned by FR-GWB-3):
+	// error ONLY without refusal AND without tool_calls — an empty content
+	// carrying calls is a valid calls-bearing reply.
+	if content == "" && len(toolCalls) == 0 {
+		return nil, fmt.Errorf("%w: response had empty assistant content and neither refusal nor tool calls", model.ErrProviderResponse)
 	}
 
 	return &model.Response{
 		Message: model.Message{
-			Role:    model.RoleAssistant,
-			Content: content,
+			Role:      model.RoleAssistant,
+			Content:   content,
+			ToolCalls: toolCalls,
 		},
 		Provider:  ProviderName,
 		ModelName: apiResp.Model,
 	}, nil
+}
+
+// fromWireToolCalls normalizes the wire's tool_calls into the seam's
+// ToolCall slice (FR-GWB-3): the arguments STRING must unmarshal to a
+// JSON object; anything else is a malformed response. Diagnostics pass
+// the H8 belt.
+func fromWireToolCalls(in []wireToolCall, a *Adapter) ([]model.ToolCall, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	out := make([]model.ToolCall, 0, len(in))
+	for _, tc := range in {
+		var args map[string]any
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+			return nil, fmt.Errorf("%w: tool call %q arguments are not a JSON object: %s",
+				model.ErrProviderResponse, tc.Function.Name, a.redact(err.Error()))
+		}
+		out = append(out, model.ToolCall{
+			ID:        tc.ID,
+			Name:      tc.Function.Name,
+			Arguments: args,
+		})
+	}
+	return out, nil
 }
 
 // mapHTTPError translates a non-2xx response into the FR-GW-4 matrix.
@@ -344,18 +397,26 @@ func formatErrorDetail(d errorDetail) string {
 
 // chatRequest is the minimal subset of the compat /chat/completions
 // request body Korvun sends (FR-GW-3). Stream is sent explicitly false.
+// Tools (FR-GWB-2) is omitempty: the plain chat lane's requests stay
+// byte-identical to SP-A.
 type chatRequest struct {
 	Model    string        `json:"model"`
 	Messages []chatMessage `json:"messages"`
+	Tools    []wireTool    `json:"tools,omitempty"`
 	Stream   bool          `json:"stream"`
 }
 
 // chatMessage models the role-tagged conversation turn on the wire.
-// Refusal only ever appears on responses; omitempty keeps requests clean.
+// Refusal only ever appears on responses. ToolCalls rides BOTH ways
+// (history replay out, calls-bearing replies in — FR-GWB-2/3);
+// ToolCallID labels a role:"tool" result turn. All omitempty: turns
+// without them serialize exactly as in SP-A.
 type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-	Refusal string `json:"refusal,omitempty"`
+	Role       string         `json:"role"`
+	Content    string         `json:"content"`
+	Refusal    string         `json:"refusal,omitempty"`
+	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string         `json:"tool_call_id,omitempty"`
 }
 
 // chatResponse models the fields Korvun reads from a non-streaming compat
@@ -388,14 +449,34 @@ type errorDetail struct {
 
 // toChatMessages maps the canonical model.Message slice to the wire
 // format. Role strings come from model.Role.String, which already emits
-// lowercase "system"/"user"/"assistant" (H2: the system-only lane).
+// lowercase "system"/"user"/"assistant"/"tool" (H2: the system-only
+// lane). History replay (FR-GWB-2): assistant turns carrying ToolCalls
+// re-serialize as tool_calls with id + type + function whose arguments
+// are a JSON STRING on this wire; RoleTool turns carry tool_call_id. All
+// zero-valued on SP-A conversations, so those requests do not change.
 func toChatMessages(in []model.Message) []chatMessage {
 	out := make([]chatMessage, len(in))
 	for i, m := range in {
-		out[i] = chatMessage{
-			Role:    m.Role.String(),
-			Content: m.Content,
+		msg := chatMessage{
+			Role:       m.Role.String(),
+			Content:    m.Content,
+			ToolCallID: m.ToolCallID,
 		}
+		for _, tc := range m.ToolCalls {
+			args, err := json.Marshal(tc.Arguments)
+			if err != nil {
+				// A seam map that cannot marshal is unrepresentable on the
+				// wire; replay it as an empty object rather than dropping
+				// the call (the call id must survive for correlation).
+				args = []byte("{}")
+			}
+			msg.ToolCalls = append(msg.ToolCalls, wireToolCall{
+				ID:       tc.ID,
+				Type:     "function",
+				Function: wireCalledFunction{Name: tc.Name, Arguments: string(args)},
+			})
+		}
+		out[i] = msg
 	}
 	return out
 }
