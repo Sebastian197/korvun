@@ -159,11 +159,72 @@ contacted only if the local one failed).
 
 | Field | Type | Required | Values / meaning |
 |-------|------|----------|------------------|
-| `provider` | string | **yes** | `ollama` \| `groq`. |
+| `provider` | string | **yes** | `ollama` \| `groq` \| `openai-compatible`. |
 | `model_id` | string | **yes** | The provider's model name (e.g. `llama3.2`). |
 | `locality` | string | **yes** | `local` \| `cloud`. **Declared**, not derived — the privacy selector routes on it (ADR-0015 §3). |
-| `base_url` | string | no | Override the adapter default (e.g. `http://localhost:11434`). |
-| `api_key_env` | string | cloud only | **Name** of the env var holding the API key. **Required for `groq`.** |
+| `base_url` | string | provider-dependent | `ollama`/`groq`: optional override of the adapter default (e.g. `http://localhost:11434`). `openai-compatible`: **required** — see below. |
+| `api_key_env` | string | provider-dependent | **Name** of the env var holding the API key. **Required for `groq`.** Optional for `openai-compatible` (see below); never the key value itself. |
+
+#### `provider: "openai-compatible"` (ADR-0044)
+
+Any endpoint speaking the OpenAI chat-completions wire — cloud or local —
+becomes a Korvun model by config alone. Rules:
+
+- `base_url` is **required** and is the **full prefix**: Korvun appends
+  exactly `/chat/completions` and never guesses (`/v1` vs no `/v1` vs
+  `/api/v1` differs per provider — see the examples below). It must be an
+  absolute `http`/`https` URL with a host, and must **not** carry
+  credentials, a query, or a fragment. Trailing `/` is tolerated (trimmed).
+- `api_key_env` is **optional**: absent ⇒ no `Authorization` header (the
+  local-server case). If you **do** name a variable, it must resolve at
+  boot — a named-but-unset variable fails loudly with the variable's name.
+- `locality` stays **declared** by you, exactly as for every provider: an
+  entry declared `local` (LM Studio, llama.cpp) is eligible in private
+  brains; one declared `cloud` is never contacted by them.
+- Two `openai-compatible` entries in the **same brain** with the same
+  `base_url` (after trailing-slash trim) **and** the same `model_id` are
+  rejected at load — that is the same backend model wired twice.
+- Redirects are refused: if the endpoint answers 3xx, the call fails
+  rather than follow the conversation to an undeclared host.
+
+`base_url` examples per provider (verified against each provider's
+official documentation, 2026-08-22 — the spec's verification table):
+
+| Target | `base_url` |
+|--------|-----------|
+| OpenAI | `https://api.openai.com/v1` |
+| DeepSeek | `https://api.deepseek.com` (no `/v1` — the only documented form) |
+| Moonshot / Kimi | `https://api.moonshot.ai/v1` (China platform: `https://api.moonshot.cn/v1`) |
+| Gemini (OpenAI-compat mode) | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| OpenRouter | `https://openrouter.ai/api/v1` (model ids are `provider/model`) |
+| LM Studio (local) | `http://localhost:1234/v1` |
+| llama.cpp server (local) | `http://127.0.0.1:8080/v1` |
+
+Example — a private brain on a local LM Studio plus a cloud fallback for
+public brains:
+
+```json
+{
+  "provider": "openai-compatible",
+  "model_id": "qwen2.5-7b-instruct",
+  "locality": "local",
+  "base_url": "http://localhost:1234/v1"
+}
+```
+
+```json
+{
+  "provider": "openai-compatible",
+  "model_id": "deepseek-chat",
+  "locality": "cloud",
+  "base_url": "https://api.deepseek.com",
+  "api_key_env": "DEEPSEEK_API_KEY"
+}
+```
+
+Not in scope today (they fail or degrade per the spec): streaming,
+models that require OpenAI's `developer` instruction role (the o1
+family), and native tool calling over this provider (SP-B).
 
 ### `brains[].agent` (optional, ADR-0021 + ADR-0041)
 
