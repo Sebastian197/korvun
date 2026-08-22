@@ -11,8 +11,8 @@
 # (FR-DEP-1): the push trigger is master-only, and the workflow_dispatch
 # path is guarded by an explicit ref check on the deploy job.
 #
-# Action pinning (house convention; tags verified at source 2026-08-02):
-# every action below is GitHub-owned -> repo major-tag convention.
+# Action pinning (house convention): full commit SHA + version comment,
+# SHAs resolved from each action's repo via the GitHub API (2026-08-22).
 name: Pages
 
 on:
@@ -37,14 +37,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v7 # GitHub-owned, repo major-tag convention
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: website/package-lock.json
       - name: Setup Pages
-        uses: actions/configure-pages@v6 # GitHub-owned, repo major-tag convention
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - name: Install the site toolchain + the e2e browser
         run: |
           cd website
@@ -53,7 +53,7 @@ jobs:
       - name: Site gates — the full harness (AS-1/2/3/4/5/8/9/perf)
         run: make website-check
       - name: Upload the built site
-        uses: actions/upload-pages-artifact@v5 # GitHub-owned, repo major-tag convention
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: website/.vitepress/dist
 
@@ -69,4 +69,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v5 # GitHub-owned, repo major-tag convention
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
