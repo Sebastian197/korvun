@@ -215,10 +215,19 @@ export function configReducer(state: Config, action: ConfigAction): Config {
     case 'addModel':
       return editBrain(state, action.brain, (b) => ({ ...b, models: [...b.models, newModel()] }))
     case 'updateModel':
-      return editBrain(state, action.brain, (b) => ({
-        ...b,
-        models: replaceAt(b.models, action.model, { ...b.models[action.model], ...action.patch }),
-      }))
+      return editBrain(state, action.brain, (b) => {
+        const merged = { ...b.models[action.model], ...action.patch }
+        // B6 (mode-follows-type, the channel panel's pattern): warmup is only
+        // valid for LOCAL models (config.Validate), and the panel does not
+        // expose the field — so a provider change to openai-compatible/groq
+        // or a locality change to cloud clears the inherited warmup instead
+        // of walking the user into a rejection over an invisible field.
+        const movedOffOllama =
+          action.patch.provider !== undefined && action.patch.provider !== 'ollama'
+        const movedToCloud = action.patch.locality === 'cloud'
+        if (movedOffOllama || movedToCloud) delete merged.warmup
+        return { ...b, models: replaceAt(b.models, action.model, merged) }
+      })
     case 'removeModel':
       return editBrain(state, action.brain, (b) => ({
         ...b,

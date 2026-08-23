@@ -13,6 +13,10 @@ export interface ModelConfig {
   locality: string
   base_url?: string
   api_key_env?: string
+  /** Boot warmup — only valid for LOCAL models (config.Validate rejects
+   *  warmup on cloud entries). The panel does not expose it; the reducer
+   *  clears it when a provider/locality change makes it invalid (B6). */
+  warmup?: boolean
 }
 
 export interface PolicyConfig {
