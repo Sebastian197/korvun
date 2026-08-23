@@ -132,7 +132,12 @@ describe('b. the MODEL panel edits the model entry', () => {
     selectNode('model:0.0')
     const provider = screen.getByLabelText('provider') as HTMLSelectElement
     const locality = screen.getByLabelText('locality') as HTMLSelectElement
-    expect(Array.from(provider.options).map((o) => o.value)).toEqual(['ollama', 'groq'])
+    // v0.9.1: the mirror learned openai-compatible (ADR-0044; app-audit A1).
+    expect(Array.from(provider.options).map((o) => o.value)).toEqual([
+      'ollama',
+      'groq',
+      'openai-compatible',
+    ])
     expect(Array.from(locality.options).map((o) => o.value)).toEqual(['local', 'cloud'])
   })
 

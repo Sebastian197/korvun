@@ -153,7 +153,7 @@ export interface Config {
 
 // ---- enums (mirror config.Validate; server 400 is the backstop) --------------
 
-export const PROVIDERS = ['ollama', 'groq'] as const
+export const PROVIDERS = ['ollama', 'groq', 'openai-compatible'] as const
 export const SENSITIVITIES = ['public', 'private'] as const
 export const DISPATCHES = ['fanout', 'sequential'] as const
 export const POLICY_KINDS = ['priority', 'consensus'] as const

@@ -454,6 +454,17 @@ function PropertiesPanel({
           options={LOCALITIES}
           onChange={(locality) => up({ locality })}
         />
+        {/* Full endpoint prefix; the server appends /chat/completions and
+            never guesses (ADR-0044). REQUIRED for openai-compatible, an
+            optional adapter-default override for ollama/groq. */}
+        <Field
+          label="base_url"
+          value={mc.base_url ?? ''}
+          onChange={(base_url) => up({ base_url })}
+          placeholder={
+            mc.provider === 'openai-compatible' ? 'https://host/v1 (required)' : 'optional override'
+          }
+        />
         {/* The env-var NAME, never the value (ADR-0010) — the house microcopy. */}
         <Field
           label="api_key_env"
