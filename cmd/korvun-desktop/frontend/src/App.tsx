@@ -153,6 +153,7 @@ export function App(): React.JSX.Element {
           existingTypes={existingTypes}
           onClose={() => setWizardOpen(false)}
           onDone={() => setWizardOpen(false)}
+          onOpenBuilder={() => setView('builder')}
         />
       )}
     </div>

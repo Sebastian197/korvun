@@ -20,6 +20,9 @@ interface WizardProps {
   existingTypes: string[]
   onClose: () => void
   onDone: () => void
+  /** Lands the user on the Builder — the webhook card's breadcrumb
+   *  (v0.9.1, app-audit añadido 2). Optional: absent in harnesses. */
+  onOpenBuilder?: () => void
   fetcher?: typeof fetch
   pollIntervalMs?: number
 }
@@ -28,11 +31,16 @@ export function ChannelWizard({
   existingTypes,
   onClose,
   onDone,
+  onOpenBuilder,
   fetcher,
   pollIntervalMs,
 }: WizardProps): React.JSX.Element {
   const [step, setStep] = useState(1)
   const [typeId, setTypeId] = useState('')
+  // The webhook card never advances the token flow (its shape — bind, path,
+  // outbound_url — is Builder territory until the v0.10 wizard step): picking
+  // it shows the breadcrumb instead.
+  const [webhookPicked, setWebhookPicked] = useState(false)
   const [secret, setSecret] = useState('')
   const [ks, setKs] = useState<KsState>('idle')
   const [pre, setPre] = useState<PreState>('idle')
@@ -130,7 +138,10 @@ export function ChannelWizard({
                       type="button"
                       className={`wiz-type ${typeId === t.id ? 'wiz-type-on' : ''}`}
                       disabled={taken}
-                      onClick={() => setTypeId(t.id)}
+                      onClick={() => {
+                        setWebhookPicked(false)
+                        setTypeId(t.id)
+                      }}
                     >
                       <span className="chan-tile" aria-hidden="true">
                         {channelGlyph(t.id)}
@@ -144,7 +155,51 @@ export function ChannelWizard({
                     </button>
                   )
                 })}
+                {/* The webhook breadcrumb (v0.9.1, app-audit añadido 2): the
+                    channel exists since ADR-0038, but with no card here a
+                    user concluded it did not exist at all. */}
+                <button
+                  type="button"
+                  className={`wiz-type ${webhookPicked ? 'wiz-type-on' : ''}`}
+                  disabled={existingTypes.includes('webhook')}
+                  onClick={() => {
+                    setTypeId('')
+                    setWebhookPicked(true)
+                  }}
+                >
+                  <span className="chan-tile" aria-hidden="true">
+                    {channelGlyph('webhook')}
+                  </span>
+                  <span className="wiz-type-body">
+                    <span className="wiz-type-title">Webhook</span>
+                    <span className="wiz-type-blurb">
+                      {existingTypes.includes('webhook')
+                        ? 'ya está conectado — un canal por tipo'
+                        : 'endpoint HTTP genérico · se monta en el Builder'}
+                    </span>
+                  </span>
+                </button>
               </div>
+              {webhookPicked && (
+                <div className="wiz-webhook-note" role="note">
+                  <p className="wiz-caption">
+                    El canal webhook se configura en el Builder: suelta un bloque de canal en el
+                    lienzo y cámbiale el tipo a <span className="mono">webhook</span> en su panel.
+                    Ahí viven sus campos (<span className="mono">bind</span>,{' '}
+                    <span className="mono">path</span>, <span className="mono">outbound_url</span>).
+                  </p>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => {
+                      onOpenBuilder?.()
+                      onClose()
+                    }}
+                  >
+                    Ir al Builder
+                  </button>
+                </div>
+              )}
             </>
           )}
 
