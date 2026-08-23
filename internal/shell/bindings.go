@@ -192,9 +192,10 @@ func (d *Desktop) DefaultConfigPath() (string, error) {
 // EnsureDefaultConfig provisions the first-run template at the default path
 // (the arg-less composition the spec fixes: resolve, then ensure). created
 // = true is the chrome's onboarding trigger (ADR-0035 §5). It then heals
-// EXISTING configs for the chat piece (EnsureChatBlocks): a pre-chat config
-// gains the storage and session blocks on mount, so the Chat tab never
-// boots dead after an app upgrade.
+// EXISTING configs: the chat piece (EnsureChatBlocks — storage and session
+// blocks, so the Chat tab never boots dead) and the builder's mutation
+// surface (EnsureAdminBlock — an admin-less config left the Builder tab a
+// 404 trap; v0.9.1, app-audit A4).
 func (d *Desktop) EnsureDefaultConfig() (bool, error) {
 	return bounded(d, "ensure default config", d.deadlines.read, func() (bool, error) {
 		path, err := DefaultConfigPath()
@@ -206,6 +207,11 @@ func (d *Desktop) EnsureDefaultConfig() (bool, error) {
 			return false, err
 		}
 		if _, err := EnsureChatBlocks(path); err != nil {
+			return created, err
+		}
+		// …and for the builder's mutation surface (v0.9.1, A4): an
+		// admin-less config left the Builder tab a 404 trap.
+		if _, err := EnsureAdminBlock(path); err != nil {
 			return created, err
 		}
 		return created, nil
