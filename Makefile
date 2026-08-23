@@ -3,7 +3,7 @@ GOLANGCI_LINT := $(GOBIN)/golangci-lint
 GOIMPORTS := $(GOBIN)/goimports
 COVERAGE_THRESHOLD := 85
 
-.PHONY: build test lint cover quality fmt vet guard-gopkgs frontend-install frontend-build desktop-frontend-install desktop-frontend desktop dmg website-check
+.PHONY: build test lint cover quality fmt vet guard-gopkgs frontend-install frontend-build desktop-frontend-install desktop-frontend desktop-frontend-check desktop dmg website-check
 
 # Go tooling must NEVER walk node_modules. npm packages ship stray .go files
 # (flatted), and desktop sync tools mint junk like "x 2.go" in there — ONE such
@@ -42,6 +42,14 @@ desktop-frontend-install:
 
 desktop-frontend:
 	cd cmd/korvun-desktop/frontend && npm run build
+
+# Local mirror of the CI chrome lane (frontend.yml "chrome (lint · typecheck ·
+# test · build)"), minus the build step so the committed dist stub is never
+# touched. Born from the 2026-08-23 ensayo red: a prettier drift in chrome
+# sources passes `quality` (Go-only, ADR-0029 §6 — Node never gates it) and
+# dies in CI. Run this BEFORE the ensayo push whenever chrome sources changed.
+desktop-frontend-check:
+	cd cmd/korvun-desktop/frontend && npm run typecheck && npm run lint && npm run format:check && npm run coverage
 
 build: frontend-build
 	go build ./cmd/korvun
