@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { LandingCopy } from './landingCopy'
 import styles from './landing.module.css'
 
-const installCommands = `VERSION=0.9.0
+const installCommands = `VERSION=0.9.1
 curl -LO https://github.com/Sebastian197/korvun/releases/download/v\${VERSION}/korvun_\${VERSION}_linux_amd64.tar.gz
 curl -LO https://github.com/Sebastian197/korvun/releases/download/v\${VERSION}/checksums.txt
 sha256sum --check checksums.txt --ignore-missing

@@ -41,9 +41,9 @@ export function Hero({ copy, quickstart }: Props) {
                 <span aria-hidden="true">↗</span>
               </Link>
             </div>
-            <div className={styles.releaseLine} aria-label={`${copy.releaseLabel} v0.9.0 — Beta`}>
+            <div className={styles.releaseLine} aria-label={`${copy.releaseLabel} v0.9.1 — Beta`}>
               <span>{copy.releaseLabel}</span>
-              <strong>v0.9.0 — Beta</strong>
+              <strong>v0.9.1 — Beta</strong>
               <span>Apache-2.0</span>
             </div>
           </div>
