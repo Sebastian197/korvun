@@ -79,6 +79,14 @@
   stroke: var(--text-3);
 }
 
+/* B8 (v0.9.2): the selected cable is VISIBLE — the unconditional stroke
+   above used to swallow React Flow's selected state entirely, so even a
+   working selection would have been invisible. Accent token, per NC-7. */
+.canvas-surface .react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
 /* Connection affordance: a violet halo on the handles at hover (final-6). */
 .canvas-surface .react-flow__handle:hover {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent);

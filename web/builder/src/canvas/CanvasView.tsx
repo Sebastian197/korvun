@@ -15,6 +15,7 @@ import {
   Position,
   type Connection,
   type Edge as RFEdge,
+  type EdgeChange,
   type Node as RFNode,
   type NodeProps,
   type ReactFlowInstance,
@@ -553,15 +554,36 @@ export function CanvasView({
       })),
     [graph, wc],
   )
+  // B8 (v0.9.2): edge SELECTION lives here. The edges are controlled, and in
+  // controlled mode React Flow delivers selection as edge changes
+  // (type:'select') through onEdgesChange — without the handler the change
+  // is dropped and no edge can ever be selected, which made onEdgesDelete
+  // unreachable from the UI (the bug-bash's undeletable cable). Selection is
+  // the ONLY change applied: structure keeps deriving from the working copy.
+  const [selectedEdges, setSelectedEdges] = useState<ReadonlySet<string>>(new Set())
+  const onEdgesChange = (changes: EdgeChange<RFEdge>[]) => {
+    setSelectedEdges((prev) => {
+      let next: Set<string> | null = null
+      for (const ch of changes) {
+        if (ch.type !== 'select') continue
+        next ??= new Set(prev)
+        if (ch.selected) next.add(ch.id)
+        else next.delete(ch.id)
+      }
+      return next ?? prev
+    })
+  }
+
   const edges = useMemo<RFEdge[]>(
     () =>
       graph.edges.map((e) => ({
         id: e.id,
         source: e.source,
         target: e.target,
+        selected: selectedEdges.has(e.id),
         ...(e.excluded ? { className: 'edge-excluded' } : {}),
       })),
-    [graph],
+    [graph, selectedEdges],
   )
 
   // fitView options: a comfortable padding and a maxZoom so a two-node graph
@@ -587,6 +609,13 @@ export function CanvasView({
     for (const e of deleted) {
       if (e.id.startsWith('route:')) dispatch({ kind: 'disconnectRoute', route: indexOf(e.id) })
     }
+    // A deleted edge leaves the selection too — stale ids must not re-mark
+    // the reindexed routes the graph projects next render (B8).
+    setSelectedEdges((prev) => {
+      const next = new Set(prev)
+      for (const e of deleted) next.delete(e.id)
+      return next
+    })
   }
 
   const onSurfaceDrop = (e: DragEvent) => {
@@ -675,7 +704,9 @@ export function CanvasView({
               nodeTypes={nodeTypes}
               isValidConnection={isValidConnection}
               onConnect={onConnect}
+              onEdgesChange={onEdgesChange}
               onEdgesDelete={onEdgesDelete}
+              deleteKeyCode={['Backspace', 'Delete']}
               onNodeClick={(_, node) => setSelected(node.id)}
               onPaneClick={() => setSelected(null)}
               onInit={setFlow}
