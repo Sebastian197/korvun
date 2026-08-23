@@ -364,6 +364,11 @@ func (s *Supervisor) RequestReload(cfg *config.Config) (Handle, error) {
 	h := Handle(fmt.Sprintf("reload-%d", s.seq))
 	s.status[h] = StatePending
 	s.mu.Unlock()
+	// Every reload transition lands in the structured log (B7, bug-bash
+	// 2026-08-23): the phantom-failure incident left no trace because the
+	// states lived only in memory — the next one must be diagnosable from
+	// the profile log alone.
+	s.logger.Info("reload state", "handle", string(h), "state", string(StatePending))
 
 	s.reloadCh <- reloadReq{cfg: cfg, handle: h}
 	return h, nil
@@ -408,6 +413,8 @@ func (s *Supervisor) setStatus(h Handle, st State) {
 	s.mu.Lock()
 	s.status[h] = st
 	s.mu.Unlock()
+	// See RequestReload: the reload trail must exist in the log (B7).
+	s.logger.Info("reload state", "handle", string(h), "state", string(st))
 }
 
 func (s *Supervisor) finishReload() {
