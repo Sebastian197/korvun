@@ -31,8 +31,8 @@ test('el lienzo embebido muestra UNA sola cabecera (sin la barra propia del buil
   await ensureRunning(page)
   await page.getByRole('button', { name: 'Builder', exact: true }).click()
   const frame = page.frameLocator('iframe[title="Builder"]')
-  await frame.getByLabel('admin bearer token').fill('x')
-  await frame.getByRole('button', { name: 'Load' }).click()
+  // v0.9.1: embedded skips the token gate (the proxy injects the real bearer) —
+  // the canvas loads directly, no paste step.
   await expect(frame.getByTestId('canvas-surface')).toBeVisible({ timeout: 15000 })
 
   // The builder's own crumb bar must be absent inside the iframe — the desktop

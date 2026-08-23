@@ -40,8 +40,8 @@ test('el lienzo es la cara del builder en el iframe: drag de paleta y conexión 
 
   // The token gate inside the iframe: ANY value works — the SP4 proxy
   // overwrites Authorization with the real bearer (proxy.go:77).
-  await frameLoc.getByLabel('admin bearer token').fill('x')
-  await frameLoc.getByRole('button', { name: 'Load' }).click()
+  // v0.9.1: embedded skips the token gate (the proxy injects the real bearer) —
+  // the canvas loads directly, no paste step.
   await expect(frameLoc.getByTestId('canvas-surface')).toBeVisible({ timeout: 15000 })
 
   // Real palette drag INSIDE the WebView (HTML5 DnD across the frame).
