@@ -87,7 +87,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       kicker: 'Verified delivery',
       title: 'Install with proof, not promises.',
       body:
-        'v0.9.1 — Beta publishes six headless OS/architecture archives. The release also includes a cosign-signed checksum manifest and an SBOM for every archive.',
+        'v0.9.2 — Beta publishes six headless OS/architecture archives. The release also includes a cosign-signed checksum manifest and an SBOM for every archive.',
       proof: ['6 headless archives', 'cosign-signed checksums', 'SBOM per archive'],
       copy: 'Copy commands',
       copied: 'Copied',
@@ -177,7 +177,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
         'Sixty seconds inside the Korvun desktop app: gpt-4o-mini — reached through the v0.9.0 universal gateway — is asked to remember something, the governance gate authorizes the memory tool, /notes shows the stored note, and the model answers from memory.',
       ariaLabel:
         'Korvun v0.9.0 desktop app demo: a cloud model driving the governed memory tool through the universal gateway',
-      release: 'Read the v0.9.1 release notes',
+      release: 'Read the v0.9.2 release notes',
     },
     final: {
       kicker: 'Build your first route',
@@ -204,7 +204,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       kicker: 'Entrega verificable',
       title: 'Instala con pruebas, no promesas.',
       body:
-        'v0.9.1 — Beta publica seis archivos headless para distintas combinaciones de sistema y arquitectura. La release incluye un manifiesto de checksums firmado con cosign y un SBOM por archivo.',
+        'v0.9.2 — Beta publica seis archivos headless para distintas combinaciones de sistema y arquitectura. La release incluye un manifiesto de checksums firmado con cosign y un SBOM por archivo.',
       proof: ['6 archivos headless', 'checksums firmados con cosign', 'SBOM por archivo'],
       copy: 'Copiar comandos',
       copied: 'Copiado',
@@ -294,7 +294,7 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
         'Sesenta segundos dentro de la app de escritorio de Korvun: a gpt-4o-mini — conectado por la pasarela universal de v0.9.0 — se le pide recordar algo, la puerta de gobernanza autoriza la herramienta de memoria, /notes muestra la nota guardada y el modelo responde desde la memoria.',
       ariaLabel:
         'Demo de la app de escritorio de Korvun v0.9.0: un modelo de nube usando la herramienta de memoria gobernada por la pasarela universal',
-      release: 'Leer las notas de v0.9.1',
+      release: 'Leer las notas de v0.9.2',
     },
     final: {
       kicker: 'Crea tu primera ruta',
