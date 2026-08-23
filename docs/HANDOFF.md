@@ -115,9 +115,40 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-22)
+## Current state (as of 2026-08-23)
 
-> **CURRENT (2026-08-22, session close): v0.9.0 IS OUT — the one-day arc,
+> **CURRENT (2026-08-23, session close): v0.9.2 APPROVED by Chano's bug
+> bash — the FIRST release gated by the Sixth Law (UX-design-first + the
+> manual pass on the packaged build).**
+>
+> **DONE this session:** the v0.9.2 batch (8 commits `d069bef`…`f43543b`:
+> the sixth law recorded, B6/B7/B8 builder+supervisor fixes, N6 model
+> health visible in the UI, release surfaces EN+ES, wave-1 after-captures)
+> passed Chano's hands-on bug bash on the packaged v0.9.2 build. Live
+> incidents during the bash were diagnosed at source and resolved in
+> place: the openrouter brain's live config had been corrupted on Apply
+> (`base_url` with the secret NAME glued on + `api_key_env` emptied +
+> locality flipped) — restored from backup evidence, atomic edit, app
+> closed (mapped as B14); the N6 stop/start drill ran against real
+> ollama. The UX debt map now stands at **23 rows** with **B12 / B13 /
+> B14** added from the bash (`design-drafts/ux-debt-map.md`, local).
+>
+> **NEXT queue (in order):**
+> (1) **B13 — "protocol JSON never reaches a channel"** — PRIORITY of
+> the next code lote (adjudicated ROMPE-USO): tool-shaped content headed
+> for a channel is replaced by an honest error + WARN/audit, never the
+> raw JSON.
+> (2) **Ola 2 designs awaiting Chano's yes** (`ola2-designs.md`): B9
+> brain selector on New chat, B10 Secrets panel, B8-bis pointer gesture
+> for cable deletion, onboarding with the gateway, honest chat B11+B12.
+> (3) **B14** — reproduce the builder config corruption + the pre-Apply
+> validation guard (well-formed `base_url`; cloud provider ⇒ non-empty
+> `api_key_env`).
+> (4) The **quality-legibility lote** (queued in `0db7d81`).
+> (5) The two landing findings **L46 / L111** awaiting Chano's word.
+> (6) The **edges.spec flake**.
+
+> **PREVIOUS (2026-08-22, session close): v0.9.0 IS OUT — the one-day arc,
 > closed end to end.**
 >
 > **DONE today, the one-day arc:** korvun.dev LIVE (Cloudflare canonical)
