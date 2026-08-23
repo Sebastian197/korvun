@@ -115,6 +115,14 @@ starting work, confirm no other session is live; a second session shares
 the working tree, the branches and the copilot report paths, and will
 step on them.
 
+## The sixth law — UX-DESIGN-FIRST + MANOS-DE-CHANO (2026-08-23) — CRITICAL
+
+UX-DESIGN-FIRST + MANOS-DE-CHANO: ninguna pieza visible para el usuario
+abre fase RED sin un diseño de experiencia aprobado por Chano (plantilla
+`docs/superpowers/specs/UX-TEMPLATE.md`), y ninguna release se etiqueta
+sin la pasada manual de Chano sobre la build empaquetada. El bug bash es
+aduana permanente, no evento.
+
 ## External documentation verification — which tool for what
 
 Never program against an external API, library, or tooling version from memory.

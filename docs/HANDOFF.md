@@ -85,6 +85,12 @@ outcomes" strictly out of the mechanism layer — that's Stages 5–6.
 The release plan. **The tag is ALWAYS Chano's explicit call** — the copilot prepares
 and proposes, never tags.
 
+### Release checklist (permanent, 2026-08-23 — the sixth law, CLAUDE.md)
+
+- [ ] **PASADA MANUAL DE CHANO sobre la app empaquetada (bug bash) — sin su
+      visto bueno no hay tag.**
+- [ ] **Simulacro de instalación limpia en cada minor.**
+
 - **PUBLISHED: `v0.2.0` (2026-07-18).**
   <https://github.com/Sebastian197/korvun/releases/tag/v0.2.0> — signed release + SBOM
   on 6 platforms, cosign **Verified OK**. Ships the ADR-0031 cold-start fix and the full
