@@ -117,7 +117,38 @@ explicit decision.
 
 ## Current state (as of 2026-08-23)
 
-> **CURRENT (2026-08-23, session close): v0.9.2 APPROVED by Chano's bug
+> **CURRENT (2026-08-23, sunday close): v0.9.2 IS OUT AND INSTALLED — the
+> founding sunday, closed end to end.**
+>
+> **DONE:** **v0.9.2 PUBLISHED and API-verified** (21/21 signed assets,
+> tag `7cd054a` → tip `1811045`, draft-until-complete, body = notes
+> verbatim + changelog) **and INSTALLED on the director's machine** by the
+> user path (cosign Verified OK + sha256 against the signed manifest;
+> old apps trashed; real profile backed up byte-verified and untouched;
+> `/Applications/Korvun.app` Info.plist 0.9.2; console "hola" answered
+> live on the official build). The **quality-story lote** is published:
+> README `8eec5b8` + website `62f628e`, both deploys verified serving the
+> new content — the apex (korvun.dev) is fine from outside but
+> unreachable from Chano's own network, cause TO BE DETERMINED with a
+> local diagnosis (no theories recorded). **Ola 2 designs SEALED 5/5 by
+> Chano** over rendered maquetas (B9, B10, B8-bis option (a), N1, N4 —
+> `ola2-designs.md` carries per-design approval blocks and sealed
+> decisions; B11+B12 "honest chat" still needs its own UX-TEMPLATE).
+> LinkedIn/X posts published — links to be registered when Chano passes
+> them.
+>
+> **NEXT queue (in order):**
+> (1) **B13 + the B14 guard** — the week's first code lote.
+> (2) The **Ola 2 lote**, piece by piece with the full ritual + Chano's
+> bug bash per piece.
+> (3) The **B11+B12 design** (UX-TEMPLATE + rendered maqueta + his yes).
+> (4) The **quality-legibility lote** (`0db7d81`).
+> (5) Landing **L46 / L111** awaiting Chano's word.
+> (6) **Apex network diagnosis** from Chano's machine (korvun.dev
+> unreachable locally — evidence first).
+> (7) The **edges.spec flake**.
+
+> **PREVIOUS (2026-08-23, session close): v0.9.2 APPROVED by Chano's bug
 > bash — the FIRST release gated by the Sixth Law (UX-design-first + the
 > manual pass on the packaged build).**
 >
