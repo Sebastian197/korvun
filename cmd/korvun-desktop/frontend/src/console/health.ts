@@ -30,7 +30,12 @@ export function channelOfKey(key: string): string {
 export function brainForChannel(routes: unknown, channel: string): string | null {
   if (!Array.isArray(routes)) return null
   for (const r of routes as RouteLike[]) {
-    if (r !== null && typeof r === 'object' && r.channel === channel && typeof r.brain === 'string') {
+    if (
+      r !== null &&
+      typeof r === 'object' &&
+      r.channel === channel &&
+      typeof r.brain === 'string'
+    ) {
       return r.brain
     }
   }

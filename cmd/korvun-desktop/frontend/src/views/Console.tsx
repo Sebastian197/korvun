@@ -727,8 +727,8 @@ export function Console(props: ConsoleProps): React.JSX.Element {
 
             {!archived && deadBrain !== null && (
               <p className="console-brain-warning" data-testid="brain-health-warning" role="alert">
-                Brain “{deadBrain}” has no live models — every boot probe failed. Check its model
-                in the Builder before chatting.
+                Brain “{deadBrain}” has no live models — every boot probe failed. Check its model in
+                the Builder before chatting.
               </p>
             )}
             {!archived && (
