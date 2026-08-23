@@ -150,8 +150,8 @@ describe('b. edge deletion: route edges only (composition is not cable-deleted)'
 })
 
 describe('c. the palette carries the final-6 drag hint', () => {
-  it('shows the literal "Arrastra un bloque al lienzo y conéctalo."', () => {
+  it('shows the literal palette hint (v0.9.1 wording: models land ON brains)', () => {
     renderView()
-    expect(screen.getByText(/Arrastra un bloque al lienzo y conéctalo\./)).toBeTruthy()
+    expect(screen.getByText(/Arrastra canales y cerebros al lienzo; un modelo se suelta sobre un cerebro\./)).toBeTruthy()
   })
 })

@@ -118,7 +118,7 @@ describe('b. the palette is sectioned with icons and drag-dots; SP5 hint stays',
   })
   it('keeps the SP5 drag hint', () => {
     renderView()
-    expect(screen.getByText(/Arrastra un bloque al lienzo y conéctalo\./)).toBeTruthy()
+    expect(screen.getByText(/Arrastra canales y cerebros al lienzo; un modelo se suelta sobre un cerebro\./)).toBeTruthy()
   })
 })
 

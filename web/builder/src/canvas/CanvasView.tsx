@@ -402,12 +402,14 @@ function PropertiesPanel({
   cfg,
   dispatch,
   onDeleted,
+  onClose,
   detectedSkills,
 }: {
   selected: string
   cfg: Config
   dispatch: Dispatch<ConfigAction>
   onDeleted: () => void
+  onClose: () => void
   detectedSkills: DetectedSkill[]
 }) {
   const kind = kindOf(selected)
@@ -478,6 +480,15 @@ function PropertiesPanel({
   if (!body) return null
   return (
     <aside className="properties-panel" data-testid="properties-panel">
+      {/* v0.9.1 (symptom 3): the panel had no close path at all. */}
+      <button
+        type="button"
+        className="panel-close"
+        aria-label="Cerrar panel"
+        onClick={onClose}
+      >
+        ×
+      </button>
       {body}
       {deleteAction && (
         <DeleteNodeControl action={deleteAction} onDeleted={onDeleted} dispatch={dispatch} />
@@ -502,7 +513,22 @@ export function CanvasView({
   const [base, setBase] = useState<Config>(baseline)
   const [wc, dispatch] = useReducer(configReducer, baseline, clone)
   const [selected, setSelected] = useState<string | null>(null)
+  // v0.9.1 (symptom 2): a model dropped on the empty surface used to be a
+  // silent no-op. NC-6 stands (models exist only inside brains) — the rule
+  // just becomes visible through this hint instead of dead air.
+  const [surfaceHint, setSurfaceHint] = useState(false)
   const [reload, setReload] = useState<ReloadStatus>({ phase: 'idle' })
+
+  // v0.9.1 (symptom 3): Escape closes the properties panel. Bound only
+  // while a node is selected; removed on close/unmount.
+  useEffect(() => {
+    if (selected === null) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelected(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected])
   const [saveError, setSaveError] = useState<SaveError | null>(null)
 
   const locked = reload.phase === 'polling'
@@ -566,10 +592,16 @@ export function CanvasView({
   const onSurfaceDrop = (e: DragEvent) => {
     e.preventDefault()
     const block = e.dataTransfer.getData(BLOCK_MIME)
-    // channel/brain blocks create fresh entries; a model on empty canvas is a
-    // no-op — a model exists only inside a brain (NC-6, no orphans).
+    // channel/brain blocks create fresh entries; a model on empty canvas
+    // creates NOTHING — a model exists only inside a brain (NC-6, no
+    // orphans) — but answers with the hint instead of silence (v0.9.1).
     if (block === 'channel') dispatch({ kind: 'addChannel' })
     else if (block === 'brain') dispatch({ kind: 'addBrain' })
+    else if (block === 'model') {
+      setSurfaceHint(true)
+      return
+    }
+    setSurfaceHint(false)
   }
 
   async function save() {
@@ -627,7 +659,9 @@ export function CanvasView({
                 </div>
               </div>
             ))}
-            <p className="palette-hint">Arrastra un bloque al lienzo y conéctalo.</p>
+            <p className="palette-hint">
+              Arrastra canales y cerebros al lienzo; un modelo se suelta sobre un cerebro.
+            </p>
           </aside>
           <div
             className="canvas-surface"
@@ -643,6 +677,7 @@ export function CanvasView({
               onConnect={onConnect}
               onEdgesDelete={onEdgesDelete}
               onNodeClick={(_, node) => setSelected(node.id)}
+              onPaneClick={() => setSelected(null)}
               onInit={setFlow}
               colorMode={document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'}
               fitView
@@ -650,6 +685,11 @@ export function CanvasView({
             >
               <Background />
             </ReactFlow>
+            {surfaceHint && (
+              <p className="surface-hint" role="status" data-testid="surface-hint">
+                Un modelo va sobre un cerebro: suéltalo encima de un nodo brain.
+              </p>
+            )}
           </div>
           {selected && (
             <PropertiesPanel
@@ -657,6 +697,7 @@ export function CanvasView({
               cfg={wc}
               dispatch={dispatch}
               onDeleted={() => setSelected(null)}
+              onClose={() => setSelected(null)}
               detectedSkills={detectedSkills}
             />
           )}
