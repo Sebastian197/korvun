@@ -171,6 +171,35 @@ explicit decision.
 > token; (6) Chano's call on the two impeccable-hook landing findings
 > (grid L46 / gradient L111 — pre-existing approved design, recorded).
 
+> **QUEUED LOTE — "QUALITY LEGIBILITY" (Chano's mandate, 2026-08-23; run
+> AFTER v0.9.2 ships — latest release today is v0.9.1, so this stays
+> queued).** Goal: any engineer or AI reading the repo cold sees the
+> standard at first glance. Scope, verbatim from the mandate:
+> (1) **CONTRIBUTING.md** — rewrite to describe the house method as it
+> IS: non-negotiable TDD with RED as contract, `make quality` as gate
+> (lint+vet+race+coverage floors per package), ensayo→master (master
+> never red), Conventional Commits, ADR per relevant decision, specs on
+> the template + three-voice adversarial review, draft-until-complete
+> releases, and the Sixth Law (UX-design-first + the manual pass). Tone
+> sober and descriptive, zero marketing. NOTE: the file EXISTS (June 24
+> repo-hygiene batch, `ab04ee3`) and predates most of the laws — this is
+> a rewrite to the current standard, not a creation.
+> (2) **SECURITY.md** — vulnerability reporting policy (GitHub private
+> vulnerability reporting — enable via API if off, and record it),
+> supported versions (latest minor), the release-signing model (cosign
+> keyless + SBOM + how to verify), and the product security invariants
+> in three lines (structural privacy, secrets only via keychain/env,
+> loopback by default). Also lifts Scorecard. Same NOTE: file exists
+> from June — rewrite to current standard.
+> (3) **README** — complete the standard badge row if any is missing
+> (CI, Scorecard, License, Release), visible at the top.
+> (4) **godoc sweep** — verify every exported symbol in the core
+> packages carries its godoc comment (the rule already exists); list any
+> gaps and close them in this lote.
+> (5) Close via the usual green path (govulncheck → ensayo); the master
+> push gets its own prompt per the rehearsal law. Commit:
+> `docs(quality): make the engineering standard legible`.
+
 > **PREVIOUS (2026-08-22, evening): UNIVERSAL MODEL GATEWAY SP-A GREEN —
 > local, NOT pushed (since shipped; see CURRENT).** The gateway piece opened and closed its first
 > sub-phase in one day: spec FINAL — Accepted for TDD (two Codex
