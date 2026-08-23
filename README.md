@@ -138,6 +138,21 @@ the same governance gate — filmed live in the Korvun desktop app below.
 
 See the [v0.9.0 release notes](docs/releases/v0.9.0.md).
 
+## The quality pass — v0.9.1 & v0.9.2
+
+Right after v0.9.0, the desktop app got its first exhaustive field audit:
+the packaged build driven as a real user on real hardware (an Intel iMac on
+macOS 13), every finding logged into a 23-row UX debt map. Two patches
+landed the same weekend, each fix verified by hand on the packaged build —
+cables can be disconnected (B8), panels close, a provider change clears the
+inherited orphan warmup (B6), the reload trail tells the truth and lands in
+the log (B7), and model health is visible in the Builder and the chat (N6).
+The process changed with the code: no user-visible piece starts without an
+approved experience design, and no release is tagged without a manual pass
+over the packaged build — the bug bash is permanent customs now, not an
+event. See the [v0.9.1](docs/releases/v0.9.1.md) and
+[v0.9.2](docs/releases/v0.9.2.md) release notes.
+
 ## Governed memory (v0.8.0)
 
 An agent brain can now remember across sessions — deliberately, and governed like
