@@ -57,6 +57,7 @@ func (a *App) startWarmup(ctx context.Context) {
 // WARN and returns; no error ever propagates to Start.
 func (a *App) warmupOne(ctx context.Context, t warmupTarget) {
 	a.logger.Info("warming up model", "provider", t.provider, "model", t.modelID)
+	a.modelHealth.set(t.provider, t.modelID, healthWarming, "")
 	start := time.Now()
 	req := &model.Request{
 		Model:    t.modelID,
@@ -64,9 +65,11 @@ func (a *App) warmupOne(ctx context.Context, t warmupTarget) {
 	}
 	if _, err := t.model.Generate(ctx, req); err != nil {
 		a.logger.Warn("warmup failed", "provider", t.provider, "model", t.modelID, "error", err)
+		a.modelHealth.set(t.provider, t.modelID, healthUnreachable, err.Error())
 		return
 	}
 	a.logger.Info("model warm", "provider", t.provider, "model", t.modelID, "took", time.Since(start))
+	a.modelHealth.set(t.provider, t.modelID, healthReady, "")
 }
 
 // awaitWarmup cancels any in-flight warmup and waits for the goroutines to

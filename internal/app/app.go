@@ -114,6 +114,9 @@ type App struct {
 	warmupTargets []warmupTarget
 	warmupCancel  context.CancelFunc
 	warmupDone    chan struct{}
+	// modelHealth records each probed model's last observed liveness (N6);
+	// BrainSummaries joins it into the per-model summaries at read time.
+	modelHealth *modelHealthRegistry
 }
 
 // channelInfo is App's per-channel record for the control API: the static
@@ -385,6 +388,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		brainSummaries: brainSummaries,
 		channelInfos:   channelInfos,
 		warmupTargets:  b.warmupTargets,
+		modelHealth:    newModelHealthRegistry(),
 	}
 	if store != nil {
 		app.store = store // owned closer, set only from a non-nil concrete store
@@ -426,11 +430,18 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 // BrainSummaries implements controlapi.Reader: it returns a defensive copy of
 // the boot snapshot (ADR-0022 §3) so a caller can never mutate App's state. The
 // per-brain Models slice is copied too (the snapshot is shared otherwise).
+// Each model's health is joined at READ time (N6): the identities are the
+// immutable snapshot, the liveness is whatever the warmup has observed by now.
 func (a *App) BrainSummaries() []controlapi.BrainSummary {
 	out := make([]controlapi.BrainSummary, len(a.brainSummaries))
 	for i, bs := range a.brainSummaries {
 		models := make([]controlapi.ModelSummary, len(bs.Models))
 		copy(models, bs.Models)
+		for j := range models {
+			st := a.modelHealth.get(models[j].Provider, models[j].ModelID)
+			models[j].Health = st.health
+			models[j].HealthDetail = st.detail
+		}
 		bs.Models = models
 		out[i] = bs
 	}

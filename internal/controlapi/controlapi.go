@@ -28,6 +28,17 @@ import (
 type ModelSummary struct {
 	Provider string `json:"provider"`
 	ModelID  string `json:"model_id"`
+	// Health is the model's observed liveness — "unknown" (never probed),
+	// "warming" (boot probe in flight), "ready" (probe answered), or
+	// "unreachable" (probe failed). Only warmup-enabled models are ever
+	// probed: probing an opted-out model would cost tokens (and, for a
+	// private brain, leak a probe to a cloud provider), so absence of
+	// evidence stays an honest "unknown", never an invented "ready" (N6).
+	Health string `json:"health"`
+	// HealthDetail carries the provider's error for an unreachable model —
+	// the model layer's errors are secret-free by construction (H8) — and is
+	// omitted otherwise.
+	HealthDetail string `json:"health_detail,omitempty"`
 }
 
 // BrainSummary is the resolved view of one registered brain: its declared

@@ -144,6 +144,19 @@
   color: var(--text-3);
   font-size: 0.66rem;
 }
+/* N6: observed model health. States use the house status tokens; the badge
+   stays quiet for ready and shouts only for unreachable. */
+.badge-health[data-health='ready'] {
+  color: var(--sent);
+}
+.badge-health[data-health='warming'] {
+  color: var(--accent-text);
+}
+.badge-health[data-health='unreachable'] {
+  color: var(--failed);
+  border: 1px solid var(--failed);
+  background: color-mix(in srgb, var(--failed) 10%, transparent);
+}
 
 .palette-section {
   margin-bottom: var(--space-sm);

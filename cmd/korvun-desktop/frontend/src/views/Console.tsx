@@ -30,6 +30,7 @@ import {
   type SessionRow,
   type TurnRow,
 } from '../console/api'
+import { deadBrainForConversation } from '../console/health'
 import { markRead, readLastSeen, unreadCount } from '../console/unread'
 import { relTime } from '../console/time'
 import { isNearBottom } from '../console/scroll'
@@ -232,6 +233,25 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   // Initial fetch + the SSE change signal + the catch-up tick.
   useEffect(() => refetchInbox(), [refetchInbox, feedVersion, pollTick])
   useEffect(() => refetchConversation(), [refetchConversation, feedVersion, pollTick])
+
+  // N6: the serving brain of the OPEN conversation, when the core observed
+  // every one of its models unreachable — the warning paints before the user
+  // types into the void. Refreshed with the catch-up tick, so a fixed model
+  // clears the banner within one poll.
+  const [deadBrain, setDeadBrain] = useState<string | null>(null)
+  useEffect(() => {
+    if (selected === null) {
+      setDeadBrain(null)
+      return
+    }
+    let ignore = false
+    void deadBrainForConversation(selected, fetcher).then((name) => {
+      if (!ignore) setDeadBrain(name)
+    })
+    return () => {
+      ignore = true
+    }
+  }, [fetcher, selected, pollTick])
 
   const listed = convs.find((c) => c.key === selected) ?? null
   // A New-chat draft exists before its first message: synthesize the row so
@@ -705,6 +725,12 @@ export function Console(props: ConsoleProps): React.JSX.Element {
               ))}
             </ol>
 
+            {!archived && deadBrain !== null && (
+              <p className="console-brain-warning" data-testid="brain-health-warning" role="alert">
+                Brain “{deadBrain}” has no live models — every boot probe failed. Check its model
+                in the Builder before chatting.
+              </p>
+            )}
             {!archived && (
               <form
                 className="console-composer"

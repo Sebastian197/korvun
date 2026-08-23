@@ -89,7 +89,12 @@ export function App() {
         // the save-bar riding the same reload machine as the 2b editor.
         <main className="canvas-main">
           <Suspense fallback={<p className="muted">loading…</p>}>
-            <CanvasView baseline={config} token={token} onAuthError={() => setToken('')} />
+            <CanvasView
+              baseline={config}
+              token={token}
+              onAuthError={() => setToken('')}
+              fetchBrains={getBrains}
+            />
           </Suspense>
         </main>
       ) : (

@@ -1699,6 +1699,13 @@
 .console-composer-error {
   color: var(--warn-t);
 }
+/* N6: the dead-brain warning sits above the composer — same quiet size as
+   the composer notes, warn-toned, no layout jump. */
+.console-brain-warning {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--warn-t);
+}
 
 /* --- Completion rider (search, unread, deletion, composer polish) ------- */
 .console-search {

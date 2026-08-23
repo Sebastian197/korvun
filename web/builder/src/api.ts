@@ -7,6 +7,11 @@ import type { Config } from './config/schema'
 export interface ModelSummary {
   provider: string
   model_id: string
+  /** Observed liveness (N6): "unknown" | "warming" | "ready" | "unreachable".
+   *  Optional so pre-v0.9.2 fixtures keep type-checking. */
+  health?: string
+  /** The provider's error for an unreachable model (secret-free, H8). */
+  health_detail?: string
 }
 export interface BrainSummary {
   name: string
