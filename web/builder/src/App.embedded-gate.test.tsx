@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import { fireEvent } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import type { Config } from './config/schema'
 import { App } from './App'
 
-// SP6 RED (builder-canvas, e): the builder's OWN top bar ("korvun · builder")
-// is redundant when embedded in the desktop chrome (which already titles the
-// view). When window.self !== window.top the own bar must NOT render; in a
-// direct browser (self === top) it stays. RED today: App always renders the
-// header.bar.
+// v0.9.1 RED (app-audit 2026-08-23, symptom 1): embedded in the desktop
+// chrome the token gate is THEATRE — the shell proxy overwrites Authorization
+// with the per-cycle bearer server-side (internal/shell/proxy.go, ADR-0035
+// §4), so any pasted string opens the gate and the real token can never be
+// known by the user. Embedded (window.self !== window.top) must SKIP the gate
+// and load the config straight away; a direct browser keeps the gate exactly
+// as before (there the pasted bearer is the real credential).
 
 vi.mock('@xyflow/react', () => ({
   ReactFlow: (props: Record<string, unknown>) => {
@@ -59,10 +62,11 @@ function stubApi() {
   )
 }
 
-async function landOnCanvas() {
-  fireEvent.change(screen.getByLabelText('admin bearer token'), { target: { value: 'secret' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Load' }))
-  await screen.findByTestId('canvas-surface')
+function embed() {
+  Object.defineProperty(window, 'top', { value: {}, configurable: true })
+}
+function unembed() {
+  Object.defineProperty(window, 'top', { value: window, configurable: true })
 }
 
 beforeEach(() => {
@@ -70,28 +74,24 @@ beforeEach(() => {
   document.documentElement.dataset.theme = 'dark'
 })
 afterEach(() => {
+  unembed()
   vi.unstubAllGlobals()
 })
 
-describe('e. own top bar vs the desktop chrome (no double header)', () => {
-  it('direct browser (self === top): the own bar is present', async () => {
-    // jsdom: window.top === window.self by default.
+describe('embedded desktop mode skips the token gate (v0.9.1, symptom 1)', () => {
+  it('embedded: the canvas loads with NO token pasted and the gate never renders', async () => {
+    embed()
     render(<App />)
-    await landOnCanvas()
-    expect(screen.getByText('builder')).toBeTruthy() // the crumb in the own bar
+    await screen.findByTestId('canvas-surface')
+    expect(screen.queryByLabelText('admin bearer token')).toBeNull()
   })
 
-  it('embedded (self !== top): the own bar is NOT rendered', async () => {
-    // Simulate the desktop iframe: make top a different object than self.
-    // Since v0.9.1 embedded also skips the token gate (App.embedded-gate
-    // test), so the canvas is awaited directly — no paste step.
-    Object.defineProperty(window, 'top', { value: {}, configurable: true })
-    try {
-      render(<App />)
-      await screen.findByTestId('canvas-surface')
-      expect(screen.queryByText('builder')).toBeNull()
-    } finally {
-      Object.defineProperty(window, 'top', { value: window, configurable: true })
-    }
+  it('direct browser: the gate stays and the canvas waits for the bearer', async () => {
+    render(<App />)
+    expect(screen.queryByTestId('canvas-surface')).toBeNull()
+    const input = screen.getByLabelText('admin bearer token')
+    fireEvent.change(input, { target: { value: 'secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Load' }))
+    await screen.findByTestId('canvas-surface')
   })
 })

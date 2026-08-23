@@ -21,11 +21,22 @@ const EVENTS = [
   { key: 'failed', label: 'failed' },
 ] as const
 
+// Embedded in the desktop chrome the gate is skipped with this sentinel: the
+// shell proxy OVERWRITES Authorization with the per-cycle bearer server-side
+// (ADR-0035 §4), so the pasted value never reaches the core and the real
+// bearer can never be known by the user — a gate here protects nothing and
+// reads as broken (app-audit 2026-08-23, symptom 1).
+const EMBEDDED_BEARER = 'embedded-proxy'
+
 export function App() {
+  // window.top differs from window.self only inside an iframe — the desktop
+  // chrome's embed (SP6). Computed once per mount, before any token state.
+  const embedded = window.self !== window.top
   const [brains, setBrains] = useState<BrainSummary[] | null>(null)
   const [channels, setChannels] = useState<ChannelSummary[] | null>(null)
   const [config, setConfig] = useState<Config | null>(null)
-  const [token, setToken] = useState('') // in-memory only (ADR-0030 §6)
+  // in-memory only (ADR-0030 §6); embedded starts past the gate.
+  const [token, setToken] = useState(embedded ? EMBEDDED_BEARER : '')
   const [draft, setDraft] = useState('')
   const [err, setErr] = useState<string | null>(null)
 
@@ -50,11 +61,8 @@ export function App() {
       })
   }, [token])
 
-  // Embedded in the desktop chrome (which already titles the view) → the
-  // builder's own top bar is redundant, so drop it and avoid a double header
-  // (SP6). window.top differs from window.self only inside an iframe.
-  const embedded = window.self !== window.top
-
+  // Embedded, the desktop chrome already titles the view → the builder's own
+  // top bar is also dropped to avoid a double header (SP6).
   return (
     <div className="app">
       {!embedded && (
