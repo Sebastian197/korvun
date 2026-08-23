@@ -19,16 +19,12 @@ beforeEach(() => {
 
 describe('ChannelWizard — the webhook card (v0.9.1)', () => {
   it('the third card is offered next to Telegram and Discord', () => {
-    render(
-      <ChannelWizard existingTypes={[]} onClose={() => undefined} onDone={() => undefined} />,
-    )
+    render(<ChannelWizard existingTypes={[]} onClose={() => undefined} onDone={() => undefined} />)
     expect(screen.getByRole('button', { name: /Webhook/ })).toBeTruthy()
   })
 
   it('picking it shows the Builder instruction instead of advancing the token flow', () => {
-    render(
-      <ChannelWizard existingTypes={[]} onClose={() => undefined} onDone={() => undefined} />,
-    )
+    render(<ChannelWizard existingTypes={[]} onClose={() => undefined} onDone={() => undefined} />)
     fireEvent.click(screen.getByRole('button', { name: /Webhook/ }))
     expect(screen.getByText(/se configura en el Builder/i)).toBeTruthy()
     const next = screen.getByRole('button', { name: 'Siguiente' }) as HTMLButtonElement
