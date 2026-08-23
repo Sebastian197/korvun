@@ -28,9 +28,11 @@ package main
 import (
 	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -38,6 +40,7 @@ import (
 
 	"github.com/Sebastian197/korvun/internal/shell"
 	"github.com/Sebastian197/korvun/internal/shell/keyring"
+	"github.com/Sebastian197/korvun/internal/shell/logsink"
 )
 
 //go:embed all:frontend/dist
@@ -54,6 +57,24 @@ func main() {
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v" || os.Args[1] == "version") {
 		fmt.Println("korvun-desktop", version)
 		return
+	}
+
+	// File log sink (v0.9.1, app-audit B3): Finder-launched apps have their
+	// stderr discarded by macOS, so slog tees to korvun-desktop.log in the
+	// profile directory (logsink docs; one-deep rotation). A sink failure
+	// keeps stderr-only logging — logging must never block the launch.
+	if cfgPath, err := shell.DefaultConfigPath(); err == nil {
+		dir := filepath.Dir(cfgPath)
+		if err := os.MkdirAll(dir, 0o700); err == nil {
+			if f, err := logsink.Open(dir); err == nil {
+				slog.SetDefault(slog.New(slog.NewTextHandler(
+					io.MultiWriter(os.Stderr, f), nil)))
+				slog.Info("korvun-desktop: log sink open",
+					"path", filepath.Join(dir, logsink.FileName), "version", version)
+			} else {
+				slog.Warn("korvun-desktop: log sink unavailable, stderr only", "error", err.Error())
+			}
+		}
 	}
 
 	assets, err := fs.Sub(chromeAssets, "frontend/dist")
