@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
@@ -113,15 +114,69 @@ func buildFileDSN(slashed string) string {
 // calls are safe from concurrent brain workers.
 type Store struct {
 	db *sql.DB
+	// capRows and pruneEvery implement the sealed retention decision: a
+	// generous automatic cap with NO config surface. Fields (not globals)
+	// so tests exercise small caps without mutable package state.
+	capRows    int
+	pruneEvery int
+	// writes counts RecordAttempt commits toward the periodic prune;
+	// mutex-guarded because callers are concurrent brain workers (the DB
+	// pool serializes statements, not this counter).
+	writesMu sync.Mutex
+	writes   int
+}
+
+// The sealed retention defaults (decision 2): generous, automatic, no
+// config surface. The cap bounds TOTAL rows; pruning only ever removes
+// terminal rows, oldest first — live rows are untouchable.
+const (
+	defaultCapRows    = 100_000
+	defaultPruneEvery = 512
+	// recoveryMarkerCrash marks actions closed by the Open recovery pass.
+	recoveryMarkerCrash = "crash_recovered"
+)
+
+// openWithCap is the test seam behind Open: same mold, explicit cap.
+func openWithCap(path string, capRows int) (*Store, error) {
+	store, err := open(path)
+	if err != nil {
+		return nil, err
+	}
+	store.capRows = capRows
+	if _, err := store.Prune(context.Background()); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	return store, nil
 }
 
 // Open opens (or creates) the action store at path — normally the SAME
 // file the conversation store uses (sealed decision 1). It creates the
 // parent directory, applies the single-writer pool, bootstraps this
-// store's own schema and lifecycle row, and pings, so a bad path or a
-// corrupt file fails HERE (the boot-fatal posture), never on the first
-// recorded action.
+// store's own schema and lifecycle row, pings (boot-fatal posture: a bad
+// path or corrupt file fails HERE, never on the first recorded action),
+// then runs the HONEST recovery pass — non-terminal actions from a
+// previous life close FAILED with the recovery marker, never re-executed
+// — and the retention prune.
 func Open(path string) (*Store, error) {
+	store, err := open(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := store.recoverPreviousLife(context.Background()); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	if _, err := store.Prune(context.Background()); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	return store, nil
+}
+
+// open is the shared mold behind Open and the test seam: pool, bootstrap
+// and ping, with the sealed retention defaults.
+func open(path string) (*Store, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("action/sqlite: resolve path %q: %w", path, err)
@@ -153,7 +208,59 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("action/sqlite: ping %q: %w", abs, err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, capRows: defaultCapRows, pruneEvery: defaultPruneEvery}, nil
+}
+
+// recoverPreviousLife closes every non-terminal action left behind by a
+// previous process life: FAILED, marked, finished-stamped — and NEVER
+// re-executed (the blueprint's §16.4 honesty applied early: the kernel
+// does not invent idempotency it does not have yet).
+func (s *Store) recoverPreviousLife(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
+		  WHERE state NOT IN (?, ?, ?, ?)`,
+		string(action.StateFailed), recoveryMarkerCrash,
+		time.Now().UTC().Format(time.RFC3339Nano),
+		string(action.StateDenied), string(action.StateShadowed),
+		string(action.StateSucceeded), string(action.StateFailed),
+	)
+	if err != nil {
+		return fmt.Errorf("action/sqlite: recovery pass: %w", err)
+	}
+	return nil
+}
+
+// Prune enforces the retention cap: when total rows exceed it, the OLDEST
+// TERMINAL rows are deleted (decisions cascade) until the total is back at
+// the cap — or until no terminal remains, because live rows are never
+// touched, cap or no cap. Returns how many actions were removed.
+func (s *Store) Prune(ctx context.Context) (int, error) {
+	total, err := s.Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	excess := total - s.capRows
+	if excess <= 0 {
+		return 0, nil
+	}
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM actions WHERE action_id IN (
+		    SELECT action_id FROM actions
+		     WHERE state IN (?, ?, ?, ?)
+		     ORDER BY requested_at ASC, action_id ASC
+		     LIMIT ?)`,
+		string(action.StateDenied), string(action.StateShadowed),
+		string(action.StateSucceeded), string(action.StateFailed),
+		excess,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("action/sqlite: prune: %w", err)
+	}
+	removed, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("action/sqlite: prune rows affected: %w", err)
+	}
+	return int(removed), nil
 }
 
 // Close releases the store's connection pool.
@@ -210,6 +317,18 @@ func (s *Store) RecordAttempt(ctx context.Context, env action.Envelope, d Decisi
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit record %q: %w", env.ActionID, err)
 	}
+	// The periodic half of the retention invariant: every pruneEvery-th
+	// committed attempt pays the (cheap, bounded) prune, so the file stays
+	// capped without any scheduler or config.
+	s.writesMu.Lock()
+	s.writes++
+	due := s.writes%s.pruneEvery == 0
+	s.writesMu.Unlock()
+	if due {
+		if _, err := s.Prune(ctx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -234,10 +353,9 @@ func (s *Store) Finish(ctx context.Context, actionID string, to action.State, fi
 	if err := action.Transition(action.State(current), to); err != nil {
 		return fmt.Errorf("action/sqlite: finish %q: %w", actionID, err)
 	}
-	if !to.Terminal() {
-		return fmt.Errorf("action/sqlite: finish %q: %w", actionID,
-			action.Transition(action.StateAuthorized, to))
-	}
+	// No separate terminality guard: in Etapa 1 every valid exit from a
+	// stored decision state IS terminal (the machine's table proves it),
+	// so Transition above already rejects any non-terminal destination.
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE actions SET state = ?, finished_at = ? WHERE action_id = ?`,
 		string(to), finishedAt.UTC().Format(time.RFC3339Nano), actionID,
