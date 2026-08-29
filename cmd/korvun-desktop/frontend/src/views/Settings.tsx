@@ -9,6 +9,7 @@ import { IconCopy } from '../components/icons'
 import { useShellStatus } from '../status/shell'
 import { useCoreState } from '../status/store'
 import { applyTheme, storedTheme, type ThemeChoice } from '../theme'
+import { SecretsCard } from './SecretsCard'
 
 const THEME_OPTIONS: ReadonlyArray<{ id: ThemeChoice; label: string }> = [
   { id: 'dark', label: 'Oscuro' },
@@ -157,6 +158,9 @@ export function Settings({ version }: { version: string }): React.JSX.Element {
           </span>
         </div>
       </section>
+
+      {/* B10 (sealed design ola2-designs §2): the Secrets card. */}
+      <SecretsCard coreState={core} />
 
       <p className="set-footer mono">Korvun {version} · un solo binario · Apache-2.0</p>
     </div>

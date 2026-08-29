@@ -59,7 +59,33 @@ type Desktop struct {
 	deadlines bindingDeadlines
 	client    *http.Client
 
+	// B10 seams: where ListSecretNames falls back for the config path when
+	// the controller holds none (a boot that failed on a broken config),
+	// and how OpenConfigFolder launches the file manager. Overridable in
+	// tests via the unexported options below.
+	configPathFallback func() (string, error)
+	folderOpener       func(dir string) error
+
 	lifecycleBusy atomic.Bool
+}
+
+// withConfigPathFallback overrides the path-less fallback (tests only —
+// the default is DefaultConfigPath, the desktop's real profile).
+func withConfigPathFallback(f func() (string, error)) DesktopOption {
+	return func(d *Desktop) {
+		if f != nil {
+			d.configPathFallback = f
+		}
+	}
+}
+
+// withFolderOpener overrides the file-manager launcher (tests only).
+func withFolderOpener(f func(dir string) error) DesktopOption {
+	return func(d *Desktop) {
+		if f != nil {
+			d.folderOpener = f
+		}
+	}
 }
 
 // DesktopOption configures NewDesktop.
@@ -93,11 +119,13 @@ func withBindingDeadlines(bd bindingDeadlines) DesktopOption {
 // NewDesktop builds the binding surface over ctrl.
 func NewDesktop(ctrl *Controller, opts ...DesktopOption) *Desktop {
 	d := &Desktop{
-		ctrl:      ctrl,
-		logger:    slog.Default(),
-		version:   "dev",
-		deadlines: defaultBindingDeadlines,
-		client:    &http.Client{},
+		ctrl:               ctrl,
+		logger:             slog.Default(),
+		version:            "dev",
+		deadlines:          defaultBindingDeadlines,
+		client:             &http.Client{},
+		configPathFallback: DefaultConfigPath,
+		folderOpener:       defaultFolderOpener,
 	}
 	for _, o := range opts {
 		o(d)

@@ -23,6 +23,10 @@ export interface DesktopBindings {
   CheckOllama(baseURL: string): Promise<{ reachable: boolean; detail: string }>
   /** PRESENCE only (SP6c) — never a value: {inEnv, inKeychain}. */
   CheckSecretPresence(name: string): Promise<{ inEnv: boolean; inKeychain: boolean }>
+  /** B10: referenced secret NAMES from the config — never a value. */
+  ListSecretNames?(): Promise<string[]>
+  /** B10: the sealed [Abrir carpeta] fix for an unreadable config. */
+  OpenConfigFolder?(): Promise<void>
   Version(): Promise<string>
 }
 

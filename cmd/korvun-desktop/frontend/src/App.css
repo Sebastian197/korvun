@@ -1951,3 +1951,67 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* B10 — the SECRETOS card (sealed design ola2-designs §2): in-row editing,
+   presence dots, the values-never-shown permanent note, and the loading
+   row skeleton. House finish only — tokens, thin borders, contained hues. */
+.secret-actions,
+.secret-editor,
+.secret-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.secret-confirm {
+  font-size: 12px;
+  color: var(--tx2);
+}
+.secret-input {
+  height: 28px;
+  width: 180px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  color: var(--tx1);
+  font-size: 12px;
+}
+.btn-accent {
+  border-color: var(--vio);
+  color: var(--vio-t);
+}
+.dot-off {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--tx3);
+  vertical-align: 1px;
+}
+.secret-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--err-t);
+}
+.secrets-note {
+  margin: 4px 14px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line2);
+  color: var(--tx3);
+}
+.secrets-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+.skeleton-row {
+  height: 16px;
+  border-radius: 6px;
+  background: var(--card2);
+}
+.set-row-caption .dot-ok {
+  display: inline-block;
+  vertical-align: 1px;
+}
