@@ -115,9 +115,61 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-23)
+## Current state (as of 2026-08-29)
 
-> **CURRENT (2026-08-23, sunday close): v0.9.2 IS OUT AND INSTALLED — the
+> **CURRENT (2026-08-29, session close): the B13+B14 lote is ON MASTER —
+> `3baf9cc`, the week's first code lote, strict TDD end to end.**
+>
+> **DONE:** **B13** (`bd56a0e`) — protocol JSON never reaches a channel:
+> a registry-free shape detector (`toolCallShape`) guards AgentBrain's
+> common exit seam (text lane, native lane, and the RT-3 degrade path in
+> ONE place); a whole-body tool-call-shaped final answer becomes an honest
+> error + bounded WARN naming the phantom tool + a finite-label
+> `protocol_leak` audit event, and is never persisted (the RED exposed
+> that the leak was ALSO poisoning conversation memory as an assistant
+> turn). JSON amid prose passes untouched — pinned by a shape table; zero
+> approved tests weakened. **B14** (`3baf9cc`) — the model panel's
+> pre-Apply first line (`web/builder/src/config/validate.ts`): absolute
+> http(s) base_url, the glued-secret-name shape rejected BY NAME (the
+> exact Sunday corruption), cloud-without-key blocking; field errors in
+> the Builder mold, Aplicar gated while any model block fails. Zero Go
+> changes — config.Validate stays the final judge. WHY the Sunday reload
+> cut to succeeded is now VERIFIED at source (each corrupt field was
+> individually plausible to the core); the input GESTURE stays a
+> hypothesis (native text drag between inputs — needs a manual WKWebView
+> repro before it earns its own map row).
+>
+> **THE PUSH — the green path, with one adjudicated stop:** preconditions
+> + `govulncheck` clean → ensayo: Quality Gate GREEN, Frontend RED on
+> `Console.echo.test.tsx` (1/246, desktop chrome — code the lote does not
+> touch; green 2× locally the same day) → STOPPED per mandate → Chano
+> adjudicated rerun-with-record → rerun GREEN on the SAME SHA → master
+> pushed, all three refs verified at `3baf9cc`. **The DEFLAKE TANDA is
+> now a registered piece** (ux-debt-map, local): three patients — the
+> Discord fake (gateway_test.go:790, 2026-08-16), edges.spec (e2e-binary
+> cross-spec interference, drags delete.spec on cold runs), and
+> Console.echo (the stale-window race the test itself documents). Two
+> rerun-precedents consumed; the third pays for the real fix.
+>
+> **OUT-OF-SCOPE FINDINGS (recorded, untouched):** a literal NUL byte in
+> `CanvasView.tsx:94` (healthKey separator, commit `a7da09a`) makes the
+> file "binary" to grep/file — a one-character fix for the next lote that
+> touches the file; the legacy ConfigEditor ModelRow still exposes no
+> base_url and only shows api_key_env for groq.
+>
+> **NEXT queue (in order):**
+> (1) The **Ola 2 lote**, piece by piece with the full ritual + Chano's
+> bug bash per piece (designs sealed 5/5: B9, B10, B8-bis (a), N1, N4).
+> (2) The **B11+B12 design** (UX-TEMPLATE + rendered maqueta + his yes).
+> (3) The **quality-legibility lote** (`0db7d81`).
+> (4) Landing **L46 / L111** awaiting Chano's word.
+> (5) **Apex network diagnosis** from Chano's machine (korvun.dev
+> unreachable locally — evidence first).
+> (6) The **deflake tanda** (three patients, see above).
+> (7) The **B14c gesture repro** (manual, WKWebView) when Chano can lend
+> his hands.
+
+> **PREVIOUS (2026-08-23, sunday close): v0.9.2 IS OUT AND INSTALLED — the
 > founding sunday, closed end to end.**
 >
 > **DONE:** **v0.9.2 PUBLISHED and API-verified** (21/21 signed assets,
