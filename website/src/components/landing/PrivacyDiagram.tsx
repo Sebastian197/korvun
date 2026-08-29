@@ -23,6 +23,7 @@ export function PrivacyDiagram({
           </div>
 
           <div className={styles.routingDiagram} aria-label={copy.title} data-motion>
+            <span aria-hidden="true" data-k-route-port className={styles.routePort} />
             <div className={styles.routeRow}>
               <span className={styles.routeNode}>{copy.localLabel}</span>
               <span className={styles.routeLine} aria-hidden="true">

@@ -25,6 +25,7 @@ export function Demo({ copy }: { copy: LandingCopy['demo'] }) {
         </div>
 
         <div className={styles.videoFrame} data-motion>
+          <span aria-hidden="true" data-k-route-port className={styles.routePort} />
           <div className={styles.videoChrome} aria-hidden="true">
             <span>korvun.desktop</span>
             <span>01:00</span>

@@ -1152,3 +1152,133 @@
     transform: scale(1.18);
   }
 }
+
+/* ---- Routing journey layer (brand-motion spec, Task 4) -------------------
+   One decorative layer below content: the base circuit is always visible at
+   low contrast; the active overlay is revealed by a clip RECTANGLE scaled
+   with --k-route-progress (transform only); the signal head is a direct
+   transform write from the controller. Desktop rail x=40, mobile rail x=14
+   (the controller re-measures per breakpoint). Reduced motion shows the
+   complete circuit and no signal. */
+.journey {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.journeySvg {
+  width: 100%;
+  height: 100%;
+}
+
+.journeyBase {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.journeyActive {
+  fill: none;
+  stroke: url('#k-route-gradient');
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(43, 200, 183, 0.4));
+}
+
+/* The transformed reveal clip: scaleY driven by the controller's progress. */
+.journey :global(rect[data-k-route-clip]) {
+  transform: scaleY(var(--k-route-progress, 0));
+  transform-origin: top;
+}
+
+.journeySignal {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--teal, #2bc8b7);
+  border-radius: 50%;
+  background: #effffc;
+  filter: drop-shadow(0 0 9px rgba(43, 200, 183, 0.9));
+}
+
+.journey[data-k-static='true'] .journeySignal {
+  display: none;
+}
+
+.journey[data-k-static='true'] :global(rect[data-k-route-clip]) {
+  transform: scaleY(1);
+}
+
+/* Route ports: each meaningful block carries one — the port node plus the
+   arrival overlay (mockup: glow enters over 220ms, the block lifts at most
+   3px on the approved entrance curve; completion leaves a quiet violet
+   indicator). Opacity/transform transitions only. */
+.routePort {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: -8px;
+  width: 14px;
+  height: 14px;
+  border: 3px solid #3b3b45;
+  border-radius: 50%;
+  background: #09090d;
+  box-shadow: 0 0 0 5px rgba(43, 200, 183, 0.06);
+}
+
+.routePort::after {
+  position: absolute;
+  inset: -14px;
+  border: 1px solid rgba(43, 200, 183, 0.33);
+  border-radius: 16px;
+  content: '';
+  opacity: 0;
+  transition:
+    opacity 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+:global([data-k-route-state='active']) .routePort {
+  border-color: #2bc8b7;
+  background: #e1fffb;
+  box-shadow:
+    0 0 0 5px rgba(43, 200, 183, 0.1),
+    0 0 17px rgba(43, 200, 183, 0.85);
+}
+
+:global([data-k-route-state='complete']) .routePort {
+  border-color: #7a5af5;
+  background: #dcd4ff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :global([data-k-route-state='active']) .routePort {
+    transform: translateY(-3px);
+    transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  :global([data-k-route-state='active']) .routePort::after {
+    opacity: 1;
+    transform: scale(0.99);
+  }
+
+  :global([data-k-route-state='complete']) .routePort {
+    transform: translateY(0);
+  }
+}
+
+/* Blocks hosting a port need a positioning context; layout is untouched. */
+.terminal,
+.capabilityGrid,
+.routingDiagram,
+.videoFrame,
+.finalInner {
+  position: relative;
+}

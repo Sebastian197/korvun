@@ -180,3 +180,36 @@ test('below-fold storytelling reveals once on viewport entry', async ({ page }) 
     .poll(() => firstCapability.evaluate((element) => element.classList.contains('k-in')))
     .toBe(true)
 })
+
+// ---- Brand-motion routing journey (brand-motion spec, Task 4) --------------
+
+test('routes through every landing block in order', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/korvun/')
+  const journey = page.locator('[data-k-journey]')
+  await expect(journey).toHaveCount(1)
+  await expect(page.locator('[data-k-route-port]')).toHaveCount(6)
+  for (const name of ['hero', 'install', 'capabilities', 'privacy', 'demo', 'final']) {
+    const section = page.locator(`[data-k-section="${name}"]`)
+    await section.scrollIntoViewIfNeeded()
+    await expect.poll(() => section.getAttribute('data-k-route-state')).toMatch(/active|complete/)
+  }
+})
+
+test('the journey switches to the mobile rail at 390px without overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.goto('/korvun/')
+  await expect(page.locator('[data-k-journey]')).toHaveAttribute('data-k-journey-mode', 'mobile')
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(overflow).toBeLessThanOrEqual(0)
+})
+
+test('reduced motion shows the complete static circuit with no signal head', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/korvun/')
+  await expect(page.locator('[data-k-journey]')).toHaveAttribute('data-k-static', 'true')
+  await expect(page.locator('[data-k-route-signal]')).toBeHidden()
+})

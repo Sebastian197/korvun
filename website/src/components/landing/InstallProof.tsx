@@ -48,6 +48,7 @@ export function InstallProof({
           </div>
 
           <div className={`k-terminal ${styles.terminal}`}>
+            <span aria-hidden="true" data-k-route-port className={styles.routePort} />
             <div className={styles.terminalBar}>
               <div aria-hidden="true" className={styles.terminalDots}>
                 <span />

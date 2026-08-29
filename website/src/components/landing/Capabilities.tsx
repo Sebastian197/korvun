@@ -13,6 +13,7 @@ export function Capabilities({ copy }: { copy: LandingCopy['capabilities'] }) {
         </div>
 
         <div className={styles.capabilityGrid}>
+          <span aria-hidden="true" data-k-route-port className={styles.routePort} />
           {copy.items.map((item) => (
             <article className={styles.capabilityCard} key={item.number} data-motion>
               <div className={styles.cardNumber}>{item.number}</div>

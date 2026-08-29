@@ -47,6 +47,7 @@ export function Hero({ copy, quickstart }: Props) {
           </div>
 
           <div className={styles.heroMarkWrap} data-motion aria-hidden="true">
+            <span aria-hidden="true" data-k-route-port className={styles.routePort} />
             <KorvunMasthead />
             <div className={styles.heroBadge}>01 · 08</div>
           </div>

@@ -14,6 +14,7 @@ export function FinalCta({
       <div className={styles.finalGrid} aria-hidden="true" />
       <div className={styles.shell}>
         <div className={styles.finalInner} data-motion>
+          <span aria-hidden="true" data-k-route-port className={styles.routePort} />
           <p className={styles.kicker}>{copy.kicker}</p>
           <h2>{copy.title}</h2>
           <p>{copy.body}</p>
