@@ -92,7 +92,7 @@ const config: Config = {
       title: 'Korvun',
       logo: {
         alt: 'Korvun',
-        src: 'brand/korvun-logo-mono.svg',
+        src: 'brand/korvun-mark.svg',
       },
       items: [
         {
@@ -119,7 +119,7 @@ const config: Config = {
       style: 'dark',
       logo: {
         alt: 'Korvun',
-        src: 'brand/korvun-logo-mono.svg',
+        src: 'brand/korvun-mark.svg',
         href: '/',
         width: 30,
         height: 30,

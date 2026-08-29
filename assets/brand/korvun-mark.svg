@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Korvun governed K mark</title>
+  <desc id="desc">A rounded teal-to-violet tile with a K cut from its center.</desc>
+  <defs>
+    <linearGradient id="mark-gradient" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2BC8B7"/>
+      <stop offset="1" stop-color="#7A5AF5"/>
+    </linearGradient>
+    <mask id="mark-mask">
+      <rect width="64" height="64" fill="white"/>
+      <path d="M23 17V47M45 18L33 32L45 46" fill="none" stroke="black" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#mark-gradient)" mask="url(#mark-mask)"/>
+</svg>

@@ -1,16 +1,19 @@
-import Link from '@docusaurus/Link'
-import type { LandingCopy } from './landingCopy'
-import styles from './landing.module.css'
+import Link from "@docusaurus/Link";
+import type { LandingCopy } from "./landingCopy";
+import styles from "./landing.module.css";
 
 export function PrivacyDiagram({
   copy,
   reference,
 }: {
-  copy: LandingCopy['privacy']
-  reference: string
+  copy: LandingCopy["privacy"];
+  reference: string;
 }) {
   return (
-    <section className={`${styles.section} ${styles.privacy}`} data-k-section="privacy">
+    <section
+      className={`${styles.section} ${styles.privacy}`}
+      data-k-section="privacy"
+    >
       <div className={styles.shell}>
         <div className={styles.privacyLayout}>
           <div className={styles.sectionIntro} data-motion>
@@ -22,8 +25,16 @@ export function PrivacyDiagram({
             </Link>
           </div>
 
-          <div className={styles.routingDiagram} aria-label={copy.title} data-motion>
-            <span aria-hidden="true" data-k-route-port className={styles.routePort} />
+          <div
+            className={`${styles.routingDiagram} ${styles.journeyTarget}`}
+            aria-label={copy.title}
+            data-motion
+          >
+            <span
+              aria-hidden="true"
+              data-k-route-port
+              className={`${styles.routePort} ${styles.portRight}`}
+            />
             <div className={styles.routeRow}>
               <span className={styles.routeNode}>{copy.localLabel}</span>
               <span className={styles.routeLine} aria-hidden="true">
@@ -49,5 +60,5 @@ export function PrivacyDiagram({
         </div>
       </div>
     </section>
-  )
+  );
 }

@@ -1,10 +1,13 @@
-import Link from '@docusaurus/Link'
-import type { LandingCopy } from './landingCopy'
-import styles from './landing.module.css'
+import Link from "@docusaurus/Link";
+import type { LandingCopy } from "./landingCopy";
+import styles from "./landing.module.css";
 
-export function Capabilities({ copy }: { copy: LandingCopy['capabilities'] }) {
+export function Capabilities({ copy }: { copy: LandingCopy["capabilities"] }) {
   return (
-    <section className={`${styles.section} ${styles.capabilities}`} data-k-section="capabilities">
+    <section
+      className={`${styles.section} ${styles.capabilities}`}
+      data-k-section="capabilities"
+    >
       <div className={styles.shell}>
         <div className={styles.sectionIntro} data-motion>
           <p className={styles.kicker}>{copy.kicker}</p>
@@ -12,10 +15,18 @@ export function Capabilities({ copy }: { copy: LandingCopy['capabilities'] }) {
           <p>{copy.body}</p>
         </div>
 
-        <div className={styles.capabilityGrid}>
-          <span aria-hidden="true" data-k-route-port className={styles.routePort} />
+        <div className={`${styles.capabilityGrid} ${styles.journeyTarget}`}>
+          <span
+            aria-hidden="true"
+            data-k-route-port
+            className={styles.routePort}
+          />
           {copy.items.map((item) => (
-            <article className={styles.capabilityCard} key={item.number} data-motion>
+            <article
+              className={styles.capabilityCard}
+              key={item.number}
+              data-motion
+            >
               <div className={styles.cardNumber}>{item.number}</div>
               <h3>{item.title}</h3>
               <p>{item.body}</p>
@@ -27,5 +38,5 @@ export function Capabilities({ copy }: { copy: LandingCopy['capabilities'] }) {
         </div>
       </div>
     </section>
-  )
+  );
 }

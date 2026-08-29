@@ -1,5 +1,9 @@
 .page {
-  --page-bg: #0a0a0c;
+  /* The routing layer is inset:0 against the page (mockup .site is the
+     positioned canvas for .route-svg) — without this it would anchor to the
+     viewport and the circuit would never span the sections. */
+  position: relative;
+  --page-bg: #08080b;
   --surface: #111114;
   --surface-raised: #16161a;
   --line: rgba(255, 255, 255, 0.09);
@@ -9,7 +13,22 @@
   --dim: #92929d;
   --teal: #2bc8b7;
   --violet: #7a5af5;
-  background: var(--page-bg);
+  /* The mockup's ONE continuous canvas (.site): a single violet bloom and
+     an unbroken 42px grid across the whole page — never per-section
+     textures that band or fade. */
+  background:
+    radial-gradient(
+      circle at 77% 6%,
+      rgba(122, 90, 245, 0.13),
+      transparent 14%
+    ),
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-color: var(--page-bg);
+  background-size:
+    auto,
+    42px 42px,
+    42px 42px;
   color: var(--text);
   overflow: clip;
 }
@@ -36,22 +55,18 @@
   aspect-ratio: 1;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 42%, rgba(43, 200, 183, 0.19), transparent 38%),
-    radial-gradient(circle at 66% 56%, rgba(122, 90, 245, 0.28), transparent 48%);
+    radial-gradient(
+      circle at 35% 42%,
+      rgba(43, 200, 183, 0.19),
+      transparent 38%
+    ),
+    radial-gradient(
+      circle at 66% 56%,
+      rgba(122, 90, 245, 0.28),
+      transparent 48%
+    );
   filter: blur(42px);
   opacity: 0.9;
-}
-
-.heroGrid,
-.finalGrid {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(to bottom, black, transparent 82%);
 }
 
 .heroLayout {
@@ -107,7 +122,12 @@
 .gradientText {
   width: fit-content;
   padding-right: 0.08em;
-  background: linear-gradient(110deg, var(--teal) 0%, #69aecf 43%, var(--violet) 100%);
+  background: linear-gradient(
+    110deg,
+    var(--teal) 0%,
+    #69aecf 43%,
+    var(--violet) 100%
+  );
   background-clip: text;
   color: transparent;
 }
@@ -139,7 +159,9 @@
   font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
-  transition: transform 180ms ease, opacity 180ms ease;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
 }
 
 .primaryButton {
@@ -180,7 +202,7 @@
 }
 
 .releaseLine > * + *::before {
-  content: '/';
+  content: "/";
   margin-right: 12px;
   color: #92929d;
 }
@@ -200,51 +222,32 @@
   animation: rise 760ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.heroMarkWrap::before,
-.heroMarkWrap::after {
-  position: absolute;
-  border-radius: 50%;
-  content: '';
-}
-
+/* The mockup masthead's breathing atmosphere: one blurred two-tone blob
+   behind the K (mockup .masthead::before), paused until the wrap runs. */
 .heroMarkWrap::before {
-  inset: 10%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.heroMarkWrap::after {
-  inset: 26%;
-  border: 1px solid rgba(43, 200, 183, 0.18);
-}
-
-.heroOrbit {
   position: absolute;
-  inset: 2%;
-  border: 1px dashed rgba(122, 90, 245, 0.25);
+  width: 104%;
+  aspect-ratio: 1;
   border-radius: 50%;
-  transform: rotate(-12deg);
+  content: "";
+  background:
+    radial-gradient(
+      circle at 40% 40%,
+      rgba(43, 200, 183, 0.22),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 62% 60%,
+      rgba(122, 90, 245, 0.34),
+      transparent 56%
+    );
+  filter: blur(40px);
+  animation: k-breath 5s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+  animation-play-state: paused;
 }
 
-.heroMark {
-  position: relative;
-  z-index: 1;
-  width: 62%;
-  height: auto;
-  filter: drop-shadow(0 32px 70px rgba(69, 52, 167, 0.42));
-}
-
-.heroBadge {
-  position: absolute;
-  right: 6%;
-  bottom: 18%;
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(10, 10, 12, 0.76);
-  color: #92929d;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
+.heroMarkWrap[data-k-running="true"]::before {
+  animation-play-state: running;
 }
 
 .heroRail {
@@ -265,7 +268,7 @@
 .section {
   position: relative;
   padding: clamp(96px, 11vw, 156px) 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .sectionIntro {
@@ -500,7 +503,11 @@
 
 .privacy {
   background:
-    radial-gradient(circle at 76% 46%, rgba(43, 200, 183, 0.08), transparent 28%),
+    radial-gradient(
+      circle at 76% 46%,
+      rgba(43, 200, 183, 0.08),
+      transparent 28%
+    ),
     #0a0a0c;
 }
 
@@ -647,8 +654,12 @@
   width: min(760px, 80vw);
   aspect-ratio: 1;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(122, 90, 245, 0.17), transparent 68%);
-  content: '';
+  background: radial-gradient(
+    circle,
+    rgba(122, 90, 245, 0.17),
+    transparent 68%
+  );
+  content: "";
   filter: blur(20px);
 }
 
@@ -671,22 +682,21 @@
   margin-left: auto;
 }
 
+/* Transform-only on purpose: an opacity fade here paints the hero
+   transparent on its first frame, so Chrome drops it as an LCP candidate
+   and the recorded LCP falls back to the navbar title (spec
+   2026-08-29-website-lcp-performance; motion contract: the hero is never
+   hidden). */
 @keyframes rise {
   from {
-    opacity: 0;
     transform: translateY(22px);
   }
   to {
-    opacity: 1;
     transform: translateY(0);
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .masthead {
-    animation: hero-float 7s ease-in-out 1.6s infinite;
-  }
-
   /* Gate on .k-reveal alone: the class is only ever added by armStorytelling
      when IntersectionObserver exists and reduced motion is off. Do NOT gate on
      an html-level class — Docusaurus rewrites the <html> class attribute after
@@ -912,55 +922,67 @@
   }
 }
 
-/* ---- A1 cinematic masthead (brand-motion spec, Task 2) -------------------
-   The mockup's exact choreography: 4.8s packet cycle, one decision pulse,
-   one output, 6s restrained tilt, opposite 18/24s orbits, four deterministic
-   particles, and the reused 7s hero float on the whole group. Every layer is
-   paused unless armBrandMotion sets data-k-running='true' (visible + motion
-   allowed); under reduced motion the static final frame IS the experience. */
-.masthead {
+/* ---- A1 cinematic masthead (transplanted from the approved mockup) ------
+   The mockup's literal choreography: 3.1s signal cycle (0.28s stagger), a
+   3.1s decision pulse and output draw, 6s +/-4deg tilt, opposite 18/24s
+   orbits, 3.4s sparks and the 7s float. The flowing input dashes are
+   transform sprites sampled from the mockup's Beziers (dashoffset is banned
+   by the motion gate) and the output line draws through a scaling mask
+   rectangle. Every layer is paused unless armBrandMotion sets
+   data-k-running='true' on the hero mark wrap. */
+.mastheadSvg {
   position: relative;
   z-index: 1;
-  width: 100%;
+  width: min(100%, 520px);
   height: auto;
   overflow: visible;
-  filter: drop-shadow(0 32px 70px rgba(69, 52, 167, 0.42));
-}
-
-/* Packets are circles traveling their route via transform waypoints sampled
-   from the route Béziers — MOTION-SPEC: "Route strokes remain static and
-   low contrast; packets create the sense of travel." Linear travel, arrival
-   opacity on the approved entrance curve, 280ms stagger, 4.8s cycle. */
-.mastheadPacket {
-  opacity: 0;
-  animation: 4.8s linear infinite;
+  animation: hero-float 7s ease-in-out 1.6s infinite;
   animation-play-state: paused;
 }
 
-.mastheadPacketTop {
-  animation-name: k-packet-top;
+.flowTop,
+.flowMid,
+.flowLow {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  animation: k-flow-top 6.2s linear infinite;
+  animation-play-state: paused;
 }
 
-.mastheadPacketMid {
-  animation-name: k-packet-mid;
+.flowMid {
+  animation-name: k-flow-mid;
   animation-delay: 0.28s;
 }
 
-.mastheadPacketLow {
-  animation-name: k-packet-low;
+.flowLow {
+  animation-name: k-flow-low;
   animation-delay: 0.56s;
 }
 
-.mastheadOut {
-  opacity: 0;
-  animation: k-out 4.8s linear infinite;
+.flowSecond {
+  animation-delay: -3.1s;
+}
+
+.flowMidSecond {
+  animation-delay: -2.82s;
+}
+
+.flowLowSecond {
+  animation-delay: -2.54s;
+}
+
+.mastheadOutReveal {
+  transform: scaleX(0);
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: k-out 3.1s ease-in-out infinite;
   animation-play-state: paused;
 }
 
 .mastheadDecision {
   transform-box: fill-box;
   transform-origin: center;
-  animation: k-decision 4.8s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  animation: k-decision 3.1s ease-in-out infinite;
   animation-play-state: paused;
 }
 
@@ -1002,108 +1024,222 @@
   animation-delay: -2.4s;
 }
 
-.masthead[data-k-running='true'] .mastheadPacket,
-.masthead[data-k-running='true'] .mastheadOut,
-.masthead[data-k-running='true'] .mastheadDecision,
-.masthead[data-k-running='true'] .mastheadTilt,
-.masthead[data-k-running='true'] .mastheadOrbit,
-.masthead[data-k-running='true'] .mastheadParticle {
+.heroMarkWrap[data-k-running="true"] .mastheadSvg,
+.heroMarkWrap[data-k-running="true"] .flowTop,
+.heroMarkWrap[data-k-running="true"] .flowMid,
+.heroMarkWrap[data-k-running="true"] .flowLow,
+.heroMarkWrap[data-k-running="true"] .mastheadOutReveal,
+.heroMarkWrap[data-k-running="true"] .mastheadDecision,
+.heroMarkWrap[data-k-running="true"] .mastheadTilt,
+.heroMarkWrap[data-k-running="true"] .mastheadOrbit,
+.heroMarkWrap[data-k-running="true"] .mastheadParticle {
   animation-play-state: running;
 }
 
-/* One neutral packet leaves the K (MOTION-SPEC "Output" phase): a single
-   dash travels the output path via stroke-dashoffset — the same legal
-   property the input packets use; stroke-dasharray itself never animates. */
-@keyframes k-packet-top {
-  0%,
-  10% {
-    opacity: 0;
-    transform: translate(0, 0);
-  }
-
-  14% {
-    opacity: 1;
-  }
-
-  41% {
-    opacity: 1;
-    transform: translate(160px, 32px);
-  }
-
-  46%,
-  100% {
-    opacity: 0;
-    transform: translate(186px, 38px);
+@keyframes k-breath {
+  50% {
+    opacity: 0.7;
+    transform: scale(1.04);
   }
 }
 
-@keyframes k-packet-mid {
-  0%,
-  10% {
+/* The three input flows: each keyframe stop is a point sampled on the
+   mockup's route Bezier (equal arc steps, so linear time IS the mockup's
+   linear dash flow at 37.4px/s); the sprite slides through a static clip at
+   the line's bounds, entering and leaving progressively like the mockup's
+   dashes. The tail returns the sprite to the start at opacity 0. */
+@keyframes k-flow-top {
+  0% {
+    opacity: 1;
+    transform: translate(0px, 142px) rotate(0deg);
+  }
+
+  7.76% {
+    transform: translate(18px, 142px) rotate(0deg);
+  }
+
+  16.86% {
+    transform: translate(39.1px, 142.7px) rotate(3.8deg);
+  }
+
+  25.19% {
+    transform: translate(58.3px, 144.6px) rotate(7.6deg);
+  }
+
+  32.95% {
+    transform: translate(76.1px, 147.6px) rotate(11.1deg);
+  }
+
+  40.41% {
+    transform: translate(93px, 151.3px) rotate(13.9deg);
+  }
+
+  47.79% {
+    transform: translate(109.5px, 155.8px) rotate(15.7deg);
+  }
+
+  55.25% {
+    transform: translate(126.1px, 160.6px) rotate(16.4deg);
+  }
+
+  63.01% {
+    transform: translate(143.4px, 165.6px) rotate(16deg);
+  }
+
+  71.33% {
+    transform: translate(161.8px, 170.7px) rotate(14.6deg);
+  }
+
+  80.22% {
+    transform: translate(181.8px, 175.5px) rotate(12.6deg);
+  }
+
+  89.97% {
+    transform: translate(204px, 180px) rotate(10.2deg);
+  }
+
+  97.73% {
+    opacity: 1;
+    transform: translate(221.7px, 183.2px) rotate(10.2deg);
+  }
+
+  98% {
     opacity: 0;
-    transform: translate(0, 0);
+    transform: translate(221.7px, 183.2px) rotate(10.2deg);
   }
 
-  14% {
-    opacity: 1;
+  99.5% {
+    opacity: 0;
+    transform: translate(0px, 142px) rotate(0deg);
   }
 
-  41% {
-    opacity: 1;
-    transform: translate(159px, 0);
-  }
-
-  46%,
   100% {
-    opacity: 0;
-    transform: translate(184px, 0);
+    opacity: 1;
+    transform: translate(0px, 142px) rotate(0deg);
   }
 }
 
-@keyframes k-packet-low {
-  0%,
-  10% {
+@keyframes k-flow-mid {
+  0% {
+    opacity: 1;
+    transform: translate(0px, 220px);
+  }
+
+  7.76% {
+    transform: translate(18px, 220px);
+  }
+
+  87.12% {
+    transform: translate(202px, 220px);
+  }
+
+  94.88% {
+    opacity: 1;
+    transform: translate(220px, 220px);
+  }
+
+  95.2% {
     opacity: 0;
-    transform: translate(0, 0);
+    transform: translate(220px, 220px);
   }
 
-  14% {
-    opacity: 1;
+  99.5% {
+    opacity: 0;
+    transform: translate(0px, 220px);
   }
 
-  41% {
-    opacity: 1;
-    transform: translate(160px, -32px);
-  }
-
-  46%,
   100% {
-    opacity: 0;
-    transform: translate(186px, -38px);
+    opacity: 1;
+    transform: translate(0px, 220px);
   }
 }
 
-/* One neutral packet leaves the K (the "Output" phase, 2750–3900ms). */
+@keyframes k-flow-low {
+  0% {
+    opacity: 1;
+    transform: translate(0px, 298px) rotate(0deg);
+  }
+
+  7.76% {
+    transform: translate(18px, 298px) rotate(0deg);
+  }
+
+  16.86% {
+    transform: translate(39.1px, 297.3px) rotate(-3.8deg);
+  }
+
+  25.19% {
+    transform: translate(58.3px, 295.4px) rotate(-7.6deg);
+  }
+
+  32.95% {
+    transform: translate(76.1px, 292.4px) rotate(-11.1deg);
+  }
+
+  40.41% {
+    transform: translate(93px, 288.7px) rotate(-13.9deg);
+  }
+
+  47.79% {
+    transform: translate(109.5px, 284.3px) rotate(-15.7deg);
+  }
+
+  55.25% {
+    transform: translate(126.1px, 279.4px) rotate(-16.4deg);
+  }
+
+  63.01% {
+    transform: translate(143.4px, 274.4px) rotate(-16deg);
+  }
+
+  71.33% {
+    transform: translate(161.8px, 269.3px) rotate(-14.6deg);
+  }
+
+  80.22% {
+    transform: translate(181.8px, 264.5px) rotate(-12.6deg);
+  }
+
+  89.97% {
+    transform: translate(204px, 260px) rotate(-10.2deg);
+  }
+
+  97.73% {
+    opacity: 1;
+    transform: translate(221.7px, 256.8px) rotate(-10.2deg);
+  }
+
+  98% {
+    opacity: 0;
+    transform: translate(221.7px, 256.8px) rotate(-10.2deg);
+  }
+
+  99.5% {
+    opacity: 0;
+    transform: translate(0px, 298px) rotate(0deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(0px, 298px) rotate(0deg);
+  }
+}
+
+/* The output draw (mockup @keyframes out, dasharray 0 90 -> 90 0 -> 0 90):
+   the mask rectangle grows from the K and retracts back into it. */
 @keyframes k-out {
   0%,
-  57% {
-    opacity: 0;
-    transform: translate(0, 0);
+  46% {
+    transform: scaleX(0);
   }
 
-  61% {
-    opacity: 1;
+  63%,
+  82% {
+    transform: scaleX(1);
   }
 
-  78% {
-    opacity: 1;
-    transform: translate(150px, -41px);
-  }
-
-  81%,
   100% {
-    opacity: 0;
-    transform: translate(168px, -46px);
+    transform: scaleX(0);
   }
 }
 
@@ -1153,13 +1289,14 @@
   }
 }
 
-/* ---- Routing journey layer (brand-motion spec, Task 4) -------------------
-   One decorative layer below content: the base circuit is always visible at
-   low contrast; the active overlay is revealed by a clip RECTANGLE scaled
-   with --k-route-progress (transform only); the signal head is a direct
-   transform write from the controller. Desktop rail x=40, mobile rail x=14
-   (the controller re-measures per breakpoint). Reduced motion shows the
-   complete circuit and no signal. */
+/* ---- Routing journey layer (transplanted from the approved mockup) -------
+   One decorative SVG layer below content. The path weaves port to port
+   across the page exactly like the mockup (first leg out to the right rail,
+   then vertical drops and horizontal runs into each port); the live overlay
+   is revealed by a clip rectangle scaled with --k-route-progress and the
+   signal head travels the path itself (getPointAtLength) via a direct
+   transform write. Reduced motion shows the complete static circuit with no
+   signal (data-k-static). */
 .journey {
   position: absolute;
   z-index: 0;
@@ -1183,46 +1320,45 @@
 
 .journeyActive {
   fill: none;
-  stroke: url('#k-route-gradient');
+  stroke: url("#k-route-gradient");
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 6px rgba(43, 200, 183, 0.4));
 }
 
-/* The transformed reveal clip: scaleY driven by the controller's progress. */
 .journey :global(rect[data-k-route-clip]) {
   transform: scaleY(var(--k-route-progress, 0));
   transform-origin: top;
 }
 
+/* The signal head: mockup r=5 circle, 5-wide teal stroke, near-white core,
+   9px teal glow (15px outer diameter). */
 .journeySignal {
   position: absolute;
-  top: -5px;
-  left: -5px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--teal, #2bc8b7);
+  top: -7.5px;
+  left: -7.5px;
+  width: 5px;
+  height: 5px;
+  border: 5px solid #2bc8b7;
   border-radius: 50%;
   background: #effffc;
   filter: drop-shadow(0 0 9px rgba(43, 200, 183, 0.9));
 }
 
-.journey[data-k-static='true'] .journeySignal {
+.journey[data-k-static="true"] .journeySignal {
   display: none;
 }
 
-.journey[data-k-static='true'] :global(rect[data-k-route-clip]) {
+.journey[data-k-static="true"] :global(rect[data-k-route-clip]) {
   transform: scaleY(1);
 }
 
-/* Route ports: each meaningful block carries one — the port node plus the
-   arrival overlay (mockup: glow enters over 220ms, the block lifts at most
-   3px on the approved entrance curve; completion leaves a quiet violet
-   indicator). Opacity/transform transitions only. */
+/* Route ports (mockup .port): 14px nodes on each section's featured block;
+   the active port lights teal, a completed port keeps a quiet violet. */
 .routePort {
   position: absolute;
-  z-index: 2;
+  z-index: 8;
   top: 50%;
   left: -8px;
   width: 14px;
@@ -1233,19 +1369,25 @@
   box-shadow: 0 0 0 5px rgba(43, 200, 183, 0.06);
 }
 
-.routePort::after {
-  position: absolute;
-  inset: -14px;
-  border: 1px solid rgba(43, 200, 183, 0.33);
-  border-radius: 16px;
-  content: '';
-  opacity: 0;
-  transition:
-    opacity 220ms cubic-bezier(0.23, 1, 0.32, 1),
-    transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
+.portHero {
+  top: auto;
+  right: -5px;
+  bottom: 20%;
+  left: auto;
 }
 
-:global([data-k-route-state='active']) .routePort {
+.portRight {
+  right: -8px;
+  left: auto;
+}
+
+.portFinal {
+  top: -55px;
+  left: 50%;
+  margin-left: -7px;
+}
+
+:global([data-k-route-state="active"]) .routePort {
   border-color: #2bc8b7;
   background: #e1fffb;
   box-shadow:
@@ -1253,32 +1395,94 @@
     0 0 17px rgba(43, 200, 183, 0.85);
 }
 
-:global([data-k-route-state='complete']) .routePort {
+:global([data-k-route-state="complete"]) .routePort {
   border-color: #7a5af5;
   background: #dcd4ff;
 }
 
+/* The activation frame (mockup .target::after): a quiet teal outline that
+   breathes in around the section's featured block while its port is live. */
+.journeyTarget {
+  position: relative;
+  /* The wrapper takes the block's place in grid/flex layouts: without this
+     a wide child (the terminal's pre) forces intrinsic overflow at 390px. */
+  min-width: 0;
+}
+
+.journeyTarget::after {
+  position: absolute;
+  z-index: -1;
+  inset: -14px;
+  content: "";
+  border: 1px solid rgba(43, 200, 183, 0.33);
+  border-radius: 16px;
+  opacity: 0;
+  filter: drop-shadow(0 0 24px rgba(43, 200, 183, 0.15));
+  transform: scale(0.97);
+  transition:
+    opacity 220ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* The routing status pill (mockup .status): sticks to the viewport bottom
+   while the journey scrolls; the controller writes the section name. */
+.status {
+  position: sticky;
+  z-index: 40;
+  bottom: 14px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.status span {
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 999px;
+  color: #9696a0;
+  background: rgba(13, 13, 18, 0.85);
+  backdrop-filter: blur(13px);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status span::before {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  content: "";
+  background: #2bc8b7;
+  box-shadow: 0 0 10px #2bc8b7;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  :global([data-k-route-state='active']) .routePort {
-    transform: translateY(-3px);
-    transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1);
+  /* Pending sections sit dimmed until the signal reaches them (mockup
+     .section[data-state='pending']); reduced motion keeps everything at
+     full presence with no frames. */
+  :global([data-k-section]) {
+    transition:
+      opacity 220ms ease,
+      filter 220ms ease;
   }
 
-  :global([data-k-route-state='active']) .routePort::after {
+  :global([data-k-section][data-k-route-state="pending"]) {
+    opacity: 0.64;
+    filter: saturate(0.72);
+  }
+
+  :global([data-k-route-state="active"]) .journeyTarget::after {
     opacity: 1;
     transform: scale(0.99);
   }
-
-  :global([data-k-route-state='complete']) .routePort {
-    transform: translateY(0);
-  }
 }
 
-/* Blocks hosting a port need a positioning context; layout is untouched. */
-.terminal,
-.capabilityGrid,
-.routingDiagram,
-.videoFrame,
-.finalInner {
-  position: relative;
+@media (prefers-reduced-motion: reduce) {
+  .journeyTarget::after {
+    display: none;
+  }
 }

@@ -1,18 +1,17 @@
-import Link from '@docusaurus/Link'
-import type { LandingCopy } from './landingCopy'
-import { KorvunMasthead } from './KorvunMasthead'
-import styles from './landing.module.css'
+import Link from "@docusaurus/Link";
+import type { LandingCopy } from "./landingCopy";
+import { KorvunMasthead } from "./KorvunMasthead";
+import styles from "./landing.module.css";
 
 type Props = {
-  copy: LandingCopy['hero']
-  quickstart: string
-}
+  copy: LandingCopy["hero"];
+  quickstart: string;
+};
 
 export function Hero({ copy, quickstart }: Props) {
   return (
     <section className={styles.hero} data-k-section="hero">
       <div className={styles.heroGlow} aria-hidden="true" />
-      <div className={styles.heroGrid} aria-hidden="true" />
       <div className={styles.shell}>
         <div className={styles.heroLayout}>
           <div className={styles.heroContent} data-motion>
@@ -39,17 +38,28 @@ export function Hero({ copy, quickstart }: Props) {
                 <span aria-hidden="true">↗</span>
               </Link>
             </div>
-            <div className={styles.releaseLine} aria-label={`${copy.releaseLabel} v0.9.2 — Beta`}>
+            <div
+              className={styles.releaseLine}
+              aria-label={`${copy.releaseLabel} v0.9.2 — Beta`}
+            >
               <span>{copy.releaseLabel}</span>
               <strong>v0.9.2 — Beta</strong>
               <span>Apache-2.0</span>
             </div>
           </div>
 
-          <div className={styles.heroMarkWrap} data-motion aria-hidden="true">
-            <span aria-hidden="true" data-k-route-port className={styles.routePort} />
+          <div
+            className={`${styles.heroMarkWrap} ${styles.journeyTarget}`}
+            data-motion
+            aria-hidden="true"
+            data-k-masthead
+          >
+            <span
+              aria-hidden="true"
+              data-k-route-port
+              className={`${styles.routePort} ${styles.portHero}`}
+            />
             <KorvunMasthead />
-            <div className={styles.heroBadge}>01 · 08</div>
           </div>
         </div>
       </div>
@@ -61,5 +71,5 @@ export function Hero({ copy, quickstart }: Props) {
         <span>GROQ</span>
       </div>
     </section>
-  )
+  );
 }

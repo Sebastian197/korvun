@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs'
 const pairs = [
   ['../../assets/brand/korvun-logo-hero.svg', '../static/brand/korvun-logo-hero.svg'],
   ['../../assets/brand/korvun-logo-mono.svg', '../static/brand/korvun-logo-mono.svg'],
+  ['../../assets/brand/korvun-mark.svg', '../static/brand/korvun-mark.svg'],
 ]
 
 for (const [canonicalPath, publicPath] of pairs) {
