@@ -157,17 +157,27 @@ explicit decision.
 > touches the file; the legacy ConfigEditor ModelRow still exposes no
 > base_url and only shows api_key_env for groq.
 >
-> **NEXT queue (in order):**
-> (1) The **Ola 2 lote**, piece by piece with the full ritual + Chano's
-> bug bash per piece (designs sealed 5/5: B9, B10, B8-bis (a), N1, N4).
-> (2) The **B11+B12 design** (UX-TEMPLATE + rendered maqueta + his yes).
-> (3) The **quality-legibility lote** (`0db7d81`).
-> (4) Landing **L46 / L111** awaiting Chano's word.
-> (5) **Apex network diagnosis** from Chano's machine (korvun.dev
+> **NEXT queue (in order, updated 2026-08-29 evening — pre-bash):**
+> (1) **CHANO'S TOTAL BASH** over the fresh local build (everything since
+> v0.9.2: B13+B14, the whole Ola 2, B11+B12, the deflake tanda) — his
+> verdict decides **v0.10.0** (Sixth Law).
+> (2) **THE BRAND LOTE — queued for RIGHT AFTER v0.10.0** (Chano's yes,
+> 2026-08-29, over the korvun-brand-motion mockup, seen and approved by
+> looking): plan at `design-drafts/korvun-brand-motion/IMPLEMENTATION-PLAN.md`
+> + the desktop APP ICON (macOS/Windows/Linux) regenerated from the
+> governed A1 K + ADR-0030 updated to the A1 identity. Two sealed
+> conditions: the landing's current transitions/animations are UNTOUCHABLE
+> (doubly sealed), and the app icon is IN scope. Spec sealed:
+> `docs/superpowers/specs/2026-08-29-brand-motion-system-design.md`.
+> (3) Landing **L46 / L111** awaiting Chano's word.
+> (4) **Apex network diagnosis** from Chano's machine (korvun.dev
 > unreachable locally — evidence first).
-> (6) The **deflake tanda** (three patients, see above).
-> (7) The **B14c gesture repro** (manual, WKWebView) when Chano can lend
+> (5) The **B14c gesture repro** (manual, WKWebView) when Chano can lend
 > his hands.
+> DONE since the friday close: Ola 2 lotes 1+2 + B11+B12 on master
+> (`8103162`), the deflake tanda CLOSED with root causes (`9371c13`,
+> `6eb83c2`, `71da120` — three patients, no timeout inflation), the
+> quality-legibility lote SHIPPED (`b84a31a`), B11+B12 design sealed.
 
 > **PREVIOUS (2026-08-23, sunday close): v0.9.2 IS OUT AND INSTALLED — the
 > founding sunday, closed end to end.**
