@@ -77,10 +77,7 @@ export function ActivityLiveChip(): React.JSX.Element {
   }
   return (
     <span className="act-live-chip" data-testid="act-live-chip">
-      <span
-        className={`chip-dot ${on ? 'chip-dot-ok chip-dot-pulse' : ''}`}
-        aria-hidden="true"
-      />
+      <span className={`chip-dot ${on ? 'chip-dot-ok chip-dot-pulse' : ''}`} aria-hidden="true" />
       {text}
     </span>
   )

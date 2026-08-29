@@ -391,8 +391,14 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   // no-stale-turns contract); a cancelled menu restores what was open —
   // "no deja rastro" in both directions.
   const brainMenuPrev = useRef<string | null>(null)
-  const brainChoices = useRef<{ brains: { name: string; sensitivity: string }[]; def: string | null } | null>(null)
-  const brainChoicesInFlight = useRef<Promise<{ brains: { name: string; sensitivity: string }[]; def: string | null }> | null>(null)
+  const brainChoices = useRef<{
+    brains: { name: string; sensitivity: string }[]
+    def: string | null
+  } | null>(null)
+  const brainChoicesInFlight = useRef<Promise<{
+    brains: { name: string; sensitivity: string }[]
+    def: string | null
+  }> | null>(null)
 
   const loadBrainChoices = useCallback(() => {
     const p = (async () => {
@@ -444,7 +450,10 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     }
   }
 
-  function decideFromChoices(c: { brains: { name: string; sensitivity: string }[]; def: string | null }): void {
+  function decideFromChoices(c: {
+    brains: { name: string; sensitivity: string }[]
+    def: string | null
+  }): void {
     if (c.brains.length <= 1) {
       // Today's behavior byte-for-byte: one click, straight to the chat.
       brainMenuPrev.current = null

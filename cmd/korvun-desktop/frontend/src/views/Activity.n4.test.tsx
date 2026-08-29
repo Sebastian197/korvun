@@ -16,9 +16,7 @@ import { Activity, ActivityLiveChip } from './Activity'
 
 async function seedCore(status: number, body: unknown): Promise<void> {
   await pollOnce((() =>
-    Promise.resolve(
-      new Response(JSON.stringify(body), { status }),
-    )) as typeof fetch)
+    Promise.resolve(new Response(JSON.stringify(body), { status }))) as typeof fetch)
 }
 
 beforeEach(async () => {

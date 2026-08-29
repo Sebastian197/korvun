@@ -10,7 +10,10 @@ function fakeFetch(): typeof fetch {
   return (async (input: RequestInfo | URL) => {
     const url = String(input)
     const json = (v: unknown) =>
-      new Response(JSON.stringify(v), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      new Response(JSON.stringify(v), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     if (url.includes('/api/config')) {
       return json({ routes: [{ channel: 'console', brain: 'asistente' }] })
     }

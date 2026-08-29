@@ -86,9 +86,7 @@ describe('cancellation (both sealed gestures)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /new chat/i }))
     await screen.findByText('¿Con qué cerebro?')
     fireEvent.keyDown(document, { key: 'Escape' })
-    await waitFor(() =>
-      expect(screen.queryByText('¿Con qué cerebro?')).not.toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.queryByText('¿Con qué cerebro?')).not.toBeInTheDocument())
     // No conversation was created.
     expect(screen.getByText(/select a conversation/i)).toBeInTheDocument()
   })
@@ -98,9 +96,7 @@ describe('cancellation (both sealed gestures)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /new chat/i }))
     await screen.findByText('¿Con qué cerebro?')
     fireEvent.mouseDown(document.body)
-    await waitFor(() =>
-      expect(screen.queryByText('¿Con qué cerebro?')).not.toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.queryByText('¿Con qué cerebro?')).not.toBeInTheDocument())
     expect(screen.getByText(/select a conversation/i)).toBeInTheDocument()
   })
 })
