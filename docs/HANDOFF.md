@@ -117,7 +117,24 @@ explicit decision.
 
 ## Current state (as of 2026-08-29)
 
-> **CURRENT (2026-08-29, session close): the B13+B14 lote is ON MASTER —
+> **CURRENT (2026-08-29, release close): v0.10.0 IS PUBLISHED AND
+> INSTALLED — with the new face.** Tag `v0.10.0` at `6be71d3`,
+> draft-until-complete, 21/21 signed assets API-verified, body = notes
+> verbatim + changelog; installed on the director's machine by the mold
+> (cosign Verified OK, profile backup byte-verified, A1 icon confirmed on
+> the installed app) and closed with his two "holas" (Telegram + console).
+> korvun.dev verified serving v0.10.0 from an OUTSIDE vantage (the apex
+> stays unreachable from Chano's own network — known condition, diagnosis
+> still queued).
+>
+> **Social register (published by Chano, 2026-08-29 — the v0.10.0
+> new-face announcement):**
+> X → https://x.com/Chano0307/status/2093745694280438173 ·
+> LinkedIn → https://www.linkedin.com/feed/update/urn:li:activity:7499510780204187648/
+> *(gap noted: the v0.9.x post links from last week are still pending —
+> Chano will pass them.)*
+
+> **PREVIOUS (2026-08-29, session close): the B13+B14 lote is ON MASTER —
 > `3baf9cc`, the week's first code lote, strict TDD end to end.**
 >
 > **DONE:** **B13** (`bd56a0e`) — protocol JSON never reaches a channel:
