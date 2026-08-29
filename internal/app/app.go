@@ -333,6 +333,10 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		ring.subscribe(eventBus)
 		ropts = append(ropts, router.WithToolsCommand(console.ChannelName, toolsReporterFor(cfg, ring)))
 	}
+	// B9: the direct-brain conversation-id contract, enabled for the console
+	// channel ONLY (spec FR-B9-1 privacy invariant — network channels never
+	// honor the prefix).
+	ropts = append(ropts, router.WithDirectBrainChannel(console.ChannelName))
 	r := router.New(ropts...)
 
 	channels, brainSummaries, channelInfos, err := b.wire(r, cfg)

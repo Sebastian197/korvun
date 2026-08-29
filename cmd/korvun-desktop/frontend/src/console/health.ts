@@ -6,6 +6,8 @@
 // before the user types into the void. Parsing is defensive throughout: any
 // unexpected shape resolves to "no warning", never a crash.
 
+import { brainOfConversationId } from './brainid'
+
 interface RouteLike {
   channel?: unknown
   brain?: unknown
@@ -24,6 +26,12 @@ interface BrainLike {
 export function channelOfKey(key: string): string {
   const sep = key.indexOf('::')
   return sep === -1 ? key : key.slice(0, sep)
+}
+
+/** The conversation id of a key ("console::chat-1" → "chat-1"). */
+function idOfKey(key: string): string {
+  const sep = key.indexOf('::')
+  return sep === -1 ? '' : key.slice(sep + 2)
 }
 
 /** Resolve the brain a channel routes to, or null when unknowable. */
@@ -68,7 +76,10 @@ export async function deadBrainForConversation(
     if (!cfgResp.ok || !brainsResp.ok) return null
     const cfg = (await cfgResp.json()) as { routes?: unknown }
     const brains = (await brainsResp.json()) as unknown
-    const brainName = brainForChannel(cfg?.routes, channelOfKey(key))
+    // B9 (FR-B9-5): a brain-addressed conversation is served by the brain
+    // its ID names — the route only resolves legacy ids.
+    const brainName =
+      brainOfConversationId(idOfKey(key)) ?? brainForChannel(cfg?.routes, channelOfKey(key))
     if (brainName === null || !Array.isArray(brains)) return null
     const brain = (brains as BrainLike[]).find(
       (b) => b !== null && typeof b === 'object' && b.name === brainName,

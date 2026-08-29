@@ -30,7 +30,8 @@ import {
   type SessionRow,
   type TurnRow,
 } from '../console/api'
-import { deadBrainForConversation } from '../console/health'
+import { brainForChannel, deadBrainForConversation } from '../console/health'
+import { brainOfConversationId, displayIdOf, newDirectChatKey } from '../console/brainid'
 import { markRead, readLastSeen, unreadCount } from '../console/unread'
 import { relTime } from '../console/time'
 import { isNearBottom } from '../console/scroll'
@@ -189,6 +190,38 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   const turnsRef = useRef<HTMLOListElement | null>(null)
   const pinnedRef = useRef(true)
 
+  // B9 (sealed design ola2-designs §1): the New chat brain selector.
+  // null = closed; brains null = the «Cargando cerebros…» flash while the
+  // /api/brains + /api/config pair is in flight.
+  const [brainMenu, setBrainMenu] = useState<{
+    brains: { name: string; sensitivity: string }[] | null
+    chosen: string | null
+  } | null>(null)
+  const brainMenuRef = useRef<HTMLDivElement | null>(null)
+  const brainMenuOpen = brainMenu !== null
+
+  // Sealed cancellation gestures: Esc AND click-outside, both leaving no
+  // trace. Bound only while the menu is open, removed on close/unmount.
+  useEffect(() => {
+    if (!brainMenuOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeBrainMenu()
+    }
+    const onDown = (e: MouseEvent) => {
+      if (brainMenuRef.current && !brainMenuRef.current.contains(e.target as Node)) {
+        closeBrainMenu()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onDown)
+    }
+    // closeBrainMenu is a stable-by-shape function declaration below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brainMenuOpen])
+
   const refetchInbox = useCallback(() => {
     let ignore = false
     void listConversations(fetcher).then((rows) => {
@@ -346,6 +379,114 @@ export function Console(props: ConsoleProps): React.JSX.Element {
           )
         })
 
+  // B9 — the sealed selector lifecycle. The brain list PREFETCHES on mount
+  // and is cached, so the click decides synchronously: ≤1 brain keeps
+  // today's one-click create byte-for-byte; >1 opens the menu with the
+  // rows already painted. «Cargando cerebros…» is the honest flash for
+  // the click that arrives before the prefetch resolved. Esc and
+  // click-outside cancel leaving no trace; the sequence token kills an
+  // in-flight open the user cancelled first.
+  const brainMenuSeq = useRef(0)
+  // The pane clears the INSTANT New chat is pressed (the approved
+  // no-stale-turns contract); a cancelled menu restores what was open —
+  // "no deja rastro" in both directions.
+  const brainMenuPrev = useRef<string | null>(null)
+  const brainChoices = useRef<{ brains: { name: string; sensitivity: string }[]; def: string | null } | null>(null)
+  const brainChoicesInFlight = useRef<Promise<{ brains: { name: string; sensitivity: string }[]; def: string | null }> | null>(null)
+
+  const loadBrainChoices = useCallback(() => {
+    const p = (async () => {
+      let brains: { name: string; sensitivity: string }[] = []
+      let routes: unknown
+      try {
+        const [brainsResp, cfgResp] = await Promise.all([
+          fetcher('/api/brains', { cache: 'no-store' }),
+          fetcher('/api/config', { cache: 'no-store' }),
+        ])
+        if (brainsResp.ok) {
+          const raw = (await brainsResp.json()) as unknown
+          if (Array.isArray(raw)) {
+            brains = raw
+              .filter(
+                (b): b is { name: string; sensitivity?: unknown } =>
+                  b !== null &&
+                  typeof b === 'object' &&
+                  typeof (b as { name?: unknown }).name === 'string',
+              )
+              .map((b) => ({
+                name: b.name,
+                sensitivity: typeof b.sensitivity === 'string' ? b.sensitivity : '',
+              }))
+          }
+        }
+        if (cfgResp.ok) routes = ((await cfgResp.json()) as { routes?: unknown })?.routes
+      } catch {
+        brains = []
+      }
+      const out = { brains, def: brainForChannel(routes, 'console') }
+      brainChoices.current = out
+      return out
+    })()
+    brainChoicesInFlight.current = p
+    return p
+  }, [fetcher])
+
+  useEffect(() => {
+    void loadBrainChoices()
+  }, [loadBrainChoices])
+
+  function closeBrainMenu(): void {
+    brainMenuSeq.current++
+    setBrainMenu(null)
+    if (brainMenuPrev.current !== null) {
+      openConversation(brainMenuPrev.current, null)
+      brainMenuPrev.current = null
+    }
+  }
+
+  function decideFromChoices(c: { brains: { name: string; sensitivity: string }[]; def: string | null }): void {
+    if (c.brains.length <= 1) {
+      // Today's behavior byte-for-byte: one click, straight to the chat.
+      brainMenuPrev.current = null
+      setBrainMenu(null)
+      openConversation(newDirectChatKey(null), null)
+      return
+    }
+    const chosen =
+      c.def !== null && c.brains.some((b) => b.name === c.def) ? c.def : c.brains[0].name
+    setBrainMenu({ brains: c.brains, chosen })
+  }
+
+  function openBrainMenu(): void {
+    // The pane goes clean NOW (the approved no-stale-turns contract) —
+    // whatever was open is remembered and restored on cancel.
+    brainMenuPrev.current = selected
+    setSelected(null)
+    setTurns([])
+    setSessions([])
+    setViewSession(null)
+    const cached = brainChoices.current
+    if (cached !== null) {
+      decideFromChoices(cached)
+      void loadBrainChoices() // background freshness for the next open
+      return
+    }
+    const seq = ++brainMenuSeq.current
+    setBrainMenu({ brains: null, chosen: null })
+    void (brainChoicesInFlight.current ?? loadBrainChoices()).then((c) => {
+      if (seq !== brainMenuSeq.current) return // cancelled while loading
+      decideFromChoices(c)
+    })
+  }
+
+  function createFromBrainMenu(): void {
+    if (brainMenu === null || brainMenu.chosen === null) return
+    const key = newDirectChatKey(brainMenu.chosen)
+    brainMenuPrev.current = null // creating IS the outcome — nothing to restore
+    closeBrainMenu()
+    openConversation(key, null)
+  }
+
   function openConversation(key: string, session: number | null): void {
     setSelected(key)
     setViewSession(session)
@@ -493,15 +634,47 @@ export function Console(props: ConsoleProps): React.JSX.Element {
       <aside className="console-inbox" aria-label="Conversations">
         <div className="console-inbox-head">
           <h2 className="console-title">Conversations</h2>
-          <button
-            type="button"
-            className="console-newchat"
-            onClick={() =>
-              openConversation(`console::chat-${crypto.randomUUID().slice(0, 8)}`, null)
-            }
-          >
-            New chat
-          </button>
+          <div className="console-newchat-wrap" ref={brainMenuRef}>
+            <button type="button" className="console-newchat" onClick={openBrainMenu}>
+              New chat <span aria-hidden="true">▾</span>
+            </button>
+            {brainMenu !== null && (
+              <div className="console-brainmenu" role="dialog" aria-label="¿Con qué cerebro?">
+                <p className="console-brainmenu-title">¿Con qué cerebro?</p>
+                {brainMenu.brains === null ? (
+                  <p className="console-brainmenu-loading">Cargando cerebros…</p>
+                ) : (
+                  <>
+                    {brainMenu.brains.map((b) => (
+                      <label key={b.name} className="console-brainmenu-row">
+                        <input
+                          type="radio"
+                          name="newchat-brain"
+                          checked={brainMenu.chosen === b.name}
+                          onChange={() =>
+                            setBrainMenu({ brains: brainMenu.brains, chosen: b.name })
+                          }
+                        />
+                        <span className="console-brainmenu-name">{b.name}</span>
+                        <span className="console-brainmenu-privacy">
+                          {b.sensitivity === 'private' ? 'Privado' : 'Público'}
+                        </span>
+                      </label>
+                    ))}
+                    <div className="console-brainmenu-actions">
+                      <button
+                        type="button"
+                        className="console-brainmenu-create"
+                        onClick={createFromBrainMenu}
+                      >
+                        Crear chat
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <input
           type="search"
@@ -564,7 +737,12 @@ export function Console(props: ConsoleProps): React.JSX.Element {
                   >
                     <span className="console-row-head">
                       <span className="console-row-channel">{channelLabel(channel)}</span>
-                      <span className="console-row-id">{id}</span>
+                      {brainOfConversationId(id) !== null && (
+                        <span className="console-brain-badge" data-testid="inbox-brain-badge">
+                          {brainOfConversationId(id)}
+                        </span>
+                      )}
+                      <span className="console-row-id">{displayIdOf(id)}</span>
                       {c.taken_over && <span className="console-badge">TAKEN OVER</span>}
                       {unread > 0 && <span className="console-unread">{unread}</span>}
                     </span>
@@ -595,7 +773,16 @@ export function Console(props: ConsoleProps): React.JSX.Element {
             <header className="console-head">
               <div>
                 <h2 className="console-title">
-                  {channelLabel(splitKey(current.key).channel)} · {splitKey(current.key).id}
+                  {(() => {
+                    // B9 badge: an addressed conversation composes the
+                    // sealed «Console · brain · id» header; legacy ids
+                    // render exactly as before.
+                    const { channel, id } = splitKey(current.key)
+                    const brain = brainOfConversationId(id)
+                    return brain !== null
+                      ? `${channelLabel(channel)} · ${brain} · ${displayIdOf(id)}`
+                      : `${channelLabel(channel)} · ${id}`
+                  })()}
                 </h2>
                 <p className="console-charge">
                   {isConsoleKey(current.key)

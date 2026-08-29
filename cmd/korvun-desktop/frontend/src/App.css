@@ -1848,6 +1848,82 @@
   font-weight: 600;
   cursor: pointer;
 }
+/* B9 — the New chat brain selector (sealed maqueta, ola2-designs §1):
+   an anchored popover card in the house finish; radio rows pair the
+   brain name with its privacy label. */
+.console-newchat-wrap {
+  position: relative;
+  display: inline-block;
+}
+.console-brainmenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 240px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+}
+.console-brainmenu-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.console-brainmenu-loading {
+  margin: 0;
+  font-size: 12px;
+  color: var(--capt);
+}
+.console-brainmenu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 2px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.console-brainmenu-name {
+  flex: 1;
+}
+.console-brainmenu-privacy {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--capt);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.console-brainmenu-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.console-brainmenu-create {
+  border: 0;
+  background: var(--vio);
+  color: var(--on-vio);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.console-brain-badge {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--vio-t);
+  border: 1px solid var(--vio);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
 .console-controls button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

@@ -118,3 +118,19 @@ func WithToolsCommand(channel string, report ToolsReporter) Option {
 		}
 	}
 }
+
+// WithDirectBrainChannel enables the direct-brain conversation-id contract
+// (B9, spec FR-B9-1) for ONE channel: a conversation id of the form
+// "b:<pct-encoded brain>:<rest>" on that channel dispatches to the named
+// brain when it is registered, and falls back to the route default with an
+// honest AckBrainFallback notice when it is not (FR-B9-2). Channels not
+// enabled NEVER honor the prefix — the privacy invariant: an id fabricated
+// on a network channel must not bypass its route. An empty name leaves the
+// contract off (the optional-seam default).
+func WithDirectBrainChannel(channel string) Option {
+	return func(r *Router) {
+		if channel != "" {
+			r.directBrainChannel = channel
+		}
+	}
+}

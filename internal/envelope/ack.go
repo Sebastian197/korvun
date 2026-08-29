@@ -12,6 +12,13 @@ const MetaAck = "korvun.ack"
 // AckSessionReset is the MetaAck value for the session-reset ack.
 const AckSessionReset = "session-reset"
 
+// AckBrainFallback is the MetaAck value for the direct-brain fallback
+// notice (B9): a conversation id asked for a brain that no longer exists,
+// the message was handled by the route default, and the conversation is
+// told so honestly (spec FR-B9-2). Self-persisting channels record it as
+// a SYSTEM turn like every ack.
+const AckBrainFallback = "brain-fallback"
+
 // AckToolsReport is the MetaAck value for the /tools gatekeeper report
 // (ADR-0041, FR-CHAT-1): a system response the console persists as a SYSTEM
 // turn like any ack.

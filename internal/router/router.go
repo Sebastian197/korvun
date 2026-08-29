@@ -63,6 +63,15 @@ type Router struct {
 	notesList    NotesLister
 	notesClear   NotesClearer
 
+	// directBrainChannel enables the B9 direct-brain conversation-id
+	// contract for exactly one channel (WithDirectBrainChannel); "" (the
+	// default) disables it everywhere. brainFallbackWarned is the bounded
+	// per-conversation dedup of the fallback notice (FR-B9-2), created
+	// lazily like the inbound dedup window.
+	directBrainChannel  string
+	brainFallbackOnce   sync.Once
+	brainFallbackWarned *dedupWindow
+
 	// SP2 (operator-console spec): session dispatch + takeover + operator
 	// outbound. sessionStore nil disables session behavior entirely; clock
 	// is the injected time source (defaults to time.Now); the takeover set
@@ -281,7 +290,25 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 		r.mu.RUnlock()
 		return fmt.Errorf("%w: %q", ErrUnknownBrain, brainName)
 	}
+	// B9: on the ONE enabled channel, a conversation id that carries the
+	// direct-brain contract overrides the route — the chosen brain when it
+	// is registered, the route default plus one honest notice when it is
+	// not. Every other channel treats the prefix as inert data (privacy
+	// invariant, spec FR-B9-1).
+	ghostBrain := ""
+	if r.directBrainChannel != "" && env.Channel == r.directBrainChannel {
+		if name, prefixed := directBrainFromConversationID(env.Meta[MetaConversationID]); prefixed {
+			if chosen, registered := r.brains[name]; registered {
+				brainName, bw = name, chosen
+			} else {
+				ghostBrain = name
+			}
+		}
+	}
 	r.mu.RUnlock()
+	if ghostBrain != "" {
+		r.maybeSendBrainFallback(env, ghostBrain)
+	}
 
 	// Inbound dedup (audit R-1), BEFORE any session side effect: a replayed
 	// delivery must not re-trigger session logic either. A duplicate is a
