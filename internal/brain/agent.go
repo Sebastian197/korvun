@@ -470,6 +470,22 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 		return decisionToEnvelopes(a.fallback, env), nil
 	}
 
+	// The channel-exit guard (B13): a final answer whose entire body is a
+	// tool-call-shaped JSON object never leaves toward the channel — BOTH
+	// lanes converge here, so the text lane's non-TOOL passthrough and the
+	// native lane's unregistered-name passthrough are closed at one seam.
+	// The phantom name is model-controlled: bounded in the LOCAL log only,
+	// finite "unknown" on the shared audit surfaces (the unknown_tool
+	// grammar). Nothing is persisted — the leaked JSON in memory would
+	// invite the model to print the syntax again (the 2026-08-09 lesson).
+	if name, _, leaked := toolCallShape(finalText); leaked {
+		a.logger.Warn("agent: tool-call-shaped reply blocked at the channel exit",
+			"envelope_id", env.ID, "channel", env.Channel, "brain", a.brainName,
+			"tool", boundedArgs(name), "rule", "protocol_leak")
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: "unknown", Outcome: "denied", Rule: "protocol_leak"})
+		return decisionToEnvelopes(protocolLeakReply, env), nil
+	}
+
 	// Persist the FINAL user+assistant pair only (§6) — the tool-use trace stays
 	// in the loop's local req.Messages and is discarded.
 	a.persistPair(ctx, key, userText, finalText)

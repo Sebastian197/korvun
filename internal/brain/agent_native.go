@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/bus"
@@ -236,21 +235,15 @@ func (a *AgentBrain) nativeCallArgs(advertised tool.Registry, call model.ToolCal
 }
 
 // rescueTextToolCall recognises a final reply that is EXACTLY one
-// tool-call-shaped JSON object — {"name": <registered tool>, and one of
-// "parameters"/"arguments"/"args"} — and converts it to a ToolCall for the
-// governed path. Anything else (including JSON naming no registered tool)
-// is an ordinary answer and passes through untouched.
+// tool-call-shaped JSON object naming a REGISTERED tool and converts it to a
+// ToolCall for the governed path. The shape half lives in toolCallShape
+// (registry-free, B13); this rescue layers the registered-name check on top.
+// A shape naming NO registered tool is NOT rescued — it falls through to
+// Handle's channel-exit guard, which blocks it (the 2026-08-23 fail-open is
+// closed there, never by executing an unknown name).
 func rescueTextToolCall(reg tool.Registry, content string) (model.ToolCall, bool) {
-	trimmed := strings.TrimSpace(content)
-	if !strings.HasPrefix(trimmed, "{") || !strings.HasSuffix(trimmed, "}") {
-		return model.ToolCall{}, false
-	}
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(trimmed), &obj); err != nil {
-		return model.ToolCall{}, false
-	}
-	name, ok := obj["name"].(string)
-	if !ok {
+	name, obj, shaped := toolCallShape(content)
+	if !shaped {
 		return model.ToolCall{}, false
 	}
 	if _, registered := reg[name]; !registered {

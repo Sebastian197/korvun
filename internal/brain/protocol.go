@@ -4,6 +4,7 @@
 package brain
 
 import (
+	"encoding/json"
 	"regexp"
 	"sort"
 	"strings"
@@ -85,6 +86,60 @@ func firstMeaningfulLine(content string) (string, bool) {
 		return line, true
 	}
 	return "", false
+}
+
+// protocolLeakReply is the honest user-facing error sent instead of a
+// tool-call-shaped final answer (B13, spec FR-B13-2): the raw protocol JSON
+// never reaches a channel, and the phantom tool's name — model-controlled —
+// stays in the bounded local log, never on the user surface.
+const protocolLeakReply = "Sorry, the model produced an internal tool request instead of an answer. Please try again."
+
+// toolCallShape recognises content whose ENTIRE meaningful body is one
+// tool-call-shaped JSON object — a string "name" plus at least one of
+// "arguments"/"parameters"/"args" — and returns the name it carries (B13,
+// spec FR-B13-1). Registry-FREE by design: the channel-exit guard blocks the
+// shape whether or not the name exists (the 2026-08-23 fail-open), while the
+// native rescue layers its registered-name check on top. Pure code-fence
+// delimiter lines and surrounding whitespace are formatting noise (the
+// firstMeaningfulLine classes); JSON amid prose, a JSON array, or an object
+// without the key pair is NOT the shape — the guard inspects the whole body
+// only (FR-B13-5, the pinned edge). The parsed object rides back so the
+// native rescue can extract the call's arguments without re-parsing.
+func toolCallShape(content string) (string, map[string]any, bool) {
+	lines := strings.Split(content, "\n")
+	start, end := 0, len(lines)
+	for start < end && isFormattingNoise(lines[start]) {
+		start++
+	}
+	for end > start && isFormattingNoise(lines[end-1]) {
+		end--
+	}
+	body := strings.TrimSpace(strings.Join(lines[start:end], "\n"))
+	if !strings.HasPrefix(body, "{") || !strings.HasSuffix(body, "}") {
+		return "", nil, false
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(body), &obj); err != nil {
+		return "", nil, false
+	}
+	name, ok := obj["name"].(string)
+	if !ok {
+		return "", nil, false
+	}
+	for _, key := range []string{"arguments", "parameters", "args"} {
+		if _, present := obj[key]; present {
+			return name, obj, true
+		}
+	}
+	return "", nil, false
+}
+
+// isFormattingNoise reports whether a line is blank or a pure code-fence
+// delimiter (``` or ```lang) — the same noise classes firstMeaningfulLine
+// skips, applied at the body's edges only.
+func isFormattingNoise(raw string) bool {
+	line := strings.TrimSpace(strings.TrimRight(raw, "\r"))
+	return line == "" || fenceDelimRe.MatchString(line)
 }
 
 // buildSystemPrompt assembles the protocol system message (ADR-0021 §3.1): the
