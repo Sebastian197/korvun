@@ -1,4 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
+import { resetToFixture } from './reset'
+
+// Deflake tanda (2026-08-29, patient a): every spec starts from the
+// pristine fixture — the shared live core persists applied configs, and
+// order-dependent leftovers were the root cause of the edges failures.
+test.beforeEach(async ({ page }) => {
+  await resetToFixture(page)
+})
 
 // v0.9.2 (B7, bug-bash 2026-08-23): a reload the log proved APPLIED (cutover
 // 09:40:44, admin 56707→56799) was painted as "reload failed — the running

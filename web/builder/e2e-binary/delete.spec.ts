@@ -1,4 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
+import { resetToFixture } from './reset'
+
+// Deflake tanda (2026-08-29, patient a): every spec starts from the
+// pristine fixture — the shared live core persists applied configs, and
+// order-dependent leftovers were the root cause of the edges failures.
+test.beforeEach(async ({ page }) => {
+  await resetToFixture(page)
+})
 
 // SP5 RED (builder-canvas, e2e against the REAL binary): node deletion from
 // the canvas reaches the served config, AND the page loads with a CLEAN
@@ -41,7 +49,9 @@ test('a. create+apply a brain → delete it from the panel → apply → the GET
   const created = await (
     await page.request.get('/api/config', { headers: { Authorization: `Bearer ${TOKEN}` } })
   ).json()
-  expect((created as { brains: Array<{ name: string }> }).brains.map((b) => b.name)).toContain('efimero')
+  expect((created as { brains: Array<{ name: string }> }).brains.map((b) => b.name)).toContain(
+    'efimero',
+  )
 
   // Now DELETE it from the panel (with the confirmation gate) and apply again.
   // After the apply re-baselined, the appended brain is still the last index.
@@ -49,12 +59,23 @@ test('a. create+apply a brain → delete it from the panel → apply → the GET
   await page.getByRole('button', { name: /eliminar nodo/i }).click()
   await page.getByRole('button', { name: /sí, eliminar|confirmar/i }).click()
   await page.getByRole('button', { name: /aplicar/i }).click()
+  // Deflake tanda (2026-08-29): the FIRST apply's succeeded chip can still be
+  // on screen when this wait runs, so the chip is an ambiguous signal for a
+  // SECOND cycle — the race behind the cold-run delete failures. Wait on the
+  // truth itself: the served config, polled through the real control API.
+  await expect
+    .poll(
+      async () => {
+        const r = await page.request.get('/api/config', {
+          headers: { Authorization: `Bearer ${TOKEN}` },
+        })
+        if (!r.ok()) return ['(admin restarting)']
+        return ((await r.json()) as { brains: Array<{ name: string }> }).brains.map((b) => b.name)
+      },
+      { timeout: 30_000 },
+    )
+    .not.toContain('efimero')
   await expect(page.getByTestId('reload-succeeded')).toBeVisible({ timeout: 30_000 })
-
-  const after = await (
-    await page.request.get('/api/config', { headers: { Authorization: `Bearer ${TOKEN}` } })
-  ).json()
-  expect((after as { brains: Array<{ name: string }> }).brains.map((b) => b.name)).not.toContain('efimero')
 })
 
 test('b. the canvas loads with a CLEAN console — zero CSP violations, zero 404s (guardian)', async ({
@@ -79,7 +100,9 @@ test('b. the canvas loads with a CLEAN console — zero CSP violations, zero 404
   await page.getByTestId('brain:0').click()
   await page.waitForTimeout(400)
 
-  cspViolations.push(...(await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp)))
+  cspViolations.push(
+    ...(await page.evaluate(() => (window as unknown as { __csp: string[] }).__csp)),
+  )
   expect(cspViolations, `CSP violations: ${cspViolations.join(', ')}`).toEqual([])
   expect(notFound, `404s: ${notFound.join(', ')}`).toEqual([])
 })

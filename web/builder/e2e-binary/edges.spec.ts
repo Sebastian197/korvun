@@ -1,4 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
+import { resetToFixture } from './reset'
+
+// Deflake tanda (2026-08-29, patient a): every spec starts from the
+// pristine fixture — the shared live core persists applied configs, and
+// order-dependent leftovers were the root cause of the edges failures.
+test.beforeEach(async ({ page }) => {
+  await resetToFixture(page)
+})
 
 // v0.9.2 (B8, bug-bash 2026-08-23): cables could not be disconnected by any
 // gesture — controlled edges without onEdgesChange dropped every selection
@@ -25,7 +33,9 @@ async function cableAndSelectRoute(page: Page) {
   await expect(page.getByTestId('channel:0')).toBeVisible()
 
   const src = await page
-    .locator('[data-testid="channel:0"] ~ .react-flow__handle.source, [data-testid="channel:0"] .react-flow__handle.source')
+    .locator(
+      '[data-testid="channel:0"] ~ .react-flow__handle.source, [data-testid="channel:0"] .react-flow__handle.source',
+    )
     .first()
     .boundingBox()
   const dst = await page
@@ -43,14 +53,17 @@ async function cableAndSelectRoute(page: Page) {
 
   // Click exactly ON the painted path (an edge's bounding-box center can sit
   // off a curved path, so aim at the path's midpoint in screen space).
-  const pt = await route.locator('.react-flow__edge-path').first().evaluate((p) => {
-    const path = p as SVGPathElement
-    const mid = path.getPointAtLength(path.getTotalLength() / 2)
-    const ctm = path.getScreenCTM()
-    if (!ctm) throw new Error('no CTM')
-    const sp = new DOMPoint(mid.x, mid.y).matrixTransform(ctm)
-    return { x: sp.x, y: sp.y }
-  })
+  const pt = await route
+    .locator('.react-flow__edge-path')
+    .first()
+    .evaluate((p) => {
+      const path = p as SVGPathElement
+      const mid = path.getPointAtLength(path.getTotalLength() / 2)
+      const ctm = path.getScreenCTM()
+      if (!ctm) throw new Error('no CTM')
+      const sp = new DOMPoint(mid.x, mid.y).matrixTransform(ctm)
+      return { x: sp.x, y: sp.y }
+    })
   await page.mouse.click(pt.x, pt.y)
 
   // The selection is real AND visible (B8's second half: the stroke used to

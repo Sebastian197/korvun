@@ -1,4 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
+import { resetToFixture } from './reset'
+
+// Deflake tanda (2026-08-29, patient a): every spec starts from the
+// pristine fixture — the shared live core persists applied configs, and
+// order-dependent leftovers were the root cause of the edges failures.
+test.beforeEach(async ({ page }) => {
+  await resetToFixture(page)
+})
 
 // SP6 RED (builder-canvas, 2a): Descartar against the REAL binary — compose
 // changes, discard, the UI returns to the applied state AND the served config

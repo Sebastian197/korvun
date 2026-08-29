@@ -1,4 +1,13 @@
 import { test, expect, type Page } from '@playwright/test'
+import { resetToFixture } from './reset'
+
+// Deflake tanda (2026-08-29, patient a): every spec starts from the
+// pristine fixture — the shared live core persists applied configs, and
+// order-dependent leftovers were the root cause of the edges failures.
+test.beforeEach(async ({ page }) => {
+  await resetToFixture(page)
+})
+
 import AxeBuilder from '@axe-core/playwright'
 
 // SP4 RED (builder-canvas, e2e against the REAL binary — make build + serve,
@@ -50,7 +59,9 @@ test('a. master flow: brain + model + channel from the palette → apply → the
 
   // Cable the route: real handle-to-handle pointer drag (SP0 precedent).
   const src = await page
-    .locator('[data-testid="channel:0"] ~ .react-flow__handle.source, [data-testid="channel:0"] .react-flow__handle.source')
+    .locator(
+      '[data-testid="channel:0"] ~ .react-flow__handle.source, [data-testid="channel:0"] .react-flow__handle.source',
+    )
     .first()
     .boundingBox()
   const dst = await page
@@ -85,7 +96,7 @@ test('a. master flow: brain + model + channel from the palette → apply → the
   expect(cfg.routes).toContainEqual({ channel: 'webhook', brain: 'nuevo' })
 })
 
-test('b. the excluded composition edge paints a dashed stroke (SP3\'s declared visual debt)', async ({
+test("b. the excluded composition edge paints a dashed stroke (SP3's declared visual debt)", async ({
   page,
 }) => {
   await openCanvas(page)
@@ -98,7 +109,7 @@ test('b. the excluded composition edge paints a dashed stroke (SP3\'s declared v
   expect(dash.trim()).not.toBe('')
 })
 
-test('c. axe COMPLETE (color-contrast ON), dark and light (SP3\'s declared a11y debt)', async ({
+test("c. axe COMPLETE (color-contrast ON), dark and light (SP3's declared a11y debt)", async ({
   page,
 }) => {
   await openCanvas(page)
