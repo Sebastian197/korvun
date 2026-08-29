@@ -343,14 +343,31 @@ func (a *Adapter) runSession(ctx context.Context, conn *websocket.Conn, st *sess
 	cancel()
 	wg.Wait()
 
-	// A zombie detected by the heartbeat loop is the meaningful cause even though the
-	// read loop also unwound with a cancelled-context read error.
 	select {
 	case e := <-hbErr:
-		return a.classifyEnd(ctx, st, connected, e)
+		return a.classifyEnd(ctx, st, connected, sessionCause(e, readErr))
 	default:
 	}
 	return a.classifyEnd(ctx, st, connected, readErr)
+}
+
+// sessionCause picks the meaningful terminating cause between the heartbeat
+// loop's error and the read loop's error (deflake tanda 2026-08-29, patient
+// b — the 2026-08-16 windows red). A zombie detected by the heartbeat loop
+// stays the meaningful cause when the read loop merely unwound with a
+// cancelled-context error. But when the READ error carries the peer's close
+// code, that code is the more specific fact: the heartbeat write failed
+// BECAUSE the peer was closing, and preferring the local write error masked
+// fatal close codes into retries — a permanent failure silently taking the
+// transient path (the fallback invariant).
+func sessionCause(hbErr, readErr error) error {
+	if hbErr == nil {
+		return readErr
+	}
+	if websocket.CloseStatus(readErr) != -1 {
+		return readErr
+	}
+	return hbErr
 }
 
 // classifyEnd maps a session's terminating cause to a supervisor action (the R1..R4

@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -1095,4 +1096,30 @@ func TestGateway_DialFailureRetries(t *testing.T) {
 	}
 	stop()
 	waitClosed(t, inbound, 2*time.Second)
+}
+
+// Deflake tanda 2026-08-29, patient (b) — the ROOT CAUSE behind the
+// 2026-08-16 windows red ("fatal close was retried: 2 connections"): when
+// the peer closes with a FATAL code, the heartbeat loop's write can fail
+// first (it fails BECAUSE the peer is closing) and its write error was
+// preferred as the session cause — masking the close code and turning a
+// permanent failure into a retry (the fallback invariant broken). The
+// peer's close code is the more specific fact and must outrank a local
+// heartbeat error; the zombie/cancelled cases keep today's preference.
+func TestSessionCause_peerCloseCodeOutranksHeartbeatError(t *testing.T) {
+	closeErr := fmt.Errorf("read: %w", websocket.CloseError{Code: websocket.StatusCode(4004), Reason: "authentication failed"})
+	writeErr := errors.New("write heartbeat: use of closed network connection")
+
+	if got := sessionCause(writeErr, closeErr); !errors.Is(got, websocket.CloseError{Code: websocket.StatusCode(4004), Reason: "authentication failed"}) && websocket.CloseStatus(got) != websocket.StatusCode(4004) {
+		t.Fatalf("sessionCause = %v, want the peer's 4004 close to win over the heartbeat write error", got)
+	}
+	// The zombie diagnosis still wins over a cancelled-context read unwind.
+	cancelled := fmt.Errorf("read: %w", context.Canceled)
+	if got := sessionCause(errZombie, cancelled); !errors.Is(got, errZombie) {
+		t.Fatalf("sessionCause = %v, want the zombie diagnosis preserved", got)
+	}
+	// No heartbeat error at all: the read error is the cause.
+	if got := sessionCause(nil, closeErr); websocket.CloseStatus(got) != websocket.StatusCode(4004) {
+		t.Fatalf("sessionCause(nil, close) = %v, want the close error", got)
+	}
 }
