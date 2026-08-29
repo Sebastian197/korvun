@@ -1,59 +1,90 @@
 # Contributing to Korvun
 
-Thanks for your interest in Korvun. This project follows a strict, deliberate
-workflow — the rules below are non-negotiable because they keep a cross-platform,
-security-sensitive binary correct. Please read this in full before opening a PR.
-
-The authoritative, always-current version of these rules lives in
-[`CLAUDE.md`](CLAUDE.md) at the repo root.
+Korvun is built under a strict, deliberate engineering method. This document
+describes that method as it IS — not as an aspiration. The authoritative,
+always-current rules live in [`CLAUDE.md`](CLAUDE.md) at the repo root; when
+the two disagree, `CLAUDE.md` wins.
 
 ## Language
 
 - Code, identifiers, comments, commit messages and in-repo docs: **English**.
-- (Project planning conversation happens in Spanish, but the repository is
-  English-only.)
+- Project planning conversation happens in Spanish; the repository is
+  English-only.
 
-## The workflow — per phase, not just per stage
+## The method, per phase
 
-Work proceeds in strict granularity: **Stage → Phase → Task**. For every unit of
-work:
+Work proceeds in strict granularity: **Stage → Phase → Task**. Every phase
+walks the same cycle:
 
-1. **Verify external docs first.** Before writing any code against a library,
-   framework, SDK, or external API, verify it — never from memory.
-   - **Code libraries/frameworks** (Go packages, SDKs, drivers): consult
-     version-specific docs via **Context7** first. If it can't be verified, stop
-     — do not guess signatures or versions.
-   - **GitHub Actions / CI tooling:** verify the current tag at the Action's own
-     repo/releases or the Marketplace (Context7 does not cover Action tags).
-     Prefer pinning Actions to a full commit SHA, or at least a fixed major tag.
-2. **Design spec first.** For non-trivial work, draft the design spec from
-   `docs/superpowers/specs/TEMPLATE.md` (Goal, FR-IDs, acceptance scenarios,
-   success criteria) before code.
-3. **Tests first (TDD).** Write the test that defines the contract, confirm it
-   fails (red), then write the minimum code to make it pass (green).
-4. **Implementation.** Only the code needed to pass the tests.
-5. **Quality gate.** `make quality` must be green over the *whole* suite.
-6. **Documentation.** Update stage docs, ADRs, and the master document.
+1. **Verify external docs first.** Never program against a library, SDK, API,
+   or CI tool from memory. Code libraries are verified through Context7
+   (version-specific docs) before any code; GitHub Actions and CI tooling are
+   verified at their own releases page or the Marketplace, pinned to a full
+   commit SHA or at least a fixed major tag. If verification is impossible,
+   the work stops and says so.
+2. **Design spec first.** Non-trivial work starts from
+   `docs/superpowers/specs/TEMPLATE.md` — goal, functional requirements,
+   Given/When/Then acceptance scenarios, success criteria. Anything undefined
+   is marked `[NEEDS CLARIFICATION]` and blocks the next step until resolved.
+   Substantial specs receive **adversarial review** (an independent
+   cross-review pass) before they are accepted for TDD; the findings are
+   triaged with evidence, not adopted wholesale.
+3. **Tests first — and the approved RED is a contract.** The test suite that
+   defines the contract is written BEFORE the implementation and confirmed
+   failing (red). Once a red suite is reviewed and approved, it is not
+   adjusted during the green step without asking first: diagnose, then change
+   only after an explicit yes. Weakening an approved test to make an
+   implementation pass is forbidden.
+4. **Implementation.** Only the code needed to make the tests pass.
+5. **Quality gate.** `make quality` must be green over the WHOLE suite —
+   lint (`gofmt`, `goimports`, `go vet`, `golangci-lint` with
+   govet/staticcheck/errcheck/gosec), the full test suite with `-race`, and
+   the coverage gate (≥ 85% across `internal/`; ≥ 90% in `policy`, `router`,
+   `envelope`, `brain`). When desktop chrome sources changed,
+   `make desktop-frontend-check` mirrors the CI chrome lane locally
+   (typecheck · lint · prettier · coverage).
+6. **Documentation.** Stage docs, ADRs, and the master document are updated
+   before the phase closes.
 
-## Before every commit
+Two more standing laws shape the cycle:
 
-```sh
-make quality      # gofmt + goimports + go vet + golangci-lint + tests + coverage
-go test -race ./... # tests must pass with the race detector
-```
+- **Model-dependent behavior needs a real model.** Anything whose behavior
+  depends on what a model actually emits (tool-use protocol, prompt
+  contracts, output parsing) is exercised against a REAL model in its own
+  sub-phase. A green suite over fakes proves our code, never the contract.
+- **UX-design-first (the Sixth Law).** No user-visible piece opens its RED
+  phase without an experience design (from
+  `docs/superpowers/specs/UX-TEMPLATE.md`) approved by the project director
+  over RENDERED mockups — prose alone is never approved. No release is
+  tagged without the director's manual pass over the packaged build; the bug
+  bash is a permanent customs gate, not an event.
 
-`make quality` runs lint (`gofmt`, `goimports`, `go vet`, `golangci-lint` with
-govet/staticcheck/errcheck/gosec), the full test suite with `-race`, and the
-coverage gate.
+## Integration: rehearsal before master
+
+`master` is never red. The integration path is:
+
+1. Run `govulncheck ./...` locally with the pinned toolchain BEFORE every
+   rehearsal — a green rehearsal expires as advisories land. New reachable
+   advisories are fixed at the source (toolchain or dependency bump), never
+   by silencing the scanner.
+2. Push the batch to the `ensayo` branch and wait for the FULL green
+   (Quality Gate across the three OSes + the Frontend lanes).
+3. Only with the rehearsal green does the same tree get pushed to `master` —
+   as its own deliberate step, never bundled inside another task.
+
+## Commits
+
+- **Conventional Commits** (`feat:`, `fix:`, `test:`, `docs:`, `refactor:`,
+  `chore:`, …) and **SemVer** for versions.
+- Commit messages and PR descriptions carry **no AI attribution** of any
+  kind — no "Generated with/by", no co-author trailers, no assistant names.
 
 ## Go standards
 
-- `gofmt` + `goimports` are mandatory; `golangci-lint` must pass.
-- Wrap errors with `%w`; pass `context.Context` on every cancellable operation.
+- `gofmt` + `goimports` mandatory; `golangci-lint` must pass.
+- Errors wrapped with `%w`; `context.Context` on every cancellable operation.
 - No mutable global state; no `panic` on normal paths.
 - Tests are table-driven and run with `-race`.
-- **Coverage:** ≥ 85% in core packages; ≥ 90% in `policy`, `router`, `envelope`,
-  `brain`.
 - Every exported symbol has a godoc comment.
 - Every source file starts with:
   ```go
@@ -61,40 +92,46 @@ coverage gate.
   // SPDX-License-Identifier: Apache-2.0
   ```
 
+## Invariants over examples
+
+Subsystems with security, privacy, routing, lifecycle, or resource
+consequences are specified and tested as INVARIANTS, not happy-path samples:
+private data flows only to explicitly trusted sinks; unauthenticated control
+surfaces are loopback-only; cancelled work stops and releases what it owns;
+no externally-driven path grows unbounded; fallback is driven by explicit
+error semantics (a permanent failure never silently takes the transient
+path).
+
 ## Dependencies
 
 - Prefer the Go standard library whenever reasonable.
-- **Every new external dependency requires a justifying ADR** in `docs/adr/`
-  *and* Context7 verification before adoption. New deps must pass the four-axis
-  test (dependency size vs hand-roll cost vs API volatility vs maintenance gain).
+- Every new external dependency requires a justifying ADR in `docs/adr/`
+  AND Context7 verification before adoption.
+- Frontend lockfiles are regenerated with `npm install --include=optional`
+  and `npm ci` verified clean twice in a row; floating transitives are
+  pinned with exact `overrides`.
 
-## Branching and integration
+## Releases
 
-- Work on a feature branch (`feat/...`, `fix/...`, `chore/...`, `docs/...`).
-- **ADRs land on `master` first**, before the code they govern.
-- Integrate with a `--no-ff` merge so the branch history is preserved.
-- Keep `master` green: do not advance a phase until the whole tree passes
-  `make quality` with `-race`.
-
-## Commit messages — critical
-
-- Use **Conventional Commits**: `feat:`, `fix:`, `test:`, `docs:`, `refactor:`,
-  `chore:`, etc. **SemVer** for versioning.
-- **Commit messages and PR descriptions MUST NOT contain any AI attribution** —
-  no "Generated with / by", no co-author trailers, no reference to any assistant.
+Releases are **draft-until-complete**: the tag's release stays a draft until
+every artifact of both families (headless + desktop) is uploaded and signed —
+cosign keyless signatures and SPDX SBOMs per platform — and only then is it
+published. The packaged build passes the director's manual bug bash before
+any tag. See [SECURITY.md](SECURITY.md) for the verification commands.
 
 ## Pull requests
 
-Open a PR against `master` and fill in the
-[PR template](.github/PULL_REQUEST_TEMPLATE.md) checklist. A PR is reviewable
-when `make quality` is green, tests were written before the implementation, an
-ADR exists for any new external dependency, and exported symbols are documented.
+Open PRs against `master` and fill the
+[PR template](.github/PULL_REQUEST_TEMPLATE.md). A PR is reviewable when
+`make quality` is green, tests were written before the implementation, an ADR
+exists for any new dependency, and exported symbols are documented.
 
 ## Security
 
 Never commit secrets. Report vulnerabilities privately — see
-[SECURITY.md](SECURITY.md), not a public issue.
+[SECURITY.md](SECURITY.md), never a public issue.
 
 ## Code of conduct
 
-Be respectful and constructive. Assume good faith and keep discussion technical.
+Be respectful and constructive. Assume good faith and keep discussion
+technical.

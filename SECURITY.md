@@ -1,60 +1,80 @@
 # Security Policy
 
+## The product's security invariants, in three lines
+
+- **Structural privacy:** private data flows only to explicitly trusted sinks
+  — a brain marked private cannot reach cloud models, and every egress path
+  (models, tools, logs, metrics, traces, persistence) honors the policy.
+- **Secrets live in the OS keychain or the environment, by NAME only** —
+  never in argv, the config file, logs, errors, or any API response.
+- **Loopback by default:** an unauthenticated control surface binds to
+  loopback only (`NO AUTH ⇔ LOOPBACK ONLY`).
+
 ## Reporting a vulnerability
 
-**Please do not report security vulnerabilities through public GitHub issues,
-pull requests, or discussions.** Public disclosure before a fix puts every user
-at risk.
+**Please do not report security vulnerabilities through public GitHub
+issues, pull requests, or discussions.**
 
-Instead, report privately through one of:
+GitHub **private vulnerability reporting is enabled** on this repository
+(verified via the API, 2026-08-29) — it is the preferred channel:
 
-- **GitHub Security Advisories** — preferred. Go to the repository's
-  **Security → Advisories → Report a vulnerability** tab to open a private
-  advisory ([draft a new one](https://github.com/Sebastian197/korvun/security/advisories/new)).
-- **Email** — `morenosebastian117@gmail.com` with the subject prefixed
+- **GitHub Security Advisories** — open a private report from the
+  repository's **Security → Advisories → Report a vulnerability** tab
+  ([draft a new one](https://github.com/Sebastian197/korvun/security/advisories/new)).
+- **Email** — `morenosebastian117@gmail.com`, subject prefixed
   `[korvun-security]`.
 
-Please include, as far as you can:
-
-- the affected version, commit, or branch;
-- a description of the vulnerability and its impact;
-- steps to reproduce (a minimal proof of concept is ideal);
-- any known mitigations or workarounds.
-
-Do **not** include real secrets (API keys, tokens) in your report. If a secret
-was exposed, revoke it first, then describe the exposure without pasting the
-value.
+Please include, as far as you can: the affected version/commit, a
+description of the impact, steps to reproduce (a minimal PoC is ideal), and
+known mitigations. Do **not** paste real secrets; if one was exposed, revoke
+it first and describe the exposure without the value.
 
 ## Response expectations
 
-This is currently a single-maintainer project, so timelines are best-effort:
+Single-maintainer project; timelines are best-effort:
 
 | Stage | Target |
 |-------|--------|
 | Acknowledge receipt | within 5 business days |
 | Initial assessment / severity triage | within 10 business days |
-| Fix or mitigation plan | depends on severity and complexity, communicated after triage |
+| Fix or mitigation plan | communicated after triage, by severity |
 
-We will keep you informed of progress and coordinate a disclosure timeline with
-you. With your consent, we are happy to credit you once a fix is released.
+Disclosure is coordinated with you, and credit is offered with your consent.
 
 ## Supported versions
 
-Korvun is in pre-1.0, staged development. Until a `1.0.0` release, only the
-latest `master` receives security fixes; there are no maintained release
-branches yet. This table will be updated once versioned releases begin.
+Korvun is pre-1.0. Security fixes land on `master` and ship in the **latest
+minor release** — older tags are not patched; upgrade to the newest release.
 
 | Version | Supported |
 |---------|-----------|
-| `master` (latest) | ✅ |
-| any tagged pre-release | ⚠️ best-effort, upgrade to latest |
+| latest minor release (see [Releases](https://github.com/Sebastian197/korvun/releases)) | ✅ |
+| `master` | ✅ (fixes land here first) |
+| older tags | ❌ upgrade to latest |
 
-## Scope and design notes
+## Release signing and verification
 
-- **Secrets are environment-only by reference.** Korvun never reads secrets from
-  argv, the config file, logs, or error messages (ADR-0010 §3). Reports about
-  secrets leaking into any of those surfaces are in scope and welcome.
-- Input is validated at every channel boundary; the dispatch policy engine can
-  keep sensitive payloads on local-only models.
-- Supply-chain hygiene: dependencies are minimized and justified by ADRs;
-  `govulncheck` and `gosec` run in CI, and an SPDX SBOM is produced per build.
+Every release is **draft-until-complete**: binaries for six platforms across
+two families (headless + desktop), each with an SPDX **SBOM**, a sha256
+manifest, and a **cosign keyless signature** (Sigstore, GitHub OIDC).
+Verify the manifest, then your download against it:
+
+```sh
+cosign verify-blob checksums.txt \
+  --signature checksums.txt.sig \
+  --certificate checksums.txt.pem \
+  --certificate-identity-regexp 'https://github.com/Sebastian197/korvun/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+(Desktop family: same command over `checksums-desktop.txt`.) Full
+walkthrough: [`docs/packaging/INSTALL.md`](docs/packaging/INSTALL.md).
+
+## Supply chain
+
+Dependencies are minimized and each one is justified by an ADR.
+`govulncheck` runs locally before every integration rehearsal and `gosec`
+runs inside the lint gate; CodeQL and OpenSSF Scorecard run in CI (badges in
+the README). Reports about any invariant above failing — a secret in a log,
+private data reaching an untrusted sink, a non-loopback unauthenticated
+bind — are in scope and very welcome.
