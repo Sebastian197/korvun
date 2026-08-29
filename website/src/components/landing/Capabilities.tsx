@@ -5,7 +5,7 @@ import styles from "./landing.module.css";
 export function Capabilities({ copy }: { copy: LandingCopy["capabilities"] }) {
   return (
     <section
-      className={`${styles.section} ${styles.capabilities}`}
+      className={styles.section}
       data-k-section="capabilities"
     >
       <div className={styles.shell}>

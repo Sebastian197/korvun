@@ -11,7 +11,7 @@ export function PrivacyDiagram({
 }) {
   return (
     <section
-      className={`${styles.section} ${styles.privacy}`}
+      className={styles.section}
       data-k-section="privacy"
     >
       <div className={styles.shell}>

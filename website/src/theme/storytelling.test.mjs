@@ -445,18 +445,20 @@ test("coalesces scroll into one frame, writes progress from cached geometry", as
   harness.scroll.fire(1200);
   assert.equal(harness.frames.pendingCount(), 1);
   harness.frames.flush();
-  // The fixture route is a straight vertical at x=46 through ports y=6..3006
-  // with a tail to y=3540. Milestone knots put the signal on port 2 (arc
-  // 1200) at scroll 888 and port 3 (arc 1800) at 1488; at scroll 1200 the
-  // arc interpolates to 1512, the signal sits at y=1518, and the clip
-  // reveals 1518/3600 of the layer.
+  // The fixture route leaves each port downward to the inter-section band
+  // (next section top minus 32), jogs to the left gutter (x=16), drops,
+  // and enters the next port at x=46 — 660 of Manhattan arc per leg.
+  // Milestone knots put the signal on port 2 (arc 1320) at scroll 888 and
+  // port 3 (arc 1980) at 1488; at scroll 1200 the arc interpolates to
+  // 1663.2 — still on the leg's opening drop at (46, 1549.2) — and the
+  // clip reveals 1549.2/3600 of the layer.
   assert.equal(
     harness.journey.style.getPropertyValue("--k-route-progress"),
-    "0.422",
+    "0.43",
   );
   assert.equal(
     harness.signal.style.getPropertyValue("transform"),
-    "translate(46px, 1518px)",
+    "translate(46px, 1549.2px)",
   );
   assert.deepEqual(
     harness.sections.map((section) => section.dataset.kRouteState),

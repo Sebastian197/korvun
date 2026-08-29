@@ -159,18 +159,31 @@ export function armRoutingJourney(
       }
       push(vertices[vertices.length - 1]!.x, Math.max(0, height - 40));
     } else {
-      const rail = Math.max(...points.map((point) => point.x));
-      const second = points[1];
-      if (second) {
-        push(rail, first.y);
-        push(rail, second.y);
-        push(second.x, second.y);
-        portArcs.push(vertices.length - 1);
-      }
-      for (const point of points.slice(2)) {
-        // Mockup order (e.g. "V1540H40"): descend at the current x to the
-        // next port's y, then run horizontally into the port.
-        push(vertices[vertices.length - 1]!.x, point.y);
+      // The director's no-lost-line law (2026-08-29): every vertical run
+      // lives in an empty page gutter, never mid-page where section blocks
+      // would cover it — so the growing route stays visible through EVERY
+      // section. From each port: a short horizontal out to the nearest
+      // gutter, the long visible drop, then a horizontal into the next
+      // port at its own height (the mockup's own verticals sat on its
+      // shell edges; this generalizes that to measured layouts).
+      const width = Math.max(1, journeyRect?.width ?? 1);
+      const margin = Math.max(32, (width - Math.min(1200, width - 64)) / 2);
+      const leftGutter = margin / 2;
+      const rightGutter = width - margin / 2;
+      for (const [index, point] of points.slice(1).entries()) {
+        const current = vertices[vertices.length - 1]!;
+        const gutter = point.x <= width / 2 ? leftGutter : rightGutter;
+        // Leave the port DOWNWARD into the empty band just above the next
+        // section, cross to the gutter there (nothing to hide behind),
+        // then drop the gutter and enter the next port at its own height —
+        // never two crossings at one height, never a full-width line.
+        const band = Math.min(
+          Math.max(current.y + 24, (sectionTops[index + 1] ?? point.y) - baseTop - 32),
+          point.y - 24,
+        );
+        push(current.x, band);
+        push(gutter, band);
+        push(gutter, point.y);
         push(point.x, point.y);
         portArcs.push(vertices.length - 1);
       }
@@ -253,7 +266,11 @@ export function armRoutingJourney(
   let frame: number | null = null;
   const render = () => {
     frame = null;
-    const point = pointAtArc(arcAtScroll(runtime.scrollY));
+    const raw = pointAtArc(arcAtScroll(runtime.scrollY));
+    const point = {
+      x: Math.round(raw.x * 10) / 10,
+      y: Math.round(raw.y * 10) / 10,
+    };
     const progress = Math.min(1, Math.max(0.005, point.y / height));
     journey.style.setProperty(
       "--k-route-progress",

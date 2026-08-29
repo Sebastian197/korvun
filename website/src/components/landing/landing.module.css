@@ -428,10 +428,6 @@
   font-size: 0.69rem;
 }
 
-.capabilities {
-  background: #0d0d10;
-}
-
 .capabilityGrid {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
@@ -499,16 +495,6 @@
   font-size: 0.82rem;
   font-weight: 500;
   text-decoration: none;
-}
-
-.privacy {
-  background:
-    radial-gradient(
-      circle at 76% 46%,
-      rgba(43, 200, 183, 0.08),
-      transparent 28%
-    ),
-    #0a0a0c;
 }
 
 .privacyLayout {
@@ -661,10 +647,6 @@
   );
   content: "";
   filter: blur(20px);
-}
-
-.finalGrid {
-  mask-image: radial-gradient(circle at center, black, transparent 72%);
 }
 
 .finalInner {
@@ -1461,20 +1443,10 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* Pending sections sit dimmed until the signal reaches them (mockup
-     .section[data-state='pending']); reduced motion keeps everything at
-     full presence with no frames. */
-  :global([data-k-section]) {
-    transition:
-      opacity 220ms ease,
-      filter 220ms ease;
-  }
-
-  :global([data-k-section][data-k-route-state="pending"]) {
-    opacity: 0.64;
-    filter: saturate(0.72);
-  }
-
+  /* The director's uniformity law (2026-08-29): sections are never dimmed
+     or tinted by route state — the canvas stays indistinguishable from top
+     to bottom (supersedes the mockup's pending dim). Only the ports, the
+     activation frame and the pill narrate progress. */
   :global([data-k-route-state="active"]) .journeyTarget::after {
     opacity: 1;
     transform: scale(0.99);
