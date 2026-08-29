@@ -17,6 +17,8 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
+await import('./check-brand.mjs')
+
 const BASE = process.env.SITE_BASE_URL ?? '/korvun/'
 const DIST = fileURLToPath(new URL('../.vitepress/dist/', import.meta.url))
 

@@ -1,1 +1,45 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 64 64"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="6" y1="6" x2="58" y2="58"><stop offset="0" stop-color="#2BC8B7"/><stop offset="1" stop-color="#7A5AF5"/></linearGradient><mask id="k"><rect width="64" height="64" fill="#fff"/><path d="M23 17 L23 47" stroke="#000" stroke-width="6.5" stroke-linecap="round" fill="none"/><path d="M45 18 L33 32 L45 46" stroke="#000" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></mask></defs><rect x="2" y="2" width="60" height="60" rx="14" fill="url(#g)" mask="url(#k)"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 440" role="img" aria-labelledby="title desc">
+  <title id="title">Korvun governed K — cinematic hero mark</title>
+  <desc id="desc">A governed K within two orbits while three model signals enter, policy decides, and one controlled response exits.</desc>
+  <defs>
+    <linearGradient id="masthead-gradient" x1="152" y1="92" x2="405" y2="347" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2BC8B7"/>
+      <stop offset="1" stop-color="#7A5AF5"/>
+    </linearGradient>
+    <mask id="masthead-mask">
+      <rect x="178" y="86" width="230" height="268" rx="58" fill="white"/>
+      <path d="M254 150V290M350 154L290 220L350 286" fill="none" stroke="black" stroke-width="29" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g data-layer="orbits" fill="none">
+    <ellipse cx="294" cy="220" rx="238" ry="128" transform="rotate(-18 294 220)" stroke="#7A5AF5" stroke-opacity=".34" stroke-width="1.5" stroke-dasharray="8 8"/>
+    <ellipse cx="294" cy="220" rx="192" ry="174" transform="rotate(24 294 220)" stroke="#2BC8B7" stroke-opacity=".22" stroke-width="1.5" stroke-dasharray="8 8"/>
+  </g>
+  <g data-layer="route-bases" fill="none" stroke="#FFFFFF" stroke-opacity=".14" stroke-width="1.2" stroke-linecap="round">
+    <path d="M18 142C92 142 126 166 204 180"/>
+    <path d="M18 220H202"/>
+    <path d="M18 298C92 298 126 274 204 260"/>
+  </g>
+  <g data-layer="input-signals" fill="none" stroke-width="2.8" stroke-linecap="round">
+    <path data-signal="input-1" d="M18 142C92 142 126 166 204 180" stroke="#2BC8B7"/>
+    <path data-signal="input-2" d="M18 220H202" stroke="#69AECF"/>
+    <path data-signal="input-3" d="M18 298C92 298 126 274 204 260" stroke="#7A5AF5"/>
+  </g>
+  <g data-layer="input-nodes">
+    <circle cx="18" cy="142" r="6" fill="#2BC8B7"/>
+    <circle cx="18" cy="220" r="6" fill="#69AECF"/>
+    <circle cx="18" cy="298" r="6" fill="#7A5AF5"/>
+  </g>
+  <g data-layer="tilting-mark" transform="rotate(-4 293 220)">
+    <rect data-layer="governed-k" x="178" y="86" width="230" height="268" rx="58" fill="url(#masthead-gradient)" mask="url(#masthead-mask)"/>
+    <circle data-layer="decision" cx="374" cy="220" r="8" fill="#FFFFFF"/>
+  </g>
+  <path data-layer="output-signal" d="M374 220C444 220 477 197 542 174" fill="none" stroke="#F4F4F6" stroke-width="2.8" stroke-linecap="round"/>
+  <circle data-layer="output-node" cx="542" cy="174" r="5" fill="#F4F4F6"/>
+  <g data-layer="particles">
+    <circle cx="90" cy="102" r="4" fill="#2BC8B7"/>
+    <circle cx="473" cy="112" r="5" fill="#7A5AF5"/>
+    <circle cx="462" cy="330" r="3" fill="#69AECF"/>
+    <circle cx="123" cy="354" r="4" fill="#8C71F8"/>
+  </g>
+</svg>
