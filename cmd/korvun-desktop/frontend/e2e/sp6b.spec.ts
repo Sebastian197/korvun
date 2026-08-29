@@ -106,7 +106,9 @@ test('Ajustes: filas reales en oscuro y claro', async ({ page }) => {
   await expect(page.getByText('Fichero de configuración')).toBeVisible()
   await expect(page.getByText(/korvun\.json/).first()).toBeVisible()
   await expect(page.getByText(/asignado al arrancar/)).toBeVisible()
-  await expect(page.getByText(/KORVUN_ADMIN_TOKEN/)).toBeVisible()
+  // .first(): since B10 the token name legitimately appears twice — the
+  // SEGURIDAD row (asserted here) and its SECRETOS row.
+  await expect(page.getByText(/KORVUN_ADMIN_TOKEN/).first()).toBeVisible()
   await expect(page.getByText('automático · se rota al arrancar')).toBeVisible()
   // No API → not painted (FR-WIN-4): the mock's Datos section stays out.
   await expect(page.getByText('Vaciar memoria')).toHaveCount(0)

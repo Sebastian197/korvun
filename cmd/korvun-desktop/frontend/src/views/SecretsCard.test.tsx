@@ -82,11 +82,15 @@ describe('presence (AS-3)', () => {
     })
     const rowOf = async (name: string) =>
       (await screen.findByText(name)).closest('[data-testid="secret-row"]') as HTMLElement
-    expect(within(await rowOf('KEYCHAIN_ONLY_TOKEN')).getByText(/en el llavero/)).toBeTruthy()
+    // findByText (async) throughout: each row's presence resolves on its own
+    // CheckSecretPresence promise — the CI runner exposed the missing awaits.
+    expect(
+      await within(await rowOf('KEYCHAIN_ONLY_TOKEN')).findByText(/en el llavero/),
+    ).toBeTruthy()
     // The wizard nuance, sealed: the environment WINS over the keychain.
-    expect(within(await rowOf('BOTH_PLACES_KEY')).getByText(/entorno.*gana/i)).toBeTruthy()
-    expect(within(await rowOf('ABSENT_TOKEN')).getByText(/ausente/)).toBeTruthy()
-    expect(within(await rowOf('WEIRD_NAME')).getByText(/no comprobable/)).toBeTruthy()
+    expect(await within(await rowOf('BOTH_PLACES_KEY')).findByText(/entorno.*gana/i)).toBeTruthy()
+    expect(await within(await rowOf('ABSENT_TOKEN')).findByText(/ausente/)).toBeTruthy()
+    expect(await within(await rowOf('WEIRD_NAME')).findByText(/no comprobable/)).toBeTruthy()
   })
 })
 
