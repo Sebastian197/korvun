@@ -157,10 +157,19 @@ explicit decision.
 > touches the file; the legacy ConfigEditor ModelRow still exposes no
 > base_url and only shows api_key_env for groq.
 >
+> **UPDATE (2026-08-29, night): THE TOTAL BASH IS APPROVED** — Chano's
+> hands over the packaged `v0.9.2-21-g0ace67a` build, zero use-breakers;
+> the Sixth Law's gate is passed and **v0.10.0 is GO**. B14c and BASH-3
+> closed as refuted with evidence; BASH-1 (min duration for
+> «Comprobando…») and BASH-2 (channel fallback speaks English → C1) queued
+> cosmetic/C1 pending Chano's word. The bash also exercised the B12 band
+> and N6 live (staged Ollama outage) and the N1 onboarding on a clean
+> sandbox profile.
+>
 > **NEXT queue (in order, updated 2026-08-29 evening — pre-bash):**
 > (1) **CHANO'S TOTAL BASH** over the fresh local build (everything since
 > v0.9.2: B13+B14, the whole Ola 2, B11+B12, the deflake tanda) — his
-> verdict decides **v0.10.0** (Sixth Law).
+> verdict decides **v0.10.0** (Sixth Law). → **DONE, APPROVED (above).**
 > (2) **THE BRAND LOTE — queued for RIGHT AFTER v0.10.0** (Chano's yes,
 > 2026-08-29, over the korvun-brand-motion mockup, seen and approved by
 > looking): plan at `design-drafts/korvun-brand-motion/IMPLEMENTATION-PLAN.md`

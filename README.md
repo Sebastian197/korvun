@@ -111,7 +111,7 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
-**Download v0.9.2** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.10.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
@@ -137,6 +137,24 @@ the same governance gate — filmed live in the Korvun desktop app below.
 </p>
 
 See the [v0.9.0 release notes](docs/releases/v0.9.0.md).
+
+## The honest desktop — v0.10.0
+
+The whole post-v0.9.2 arc, gated end to end by the Sixth Law (experience
+designs approved over rendered mockups before any code; the release decided
+by the director's manual bash over the packaged build — zero use-breakers).
+The chat never shows protocol internals (a hallucinated tool call becomes an
+honest error, never raw JSON in your Telegram), names who is actually
+thinking (*«openrouter está pensando — openrouter/auto · nube…»*), and says
+so on screen when a request dies — with a retry at hand and a 60-second
+notice that warns but never cuts on its own. The desktop gains brain
+selection on New chat, a write-only Secrets panel over the OS keychain that
+works even when a broken boot needs it most, an onboarding that speaks
+OpenAI-compatible and validates the chosen model exists, mouse deletion for
+canvas cables, and a model panel that blocks the corruption shapes before
+Apply. Under the hood, three chronic test flakes fell with root causes — one
+of them a real routing defect (a masked fatal close code) caught and fixed
+in the adapter. See the [v0.10.0 release notes](docs/releases/v0.10.0.md).
 
 ## The quality pass — v0.9.1 & v0.9.2
 
@@ -237,11 +255,13 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.9.2` — Beta — is the current release.** Every beta criterion is met and the
+**`v0.10.0` — Beta — is the current release.** Every beta criterion is met and the
 platform keeps growing: channels, multi-brain routing, the policy engine,
 resilience, the no-code builder, the operator console, governed tools & skills,
-governed memory, and the universal model gateway — each validated on real
-hardware. See [the release notes](docs/releases/v0.9.2.md),
+governed memory, the universal model gateway, and now the honest desktop —
+brain selection on New chat, the Secrets panel, a gateway-aware onboarding,
+and a chat that names who is thinking and says so when a request dies — each
+validated on real hardware. See [the release notes](docs/releases/v0.10.0.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 
