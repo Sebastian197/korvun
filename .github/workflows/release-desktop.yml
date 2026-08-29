@@ -61,15 +61,15 @@ jobs:
           echo "::error::Manual dispatch supports dry_run=true only; publish a real release by pushing a v* tag."
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0 # full history + tags: git describe (dry-run VERSION) and the Makefile's PRODUCT_VERSION need them
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
 
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
 
@@ -95,7 +95,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          choco install -y make nsis
+          # Pinned versions (Scorecard pinned-deps; verified at chocolatey.org
+          # 2026-08-30): supply-chain determinism over floating latest.
+          choco install -y make --version=4.4.1
+          choco install -y nsis --version=3.12.0
           echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
 
       - name: Verify make + makensis on PATH (Windows)
@@ -247,7 +250,7 @@ jobs:
       # release is touched.
       - name: Upload workflow artifact (dry-run only)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7 # GitHub-owned, repo major-tag convention
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-${{ matrix.family }}
           path: cmd/korvun-desktop/build/bin/korvun-desktop_*
@@ -286,7 +289,7 @@ jobs:
 
       - name: Download desktop artifacts (dry-run only)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/download-artifact@v8 # GitHub-owned, repo major-tag convention
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: desktop-*
           merge-multiple: true
@@ -345,7 +348,7 @@ jobs:
 
       - name: Persist signed manifest (dry-run only)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7 # GitHub-owned, repo major-tag convention
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: desktop-checksums-signed
           path: dist-desktop/checksums-desktop.txt*

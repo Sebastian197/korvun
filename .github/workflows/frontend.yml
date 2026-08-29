@@ -35,8 +35,8 @@ jobs:
       run:
         working-directory: web/builder
     steps:
-      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
           cache: npm
@@ -58,8 +58,8 @@ jobs:
       run:
         working-directory: web/builder
     steps:
-      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
           cache: npm
@@ -77,8 +77,8 @@ jobs:
       run:
         working-directory: cmd/korvun-desktop/frontend
     steps:
-      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
           cache: npm
@@ -100,15 +100,15 @@ jobs:
       run:
         working-directory: cmd/korvun-desktop/frontend
     steps:
-      - uses: actions/checkout@v6 # GitHub-owned, repo major-tag convention
-      - uses: actions/setup-node@v5 # GitHub-owned, repo major-tag convention; v5 = first major on the Node 24 runtime (resolves GitHub Node 20 deprecation)
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: cmd/korvun-desktop/frontend/package-lock.json
       # The e2e webServer is the Go harness (built chrome + SP4 proxy + the
       # SP5 channel-less template on a real Controller) — Go is required.
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
       - run: npm ci
@@ -116,7 +116,7 @@ jobs:
       # @playwright/test version (6a review rider): on a hit the install
       # step below skips the ~100 MB Chromium download and only installs
       # the OS deps. actions/cache v6.1.0 verified at source 2026-07-25.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('cmd/korvun-desktop/frontend/package-lock.json') }}
