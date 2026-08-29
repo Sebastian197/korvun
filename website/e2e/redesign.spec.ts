@@ -213,3 +213,26 @@ test('reduced motion shows the complete static circuit with no signal head', asy
   await expect(page.locator('[data-k-journey]')).toHaveAttribute('data-k-static', 'true')
   await expect(page.locator('[data-k-route-signal]')).toBeHidden()
 })
+
+test('client-side navigation back home re-arms the routing journey', async ({ page }) => {
+  // The director's finding (2026-08-29): landing on a docs page and then
+  // clicking the navbar brand must yield a LIVE landing — the circuit
+  // re-measures, draws and follows the scroll exactly like a fresh load.
+  await page.goto('/korvun/guide/what-is-korvun/')
+  await page.click('.navbar__brand')
+  await expect(page.locator('[data-k-journey]')).toHaveAttribute('data-k-journey-mode', /desktop|mobile/)
+  const base = page.locator('[data-k-route-path-base]')
+  await expect.poll(async () => ((await base.getAttribute('d')) ?? '').length).toBeGreaterThan(10)
+  await page.evaluate(() => window.scrollTo(0, 2400))
+  await expect
+    .poll(async () =>
+      page.evaluate(() =>
+        Number(
+          document
+            .querySelector<HTMLElement>('[data-k-journey]')
+            ?.style.getPropertyValue('--k-route-progress') || '0',
+        ),
+      ),
+    )
+    .toBeGreaterThan(0.2)
+})

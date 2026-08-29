@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+import { armBrandMotion, armRoutingJourney } from "../../theme/brandMotion";
+import { armStorytelling } from "../../theme/storytelling";
 import { Capabilities } from "./Capabilities";
 import { Demo } from "./Demo";
 import { FinalCta } from "./FinalCta";
@@ -9,6 +12,16 @@ import { RoutingJourney } from "./RoutingJourney";
 import styles from "./landing.module.css";
 
 export function LandingPage({ copy }: { copy: LandingCopy }) {
+  // The landing owns its motion controllers: arming on MOUNT is the only
+  // moment that works for both a fresh load and a client-side navigation
+  // (Docusaurus keeps the previous page's DOM alive while the next chunk
+  // loads, so route- or children-keyed effects in Root measure the wrong
+  // page). Cleanup on unmount removes every listener and attribute.
+  useEffect(() => {
+    const cleanups = [armStorytelling(), armBrandMotion(), armRoutingJourney()];
+    return () => cleanups.forEach((cleanup) => cleanup());
+  }, []);
+
   return (
     <main className={styles.page}>
       <RoutingJourney />
