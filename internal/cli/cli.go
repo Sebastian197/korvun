@@ -168,14 +168,21 @@ func isTerminal(w io.Writer) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
-// logo is the placeholder banner shown on an interactive terminal. The final art
-// is Chano's brand decision (ADR-0030 reserves the teal→violet gradient for
-// identity moments); this honest ASCII placeholder holds its place. It carries no
-// ANSI styling yet — color is integrated in a later sub-phase.
+// logo is the banner shown on an interactive terminal: the A1 governed K in
+// characters (adopted 2026-08-29, succeeding the K-terminal placeholder). It
+// tells the identity's routing story — three signals enter the rounded K
+// tile, the decision fires, exactly one controlled reply exits. Sober by
+// design: no ANSI styling (the TTY/NO_COLOR gate already decides whether the
+// banner appears at all), and every line stays within 80 columns.
 const logo = `
-   ██ ██  KORVUN
-   ████    messaging gateway · multi-model router · multi-brain orchestrator
-   ██ ██   (placeholder banner — final logo art TBD, ADR-0030)
+        ╭────────────────╮
+    ●───┤  ██    ██      │
+    ●───┤  ██  ██        │
+    ●───┤  █████     ◆───┼──▶ ●
+        │  ██  ██        │
+        │  ██    ██      │
+        ╰────────────────╯
+      KORVUN · messaging gateway · multi-model router · multi-brain orchestrator
 
 `
 
