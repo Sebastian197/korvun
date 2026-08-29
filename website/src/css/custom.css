@@ -14,7 +14,7 @@
   --ifm-font-family-monospace: 'Geist Mono', ui-monospace, monospace;
   --ifm-heading-font-family: 'Geist Sans', system-ui, -apple-system, sans-serif;
   --ifm-navbar-background-color: rgba(10, 10, 12, 0.84);
-  --ifm-footer-background-color: #08080a;
+  --ifm-footer-background-color: #08080b;
   --ifm-code-background: rgba(122, 90, 245, 0.12);
   --korvun-teal: #2bc8b7;
   --korvun-violet: #7a5af5;
@@ -120,9 +120,10 @@ a {
 }
 
 .footer {
-  /* Infima's .footer--dark redefines the background var locally; pin it. */
-  background: #08080a;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  /* Infima's .footer--dark redefines the background var locally; pin it to
+     the landing canvas tone so the page ends without a seam (no border, no
+     shade step — the director's no-cuts call, 2026-08-29). */
+  background: #08080b;
   padding: 4.5rem 0 2.5rem;
 }
 

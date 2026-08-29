@@ -258,7 +258,6 @@
   gap: 24px;
   margin: 34px auto 0;
   padding: 22px 0;
-  border-top: 1px solid var(--line);
   color: #92929d;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.66rem;
@@ -266,9 +265,10 @@
 }
 
 .section {
+  /* One uninterrupted canvas — the director's call (2026-08-29): no
+     horizontal separators anywhere; whitespace alone divides sections. */
   position: relative;
   padding: clamp(96px, 11vw, 156px) 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .sectionIntro {
