@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { ingestFrame, resetFeedForTests } from '../feed/store'
 import { resetIncidentForTests } from '../incident/store'
 import { pollOnce } from '../status/store'
-import { Activity } from './Activity'
+import { Activity, ActivityLiveChip } from './Activity'
 
 function frame(
   type: string,
@@ -37,7 +37,11 @@ describe('Actividad vacía', () => {
   })
 
   it('stopped and disconnected reads Pausado, honestly', () => {
-    render(<Activity />)
+    // N4 (sealed redesign, 2026-08-29): the honest state declaration moved
+    // from the filter row into the header chip the shell mounts next to
+    // the title — the CONTRACT (stopped reads Pausado) is unchanged, only
+    // its surface. Asserted on the chip since then.
+    render(<ActivityLiveChip />)
     expect(screen.getByText('Pausado — gateway detenido')).toBeInTheDocument()
   })
 })

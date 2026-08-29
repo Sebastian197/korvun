@@ -59,24 +59,41 @@ function Row({ f }: { f: FeedFrame }): React.JSX.Element {
   )
 }
 
-export function Activity(): React.JSX.Element {
+// ActivityLiveChip is the N4 state chip the shell mounts NEXT TO the view
+// title (sealed design ola2-designs §4) — the permanent, honest declaration
+// that the feed is window-scoped. The pill keeps the three honest states
+// the view carried before; only the LIVE one earns the pulsing green dot
+// (soft pulse, silenced under prefers-reduced-motion in App.css).
+export function ActivityLiveChip(): React.JSX.Element {
   const feed = useFeed()
   const core = useCoreState()
+  let text = 'Pausado — gateway detenido'
+  let on = false
+  if (feed.live) {
+    text = 'En vivo · desde que se abrió la ventana'
+    on = true
+  } else if (core === 'running') {
+    text = 'Conectando…'
+  }
+  return (
+    <span className="act-live-chip" data-testid="act-live-chip">
+      <span
+        className={`chip-dot ${on ? 'chip-dot-ok chip-dot-pulse' : ''}`}
+        aria-hidden="true"
+      />
+      {text}
+    </span>
+  )
+}
+
+export function Activity(): React.JSX.Element {
+  const feed = useFeed()
   const [channel, setChannel] = useState('all')
   const [type, setType] = useState('all')
 
   const rows = feed.frames.filter(
     (f) => (channel === 'all' || f.channel === channel) && (type === 'all' || f.type === type),
   )
-
-  let liveText = 'Pausado — gateway detenido'
-  let liveOn = false
-  if (feed.live) {
-    liveText = 'En vivo'
-    liveOn = true
-  } else if (core === 'running') {
-    liveText = 'Conectando…'
-  }
 
   return (
     <div className="activity" data-testid="actividad">
@@ -110,10 +127,6 @@ export function Activity(): React.JSX.Element {
           </button>
         ))}
         <span className="act-spacer" />
-        <span className="act-live">
-          <span className={`chip-dot ${liveOn ? 'chip-dot-ok' : ''}`} aria-hidden="true" />
-          {liveText}
-        </span>
       </div>
 
       <div className="act-table">
@@ -124,8 +137,12 @@ export function Activity(): React.JSX.Element {
             </div>
             <div className="act-empty-title">Sin actividad todavía</div>
             <div className="act-empty-caption">
-              Cuando fluyan mensajes, aquí verás cada mensaje y su camino por el gateway — solo
-              metadatos, nunca el contenido.
+              Cuando fluyan mensajes, aquí verás cada mensaje y su camino por el gateway.
+            </div>
+            {/* N4 (sealed): the honest volatility line, visible — never fine print. */}
+            <div className="act-empty-caption act-empty-volatility">
+              El feed vive en esta ventana — al cerrarla se vacía. Solo metadatos, nunca el
+              contenido.
             </div>
           </div>
         ) : (

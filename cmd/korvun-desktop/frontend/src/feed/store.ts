@@ -179,6 +179,11 @@ export function getFeed(): FeedState {
   return state
 }
 
+/** Force the live flag (exported for tests — the N4 chip states). */
+export function setLiveForTests(live: boolean): void {
+  setLive(live)
+}
+
 export function resetFeedForTests(): void {
   close()
   // Detach the core-store listener too — otherwise every re-start stacks a

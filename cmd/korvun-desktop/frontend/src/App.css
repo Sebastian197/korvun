@@ -148,6 +148,29 @@
   }
 }
 
+/* N4 (sealed design): the volatility chip next to the Actividad title —
+   thin-border pill; only the LIVE state pulses, and the pulse is silenced
+   under prefers-reduced-motion. */
+.act-live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--tx2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.chip-dot-pulse {
+  animation: kv-pulse 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chip-dot-pulse {
+    animation: none;
+  }
+}
+
 .main {
   overflow: auto;
   padding: 24px 28px 26px;

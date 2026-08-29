@@ -19,7 +19,7 @@ import {
 import { desktop } from './lib/go'
 import { useUnreadTotal } from './console/useUnreadTotal'
 import { useSnapshot } from './snapshot/store'
-import { Activity } from './views/Activity'
+import { Activity, ActivityLiveChip } from './views/Activity'
 import { BuilderEmbed } from './views/BuilderEmbed'
 import { Channels } from './views/Channels'
 import { Console } from './views/Console'
@@ -133,6 +133,8 @@ export function App(): React.JSX.Element {
       <main className="main">
         <header className="main-head">
           <h1 className="view-title">{active?.label ?? 'Inicio'}</h1>
+          {/* N4 (sealed): the volatility chip lives NEXT TO the title. */}
+          {view === 'actividad' && <ActivityLiveChip />}
           <HealthzBadge />
         </header>
         {view === 'inicio' && <Home />}
