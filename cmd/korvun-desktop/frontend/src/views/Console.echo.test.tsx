@@ -203,7 +203,12 @@ describe('switching conversations (the duplicated-conversation bug)', () => {
         return json([{ id: 1, turn_count: turns.length }])
       // Conversation detail: A has the pair; the NEW chat's detail is SLOW
       // (the real bearer fetch) — the stale window under test.
-      if (url.includes('chat-a')) return json(turns)
+      // Deflake tanda (2026-08-29, patient c) — THE root cause of this
+      // spec's historic flake: `includes('chat-a')` also matched any NEW
+      // chat whose random uuid starts with "a" (console::chat-a1b2c3d4),
+      // handing conversation A's history to the fresh conversation ~1/16
+      // of the runs. Exact-key match only.
+      if (/console::chat-a(\/|$)/.test(decodeURIComponent(url))) return json(turns)
       await new Promise((r) => setTimeout(r, 150))
       return json([])
     }) as typeof fetch
