@@ -91,6 +91,8 @@ func (d *Desktop) ApplyCompatFirstRun(baseURL, modelID, apiKeyEnv, locality stri
 		if err != nil {
 			return struct{}{}, err
 		}
+		// #nosec G304 -- path is the desktop's own config location (the
+		// controller's loaded path or DefaultConfigPath), never user input.
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			return struct{}{}, fmt.Errorf("shell: read first-run config %q: %w", path, err)

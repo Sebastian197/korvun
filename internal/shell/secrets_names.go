@@ -43,6 +43,8 @@ func (d *Desktop) ListSecretNames() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		// #nosec G304 -- path is the desktop's own config location (the
+		// controller's loaded path or DefaultConfigPath), never user input.
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("shell: read config %q: %w", path, err)
