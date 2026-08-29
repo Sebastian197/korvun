@@ -683,7 +683,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .heroMark {
+  .masthead {
     animation: hero-float 7s ease-in-out 1.6s infinite;
   }
 
@@ -909,5 +909,246 @@
 
   .final {
     min-height: 660px;
+  }
+}
+
+/* ---- A1 cinematic masthead (brand-motion spec, Task 2) -------------------
+   The mockup's exact choreography: 4.8s packet cycle, one decision pulse,
+   one output, 6s restrained tilt, opposite 18/24s orbits, four deterministic
+   particles, and the reused 7s hero float on the whole group. Every layer is
+   paused unless armBrandMotion sets data-k-running='true' (visible + motion
+   allowed); under reduced motion the static final frame IS the experience. */
+.masthead {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 32px 70px rgba(69, 52, 167, 0.42));
+}
+
+/* Packets are circles traveling their route via transform waypoints sampled
+   from the route Béziers — MOTION-SPEC: "Route strokes remain static and
+   low contrast; packets create the sense of travel." Linear travel, arrival
+   opacity on the approved entrance curve, 280ms stagger, 4.8s cycle. */
+.mastheadPacket {
+  opacity: 0;
+  animation: 4.8s linear infinite;
+  animation-play-state: paused;
+}
+
+.mastheadPacketTop {
+  animation-name: k-packet-top;
+}
+
+.mastheadPacketMid {
+  animation-name: k-packet-mid;
+  animation-delay: 0.28s;
+}
+
+.mastheadPacketLow {
+  animation-name: k-packet-low;
+  animation-delay: 0.56s;
+}
+
+.mastheadOut {
+  opacity: 0;
+  animation: k-out 4.8s linear infinite;
+  animation-play-state: paused;
+}
+
+.mastheadDecision {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: k-decision 4.8s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  animation-play-state: paused;
+}
+
+.mastheadTilt {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: k-tilt 6s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+  animation-play-state: paused;
+}
+
+.mastheadOrbit {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: k-spin 18s linear infinite;
+  animation-play-state: paused;
+}
+
+.mastheadOrbitReverse {
+  animation-direction: reverse;
+  animation-duration: 24s;
+}
+
+.mastheadParticle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: k-spark 3.4s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+  animation-play-state: paused;
+}
+
+.mastheadParticle2 {
+  animation-delay: -0.8s;
+}
+
+.mastheadParticle3 {
+  animation-delay: -1.6s;
+}
+
+.mastheadParticle4 {
+  animation-delay: -2.4s;
+}
+
+.masthead[data-k-running='true'] .mastheadPacket,
+.masthead[data-k-running='true'] .mastheadOut,
+.masthead[data-k-running='true'] .mastheadDecision,
+.masthead[data-k-running='true'] .mastheadTilt,
+.masthead[data-k-running='true'] .mastheadOrbit,
+.masthead[data-k-running='true'] .mastheadParticle {
+  animation-play-state: running;
+}
+
+/* One neutral packet leaves the K (MOTION-SPEC "Output" phase): a single
+   dash travels the output path via stroke-dashoffset — the same legal
+   property the input packets use; stroke-dasharray itself never animates. */
+@keyframes k-packet-top {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  14% {
+    opacity: 1;
+  }
+
+  41% {
+    opacity: 1;
+    transform: translate(160px, 32px);
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+    transform: translate(186px, 38px);
+  }
+}
+
+@keyframes k-packet-mid {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  14% {
+    opacity: 1;
+  }
+
+  41% {
+    opacity: 1;
+    transform: translate(159px, 0);
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+    transform: translate(184px, 0);
+  }
+}
+
+@keyframes k-packet-low {
+  0%,
+  10% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  14% {
+    opacity: 1;
+  }
+
+  41% {
+    opacity: 1;
+    transform: translate(160px, -32px);
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+    transform: translate(186px, -38px);
+  }
+}
+
+/* One neutral packet leaves the K (the "Output" phase, 2750–3900ms). */
+@keyframes k-out {
+  0%,
+  57% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  61% {
+    opacity: 1;
+  }
+
+  78% {
+    opacity: 1;
+    transform: translate(150px, -41px);
+  }
+
+  81%,
+  100% {
+    opacity: 0;
+    transform: translate(168px, -46px);
+  }
+}
+
+@keyframes k-decision {
+  0%,
+  38%,
+  100% {
+    opacity: 0.65;
+    transform: scale(0.88);
+  }
+
+  51%,
+  68% {
+    opacity: 1;
+    transform: scale(1.13);
+  }
+}
+
+@keyframes k-tilt {
+  0%,
+  100% {
+    transform: rotate(-4deg) translateY(5px);
+  }
+
+  50% {
+    transform: rotate(4deg) translateY(-7px);
+  }
+}
+
+@keyframes k-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes k-spark {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.92);
+  }
+
+  45%,
+  60% {
+    opacity: 1;
+    transform: scale(1.18);
   }
 }

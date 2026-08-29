@@ -153,3 +153,97 @@ test('keeps every section visible without IntersectionObserver', async () => {
   assert.equal(harness.documentElement.classList.contains('k-motion'), false)
   assert.equal(harness.observer(), undefined)
 })
+
+// ---- Brand-motion masthead (brand-motion spec, Task 2) ---------------------
+
+class FakeMasthead {
+  attributes = new Map()
+
+  setAttribute(name, value) {
+    this.attributes.set(name, value)
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name)
+  }
+
+  hasAttribute(name) {
+    return this.attributes.has(name)
+  }
+}
+
+function createBrandHarness({ reducedMotion = false, intersectionObserver = true } = {}) {
+  const masthead = new FakeMasthead()
+  const document = {
+    querySelector(selector) {
+      return selector === '[data-k-masthead]' ? masthead : null
+    },
+  }
+  const visibility = {
+    created: false,
+    observer: null,
+    reveal(isIntersecting) {
+      assert.ok(this.observer, 'masthead observer must exist before reveal')
+      this.observer.callback([{ isIntersecting }], this.observer)
+    },
+  }
+  class FakeIntersectionObserver {
+    constructor(callback) {
+      this.callback = callback
+      visibility.created = true
+      visibility.observer = this
+      this.observed = new Set()
+    }
+
+    observe(target) {
+      this.observed.add(target)
+    }
+
+    disconnect() {
+      this.observed.clear()
+    }
+  }
+  const runtime = {
+    matchMedia: (query) => ({
+      matches: query.includes('no-preference') ? !reducedMotion : reducedMotion,
+    }),
+  }
+  if (intersectionObserver) runtime.IntersectionObserver = FakeIntersectionObserver
+  return { document, runtime, masthead, visibility }
+}
+
+test('runs the masthead only while visible and motion is allowed', async () => {
+  const { armBrandMotion } = await import('./brandMotion.ts')
+  const harness = createBrandHarness()
+  const cleanup = armBrandMotion(harness.document, harness.runtime)
+  harness.visibility.reveal(true)
+  assert.equal(harness.masthead.getAttribute('data-k-running'), 'true')
+  harness.visibility.reveal(false)
+  assert.equal(harness.masthead.getAttribute('data-k-running'), 'false')
+  cleanup()
+  assert.equal(harness.masthead.hasAttribute('data-k-running'), false)
+})
+
+test('keeps the masthead static under reduced motion', async () => {
+  const { armBrandMotion } = await import('./brandMotion.ts')
+  const harness = createBrandHarness({ reducedMotion: true })
+  armBrandMotion(harness.document, harness.runtime)
+  assert.equal(harness.visibility.created, false)
+  assert.equal(harness.masthead.hasAttribute('data-k-running'), false)
+})
+
+test('arms nothing without a masthead or without observer support', async () => {
+  const { armBrandMotion } = await import('./brandMotion.ts')
+  const empty = { querySelector: () => null }
+  const cleanupNone = armBrandMotion(empty, { matchMedia: () => ({ matches: true }) })
+  assert.equal(typeof cleanupNone, 'function')
+  cleanupNone()
+  const harness = createBrandHarness({ intersectionObserver: false })
+  const cleanup = armBrandMotion(harness.document, harness.runtime)
+  assert.equal(harness.visibility.created, false)
+  cleanup()
+})

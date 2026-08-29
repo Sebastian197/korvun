@@ -1,6 +1,6 @@
 import Link from '@docusaurus/Link'
-import useBaseUrl from '@docusaurus/useBaseUrl'
 import type { LandingCopy } from './landingCopy'
+import { KorvunMasthead } from './KorvunMasthead'
 import styles from './landing.module.css'
 
 type Props = {
@@ -9,8 +9,6 @@ type Props = {
 }
 
 export function Hero({ copy, quickstart }: Props) {
-  const mark = useBaseUrl('/brand/korvun-logo-hero.svg')
-
   return (
     <section className={styles.hero} data-k-section="hero">
       <div className={styles.heroGlow} aria-hidden="true" />
@@ -49,8 +47,7 @@ export function Hero({ copy, quickstart }: Props) {
           </div>
 
           <div className={styles.heroMarkWrap} data-motion aria-hidden="true">
-            <div className={styles.heroOrbit} />
-            <img className={styles.heroMark} src={mark} alt="" width="640" height="640" />
+            <KorvunMasthead />
             <div className={styles.heroBadge}>01 · 08</div>
           </div>
         </div>
