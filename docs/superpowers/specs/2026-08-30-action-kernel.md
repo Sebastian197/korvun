@@ -179,6 +179,21 @@ mockup + Chano's yes).
   on the reference machine, and the numbers are recorded in the stage
   close.
 
+### FR-DOM addendum — native fuzzing (Chano's mandate, 2026-08-30)
+
+- **FR-DOM-5** (adenda sellada — MORE rigor over the approved scope, no
+  scope change): the kernel's parsers are born fuzzed, with Go's native
+  fuzzing and zero new dependencies. `FuzzCanonicalize` asserts that
+  arbitrary input NEVER panics and that canonicalization is deterministic
+  (two runs, same bytes) and idempotent; `FuzzDigest` asserts digest
+  stability (same tuple, same digest) and that shifting bytes across the
+  length-prefixed field boundaries never collides. Seed corpus in the
+  tree (the spec's edge list: enormous numeric literals, deep nesting,
+  duplicate keys, unicode, non-JSON, empty). A SHORT fuzz smoke (seconds)
+  joins `make quality` as a gate; long campaigns are a documented
+  manual/nightly task — the general pre-1.0 fuzzing campaign over the
+  hostile-input borders stays where the security plan puts it.
+
 ## Acceptance scenarios (Given / When / Then)
 
 - **AS-1 (reify everything)** Given any governed or ungoverned brain, When

@@ -134,6 +134,24 @@ explicit decision.
 > *(gap noted: the v0.9.x post links from last week are still pending —
 > Chano will pass them.)*
 >
+> **Ciberseguridad — el camino honesto (planificado 2026-08-30, mandato
+> de Chano):** tres piezas con su momento.
+> **(1) Fuzzing del kernel** — adelantada por decisión de Chano: los
+> analizadores del Action Kernel nacen fuzzeados (FR-DOM-5 de la spec
+> sellada; fuzz nativo de Go, corpus semilla versionado, smoke de
+> segundos DENTRO de `make quality`; campañas largas como tarea
+> manual/nocturna documentada).
+> **(2) Fuzzing general pre-1.0** — la ya fichada: campaña sobre los
+> bordes que comen input hostil (webhook JSON, parsers de canales,
+> config, el shape-detector B13) — `go test -fuzz` nativo, corpus
+> versionado, hallazgos como bugs normales del mapa. Momento:
+> post-estreno del gateway, pre-v1.0.0.
+> **(3) Auditoría externa** — revisión de seguridad por terceros ANTES
+> del tier empresarial (blueprint §27 / Etapa 10); fichada además la
+> opción intermedia de una pasada externa más ligera pre-1.0 si el
+> presupuesto de Chano lo permite llegado el momento (decisión suya).
+> Ningún producto de seguridad se declara seguro por autoevaluación.
+
 > **Adjudicated (2026-08-29):** the two orphan files a parallel session
 > left in the tree (an LCP spec + a font-preload e2e) are WITHDRAWN by
 > Chano's call — deleted untracked, never released. Future idea, no

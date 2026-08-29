@@ -3,7 +3,7 @@ GOLANGCI_LINT := $(GOBIN)/golangci-lint
 GOIMPORTS := $(GOBIN)/goimports
 COVERAGE_THRESHOLD := 85
 
-.PHONY: build test lint cover quality fmt vet guard-gopkgs frontend-install frontend-build desktop-frontend-install desktop-frontend desktop-frontend-check desktop dmg website-check
+.PHONY: build test lint cover quality fuzz-smoke fmt vet guard-gopkgs frontend-install frontend-build desktop-frontend-install desktop-frontend desktop-frontend-check desktop dmg website-check
 
 # Go tooling must NEVER walk node_modules. npm packages ship stray .go files
 # (flatted), and desktop sync tools mint junk like "x 2.go" in there — ONE such
@@ -181,7 +181,15 @@ guard-gopkgs:
 	@case "$(GO_PKGS)" in *node_modules*) echo "FAIL: GO_PKGS contains node_modules — the exclusion regressed"; exit 1;; esac
 	@echo "GO_PKGS guard: $(words $(GO_PKGS)) packages, node_modules-free."
 
-quality: guard-gopkgs lint test cover
+# Fuzz smoke (spec 2026-08-30-action-kernel FR-DOM-5, Chano's mandate):
+# seconds-long native fuzz over the kernel's parsers on every gate run.
+# Long campaigns are the documented manual/nightly task, not this gate.
+fuzz-smoke:
+	@echo "Fuzz smoke: action kernel parsers (FR-DOM-5)..."
+	go test ./internal/action/ -run '^$$' -fuzz FuzzCanonicalize -fuzztime 3s
+	go test ./internal/action/ -run '^$$' -fuzz FuzzDigest -fuzztime 3s
+
+quality: guard-gopkgs lint test cover fuzz-smoke
 	@echo "Quality gate passed."
 
 # --- Web track SP1: the site check harness (spec AS-1 + AS-9, ADR-0040) ----------
