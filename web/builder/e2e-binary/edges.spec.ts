@@ -16,14 +16,14 @@ async function openCanvas(page: Page) {
   await expect(page.getByTestId('canvas-surface')).toBeVisible({ timeout: 10_000 })
 }
 
-test('a cabled route is selectable on click and deleted with Backspace', async ({ page }) => {
-  await openCanvas(page)
-
+// Cable channel:0 → brain:0 with a real pointer drag (SP0 precedent), then
+// select the painted route path with a real click. Shared by both deletion
+// gestures (Backspace and the B8-bis ✕ button).
+async function cableAndSelectRoute(page: Page) {
   // A channel to cable from (the fixture boots channel-less).
   await page.dragAndDrop('[data-testid="palette:channel"]', '[data-testid="canvas-surface"]')
   await expect(page.getByTestId('channel:0')).toBeVisible()
 
-  // Cable channel:0 → brain:0 with a real pointer drag (SP0 precedent).
   const src = await page
     .locator('[data-testid="channel:0"] ~ .react-flow__handle.source, [data-testid="channel:0"] .react-flow__handle.source')
     .first()
@@ -56,12 +56,36 @@ test('a cabled route is selectable on click and deleted with Backspace', async (
   // The selection is real AND visible (B8's second half: the stroke used to
   // swallow the selected state).
   await expect(page.locator('.react-flow__edge.selected[data-id^="route:"]')).toHaveCount(1)
+}
+
+// Leave the fixture pristine for the next spec (the channel is still a
+// pending edit): discard everything.
+async function discardAll(page: Page) {
+  await page.getByRole('button', { name: /descartar/i }).click()
+  await expect(page.getByText(/no changes/i)).toBeVisible()
+}
+
+test('a cabled route is selectable on click and deleted with Backspace', async ({ page }) => {
+  await openCanvas(page)
+  await cableAndSelectRoute(page)
 
   await page.keyboard.press('Backspace')
   await expect(page.locator('.react-flow__edge[data-id^="route:"]')).toHaveCount(0)
 
-  // Leave the fixture pristine for the next spec (the channel is still a
-  // pending edit): discard everything.
-  await page.getByRole('button', { name: /descartar/i }).click()
-  await expect(page.getByText(/no changes/i)).toBeVisible()
+  await discardAll(page)
+})
+
+test('B8-bis: the selected cable offers the ✕ and a mouse click deletes it', async ({ page }) => {
+  await openCanvas(page)
+  await cableAndSelectRoute(page)
+
+  // The sealed option (a): the ✕ floats at the midpoint of the SELECTED
+  // cable only, and clicking it is the mouse twin of Backspace.
+  const del = page.getByRole('button', { name: 'Eliminar conexión' })
+  await expect(del).toBeVisible()
+  await del.click()
+  await expect(page.locator('.react-flow__edge[data-id^="route:"]')).toHaveCount(0)
+  await expect(del).toHaveCount(0)
+
+  await discardAll(page)
 })
