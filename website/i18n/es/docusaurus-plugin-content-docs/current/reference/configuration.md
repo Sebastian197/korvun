@@ -18,7 +18,13 @@ proveedores).
 > **nombre** de una variable de entorno; Korvun lee el valor al arrancar.
 > Un secreto nunca se lee de la línea de comandos, del fichero de
 > configuración, de logs ni de mensajes de error. Un secreto ausente es un
-> error de arranque claro y con nombre.
+> error de arranque claro y con nombre. En Korvun Desktop, la tarjeta
+> **SECRETOS** de Ajustes gestiona los valores detrás de esos nombres sobre
+> el llavero del sistema — solo-escritura (ningún valor se muestra ni se
+> devuelve jamás), con la presencia indicada por nombre; un valor puesto en
+> el entorno gana al llavero, y la tarjeta lo dice. Funciona incluso con el
+> core parado — justo cuando lo necesita un arranque roto por un secreto
+> ausente.
 
 ## Nivel superior
 

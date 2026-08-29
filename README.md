@@ -155,7 +155,13 @@ OpenAI-compatible and validates the chosen model exists, mouse deletion for
 canvas cables, and a model panel that blocks the corruption shapes before
 Apply. Under the hood, three chronic test flakes fell with root causes — one
 of them a real routing defect (a masked fatal close code) caught and fixed
-in the adapter. See the [v0.10.0 release notes](docs/releases/v0.10.0.md).
+in the adapter.
+
+v0.10.0 also ships the new face: the **A1 governed K** — three signals in,
+one governed decision, one controlled reply out — animated on
+[korvun.dev](https://korvun.dev/), opening this README, on the desktop app
+icon for all three platforms, and in the CLI's startup banner. See the
+[v0.10.0 release notes](docs/releases/v0.10.0.md).
 
 ## The quality pass — v0.9.1 & v0.9.2
 

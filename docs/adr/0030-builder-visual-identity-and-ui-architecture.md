@@ -244,3 +244,28 @@ Baked into 2b.1's tokens and components:
 - **Canvas/node editor now** — deferred; 2b is forms.
 - **Defer accessibility to the polish phase (2b.3)** — rejected: the AA floor and
   focus model are design-system foundations, not polish.
+
+## Amendment — the A1 governed K (2026-08-29)
+
+The **A1 "governed K"** succeeds the K-terminal mark as Korvun's core
+identity, approved by the director over the rendered korvun-brand-motion
+mockup and shipped with v0.10.0. The mark keeps this ADR's palette law and
+gives it a story: three model signals enter a rounded K tile, the policy
+decision fires inside it, and exactly one controlled reply exits.
+
+- **The gradient contract is unchanged and stays locked**: `#2BC8B7` at 0%
+  to `#7A5AF5` at 100%, diagonal top-left to bottom-right, no intermediate
+  stops, identity moments only — never functional states or focus.
+- **The single-ink form stays violet** (`#7A5AF5`) for functional contexts
+  (favicon, small monochrome placements).
+- **Director's decision (2026-08-29): the website navbar/footer mark wears
+  the full gradient** (`korvun-mark.svg`), superseding the previous
+  mono-violet navbar placement; the mockup's flat-teal K was a rendering
+  artifact (missing `gradientUnits`), not a decision — the documented
+  gradient governs.
+- Canonical sources live in `assets/brand/` mirrored byte-for-byte to
+  `website/static/brand/` and are validated by `website/scripts/
+  check-brand.mjs` (parity, viewBox, gradient endpoints, named layers, the
+  README GIF budget). The desktop app icon regenerates from the same A1
+  source (`cmd/korvun-desktop/build/appicon.png`); the CLI banner carries
+  the character form of the same story.

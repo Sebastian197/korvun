@@ -2,8 +2,10 @@
 
 The **builder** is a visual panel, served by Korvun itself, where you edit your
 configuration — brains, channels, routes, policies, and models — from your browser
-instead of hand-writing the JSON file. You make your changes in forms, click one
-button, and Korvun applies them **without restarting**.
+instead of hand-writing the JSON file. Since v0.6.0 it is a **canvas**: drag
+blocks from a palette, wire them with cables, edit each piece in its
+properties panel, click one button, and Korvun applies everything
+**without restarting**.
 
 This guide is for someone who wants to run and configure Korvun **without editing
 JSON by hand**. You do not need to be a developer.
@@ -112,14 +114,25 @@ form and try again.
 > A brief network blip while Korvun swaps itself is normal and treated as a retry, not
 > a failure — the panel keeps polling until it hears a final result.
 
-## 4. Add and remove
+## 4. Compose on the canvas
 
-The forms are add/edit/remove throughout:
+Your configuration appears as blocks and cables:
 
-- **Add a brain** with **Add brain**; add a model inside a brain with its **Add model**
-  button; add channels and routes the same way.
-- **Remove** an item with its remove control (removing a brain asks you to confirm —
-  **"Remove brain?"** — so you cannot delete one by accident).
+- **Drag** channels, brains, and models from the palette onto the canvas.
+- **Wire** a channel to a brain — the only manual cable; the canvas validates
+  what can connect to what.
+- **Edit** any block in its properties panel — a brain's persona included.
+  **The model panel validates before Apply**: only absolute `http(s)` URLs, a
+  secret NAME glued into `base_url` is rejected by name, and a cloud entry
+  without its API key is blocked — with field-level messages, while the
+  server remains the final judge.
+- **Privacy is visible**: mark a brain `private` and every cloud model shows
+  a **gray dashed cable** — excluded before dispatch, drawn on the canvas
+  instead of buried in JSON.
+- **Delete** removes a block and its cables, with confirmation. A selected
+  route cable also grows a floating **✕** at its midpoint — clicking it
+  rides exactly the same confirmed path as pressing Backspace; the gray
+  dashed privacy cable never offers the gesture.
 
 Every add/remove is just another edit: nothing is applied until you click **Save and
 reload**, and it goes through the same safe live-reload.

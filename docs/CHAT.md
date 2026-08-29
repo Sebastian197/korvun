@@ -77,13 +77,23 @@ across a core restart (fail-open: the brain answers again).
 
 ## Direct chat with the AI (console channel)
 
-With a `console` channel configured, **New chat** starts a conversation
-between you and a brain — you are the *user* here, so there is no takeover
-and no Take over button (the composer explains this). Messages run the full
-pipeline (policy, routing, persistence); **Thinking…** shows while the brain
-works. Sessions, `/new`, deletion, search and unread badges behave exactly
-as everywhere else. With no explicit route, the console channel talks to the
-first configured brain.
+With a `console` channel configured, **New chat ▾** asks first — *«¿Con qué
+cerebro?»* — and starts the conversation addressed to the brain you pick.
+The choice is part of the conversation itself: it survives restarts, shows
+as a badge in the inbox and the header, and is honored on the console
+channel only (a network channel can never smuggle a brain address past its
+configured route). You are the *user* here, so there is no takeover and no
+Take over button (the composer explains this). Messages run the full
+pipeline (policy, routing, persistence). Sessions, `/new`, deletion, search
+and unread badges behave exactly as everywhere else.
+
+The wait never lies about who is working: the console names the actual
+brain and model — *«mybrain está pensando — llama3.2:1b · local…»* — with
+its locality honest (`local` / `nube`). A dead request cuts the wait and
+says so in a visible band with **Reintentar** at hand; after 60 seconds the
+console warns and offers **Cancelar y reintentar** but never cuts on its
+own. Error states are UI-only: the store keeps real turns and the durable
+record stays the Activity feed.
 
 ## Deleting
 

@@ -77,9 +77,13 @@ On Windows, unzip and run `.\korvun.exe --version` in PowerShell.
 ## Korvun Desktop (the native app)
 
 The same release also carries **Korvun Desktop** — the full gateway behind a
-native window: first-run onboarding, secrets stored in your OS keychain, and
-the visual builder embedded. Same core, same version; the headless binary
-stays the way to run Korvun on a server.
+native window: first-run onboarding, secrets stored in your OS keychain
+(managed from the **SECRETOS** card in Ajustes, write-only by design), and
+the visual builder embedded. The onboarding's model step speaks both local
+Ollama and any **OpenAI-compatible server** (LM Studio, llama.cpp,
+OpenRouter…), and it verifies the model you chose actually exists on that
+server before the step can close. Same core, same version; the headless
+binary stays the way to run Korvun on a server.
 
 | OS | Artifact |
 |---|---|

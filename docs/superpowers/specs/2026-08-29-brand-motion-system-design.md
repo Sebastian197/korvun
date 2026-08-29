@@ -1,6 +1,12 @@
 # Website brand-motion system — governed K and routing journey: Design Spec
 
-> **Status: approved for TDD — APROBADO POR CHANO 2026-08-29** (the
+> **Status: VERIFIED — implemented, corrected to the literal mockup and
+> approved at the visual curtain (telón 2) by Chano, 2026-08-29.** Shipped
+> with v0.10.0; deviations from the mockup on record: the A1 gradient K
+> (the director's call over the mockup's flat-teal rendering artifact), the
+> gradient navbar mark, and the no-cuts/no-dim uniformity laws superseding
+> the mockup's separators and pending dim.
+> Original approval: **approved for TDD — APROBADO POR CHANO 2026-08-29** (the
 > design-drafts/korvun-brand-motion mockup seen and approved by LOOKING at
 > it — the Sixth Law's gate). Two conditions recorded with the yes:
 > 1. **The landing's CURRENT transitions and animations are UNTOUCHABLE.**

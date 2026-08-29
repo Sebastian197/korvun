@@ -62,7 +62,14 @@ Your configuration appears as blocks and cables:
   a **gray dashed cable** — excluded before dispatch, drawn on the canvas
   instead of buried in JSON.
 - **Delete** removes a block and everything that only made sense with it
-  (its cables), with confirmation.
+  (its cables), with confirmation. A selected route cable also grows a
+  floating **✕** at its midpoint — clicking it rides exactly the same
+  confirmed path as pressing Backspace. The gray dashed privacy cable never
+  offers the gesture: it is a consequence, not an edit.
+- **The model panel validates before Apply**: only absolute `http(s)` URLs,
+  a secret NAME glued into `base_url` is rejected by name, and a cloud
+  entry without its API key is blocked — with field-level messages, while
+  the server remains the final judge.
 
 ## 4. Save and reload — live, with a safety net
 

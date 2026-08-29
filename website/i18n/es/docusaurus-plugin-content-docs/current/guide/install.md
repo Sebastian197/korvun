@@ -84,9 +84,13 @@ En Windows, descomprime y ejecuta `.\korvun.exe --version` en PowerShell.
 
 La misma release trae también **Korvun Desktop** — la pasarela completa
 tras una ventana nativa: onboarding en el primer arranque, secretos
-guardados en el llavero del sistema, y el builder visual embebido. Mismo
-núcleo, misma versión; el binario headless sigue siendo la forma de correr
-Korvun en un servidor.
+guardados en el llavero del sistema (gestionados desde la tarjeta
+**SECRETOS** de Ajustes, solo-escritura por diseño), y el builder visual
+embebido. El paso de modelo del onboarding habla tanto con un Ollama local
+como con cualquier **servidor compatible OpenAI** (LM Studio, llama.cpp,
+OpenRouter…), y verifica que el modelo elegido existe de verdad en ese
+servidor antes de poder cerrar el paso. Mismo núcleo, misma versión; el
+binario headless sigue siendo la forma de correr Korvun en un servidor.
 
 | SO | Artefacto |
 |---|---|

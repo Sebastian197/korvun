@@ -63,7 +63,10 @@ allow-list is still denied.
 
 Every use, shadow, and denial lands on three surfaces: structured logs,
 Prometheus metrics, and the Activity feed — metadata only: brain, tool,
-channel, outcome, rule, latency; NEVER the tool's arguments.
+channel, outcome, rule, latency; NEVER the tool's arguments. The desktop's
+Activity feed declares its own scope with a status chip — *«En vivo · desde
+que se abrió la ventana»*: it is a live window, emptied when the window
+closes; the durable records are the logs and metrics.
 
 From the desktop chat's console channel, send **`/tools`** to get the
 gatekeeper report of that conversation's brain: its effective grants (with

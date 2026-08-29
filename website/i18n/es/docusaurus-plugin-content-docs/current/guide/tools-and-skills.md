@@ -70,7 +70,10 @@ permitidos sigue denegado.
 Cada uso, ensayo y denegación aterriza en tres superficies: logs
 estructurados, métricas Prometheus y el feed de Actividad — solo
 metadatos: cerebro, herramienta, canal, resultado, regla, latencia; NUNCA
-los argumentos de la herramienta.
+los argumentos de la herramienta. El feed de Actividad del escritorio
+declara su propio alcance con un chip de estado — *«En vivo · desde que se
+abrió la ventana»*: es una ventana en vivo que se vacía al cerrarla; los
+registros duraderos son los logs y las métricas.
 
 Desde el canal console del chat de escritorio, envía **`/tools`** para
 obtener el informe del gatekeeper del cerebro de esa conversación: sus

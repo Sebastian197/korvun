@@ -67,7 +67,15 @@ Tu configuración aparece como bloques y cables:
   muestra un **cable gris discontinuo** — excluido antes del despacho,
   dibujado en el lienzo en vez de enterrado en JSON.
 - **Borrar** elimina un bloque y todo lo que solo tenía sentido con él
-  (sus cables), con confirmación.
+  (sus cables), con confirmación. Un cable de ruta seleccionado muestra
+  además una **✕** flotante en su punto medio — el clic recorre exactamente
+  el mismo camino confirmado que la tecla Backspace. El cable gris
+  discontinuo de privacidad nunca ofrece el gesto: es una consecuencia, no
+  una edición.
+- **El panel del modelo valida antes de Aplicar**: solo URLs `http(s)`
+  absolutas, un NOMBRE de secreto pegado dentro de `base_url` se rechaza
+  por su nombre, y una entrada cloud sin su clave de API se bloquea — con
+  mensajes por campo, con el servidor como juez final.
 
 ## 4. Guardar y recargar — en vivo, con red de seguridad
 

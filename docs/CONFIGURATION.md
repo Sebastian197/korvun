@@ -20,7 +20,11 @@ a profile in [`configs/`](../configs/) and adjust.
 > in `_env` (`token_env`, `api_key_env`) hold the **name** of an environment
 > variable; Korvun reads the value from the environment at boot. A secret is never
 > read from argv, the config file, logs, or error messages (ADR-0010 §3). A
-> missing secret is a loud, named boot error.
+> missing secret is a loud, named boot error. On Korvun Desktop, the
+> **SECRETOS** card in Ajustes manages the values behind those names over
+> the OS keychain — write-only (no value is ever displayed or returned),
+> presence shown per name, environment winning over keychain — and it works
+> even while the core is stopped.
 
 ## Top-level
 

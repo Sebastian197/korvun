@@ -78,12 +78,26 @@ core restart (fail-open: the brain answers again).
 
 ## Direct chat with the AI (console channel)
 
-With a `console` channel configured, **New chat** starts a conversation
-between you and a brain — you are the *user* here, so there is no takeover.
-Messages run the full pipeline (policy, routing, persistence);
-**Thinking…** shows while the brain works. Sessions, `/new`, deletion,
-search and unread badges behave exactly as everywhere else. With no
-explicit route, the console channel talks to the first configured brain.
+With a `console` channel configured, **New chat ▾** asks first —
+*«¿Con qué cerebro?»* — and starts the conversation addressed to the brain
+you pick. The choice is part of the conversation itself: it survives
+restarts, shows as a badge in the inbox and the header, and is honored on
+the console channel only (a network channel can never smuggle a brain
+address past its configured route). You are the *user* here, so there is no
+takeover; messages run the full pipeline (policy, routing, persistence).
+Sessions, `/new`, deletion, search and unread badges behave exactly as
+everywhere else.
+
+The wait never lies about who is working. While a reply is in flight the
+console names the actual brain and model — *«mybrain está pensando —
+llama3.2:1b · local…»* — and keeps its locality honest (`local` / `nube`).
+If a request dies (provider error, dead model, broken route), the waiting
+line CUTS and a visible band says so with **Reintentar** at hand — never an
+eternal spinner. After 60 seconds without an answer the console warns and
+offers **Cancelar y reintentar**, but it never cuts on its own: a real
+local model on modest hardware may legitimately need the time. These error
+states live in the UI only — your stored conversation keeps real turns, and
+the permanent record stays the Activity feed.
 
 From the console channel, `/tools` returns the gatekeeper report of that
 conversation's brain — its effective tool grants and recent tool activity.
@@ -102,4 +116,5 @@ Both are permanent. There is no undo.
 - The desktop UI never holds the admin bearer: the shell injects it
   server-side, and the live event stream stays secret-free.
 - Secrets are only ever env-var names in the config; values live in the
-  environment or the OS keychain.
+  environment or the OS keychain. On the desktop, the **SECRETOS** card in
+  Ajustes manages keychain values write-only — no value is ever shown back.

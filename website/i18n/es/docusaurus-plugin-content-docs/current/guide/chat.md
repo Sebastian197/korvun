@@ -86,13 +86,27 @@ reinicio del core (fail-open: el cerebro vuelve a responder).
 
 ## Chat directo con la IA (canal console)
 
-Con un canal `console` configurado, **New chat** inicia una conversación
-entre tú y un cerebro — aquí el *usuario* eres tú, así que no hay takeover.
-Los mensajes recorren el pipeline completo (política, enrutado,
-persistencia); **Thinking…** se muestra mientras el cerebro trabaja. Las
-sesiones, `/new`, el borrado, la búsqueda y los badges se comportan igual
-que en el resto. Sin ruta explícita, el canal console habla con el primer
-cerebro configurado.
+Con un canal `console` configurado, **New chat ▾** pregunta primero —
+*«¿Con qué cerebro?»* — e inicia la conversación dirigida al cerebro que
+elijas. La elección forma parte de la conversación: sobrevive a los
+reinicios, se muestra como badge en el buzón y en la cabecera, y solo se
+honra en el canal console (un canal de red nunca puede colar una dirección
+de cerebro por encima de su ruta configurada). Aquí el *usuario* eres tú,
+así que no hay takeover; los mensajes recorren el pipeline completo
+(política, enrutado, persistencia). Las sesiones, `/new`, el borrado, la
+búsqueda y los badges se comportan igual que en el resto.
+
+La espera nunca miente sobre quién trabaja. Mientras hay una respuesta en
+vuelo, la consola nombra al cerebro y al modelo reales — *«mybrain está
+pensando — llama3.2:1b · local…»* — con su localidad honesta (`local` /
+`nube`). Si una petición muere (error del proveedor, modelo caído, ruta
+rota), la línea de espera SE CORTA y una banda visible lo dice con
+**Reintentar** a mano — nunca un spinner eterno. Tras 60 segundos sin
+respuesta la consola avisa y ofrece **Cancelar y reintentar**, pero nunca
+corta por su cuenta: un modelo local real en hardware modesto puede
+necesitar ese tiempo legítimamente. Estos estados de error viven solo en la
+UI — la conversación guardada conserva turnos reales, y el registro
+permanente sigue siendo el feed de Actividad.
 
 Desde el canal console, `/tools` devuelve el informe del gatekeeper del
 cerebro de esa conversación — sus permisos efectivos y la actividad
@@ -114,4 +128,6 @@ Ambos son permanentes. No hay deshacer.
   libre de secretos.
 - Los secretos son siempre nombres de variables de entorno en la
   configuración; los valores viven en el entorno o en el llavero del
-  sistema operativo.
+  sistema operativo. En el escritorio, la tarjeta **SECRETOS** de Ajustes
+  gestiona los valores del llavero en modo solo-escritura — ningún valor se
+  muestra jamás de vuelta.
