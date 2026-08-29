@@ -38,16 +38,20 @@ test('every public English route has a Spanish mirror', async ({ page }) => {
 test('English and Spanish documentation expose the same route tree', async ({ page }) => {
   const collect = async (url: string, prefix: string) => {
     await page.goto(url)
-    return page.locator('nav a, aside a').evaluateAll(
+    const routes = await page.locator('nav a, aside a').evaluateAll(
       (links, routePrefix) =>
         links
           .map((link) => link.getAttribute('href') ?? '')
           .filter((href) => href.startsWith(routePrefix as string))
           .map((href) => href.slice((routePrefix as string).length))
-          .filter(Boolean)
-          .sort(),
+          .filter(Boolean),
       prefix,
     )
+    // The invariant is the SET of exposed routes: Docusaurus legitimately
+    // renders the same href more than once (navbar plus the mobile sidebar
+    // clone, whose presence depends on hydration timing), so raw lists
+    // flake while the route tree itself is stable.
+    return [...new Set(routes)].sort()
   }
 
   const en = (await collect('/korvun/guide/quickstart/', '/korvun/')).filter(
