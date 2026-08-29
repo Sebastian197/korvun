@@ -151,6 +151,15 @@ explicit decision.
 > opción intermedia de una pasada externa más ligera pre-1.0 si el
 > presupuesto de Chano lo permite llegado el momento (decisión suya).
 > Ningún producto de seguridad se declara seguro por autoevaluación.
+>
+> **Scorecard (2026-08-30):** las palancas técnicas ejecutadas (todo
+> pineado por SHA, choco con versión, advisories alcanzables bumpeados,
+> fuzzing ya computa, Best-Practices en InProgress). Lo estructural por
+> mantenedor único — **Code-Review 0 y Contributors 0 — no se persigue**:
+> serían puntos comprados con ceremonia vacía, no con seguridad real.
+> Maintained 0 se cura solo con la edad del repo (~mediados de sept.).
+> Sin fix upstream aún: image-size (npm) y el advisory de openpgp
+> (x/crypto) — fichados, se re-evalúan en cada govulncheck.
 
 > **Adjudicated (2026-08-29):** the two orphan files a parallel session
 > left in the tree (an LCP spec + a font-preload e2e) are WITHDRAWN by
