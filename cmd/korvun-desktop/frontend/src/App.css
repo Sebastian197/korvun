@@ -2015,3 +2015,43 @@
   display: inline-block;
   vertical-align: 1px;
 }
+
+/* N1 — the gateway branch of the onboarding's Modelo step (sealed §3):
+   branch radios and the compat mold fields, house finish. */
+.ob-branches {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0 10px;
+}
+.ob-branch {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--tx1);
+  cursor: pointer;
+}
+.ob-compat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ob-field {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tx2);
+}
+.ob-input {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  color: var(--tx1);
+  font-size: 12.5px;
+}

@@ -24,7 +24,20 @@ import { ChannelWizard } from './ChannelWizard'
 
 const OLLAMA_BASE = 'http://127.0.0.1:11434'
 
+/** Sealed compat default (ola2-designs §3): the LM Studio-style local URL. */
+const COMPAT_DEFAULT_URL = 'http://localhost:1234/v1'
+
 type ChkState = 'idle' | 'checking' | 'ok' | 'fail'
+
+/** N1 — the compat branch's check outcome: ok, or an on-screen failure
+ * with its fix at hand (missing names the id; needskey bridges to B10). */
+type CompatChk =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'ok' }
+  | { kind: 'missing' }
+  | { kind: 'needskey' }
+  | { kind: 'unreachable' }
 
 interface OnboardingProps {
   onFinished: () => void
@@ -39,6 +52,16 @@ export function Onboarding({ onFinished, initialStep }: OnboardingProps): React.
   const [channelAdded, setChannelAdded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // N1 (sealed design ola2-designs §3): the gateway branch. Switching
+  // branches DISCARDS the other branch's check result (sealed).
+  const [branch, setBranch] = useState<'ollama' | 'compat'>('ollama')
+  const [compat, setCompat] = useState({
+    baseUrl: COMPAT_DEFAULT_URL,
+    modelId: '',
+    apiKeyEnv: '',
+    locality: 'local',
+  })
+  const [compatChk, setCompatChk] = useState<CompatChk>({ kind: 'idle' })
   const core = useCoreState()
   const running = core === 'running'
 
@@ -52,6 +75,51 @@ export function Onboarding({ onFinished, initialStep }: OnboardingProps): React.
     d.CheckOllama(OLLAMA_BASE)
       .then((r) => setChk(r.reachable ? 'ok' : 'fail'))
       .catch(() => setChk('fail'))
+  }
+
+  const pickBranch = (b: 'ollama' | 'compat'): void => {
+    setBranch(b)
+    // Sealed: the abandoned branch's result is discarded.
+    if (b === 'ollama') setCompatChk({ kind: 'idle' })
+    else setChk('idle')
+  }
+
+  const checkCompat = (): void => {
+    const d = desktop()
+    if (!d?.CheckCompatModel) {
+      setCompatChk({ kind: 'unreachable' })
+      return
+    }
+    setCompatChk({ kind: 'checking' })
+    d.CheckCompatModel(compat.baseUrl, compat.modelId, compat.apiKeyEnv)
+      .then((r) => {
+        if (r.modelFound) setCompatChk({ kind: 'ok' })
+        else if (r.needsKey) setCompatChk({ kind: 'needskey' })
+        else if (r.reachable) setCompatChk({ kind: 'missing' })
+        else setCompatChk({ kind: 'unreachable' })
+      })
+      .catch(() => setCompatChk({ kind: 'unreachable' }))
+  }
+
+  // N1: closing the Modelo step on the compat branch rewrites the first-run
+  // template BEFORE any later step can boot the core.
+  const nextStep = (): void => {
+    if (step === 1 && branch === 'compat') {
+      const d = desktop()
+      if (d?.ApplyCompatFirstRun) {
+        setError('')
+        d.ApplyCompatFirstRun(compat.baseUrl, compat.modelId, compat.apiKeyEnv, compat.locality)
+          .then(() => setStep(2))
+          .catch((e: unknown) => {
+            setError(
+              'No se pudo escribir la configuración del primer arranque: ' +
+                (e instanceof Error ? e.message : String(e)),
+            )
+          })
+        return
+      }
+    }
+    setStep((s) => s + 1)
   }
 
   // Boot the template core so the assistant's POST/reload pipe has a live
@@ -120,35 +188,142 @@ export function Onboarding({ onFinished, initialStep }: OnboardingProps): React.
         <div className="ob-body">
           {step === 1 && (
             <>
-              <div className="wiz-heading">Primero: ¿hay un modelo que responda?</div>
+              <div className="wiz-heading">Primero: ¿dónde están tus modelos?</div>
               <div className="wiz-caption">
                 Korvun no trae modelos — usa los que ya tienes. Comprobemos que hay uno accesible
                 antes de conectar nada.
               </div>
-              <div className="ob-check">
-                {chk === 'idle' && (
-                  <button type="button" className="btn-primary btn-primary-sm" onClick={checkModel}>
-                    Comprobar modelo
-                  </button>
-                )}
-                {chk === 'checking' && (
-                  <span className="wiz-precheck-hint">Comprobando {OLLAMA_BASE}…</span>
-                )}
-                {chk === 'ok' && (
-                  <span className="wiz-precheck-ok mono">
-                    ✓ ollama accesible · {OLLAMA_BASE} — listo
-                  </span>
-                )}
-                {chk === 'fail' && (
-                  <div className="ob-check-fail">
-                    <IconWarning size={14} />
-                    <span>Ollama no responde — arráncalo y reintenta.</span>
-                    <button type="button" className="btn-secondary btn-sm" onClick={checkModel}>
-                      Reintentar
-                    </button>
-                  </div>
-                )}
+              {/* N1 (sealed): the two branches. Ollama keeps today's flow. */}
+              <div className="ob-branches" role="radiogroup" aria-label="¿Dónde están tus modelos?">
+                <label className="ob-branch">
+                  <input
+                    type="radio"
+                    name="model-branch"
+                    checked={branch === 'ollama'}
+                    onChange={() => pickBranch('ollama')}
+                  />
+                  Ollama (local)
+                </label>
+                <label className="ob-branch">
+                  <input
+                    type="radio"
+                    name="model-branch"
+                    checked={branch === 'compat'}
+                    onChange={() => pickBranch('compat')}
+                  />
+                  Servidor compatible OpenAI (LM Studio, llama.cpp…)
+                </label>
               </div>
+              {branch === 'ollama' && (
+                <div className="ob-check">
+                  {chk === 'idle' && (
+                    <button
+                      type="button"
+                      className="btn-primary btn-primary-sm"
+                      onClick={checkModel}
+                    >
+                      Comprobar modelo
+                    </button>
+                  )}
+                  {chk === 'checking' && (
+                    <span className="wiz-precheck-hint">Comprobando {OLLAMA_BASE}…</span>
+                  )}
+                  {chk === 'ok' && (
+                    <span className="wiz-precheck-ok mono">
+                      ✓ ollama accesible · {OLLAMA_BASE} — listo
+                    </span>
+                  )}
+                  {chk === 'fail' && (
+                    <div className="ob-check-fail">
+                      <IconWarning size={14} />
+                      <span>Ollama no responde — arráncalo y reintenta.</span>
+                      <button type="button" className="btn-secondary btn-sm" onClick={checkModel}>
+                        Reintentar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {branch === 'compat' && (
+                <div className="ob-compat">
+                  <label className="ob-field">
+                    base_url
+                    <input
+                      className="ob-input mono"
+                      value={compat.baseUrl}
+                      onChange={(e) => setCompat({ ...compat, baseUrl: e.target.value })}
+                    />
+                  </label>
+                  <label className="ob-field">
+                    model_id
+                    <input
+                      className="ob-input mono"
+                      placeholder="p. ej. qwen3-4b"
+                      value={compat.modelId}
+                      onChange={(e) => setCompat({ ...compat, modelId: e.target.value })}
+                    />
+                  </label>
+                  <label className="ob-field">
+                    api_key_env
+                    <input
+                      className="ob-input mono"
+                      placeholder="nombre de variable (opcional)"
+                      value={compat.apiKeyEnv}
+                      onChange={(e) => setCompat({ ...compat, apiKeyEnv: e.target.value })}
+                    />
+                  </label>
+                  <label className="ob-field">
+                    locality
+                    <select
+                      className="ob-input"
+                      value={compat.locality}
+                      onChange={(e) => setCompat({ ...compat, locality: e.target.value })}
+                    >
+                      <option value="local">local</option>
+                      <option value="cloud">cloud</option>
+                    </select>
+                  </label>
+                  <div className="ob-check">
+                    {compatChk.kind === 'ok' ? (
+                      <span className="wiz-precheck-ok mono">
+                        ✓ openai-compatible · {compat.modelId} — listo
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-primary btn-primary-sm"
+                        onClick={checkCompat}
+                        disabled={compatChk.kind === 'checking' || compat.modelId.trim() === ''}
+                      >
+                        {compatChk.kind === 'checking' ? 'Comprobando…' : 'Comprobar'}
+                      </button>
+                    )}
+                  </div>
+                  {(compatChk.kind === 'missing' ||
+                    compatChk.kind === 'needskey' ||
+                    compatChk.kind === 'unreachable') && (
+                    <div className="ob-check-fail" role="alert">
+                      <IconWarning size={14} />
+                      <span>
+                        {compatChk.kind === 'missing' &&
+                          `El modelo "${compat.modelId}" no está en ese servidor — revisa el nombre y reintenta.`}
+                        {compatChk.kind === 'needskey' &&
+                          'El servidor exige clave de API — guárdala en Ajustes → Secretos y reintenta.'}
+                        {compatChk.kind === 'unreachable' &&
+                          'El servidor no responde — arráncalo y reintenta.'}
+                      </span>
+                      <button type="button" className="btn-secondary btn-sm" onClick={checkCompat}>
+                        Reintentar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {error !== '' && (
+                <div className="hero-strip-error" role="alert">
+                  {error}
+                </div>
+              )}
             </>
           )}
 
@@ -215,10 +390,13 @@ export function Onboarding({ onFinished, initialStep }: OnboardingProps): React.
             <button
               type="button"
               className="btn-primary btn-primary-sm"
-              onClick={() => setStep((s) => s + 1)}
-              // Step 1 gates on the model check; step 2's channel is OPTIONAL
-              // (the template runs channel-less), so Siguiente is always open.
-              disabled={step === 1 && chk !== 'ok'}
+              onClick={nextStep}
+              // Step 1 gates on the ACTIVE branch's check (N1: the compat
+              // branch validates the model EXISTS before the step closes);
+              // step 2's channel is OPTIONAL, so Siguiente is always open.
+              disabled={
+                step === 1 && (branch === 'ollama' ? chk !== 'ok' : compatChk.kind !== 'ok')
+              }
             >
               Siguiente
             </button>

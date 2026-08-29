@@ -21,6 +21,19 @@ export interface DesktopBindings {
   SetSecret(name: string, value: string): Promise<void>
   DeleteSecret(name: string): Promise<void>
   CheckOllama(baseURL: string): Promise<{ reachable: boolean; detail: string }>
+  /** N1: probe {base}/models for the compat branch — outcomes, never values. */
+  CheckCompatModel?(
+    baseURL: string,
+    modelID: string,
+    apiKeyEnv: string,
+  ): Promise<{ reachable: boolean; modelFound: boolean; needsKey: boolean; detail: string }>
+  /** N1: rewrite the first-run template's brain to the compat entry. */
+  ApplyCompatFirstRun?(
+    baseURL: string,
+    modelID: string,
+    apiKeyEnv: string,
+    locality: string,
+  ): Promise<void>
   /** PRESENCE only (SP6c) — never a value: {inEnv, inKeychain}. */
   CheckSecretPresence(name: string): Promise<{ inEnv: boolean; inKeychain: boolean }>
   /** B10: referenced secret NAMES from the config — never a value. */
