@@ -30,3 +30,17 @@ assert.match(hero, /data-layer="orbits"/)
 assert.match(hero, /data-layer="particles"/)
 
 console.log('check-brand: OK')
+
+// Task 5 — the README masthead GIF: one-shot (no infinite Netscape loop),
+// within the approved dimensions and byte budget.
+const gif = readFileSync(new URL('../../assets/brand/korvun-readme-masthead.gif', import.meta.url))
+assert.equal(gif.subarray(0, 6).toString('ascii'), 'GIF89a')
+assert.ok(gif.readUInt16LE(6) <= 1280)
+assert.ok(gif.readUInt16LE(8) <= 520)
+assert.ok(gif.byteLength <= 2.5 * 1024 * 1024)
+const netscape = gif.indexOf(Buffer.from('NETSCAPE2.0', 'ascii'))
+if (netscape >= 0) {
+  assert.notDeepEqual([...gif.subarray(netscape + 11, netscape + 16)], [3, 1, 0, 0, 0])
+}
+
+console.log('check-brand: gif OK')

@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="assets/brand/korvun-logo-hero.svg" width="150" alt="Korvun logo">
+  <img src="assets/brand/korvun-readme-masthead.gif" width="880"
+       alt="Korvun governed K: three model signals enter, policy decides, and one controlled response exits.">
 </p>
 
 <h1 align="center">Korvun</h1>
