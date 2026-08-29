@@ -247,3 +247,178 @@ test('arms nothing without a masthead or without observer support', async () => 
   assert.equal(harness.visibility.created, false)
   cleanup()
 })
+
+// ---- Scroll routing journey (brand-motion spec, Task 3) --------------------
+
+class FakeJourneyElement {
+  attributes = new Map()
+  dataset = {}
+  style = new FakeStyle()
+
+  constructor(section = null) {
+    this.section = section
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, value)
+    if (name.startsWith('data-')) {
+      const key = name
+        .slice(5)
+        .replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+      this.dataset[key] = value
+    }
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name)
+    const key = name.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+    delete this.dataset[key]
+  }
+}
+
+function createJourneyHarness({ reducedMotion = false, resizeObserver = true } = {}) {
+  const journey = new FakeJourneyElement()
+  const signal = new FakeJourneyElement()
+  const sections = ['hero', 'install', 'capabilities', 'privacy', 'demo', 'final'].map(
+    (name) => new FakeJourneyElement(name),
+  )
+  const geometry = { readCount: 0 }
+  const ports = sections.map((_, index) => {
+    const port = new FakeJourneyElement()
+    port.getBoundingClientRect = () => {
+      geometry.readCount++
+      return { top: index * 600, left: 40, width: 12, height: 12 }
+    }
+    return port
+  })
+  sections.forEach((section, index) => {
+    section.querySelector = (selector) =>
+      selector === '[data-k-route-port]' ? ports[index] : null
+  })
+  const listeners = new Map()
+  const frames = {
+    queue: [],
+    pendingCount() {
+      return this.queue.length
+    },
+    flush() {
+      const jobs = [...this.queue]
+      this.queue = []
+      jobs.forEach((job) => job())
+    },
+  }
+  const document = {
+    querySelector(selector) {
+      if (selector === '[data-k-journey]') return journey
+      if (selector === '[data-k-route-signal]') return signal
+      return null
+    },
+    querySelectorAll(selector) {
+      return selector === '[data-k-section]' ? sections : []
+    },
+  }
+  const runtime = {
+    matchMedia: (query) => ({
+      matches: query.includes('no-preference') ? !reducedMotion : reducedMotion,
+    }),
+    scrollY: 0,
+    innerHeight: 600,
+    requestAnimationFrame: (job) => {
+      frames.queue.push(job)
+      return frames.queue.length
+    },
+    cancelAnimationFrame: () => {
+      frames.queue = []
+    },
+    addEventListener: (name, fn) => listeners.set(name, fn),
+    removeEventListener: (name) => listeners.delete(name),
+  }
+  if (resizeObserver) {
+    runtime.ResizeObserver = class {
+      constructor(callback) {
+        runtime.resizeCallback = callback
+      }
+
+      observe() {}
+
+      disconnect() {}
+    }
+  }
+  const scroll = {
+    fire(y = runtime.scrollY) {
+      runtime.scrollY = y
+      listeners.get('scroll')?.()
+    },
+  }
+  return { document, runtime, journey, signal, sections, geometry, frames, scroll, listeners }
+}
+
+test('routeStates orders pending/active/complete around the active index', async () => {
+  const { routeStates } = await import('./brandMotion.ts')
+  assert.deepEqual(routeStates(2, 6), [
+    'complete',
+    'complete',
+    'active',
+    'pending',
+    'pending',
+    'pending',
+  ])
+  assert.deepEqual(routeStates(0, 3), ['active', 'pending', 'pending'])
+})
+
+test('coalesces scroll into one frame, writes progress from cached geometry', async () => {
+  const { armRoutingJourney } = await import('./brandMotion.ts')
+  const harness = createJourneyHarness()
+  const cleanup = armRoutingJourney(harness.document, harness.runtime)
+  const initialReadCount = harness.geometry.readCount
+  assert.ok(initialReadCount > 0, 'geometry must be measured at init')
+
+  // Scroll to the midpoint (activation pos = scrollY + innerHeight/2 lands
+  // exactly halfway between the first and last port centers): two events
+  // must schedule exactly ONE frame.
+  harness.scroll.fire(1206)
+  harness.scroll.fire(1206)
+  assert.equal(harness.frames.pendingCount(), 1)
+  harness.frames.flush()
+  assert.equal(harness.journey.style.getPropertyValue('--k-route-progress'), '0.5')
+  assert.deepEqual(
+    harness.sections.map((section) => section.dataset.kRouteState),
+    ['complete', 'complete', 'active', 'pending', 'pending', 'pending'],
+  )
+  // No per-frame geometry reads: the render frame reuses the cache.
+  assert.equal(harness.geometry.readCount, initialReadCount)
+  cleanup()
+})
+
+test('resize recomputes geometry; cleanup clears every trace', async () => {
+  const { armRoutingJourney } = await import('./brandMotion.ts')
+  const harness = createJourneyHarness()
+  const cleanup = armRoutingJourney(harness.document, harness.runtime)
+  const afterInit = harness.geometry.readCount
+  harness.runtime.resizeCallback?.([])
+  assert.ok(harness.geometry.readCount > afterInit, 'resize must re-measure ports')
+
+  harness.scroll.fire(600)
+  harness.frames.flush()
+  cleanup()
+  assert.equal(harness.journey.style.getPropertyValue('--k-route-progress'), '')
+  assert.ok(
+    harness.sections.every((section) => section.dataset.kRouteState === undefined),
+    'cleanup must remove every data-k-route-state',
+  )
+  assert.equal(harness.listeners.size, 0, 'cleanup must remove listeners')
+})
+
+test('reduced motion leaves the journey static and complete', async () => {
+  const { armRoutingJourney } = await import('./brandMotion.ts')
+  const harness = createJourneyHarness({ reducedMotion: true })
+  const cleanup = armRoutingJourney(harness.document, harness.runtime)
+  assert.equal(harness.listeners.has('scroll'), false)
+  assert.equal(harness.journey.getAttribute('data-k-static'), 'true')
+  cleanup()
+  assert.equal(harness.journey.getAttribute('data-k-static'), null)
+})
