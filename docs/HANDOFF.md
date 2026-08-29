@@ -133,6 +133,12 @@ explicit decision.
 > LinkedIn → https://www.linkedin.com/feed/update/urn:li:activity:7499510780204187648/
 > *(gap noted: the v0.9.x post links from last week are still pending —
 > Chano will pass them.)*
+>
+> **Adjudicated (2026-08-29):** the two orphan files a parallel session
+> left in the tree (an LCP spec + a font-preload e2e) are WITHDRAWN by
+> Chano's call — deleted untracked, never released. Future idea, no
+> commitment: landing performance metrics, redone with fresh post-launch
+> context if ever wanted.
 
 > **PREVIOUS (2026-08-29, session close): the B13+B14 lote is ON MASTER —
 > `3baf9cc`, the week's first code lote, strict TDD end to end.**
