@@ -77,7 +77,9 @@ describe('the direct chat (console channel)', () => {
     const box = screen.getByRole('textbox', { name: /message/i })
     fireEvent.change(box, { target: { value: 'hola' } })
     fireEvent.keyDown(box, { key: 'Enter' })
-    await screen.findByText(/thinking/i)
+    // B11 (sealed redesign, 2026-08-29): the wait speaks the serving brain's
+    // truth; this harness exposes none, so the honest degradation shows.
+    await screen.findByText(/pensando/i)
     const msg = calls.find((c) => c.url.endsWith('/message'))
     expect(msg?.method).toBe('POST')
     expect(msg?.url).toMatch(/^\/api\/conversations\/console%3A%3A/)
@@ -90,7 +92,7 @@ describe('the direct chat (console channel)', () => {
     await screen.findByText('hola humano')
     // The indicator clears a state-tick after the reply lands — auto-wait
     // for its real removal (house lesson: never assert absence impatiently).
-    await waitFor(() => expect(screen.queryByText(/thinking/i)).toBeNull())
+    await waitFor(() => expect(screen.queryByText(/pensando/i)).toBeNull())
   })
 
   it('takeover is disabled with its reason in console conversations', async () => {

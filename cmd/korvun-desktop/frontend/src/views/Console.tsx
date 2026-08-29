@@ -178,6 +178,17 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   // can turn plain-words after ~10s of a slow local model.
   const [thinkingSince, setThinkingSince] = useState<number | null>(null)
   const [thinkingLong, setThinkingLong] = useState(false)
+  // B12 (sealed design b11-b12-honest-chat.md): the visible failure. The
+  // band is UI state ONLY — decision 2: the store keeps real turns, the
+  // permanent record is Actividad's feed. handle_failed frames arrive
+  // through the live feed store; the seq baseline scopes them to the
+  // in-flight request.
+  const feed = useFeed()
+  const [failBand, setFailBand] = useState<{ brain: string; repeat: boolean } | null>(null)
+  const [waitNotice, setWaitNotice] = useState<'none' | 'shown' | 'dismissed'>('none')
+  const failSeqBaseline = useRef(0)
+  const lastSentRef = useRef<{ key: string; text: string } | null>(null)
+  const consecutiveFails = useRef(0)
   // Optimistic echoes (pega 2, list since estreno E-14): EVERY in-flight
   // send paints the instant Send is pressed and reconciles with ITS real
   // pair — a second rapid send must not overwrite the first (the
@@ -319,15 +330,45 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     )
   }, [currentKey, currentTurns])
 
-  // The brain answered (or the ack landed): thinking ends.
+  // The brain answered (or the ack landed): thinking ends. A real answer
+  // also resets the B12 failure streak — the repeat line is for
+  // CONSECUTIVE failures only.
   useEffect(() => {
     if (turns.length === 0) return
     const last = turns[turns.length - 1]
     if (last.role === 'assistant' || last.role === 'system') {
       setThinking(false)
       setThinkingSince(null)
+      if (last.role === 'assistant') consecutiveFails.current = 0
     }
   }, [turns])
+
+  // B12 — the failure CUTS the wait and speaks (sealed estado 3): a NEW
+  // handle_failed frame on the console channel, while this conversation
+  // waits, ends the thinking and paints the band. Correlation: the seq
+  // baseline captured at send time (one operator, one in-flight wait).
+  useEffect(() => {
+    if (!thinking || selected === null || !isConsoleKey(selected)) return
+    const hit = feed.frames.find(
+      (f) =>
+        f.type === 'handle_failed' &&
+        f.channel === 'console' &&
+        (f.seq ?? 0) > failSeqBaseline.current,
+    )
+    if (hit === undefined) return
+    failSeqBaseline.current = hit.seq ?? failSeqBaseline.current
+    setThinking(false)
+    setThinkingSince(null)
+    setWaitNotice('none')
+    const fallback = servingBrainInfo(selected).brain ?? ''
+    setFailBand({
+      brain: hit.brain !== undefined && hit.brain !== '' ? hit.brain : fallback,
+      repeat: consecutiveFails.current > 0,
+    })
+    consecutiveFails.current++
+    // servingBrainInfo reads refs only — stable by construction.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feed.frames, thinking, selected])
 
   // Reconcile the optimistic echoes with the shared per-baseline rule
   // (retiredPendingIds): each NEW store turn retires exactly one pending.
@@ -340,13 +381,22 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     })
   }, [turns, selected])
 
-  // The honest-wait tick: after ~10s of thinking, say it in plain words.
+  // The honest-wait tick: after ~10s of thinking, say it in plain words —
+  // and after 60s, the B12 threshold NOTICE (sealed estado 4: it warns,
+  // it never cuts alone; 'dismissed' means the user chose to keep waiting
+  // and this request never re-warns).
   useEffect(() => {
     if (thinkingSince === null) {
       setThinkingLong(false)
       return
     }
-    const tick = () => setThinkingLong(Date.now() - thinkingSince > 10_000)
+    const tick = () => {
+      const elapsed = Date.now() - thinkingSince
+      setThinkingLong(elapsed > 10_000)
+      if (elapsed > 60_000) {
+        setWaitNotice((w) => (w === 'none' ? 'shown' : w))
+      }
+    }
     tick()
     const id = setInterval(tick, 1_000)
     return () => clearInterval(id)
@@ -392,17 +442,21 @@ export function Console(props: ConsoleProps): React.JSX.Element {
   // "no deja rastro" in both directions.
   const brainMenuPrev = useRef<string | null>(null)
   const brainChoices = useRef<{
-    brains: { name: string; sensitivity: string }[]
+    brains: { name: string; sensitivity: string; model: { id: string; locality: string } | null }[]
     def: string | null
   } | null>(null)
   const brainChoicesInFlight = useRef<Promise<{
-    brains: { name: string; sensitivity: string }[]
+    brains: { name: string; sensitivity: string; model: { id: string; locality: string } | null }[]
     def: string | null
   }> | null>(null)
 
   const loadBrainChoices = useCallback(() => {
     const p = (async () => {
-      let brains: { name: string; sensitivity: string }[] = []
+      let brains: {
+        name: string
+        sensitivity: string
+        model: { id: string; locality: string } | null
+      }[] = []
       let routes: unknown
       try {
         const [brainsResp, cfgResp] = await Promise.all([
@@ -414,15 +468,31 @@ export function Console(props: ConsoleProps): React.JSX.Element {
           if (Array.isArray(raw)) {
             brains = raw
               .filter(
-                (b): b is { name: string; sensitivity?: unknown } =>
+                (b): b is { name: string; sensitivity?: unknown; models?: unknown } =>
                   b !== null &&
                   typeof b === 'object' &&
                   typeof (b as { name?: unknown }).name === 'string',
               )
-              .map((b) => ({
-                name: b.name,
-                sensitivity: typeof b.sensitivity === 'string' ? b.sensitivity : '',
-              }))
+              .map((b) => {
+                // B11: the FIRST model's identity feeds the truthful wait
+                // (the sealed «{model_id} · {local|nube}» detail). Shape is
+                // defensive — anything unexpected degrades to null detail.
+                let model: { id: string; locality: string } | null = null
+                if (Array.isArray(b.models) && b.models.length > 0) {
+                  const m = b.models[0] as { model_id?: unknown; locality?: unknown }
+                  if (m !== null && typeof m === 'object' && typeof m.model_id === 'string') {
+                    model = {
+                      id: m.model_id,
+                      locality: typeof m.locality === 'string' ? m.locality : '',
+                    }
+                  }
+                }
+                return {
+                  name: b.name,
+                  sensitivity: typeof b.sensitivity === 'string' ? b.sensitivity : '',
+                  model,
+                }
+              })
           }
         }
         if (cfgResp.ok) routes = ((await cfgResp.json()) as { routes?: unknown })?.routes
@@ -436,6 +506,39 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     brainChoicesInFlight.current = p
     return p
   }, [fetcher])
+
+  // B11 — who is actually serving the open conversation: the B9 id first,
+  // the console route as fallback; the model detail from the cached
+  // /api/brains list. Dropping detail is honest; inventing it never is.
+  const servingBrainInfo = (
+    key: string | null,
+  ): { brain: string | null; model: { id: string; locality: string } | null } => {
+    if (key === null || !isConsoleKey(key)) return { brain: null, model: null }
+    const cached = brainChoices.current
+    const brain = brainOfConversationId(splitKey(key).id) ?? cached?.def ?? null
+    if (brain === null) return { brain: null, model: null }
+    const row = cached?.brains.find((b) => b.name === brain)
+    return { brain, model: row?.model ?? null }
+  }
+
+  // B11 — the sealed truthful-wait mold (b11-b12-honest-chat.md, estado
+  // 1/2): «{brain} está pensando — {model_id} · {local|nube}…»; the long
+  // wait forks by the TRUTH (the old hardcoded local line survives only
+  // when it is literally true); degradation drops detail, never invents.
+  const thinkingCaption = (long: boolean): string => {
+    const { brain, model } = servingBrainInfo(selected)
+    if (brain === null) return long ? 'Sigue pensando…' : 'Pensando…'
+    if (model === null || model.id === '') {
+      return long ? `${brain} sigue pensando…` : `${brain} está pensando…`
+    }
+    if (!long) {
+      const where = model.locality === 'cloud' ? 'nube' : 'local'
+      return `${brain} está pensando — ${model.id} · ${where}…`
+    }
+    return model.locality === 'cloud'
+      ? `${brain} sigue sin responder — la petición está en la nube…`
+      : `${model.id} sigue pensando — un modelo local puede tardar en esta máquina…`
+  }
 
   useEffect(() => {
     void loadBrainChoices()
@@ -501,6 +604,10 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     setViewSession(session)
     setComposer({ kind: 'idle' })
     setConfirm('none')
+    // B12: switching conversations closes the failure band and the wait
+    // notice — they belong to the conversation that produced them.
+    setFailBand(null)
+    setWaitNotice('none')
     pinnedRef.current = true
     // The pane belongs to the NEW conversation from this instant: stale
     // turns from the previous one must never show under its title (the
@@ -528,61 +635,95 @@ export function Console(props: ConsoleProps): React.JSX.Element {
     setQuery('')
   }
 
+  // sendDirectText is the ONE direct-chat send path (extracted for B12: the
+  // [Reintentar] gestures ride the same rail as the composer — echo, honest
+  // wait, reconciliation, band resets included).
+  async function sendDirectText(text: string): Promise<boolean> {
+    if (selected === null) return false
+    setComposer({ kind: 'idle' })
+    // B12 resets: a fresh send opens a fresh honest wait.
+    setFailBand(null)
+    setWaitNotice('none')
+    failSeqBaseline.current = feed.frames.reduce((m, f) => Math.max(m, f.seq ?? 0), 0)
+    lastSentRef.current = { key: selected, text }
+    const pendingId = ++nextPendingId.current
+    const baseline = turns.filter((t) => t.role === 'user' && t.content === text).length
+    const sysBaseline = turns.filter((t) => t.role === 'system').length
+    setPendings((p) => {
+      // Hard retention cap (re-review follow-up F6): a long outage with
+      // retries must not grow state and DOM without bound. Oldest FAILED
+      // entries evict first; sending ones only under a pathological pile.
+      const next = [
+        ...p,
+        {
+          id: pendingId,
+          key: selected,
+          content: text,
+          state: 'sending' as const,
+          baseline,
+          sysBaseline,
+        },
+      ]
+      if (next.length > MAX_PENDING_ECHOES) {
+        const failedIdx = next.findIndex((x) => x.state === 'failed')
+        next.splice(failedIdx >= 0 ? failedIdx : 0, 1)
+      }
+      return next
+    })
+    setThinking(true)
+    setThinkingSince(Date.now())
+    pinnedRef.current = true
+    const sent = await sendUserMessage(selected, text, fetcher)
+    if (sent.ok) {
+      refetchConversation()
+      refetchInbox()
+      return true
+    }
+    // The echo NEVER vanishes silently: it stays, marked as not sent.
+    setPendings((p) => p.map((x) => (x.id === pendingId ? { ...x, state: 'failed' } : x)))
+    setThinking(false)
+    setThinkingSince(null)
+    setComposer({
+      kind: 'error',
+      message:
+        sent.reason === 'not-wired'
+          ? 'Console channel not wired in the running core.'
+          : sent.reason === 'saturated'
+            ? 'Brain queue is saturated — try again in a moment.'
+            : 'The message could not be sent.',
+    })
+    return false
+  }
+
+  // B12 — [Reintentar]: resend the LAST user message through the same rail.
+  function retryLastSend(): void {
+    const last = lastSentRef.current
+    if (last === null || last.key !== selected) {
+      setFailBand(null)
+      return
+    }
+    void sendDirectText(last.text)
+  }
+
+  // B12 — [Cancelar y reintentar]: stop waiting on THIS request (decision
+  // 1: a late answer still paints as a normal turn — cancel means stop
+  // waiting, never hide) and resend.
+  function cancelAndRetry(): void {
+    setThinking(false)
+    setThinkingSince(null)
+    setWaitNotice('none')
+    retryLastSend()
+  }
+
   async function submitReply(): Promise<void> {
     if (selected === null || draft.trim() === '') return
     if (isConsoleKey(selected)) {
       // Direct chat: the user's turn ECHOES INSTANTLY (pega 2) and the
       // honest wait starts from the send instant (pega 4-UI) — the store's
-      // final pair reconciles both later.
-      const text = draft
-      setComposer({ kind: 'idle' })
-      const pendingId = ++nextPendingId.current
-      const baseline = turns.filter((t) => t.role === 'user' && t.content === text).length
-      const sysBaseline = turns.filter((t) => t.role === 'system').length
-      setPendings((p) => {
-        // Hard retention cap (re-review follow-up F6): a long outage with
-        // retries must not grow state and DOM without bound. Oldest FAILED
-        // entries evict first; sending ones only under a pathological pile.
-        const next = [
-          ...p,
-          {
-            id: pendingId,
-            key: selected,
-            content: text,
-            state: 'sending' as const,
-            baseline,
-            sysBaseline,
-          },
-        ]
-        if (next.length > MAX_PENDING_ECHOES) {
-          const failedIdx = next.findIndex((x) => x.state === 'failed')
-          next.splice(failedIdx >= 0 ? failedIdx : 0, 1)
-        }
-        return next
-      })
-      setThinking(true)
-      setThinkingSince(Date.now())
-      pinnedRef.current = true
-      const sent = await sendUserMessage(selected, text, fetcher)
-      if (sent.ok) {
-        setDraft('')
-        refetchConversation()
-        refetchInbox()
-        return
-      }
-      // The echo NEVER vanishes silently: it stays, marked as not sent.
-      setPendings((p) => p.map((x) => (x.id === pendingId ? { ...x, state: 'failed' } : x)))
-      setThinking(false)
-      setThinkingSince(null)
-      setComposer({
-        kind: 'error',
-        message:
-          sent.reason === 'not-wired'
-            ? 'Console channel not wired in the running core.'
-            : sent.reason === 'saturated'
-              ? 'Brain queue is saturated — try again in a moment.'
-              : 'The message could not be sent.',
-      })
+      // final pair reconciles both later. The send itself is the shared
+      // sendDirectText rail (B12's retry rides it too).
+      const ok = await sendDirectText(draft)
+      if (ok) setDraft('')
       return
     }
     setComposer({ kind: 'inflight' })
@@ -940,12 +1081,55 @@ export function Console(props: ConsoleProps): React.JSX.Element {
                     Core is stopped — start Korvun to reply.
                   </p>
                 )}
-                {thinking && isConsoleKey(current.key) && (
-                  <p className="console-composer-state">
-                    {thinkingLong
-                      ? 'The local model is thinking — this can take a while on this machine…'
-                      : 'Thinking…'}
-                  </p>
+                {/* B12 (sealed): the failure lives ON SCREEN as a band —
+                    never an eternal wait, never a persisted turn. */}
+                {failBand !== null && (
+                  <div className="console-fail-band" role="alert">
+                    <span className="band-icon" aria-hidden="true">
+                      ⚠
+                    </span>
+                    <span>
+                      {failBand.brain !== '' ? failBand.brain : 'El brain'} no pudo responder esta
+                      vez — fallo del proveedor o del modelo.
+                      {failBand.repeat && (
+                        <span className="console-fail-second">
+                          Se repite. Revisa el modelo de{' '}
+                          {failBand.brain !== '' ? failBand.brain : 'ese brain'} en el Builder o su
+                          clave en Ajustes → Secretos.
+                        </span>
+                      )}
+                    </span>
+                    <button type="button" className="btn-small" onClick={retryLastSend}>
+                      Reintentar
+                    </button>
+                  </div>
+                )}
+                {/* B12 (sealed): the 60 s threshold WARNS, never cuts alone. */}
+                {thinking && waitNotice === 'shown' && isConsoleKey(current.key) && (
+                  <div className="console-wait-band" role="alert">
+                    <span className="band-icon" aria-hidden="true">
+                      ⚠
+                    </span>
+                    <span>
+                      Sin respuesta de {servingBrainInfo(current.key).brain ?? 'ese brain'} tras un
+                      minuto. Puedes seguir esperando o reintentar.
+                    </span>
+                    <span className="console-wait-actions">
+                      <button
+                        type="button"
+                        className="btn-small"
+                        onClick={() => setWaitNotice('dismissed')}
+                      >
+                        Seguir esperando
+                      </button>
+                      <button type="button" className="btn-small" onClick={cancelAndRetry}>
+                        Cancelar y reintentar
+                      </button>
+                    </span>
+                  </div>
+                )}
+                {thinking && waitNotice !== 'shown' && isConsoleKey(current.key) && (
+                  <p className="console-composer-state">{thinkingCaption(thinkingLong)}</p>
                 )}
                 {composer.kind === 'inflight' && (
                   <p className="console-composer-state">On its way…</p>

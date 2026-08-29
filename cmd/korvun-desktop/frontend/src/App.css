@@ -2055,3 +2055,39 @@
   color: var(--tx1);
   font-size: 12.5px;
 }
+
+/* B12 — the visible failure (sealed design): the error band and the 60s
+   wait notice over the composer. UI state only — never a turn. */
+.console-fail-band,
+.console-wait-band {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  margin-bottom: 8px;
+}
+.console-fail-band {
+  background: var(--err-s);
+  color: var(--err-t);
+}
+.console-wait-band {
+  background: var(--warn-s);
+  color: var(--warn-t);
+}
+.console-fail-band .btn-small,
+.console-wait-actions {
+  margin-left: auto;
+  flex: none;
+}
+.console-wait-actions {
+  display: flex;
+  gap: 8px;
+}
+.console-fail-second {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  opacity: 0.92;
+}

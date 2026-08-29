@@ -145,11 +145,15 @@ describe('honest wait (pega 4-UI)', () => {
     const { fetcher, cleanup } = realisticFetch({ brainDelayMs: 60_000 })
     try {
       await openDraftAndSend(fetcher, 'tarda mucho')
-      await waitFor(() => expect(screen.getByText('Thinking…')).toBeTruthy())
+      // B11 (sealed redesign, 2026-08-29): the wait speaks the TRUTH of the
+      // serving brain. This harness exposes no brain data, so the honest
+      // degradation shows — the CONTRACT (visible wait from the send
+      // instant, plain words after ~10s) is unchanged, only its surface.
+      await waitFor(() => expect(screen.getByText('Pensando…')).toBeTruthy())
       await act(async () => {
         vi.advanceTimersByTime(11_000)
       })
-      await waitFor(() => expect(screen.getByText(/local model is thinking/i)).toBeTruthy())
+      await waitFor(() => expect(screen.getByText('Sigue pensando…')).toBeTruthy())
     } finally {
       cleanup()
     }
