@@ -9,12 +9,14 @@
 // the other way around.
 //
 // ActionEnvelope v1 carries the sealed subset of the blueprint's §10.5.
-// The remaining §10.5 fields are RESERVED and arrive with their stages:
-// intent_id, principal, authority_refs (Etapa 2); resource and the full
-// effect classification (Etapa 3); protected_parameters_ref (Etapa 4);
-// transaction_id, idempotency_key, expires_at (Etapa 6); tenant_id
-// (Etapa 10). They are deliberately NOT fields yet — an unreachable field
-// is a field nobody can misuse.
+// The Etapa-2 identity trio AWOKE in batch 4 and is fields now:
+// Principal (a PrincipalRef), IntentID and AuthorityRefs — row data with
+// the receipt digest untouched (spec FR-ENV-2, pinned by test). The
+// remaining §10.5 fields stay RESERVED and arrive with their stages:
+// resource and the full effect classification (Etapa 3);
+// protected_parameters_ref (Etapa 4); transaction_id, idempotency_key,
+// expires_at (Etapa 6); tenant_id (Etapa 10). Those are deliberately NOT
+// fields yet — an unreachable field is a field nobody can misuse.
 package action
 
 import (
