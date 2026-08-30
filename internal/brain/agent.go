@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Sebastian197/korvun/internal/action/executor"
 	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
@@ -103,9 +104,12 @@ type AgentBrain struct {
 	nativeDisabled atomic.Bool
 	maxIters       int
 	perTool        time.Duration
-	perModelCall   time.Duration
-	fallback       string
-	systemPrompt   string
+	// exec is the Action Kernel's single execution path (never nil after
+	// NewAgentBrain).
+	exec         *executor.Executor
+	perModelCall time.Duration
+	fallback     string
+	systemPrompt string
 	// personaPrefix is the composed persona fragment (ComposePersona) prepended
 	// BEFORE the protocol block in the seed system message (builder-canvas spec
 	// FR-PERSONA-2, NC-4). Empty = today's prompt byte-for-byte.
@@ -392,6 +396,11 @@ func NewAgentBrain(m model.Model, tools tool.Registry, opts ...AgentOption) *Age
 	for _, opt := range opts {
 		opt(a)
 	}
+	// The Action Kernel's execution seam (Trust Layer Etapa 1, lote 3):
+	// built AFTER options so it sees the configured per-tool timeout and
+	// clock. From here on, the ONLY path to Tool.Execute is the executor —
+	// the tripwire test in internal/action/executor enforces it forever.
+	a.exec = executor.New(tools, a.perTool, a.now)
 	return a
 }
 
@@ -631,8 +640,7 @@ func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *m
 // undecided call feeds the denial observation. The bounded args prefix goes to
 // LOCAL slog only (ADR-0024 §1 law).
 func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisions map[string]policy.ToolDecision, name, args string) string {
-	t, ok := a.tools[name]
-	if !ok {
+	if !a.exec.Has(name) {
 		// A hallucinated tool name is exactly the behavior the audit
 		// surfaces exist to observe (estreno E-3 / red-team): a denial with
 		// its own rule, on the same grammar the cages emit. The MODEL
@@ -668,29 +676,15 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 			return deniedObservation(name)
 		}
 	}
-	toolCtx := ctx
-	if a.perTool > 0 {
-		var cancel context.CancelFunc
-		toolCtx, cancel = context.WithTimeout(ctx, a.perTool)
-		defer cancel()
+	// Execution flows through the kernel's single seam: per-tool timeout,
+	// the OPTIONAL scope capability (minimal-memory FR-TOOL-2 — envelope
+	// facts only: the brain's own name and the conversation key, possibly
+	// empty) and the measured latency all live in the executor now.
+	conv := ""
+	if key, kerr := conversation.KeyFromEnvelope(env); kerr == nil {
+		conv = string(key)
 	}
-	start := a.now()
-	var result string
-	var err error
-	if st, scoped := t.(tool.ScopedTool); scoped {
-		// The OPTIONAL scope capability (minimal-memory FR-TOOL-2, the
-		// ToolCallingModel/ParamTool precedent): envelope facts only — the
-		// brain's own name (WithAgentName) and the conversation key,
-		// possibly empty.
-		conv := ""
-		if key, kerr := conversation.KeyFromEnvelope(env); kerr == nil {
-			conv = string(key)
-		}
-		result, err = st.ExecuteScoped(toolCtx, tool.Scope{Brain: a.name, Conversation: conv}, args)
-	} else {
-		result, err = t.Execute(toolCtx, args)
-	}
-	latency := a.now().Sub(start)
+	result, latency, err := a.exec.Run(ctx, name, tool.Scope{Brain: a.name, Conversation: conv}, args)
 
 	// A cage/shield breach is a DENIAL, not an executed-with-error use
 	// (ADR-0041 §4/§5): the tool refused before any effect. The model still
