@@ -15,6 +15,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -51,6 +52,9 @@ type Record struct {
 	RecoveryMarker string
 	// FinishedAt is nil while the action is not terminal.
 	FinishedAt *time.Time
+	// Identity is nil for identity-less (v1-path) rows and carries the
+	// principal/intent/authority refs for identified rows.
+	Identity *StoredIdentity
 }
 
 // ErrNotFound reports an unknown action_id.
@@ -444,9 +448,13 @@ func (s *Store) RecordAttempt(ctx context.Context, env action.Envelope, d Decisi
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit record %q: %w", env.ActionID, err)
 	}
-	// The periodic half of the retention invariant: every pruneEvery-th
-	// committed attempt pays the (cheap, bounded) prune, so the file stays
-	// capped without any scheduler or config.
+	return s.noteWrite(ctx)
+}
+
+// noteWrite is the periodic half of the retention invariant: every
+// pruneEvery-th committed attempt pays the (cheap, bounded) prune, so the
+// file stays capped without any scheduler or config.
+func (s *Store) noteWrite(ctx context.Context) error {
 	s.writesMu.Lock()
 	s.writes++
 	due := s.writes%s.pruneEvery == 0
@@ -498,10 +506,13 @@ func (s *Store) Finish(ctx context.Context, actionID string, to action.State, fi
 // Get returns one stored record, envelope round-tripped verbatim.
 func (s *Store) Get(ctx context.Context, actionID string) (Record, error) {
 	var (
-		rec         Record
-		state       string
-		requestedAt string
-		finishedAt  sql.NullString
+		rec           Record
+		state         string
+		requestedAt   string
+		finishedAt    sql.NullString
+		principalID   sql.NullString
+		intentID      sql.NullString
+		authorityRefs sql.NullString
 	)
 	err := s.db.QueryRowContext(ctx,
 		`SELECT a.action_id, a.schema_version, a.correlation_id,
@@ -509,6 +520,7 @@ func (s *Store) Get(ctx context.Context, actionID string) (Record, error) {
 		        a.op_namespace, a.op_name, a.op_version,
 		        a.parameters_digest, a.effect_class, a.state,
 		        a.recovery_marker, a.requested_at, a.finished_at,
+		        a.principal_id, a.intent_id, a.authority_refs,
 		        d.outcome, d.rule
 		   FROM actions a JOIN action_decisions d ON d.action_id = a.action_id
 		  WHERE a.action_id = ?`, actionID,
@@ -518,6 +530,7 @@ func (s *Store) Get(ctx context.Context, actionID string) (Record, error) {
 		&rec.Envelope.Operation.Namespace, &rec.Envelope.Operation.Name, &rec.Envelope.Operation.Version,
 		&rec.Envelope.ParametersDigest, &rec.Envelope.Effect.Class, &state,
 		&rec.RecoveryMarker, &requestedAt, &finishedAt,
+		&principalID, &intentID, &authorityRefs,
 		&rec.Decision.Outcome, &rec.Decision.Rule,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -527,6 +540,15 @@ func (s *Store) Get(ctx context.Context, actionID string) (Record, error) {
 		return Record{}, fmt.Errorf("action/sqlite: get %q: %w", actionID, err)
 	}
 	rec.State = action.State(state)
+	if principalID.Valid {
+		identity := StoredIdentity{PrincipalID: principalID.String, IntentID: intentID.String}
+		if authorityRefs.Valid && authorityRefs.String != "" {
+			if err := json.Unmarshal([]byte(authorityRefs.String), &identity.AuthorityRefs); err != nil {
+				return Record{}, fmt.Errorf("action/sqlite: parse authority_refs of %q: %w", actionID, err)
+			}
+		}
+		rec.Identity = &identity
+	}
 	at, err := time.Parse(time.RFC3339Nano, requestedAt)
 	if err != nil {
 		return Record{}, fmt.Errorf("action/sqlite: parse requested_at of %q: %w", actionID, err)
