@@ -60,6 +60,10 @@ var ErrNotFound = errors.New("action/sqlite: action not found")
 // decision outcome (only DENIED, SHADOWED and AUTHORIZED enter the store).
 var ErrNotADecisionState = errors.New("action/sqlite: not a decision state")
 
+// ErrSchemaFromTheFuture reports a stored schema version newer than this
+// binary understands: fail closed, never guess at unknown structure.
+var ErrSchemaFromTheFuture = errors.New("action/sqlite: schema version from the future")
+
 // dsnQuery mirrors the house connection pragmas (the conversation store's
 // mold): WAL for multi-pool robustness on the SHARED file, busy_timeout as
 // the cross-pool safety net, foreign_keys on because the decision row
@@ -98,6 +102,125 @@ CREATE TABLE IF NOT EXISTS action_decisions (
     rule       TEXT NOT NULL,
     decided_at TEXT NOT NULL
 ) WITHOUT ROWID;`
+
+// schemaVersionCurrent is the version this binary writes and understands.
+const schemaVersionCurrent = 2
+
+// migrations maps a FROM-version to the DDL that lifts it one version.
+// Each step runs in ONE transaction together with its version bump, so a
+// crash mid-migration rolls back to a clean previous version — never a
+// zombie schema (AS-8). v1→v2 (Trust Layer Etapa 2): additive identity
+// columns on actions (the Etapa-1 RESERVED fields wake up on disk;
+// existing rows keep NULL identity and stay readable), plus the intents,
+// grants, evidence and budget_spent tables under this store's OWN
+// lifecycle.
+//
+// Bounded growth (FR-ENV-1, reasoned not assumed): evidence rows are
+// tied to their action via ON DELETE CASCADE, so the Etapa-1 retention
+// cap prunes them with their actions; intents and grants are
+// OPERATOR-SCALE — a human creates them deliberately (tens, not
+// millions), so they carry no cap; budget_spent is bounded by
+// contracts × operation names, the same operator scale.
+var migrations = map[int]string{
+	1: `
+ALTER TABLE actions ADD COLUMN principal_id TEXT;
+ALTER TABLE actions ADD COLUMN intent_id TEXT;
+ALTER TABLE actions ADD COLUMN authority_refs TEXT;
+CREATE TABLE intents (
+    intent_id          TEXT    NOT NULL PRIMARY KEY,
+    schema_version     INTEGER NOT NULL,
+    owner_principal_id TEXT    NOT NULL,
+    purpose            TEXT    NOT NULL,
+    operations         TEXT    NOT NULL,
+    resources          TEXT    NOT NULL,
+    max_actions        INTEGER NOT NULL,
+    per_operation      TEXT    NOT NULL,
+    valid_from         TEXT    NOT NULL,
+    expires_at         TEXT,
+    status             TEXT    NOT NULL,
+    version            INTEGER NOT NULL,
+    digest             TEXT    NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE grants (
+    grant_id             TEXT    NOT NULL PRIMARY KEY,
+    intent_id            TEXT    NOT NULL REFERENCES intents(intent_id),
+    issuer_principal_id  TEXT    NOT NULL,
+    subject_principal_id TEXT    NOT NULL,
+    parent_grant_id      TEXT    NOT NULL DEFAULT '',
+    operations           TEXT    NOT NULL,
+    resources            TEXT    NOT NULL,
+    max_actions          INTEGER NOT NULL,
+    per_operation        TEXT    NOT NULL,
+    valid_from           TEXT    NOT NULL,
+    expires_at           TEXT,
+    status               TEXT    NOT NULL,
+    depth_remaining      INTEGER NOT NULL,
+    digest               TEXT    NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE evidence (
+    evidence_id       TEXT NOT NULL PRIMARY KEY,
+    action_id         TEXT NOT NULL REFERENCES actions(action_id) ON DELETE CASCADE,
+    provider          TEXT NOT NULL,
+    subject           TEXT NOT NULL,
+    credential        TEXT NOT NULL,
+    issued_at         TEXT NOT NULL,
+    transport_binding TEXT NOT NULL,
+    claims_digest     TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX evidence_by_action ON evidence(action_id);
+CREATE TABLE budget_spent (
+    scope_id  TEXT    NOT NULL,
+    operation TEXT    NOT NULL,
+    spent     INTEGER NOT NULL,
+    PRIMARY KEY (scope_id, operation)
+) WITHOUT ROWID;`,
+}
+
+// migrate lifts the store to schemaVersionCurrent, one version per
+// transaction (DDL + version bump commit atomically). A version newer
+// than this binary fails CLOSED with ErrSchemaFromTheFuture — the store
+// never guesses at structure it does not understand.
+func migrate(db *sql.DB) error {
+	for {
+		var v int
+		if err := db.QueryRow(`SELECT version FROM action_schema`).Scan(&v); err != nil {
+			return fmt.Errorf("action/sqlite: read schema version for migration: %w", err)
+		}
+		if v == schemaVersionCurrent {
+			return nil
+		}
+		if v > schemaVersionCurrent {
+			return fmt.Errorf("%w: stored %d, this binary understands %d",
+				ErrSchemaFromTheFuture, v, schemaVersionCurrent)
+		}
+		step, ok := migrations[v]
+		if !ok {
+			return fmt.Errorf("action/sqlite: no migration from schema version %d", v)
+		}
+		if err := migrateStep(db, step, v); err != nil {
+			return err
+		}
+	}
+}
+
+// migrateStep runs ONE migration and its version bump in one transaction.
+func migrateStep(db *sql.DB, step string, from int) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("action/sqlite: begin migration from v%d: %w", from, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(step); err != nil {
+		return fmt.Errorf("action/sqlite: migration from v%d: %w", from, err)
+	}
+	if _, err := tx.Exec(`UPDATE action_schema SET version = ?`, from+1); err != nil {
+		return fmt.Errorf("action/sqlite: bump schema version to v%d: %w", from+1, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("action/sqlite: commit migration to v%d: %w", from+1, err)
+	}
+	return nil
+}
 
 // buildFileDSN is the house DSN builder (conversation store mold): url.URL
 // percent-encodes the path so URI-significant characters cannot swallow
@@ -203,6 +326,10 @@ func open(path string) (*Store, error) {
 	); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("action/sqlite: seed schema version in %q: %w", abs, err)
+	}
+	if err := migrate(db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("action/sqlite: migrate %q: %w", abs, err)
 	}
 	if err := db.Ping(); err != nil {
 		_ = db.Close()

@@ -44,8 +44,11 @@ func openTemp(t *testing.T) (*Store, string) {
 func TestOpen_bootstrapsItsOwnLifecycleAndIsIdempotent(t *testing.T) {
 	t.Parallel()
 	store, path := openTemp(t)
-	if got, err := store.SchemaVersion(context.Background()); err != nil || got != 1 {
-		t.Fatalf("the store owns its schema lifecycle: version=%d err=%v, want 1", got, err)
+	// Advanced from the Etapa-1 literal `1` under the batch-3 mandate: the
+	// v1→v2 migration IS the authorized scope, and the test's intent (the
+	// store owns its own schema lifecycle) is version-independent.
+	if got, err := store.SchemaVersion(context.Background()); err != nil || got != schemaVersionCurrent {
+		t.Fatalf("the store owns its schema lifecycle: version=%d err=%v, want %d", got, err, schemaVersionCurrent)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("close: %v", err)
@@ -55,8 +58,8 @@ func TestOpen_bootstrapsItsOwnLifecycleAndIsIdempotent(t *testing.T) {
 		t.Fatalf("reopen must be idempotent, got %v", err)
 	}
 	defer func() { _ = again.Close() }()
-	if got, err := again.SchemaVersion(context.Background()); err != nil || got != 1 {
-		t.Fatalf("reopen keeps version 1: version=%d err=%v", got, err)
+	if got, err := again.SchemaVersion(context.Background()); err != nil || got != schemaVersionCurrent {
+		t.Fatalf("reopen keeps the current version: version=%d err=%v", got, err)
 	}
 }
 
