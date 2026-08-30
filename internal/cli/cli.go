@@ -202,6 +202,8 @@ Commands:
   serve         Load config, wire channels/brains, and serve until SIGINT/SIGTERM.
   config check  Validate a config file (offline; --preflight adds online checks).
   status        Show the live wiring of a running korvun via its admin API.
+  intent        Operator intents: create, activate, revoke, list, show.
+  grant         Authority grants under an intent: issue, delegate, revoke.
   version       Print the binary version and exit.
   help          Show this help.
 
@@ -209,6 +211,8 @@ Examples:
   korvun serve --config korvun.json
   korvun config check --preflight korvun.json
   korvun status --addr 127.0.0.1:2112
+  korvun intent create --config korvun.json --purpose "read-only reporting" --operations calc,time
+  korvun grant issue --config korvun.json --intent int_... --subject principal_brain_a --operations calc
 
 See the docs in docs/ — QUICKSTART.md, packaging/INSTALL.md, CONFIGURATION.md.
 `
