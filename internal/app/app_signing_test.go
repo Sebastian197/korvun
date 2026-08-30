@@ -170,3 +170,44 @@ func TestBuild_generatesTheSigningKeyBesideTheStore(t *testing.T) {
 		t.Fatalf("the boot must generate the signing key beside the store: %v", err)
 	}
 }
+
+func TestRotateProfileSigningKey_directContract(t *testing.T) {
+	t.Parallel()
+	store, dir := signingHarness(t)
+	first, err := ensureSigningKey(context.Background(), store, dir)
+	if err != nil {
+		t.Fatalf("seed key: %v", err)
+	}
+	rotated, err := RotateProfileSigningKey(context.Background(), store, dir)
+	if err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	if first.Equal(rotated) {
+		t.Fatal("rotation must mint a NEW key")
+	}
+	// The staged .new file must be gone after the swap.
+	if _, err := os.Stat(filepath.Join(dir, "keys", "receipt-signing.key.new")); !os.IsNotExist(err) {
+		t.Fatalf("staged seed must be swapped away: %v", err)
+	}
+	// The file now parses to the rotated key and the registry agrees.
+	again, err := ensureSigningKey(context.Background(), store, dir)
+	if err != nil {
+		t.Fatalf("post-rotation boot: %v", err)
+	}
+	if !again.Equal(rotated) {
+		t.Fatal("the profile must boot with the rotated key")
+	}
+	// A failing registry rotation cleans the staged seed and keeps the
+	// old file untouched.
+	closed, dir2 := signingHarness(t)
+	if _, err := ensureSigningKey(context.Background(), closed, dir2); err != nil {
+		t.Fatalf("seed key 2: %v", err)
+	}
+	_ = closed.Close()
+	if _, err := RotateProfileSigningKey(context.Background(), closed, dir2); err == nil {
+		t.Fatal("a failing registry rotation must fail the rotate")
+	}
+	if _, err := os.Stat(filepath.Join(dir2, "keys", "receipt-signing.key.new")); !os.IsNotExist(err) {
+		t.Fatalf("the staged seed must be cleaned after a registry failure: %v", err)
+	}
+}

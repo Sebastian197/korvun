@@ -27,10 +27,13 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
+	"github.com/Sebastian197/korvun/internal/app"
+	"github.com/Sebastian197/korvun/internal/config"
 )
 
 // receiptCmd dispatches the `receipt` noun's verbs.
@@ -42,6 +45,8 @@ func (c *cli) receiptCmd(args []string) int {
 	switch args[0] {
 	case "verify":
 		return c.receiptVerify(args[1:])
+	case "rotate-key":
+		return c.receiptRotateKey(args[1:])
 	default:
 		_, _ = fmt.Fprintf(c.stderr, "korvun receipt: unknown subcommand %q\nRun 'korvun help' for usage.\n", args[0])
 		return 2
@@ -183,4 +188,64 @@ func lastReceiptOutcome(ctx context.Context, store *actionsqlite.Store, r action
 		return true
 	}
 	return receipts[len(receipts)-1].ReceiptID == r.ReceiptID
+}
+
+// receiptRotateKey implements `korvun receipt rotate-key`: the lote-2
+// retire-and-activate rotation exposed to the operator. The act leaves
+// its OWN receipt — sealed with the NEW key: the sealer is swapped
+// inside the act, between the registry rotation and the terminal close.
+func (c *cli) receiptRotateKey(args []string) int {
+	fs := flag.NewFlagSet("receipt rotate-key", flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
+	configPath := fs.String("config", "", "path to the korvun config (required)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *configPath == "" {
+		_, _ = fmt.Fprint(c.stderr, "korvun receipt rotate-key: --config is required\n")
+		return 2
+	}
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
+		return 1
+	}
+	storage := app.StoragePath(cfg)
+	profileDir := filepath.Dir(storage)
+	store, err := actionsqlite.Open(storage)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
+		return 1
+	}
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	// The CURRENT ink seals the act's AUTHORIZED record; the NEW ink
+	// seals its terminal receipt after the swap below.
+	oldPriv, err := app.EnsureSigningKey(ctx, store, profileDir)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
+		return 1
+	}
+	store.SetReceiptSealer(func(r action.Receipt) action.Receipt {
+		return action.SignReceipt(oldPriv, r)
+	})
+	oldKeyID := action.SigningKeyID(oldPriv.Public().(ed25519.PublicKey))
+	var newKeyID string
+	params := contractParams(map[string]any{"old_key_id": oldKeyID})
+	if err := recordOperatorAct(ctx, store, "receipt", "rotate-key", params, func() error {
+		newPriv, rotateErr := app.RotateProfileSigningKey(ctx, store, profileDir)
+		if rotateErr != nil {
+			return rotateErr
+		}
+		newKeyID = action.SigningKeyID(newPriv.Public().(ed25519.PublicKey))
+		store.SetReceiptSealer(func(r action.Receipt) action.Receipt {
+			return action.SignReceipt(newPriv, r)
+		})
+		return nil
+	}); err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(c.stdout, "signing key rotated: %s retired, %s active\n", oldKeyID, newKeyID)
+	return 0
 }

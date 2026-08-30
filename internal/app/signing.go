@@ -87,12 +87,17 @@ func ensureSigningKey(ctx context.Context, store *actionsqlite.Store, profileDir
 // registerPublicKey puts the key's public half into the ink registry
 // when it is not there yet. A DIFFERENT active key in the registry with
 // our file key unregistered is an identity conflict — boot-fatal, never
-// silently resolved.
+// silently resolved. A file key that is registered but RETIRED is
+// refused the same way (Etapa 4, the rotation crash window): retired
+// ink must never sign again.
 func registerPublicKey(ctx context.Context, store *actionsqlite.Store, priv ed25519.PrivateKey) error {
 	pub := priv.Public().(ed25519.PublicKey)
 	keyID := action.SigningKeyID(pub)
-	if _, err := store.GetSigningKey(ctx, keyID); err == nil {
-		return nil // registered — the verified no-op
+	if key, err := store.GetSigningKey(ctx, keyID); err == nil {
+		if !key.RetiredAt.IsZero() {
+			return fmt.Errorf("app: the profile key file carries %s, which was retired %s — retired ink never signs; swap in the rotated seed (a staged .new file beside it, if present) or rotate again", keyID, key.RetiredAt.Format(time.RFC3339))
+		}
+		return nil // registered and active — the verified no-op
 	} else if !errors.Is(err, actionsqlite.ErrNotFound) {
 		return fmt.Errorf("app: read signing key registry: %w", err)
 	}
@@ -116,4 +121,35 @@ func registerPublicKey(ctx context.Context, store *actionsqlite.Store, priv ed25
 // ink the server uses.
 func EnsureSigningKey(ctx context.Context, store *actionsqlite.Store, profileDir string) (ed25519.PrivateKey, error) {
 	return ensureSigningKey(ctx, store, profileDir)
+}
+
+// RotateProfileSigningKey rotates the profile ink (Etapa 4 FR-VER, the
+// operator's rotate-key): a fresh Ed25519 pair is generated, the seed is
+// staged beside the live file, the registry rotation (retire-and-insert,
+// one transaction) lands FIRST, and the file swap is the atomic last
+// step. A crash between the two leaves the OLD file against the NEW
+// registry — a state ensureSigningKey refuses closed, with the staged
+// seed sitting beside it for manual recovery.
+func RotateProfileSigningKey(ctx context.Context, store *actionsqlite.Store, profileDir string) (ed25519.PrivateKey, error) {
+	keysDir := filepath.Join(profileDir, "keys")
+	keyPath := filepath.Join(keysDir, signingKeyFile)
+	stagedPath := keyPath + ".new"
+	if err := os.MkdirAll(keysDir, 0o700); err != nil {
+		return nil, fmt.Errorf("app: create keys dir: %w", err)
+	}
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("app: generate rotation key: %w", err)
+	}
+	if err := os.WriteFile(stagedPath, action.EncodeSigningKeySeed(priv), 0o600); err != nil {
+		return nil, fmt.Errorf("app: stage rotation seed: %w", err)
+	}
+	if err := store.RotateSigningKey(ctx, action.SigningKeyID(pub), hex.EncodeToString(pub), time.Now().UTC()); err != nil {
+		_ = os.Remove(stagedPath)
+		return nil, fmt.Errorf("app: rotate signing key registry: %w", err)
+	}
+	if err := os.Rename(stagedPath, keyPath); err != nil {
+		return nil, fmt.Errorf("app: swap rotated seed into place (the staged seed remains at %s for recovery): %w", stagedPath, err)
+	}
+	return priv, nil
 }
