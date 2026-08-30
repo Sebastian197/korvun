@@ -211,3 +211,40 @@ func TestRotateProfileSigningKey_directContract(t *testing.T) {
 		t.Fatalf("the staged seed must be cleaned after a registry failure: %v", err)
 	}
 }
+
+func TestRotateProfileSigningKey_failedSwapStillHandsOverTheActiveInk(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("read-only dir permissions are POSIX-only")
+	}
+	store, dir := signingHarness(t)
+	if _, err := ensureSigningKey(context.Background(), store, dir); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// Force the swap to fail AFTER the registry rotation: the staged
+	// write lands (file create allowed by the existing dir handle path?
+	// no — make the dir read-only between stage and rename is racy), so
+	// instead make the TARGET unrenameable by turning the key file into
+	// a directory.
+	keyPath := filepath.Join(dir, "keys", "receipt-signing.key")
+	if err := os.Remove(keyPath); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(keyPath, "block"), 0o700); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+	newPriv, err := RotateProfileSigningKey(context.Background(), store, dir)
+	if err == nil {
+		t.Fatal("the blocked swap must surface its error")
+	}
+	if newPriv == nil {
+		t.Fatal("the registry rotation is effective — the ACTIVE ink must be handed over with the error")
+	}
+	active, aerr := store.ActiveSigningKey(context.Background())
+	if aerr != nil {
+		t.Fatalf("active: %v", aerr)
+	}
+	if action.SigningKeyID(newPriv.Public().(ed25519.PublicKey)) != active.KeyID {
+		t.Fatal("the handed-over key must be the registry's active key")
+	}
+}

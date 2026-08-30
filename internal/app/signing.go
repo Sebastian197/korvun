@@ -149,7 +149,11 @@ func RotateProfileSigningKey(ctx context.Context, store *actionsqlite.Store, pro
 		return nil, fmt.Errorf("app: rotate signing key registry: %w", err)
 	}
 	if err := os.Rename(stagedPath, keyPath); err != nil {
-		return nil, fmt.Errorf("app: swap rotated seed into place (the staged seed remains at %s for recovery): %w", stagedPath, err)
+		// The registry rotation IS effective: the new key is returned
+		// WITH the error so the caller can still seal with the active
+		// ink — otherwise the act's own FAILED receipt would be signed
+		// with retired ink and stain the chain's key windows forever.
+		return priv, fmt.Errorf("app: swap rotated seed into place (the staged seed remains at %s for recovery): %w", stagedPath, err)
 	}
 	return priv, nil
 }

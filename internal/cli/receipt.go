@@ -234,14 +234,16 @@ func (c *cli) receiptRotateKey(args []string) int {
 	params := contractParams(map[string]any{"old_key_id": oldKeyID})
 	if err := recordOperatorAct(ctx, store, "receipt", "rotate-key", params, func() error {
 		newPriv, rotateErr := app.RotateProfileSigningKey(ctx, store, profileDir)
-		if rotateErr != nil {
-			return rotateErr
+		if newPriv != nil {
+			// Even on a failed file swap the registry rotation is
+			// effective — the act's own receipt must carry the ACTIVE
+			// ink, never the retired one.
+			newKeyID = action.SigningKeyID(newPriv.Public().(ed25519.PublicKey))
+			store.SetReceiptSealer(func(r action.Receipt) action.Receipt {
+				return action.SignReceipt(newPriv, r)
+			})
 		}
-		newKeyID = action.SigningKeyID(newPriv.Public().(ed25519.PublicKey))
-		store.SetReceiptSealer(func(r action.Receipt) action.Receipt {
-			return action.SignReceipt(newPriv, r)
-		})
-		return nil
+		return rotateErr
 	}); err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
 		return 1
