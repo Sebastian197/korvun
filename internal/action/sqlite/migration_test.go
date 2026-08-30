@@ -123,8 +123,11 @@ func TestMigration_freshFileLandsOnV2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version: %v", err)
 	}
-	if v != 2 {
-		t.Fatalf("a fresh store lands on v2, got %d", v)
+	// Advanced from the E2 literal under the batch-3 mandate (the same
+	// precedent as version 1→current in E2): the test's intent — a fresh
+	// store lands on the CURRENT version — is number-independent.
+	if v != schemaVersionCurrent {
+		t.Fatalf("a fresh store lands on the current version, got %d", v)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("close: %v", err)
@@ -147,8 +150,8 @@ func TestMigration_v1FileMigratesAndOldRowsRemainReadable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version: %v", err)
 	}
-	if v != 2 {
-		t.Fatalf("v1 file must migrate to 2, got %d", v)
+	if v != schemaVersionCurrent {
+		t.Fatalf("v1 file must migrate to the current version, got %d", v)
 	}
 	rec, err := store.Get(context.Background(), "act_v1")
 	if err != nil {
@@ -171,7 +174,7 @@ func TestMigration_idempotentAcrossReopens(t *testing.T) {
 		if err != nil {
 			t.Fatalf("version %d: %v", i, err)
 		}
-		if v != 2 {
+		if v != schemaVersionCurrent {
 			t.Fatalf("reopen %d: version = %d", i, v)
 		}
 		if err := store.Close(); err != nil {
@@ -234,8 +237,8 @@ func TestMigration_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version: %v", err)
 	}
-	if v != 2 {
-		t.Fatalf("completed migration must land on 2, got %d", v)
+	if v != schemaVersionCurrent {
+		t.Fatalf("completed migration must land on the current version, got %d", v)
 	}
 	if _, err := store.Get(context.Background(), "act_v1"); err != nil {
 		t.Fatalf("the v1 row must survive the crash-and-complete cycle: %v", err)

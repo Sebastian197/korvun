@@ -231,13 +231,13 @@ func (s *Store) CreateGrant(ctx context.Context, g action.AuthorityGrant) error 
 		`INSERT INTO grants (grant_id, intent_id, issuer_principal_id,
 		    subject_principal_id, parent_grant_id, operations, resources,
 		    max_actions, per_operation, valid_from, expires_at, status,
-		    depth_remaining, digest)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		    depth_remaining, effect_ceiling, digest)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		g.GrantID, g.IntentID, g.IssuerPrincipalID,
 		g.SubjectPrincipalID, g.ParentGrantID, ops, res,
 		g.Budgets.MaxActions, perOp,
 		g.ValidFrom.UTC().Format(time.RFC3339Nano), timeOrNull(g.ExpiresAt),
-		string(g.Status), g.DelegationDepthRemaining, g.Digest(),
+		string(g.Status), g.DelegationDepthRemaining, string(g.EffectCeiling), g.Digest(),
 	); err != nil {
 		return fmt.Errorf("action/sqlite: create grant %q: %w", g.GrantID, err)
 	}
@@ -255,15 +255,17 @@ func (s *Store) GetGrant(ctx context.Context, grantID string) (action.AuthorityG
 		validFrom  string
 		expiresAt  sql.NullString
 		status     string
+		ceiling    string
 	)
 	err := s.db.QueryRowContext(ctx,
 		`SELECT grant_id, intent_id, issuer_principal_id, subject_principal_id,
 		        parent_grant_id, operations, resources, max_actions,
-		        per_operation, valid_from, expires_at, status, depth_remaining
+		        per_operation, valid_from, expires_at, status, depth_remaining,
+		        effect_ceiling
 		   FROM grants WHERE grant_id = ?`, grantID,
 	).Scan(&g.GrantID, &g.IntentID, &g.IssuerPrincipalID, &g.SubjectPrincipalID,
 		&g.ParentGrantID, &ops, &res, &maxActions, &perOp,
-		&validFrom, &expiresAt, &status, &g.DelegationDepthRemaining)
+		&validFrom, &expiresAt, &status, &g.DelegationDepthRemaining, &ceiling)
 	if errors.Is(err, sql.ErrNoRows) {
 		return action.AuthorityGrant{}, fmt.Errorf("%w: grant %q", ErrNotFound, grantID)
 	}
@@ -287,6 +289,7 @@ func (s *Store) GetGrant(ctx context.Context, grantID string) (action.AuthorityG
 		return action.AuthorityGrant{}, fmt.Errorf("action/sqlite: parse expires_at of grant %q: %w", grantID, err)
 	}
 	g.Status = action.LifecycleStatus(status)
+	g.EffectCeiling = action.EffectClass(ceiling)
 	return g, nil
 }
 

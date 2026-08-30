@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 2
+const schemaVersionCurrent = 3
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -178,6 +178,13 @@ CREATE TABLE budget_spent (
     spent     INTEGER NOT NULL,
     PRIMARY KEY (scope_id, operation)
 ) WITHOUT ROWID;`,
+	// v2→v3 (Trust Layer Etapa 3, FR-CEIL-1): the grants table gains the
+	// additive effect_ceiling column — NULL/empty = no ceiling, so every
+	// pre-E3 grant reads back UNLIMITED and nothing moves. Same
+	// anti-zombie discipline: this DDL and its version bump commit in one
+	// transaction (the AS-8 crash mold, re-armed by test for v3).
+	2: `
+ALTER TABLE grants ADD COLUMN effect_ceiling TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per
