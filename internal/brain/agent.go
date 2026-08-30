@@ -110,6 +110,7 @@ type AgentBrain struct {
 	exec         *executor.Executor
 	actions      ActionRecorder
 	identity     *ActionIdentity
+	effects      EffectClassifier
 	perModelCall time.Duration
 	fallback     string
 	systemPrompt string
@@ -682,6 +683,21 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 		a.recordAttempt(ctx, env, lane, boundedArgs(name), args, "deny", "unknown_tool", action.StateDenied)
 		return fmt.Sprintf("tool %q not found", name)
 	}
+	// The second wall of FR-REG-3 (Etapa 3): a tool that EXISTS but has no
+	// declared effect descriptor is denied with its stable rule — boot
+	// preflight already guards the front door; this guards any odd boot
+	// that slipped an undeclared tool into the registry. Only when the
+	// effect engine is wired (nil classifier = pre-stage behavior).
+	if a.effects != nil {
+		if _, declared := a.classifyEffect(name); !declared {
+			a.logger.Warn("agent: tool denied",
+				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+				"rule", "effect_undeclared", "args_prefix", boundedArgs(args))
+			a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: "effect_undeclared"})
+			a.recordAttempt(ctx, env, lane, name, args, "deny", "effect_undeclared", action.StateDenied)
+			return deniedObservation(name)
+		}
+	}
 	if decisions != nil {
 		d, decided := decisions[name]
 		switch {
@@ -765,10 +781,19 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 // domain): fresh id, the inbound envelope as correlation, the lane as the
 // source protocol, and the canonical parameters digest.
 func (a *AgentBrain) buildActionEnvelope(env *envelope.Envelope, lane, name, args string) action.Envelope {
-	return action.NewEnvelope(action.NewID(), env.ID,
+	e := action.NewEnvelope(action.NewID(), env.ID,
 		action.Source{Kind: "agent_brain", Protocol: lane, Channel: env.Channel},
 		action.Operation{Namespace: "tool", Name: name, Version: 1},
 		args, a.now())
+	// The envelope wakes its REAL class from the registry (Etapa 3): the
+	// classifier's input is the NAME alone (§9.7). Undeclared operations
+	// keep the honest placeholder here — the gate's wall denies them
+	// before any effect, and denied-by-nonexistence rows stay honestly
+	// unclassifiable.
+	if class, declared := a.classifyEffect(name); declared {
+		e.Effect = action.Effect{Class: class}
+	}
+	return e
 }
 
 // recordAttempt persists a terminal decision outcome (DENIED/SHADOWED).

@@ -62,3 +62,35 @@ func BenchmarkRunToolHotPathIdentified(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkRunToolHotPathClassified re-measures the toll with the Etapa-3
+// effect engine wired on top of the identified path: classification is a
+// registry lookup by name — the ceiling must not notice it.
+func BenchmarkRunToolHotPathClassified(b *testing.B) {
+	store, err := actionsqlite.Open(filepath.Join(b.TempDir(), "korvun.db"))
+	if err != nil {
+		b.Fatalf("open action store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	a := NewAgentBrain(&scriptedModel{}, tool.Registry{"echo": tool.Echo()},
+		WithAgentName("bench"),
+		WithActionRecorder(benchIdentifiedRecorder{benchRecorder{store: store}}),
+		WithEffectClassifier(tool.BuiltinEffects),
+		WithActionIdentity(ActionIdentity{
+			Registry: action.ProvenanceRegistry{
+				"console": {Class: "console", Credential: action.CredentialLoopbackInProcess},
+			},
+			IntentID: action.RootIntentID,
+			GrantID:  action.DeriveConfigGrant("bench", []string{"echo"}, []string{"*"}).GrantID,
+		}))
+	env := &envelope.Envelope{ID: "bench-env", Channel: "console",
+		Sender: envelope.Participant{ID: "console-user"}}
+	ctx := context.Background()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if out := a.runTool(ctx, env, nil, laneText, "echo", `{"say":"hola"}`); out == "" {
+			b.Fatal("echo must produce an observation")
+		}
+	}
+}
