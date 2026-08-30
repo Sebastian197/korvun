@@ -11,8 +11,12 @@ package brain
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/Sebastian197/korvun/internal/action"
+	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
@@ -33,4 +37,37 @@ func BenchmarkRunToolHotPath(b *testing.B) {
 			b.Fatal("echo must produce an observation")
 		}
 	}
+}
+
+// BenchmarkRunToolHotPathRecorded measures the FULL kernel toll: envelope +
+// digest + atomic record + execute + terminal finish against a real sqlite
+// store on a temp file — the number the spec bounds at <=5ms p95.
+func BenchmarkRunToolHotPathRecorded(b *testing.B) {
+	store, err := actionsqlite.Open(filepath.Join(b.TempDir(), "korvun.db"))
+	if err != nil {
+		b.Fatalf("open action store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	a := NewAgentBrain(&scriptedModel{}, tool.Registry{"echo": tool.Echo()},
+		WithActionRecorder(benchRecorder{store: store}))
+	env := benchEnvelope()
+	ctx := context.Background()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if out := a.runTool(ctx, env, nil, laneText, "echo", `{"say":"hola"}`); out == "" {
+			b.Fatal("echo must produce an observation")
+		}
+	}
+}
+
+// benchRecorder adapts the sqlite store exactly like the app's adapter.
+type benchRecorder struct{ store *actionsqlite.Store }
+
+func (r benchRecorder) RecordAttempt(ctx context.Context, env action.Envelope, outcome, rule string, state action.State) error {
+	return r.store.RecordAttempt(ctx, env, actionsqlite.Decision{Outcome: outcome, Rule: rule}, state)
+}
+
+func (r benchRecorder) Finish(ctx context.Context, id string, to action.State, at time.Time) error {
+	return r.store.Finish(ctx, id, to, at)
 }

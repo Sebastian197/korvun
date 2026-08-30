@@ -29,6 +29,8 @@ import (
 
 	builderui "github.com/Sebastian197/korvun/web/builder"
 
+	"github.com/Sebastian197/korvun/internal/action"
+	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/channel"
@@ -81,6 +83,11 @@ type App struct {
 	// (stateless). Held as io.Closer, set only from a non-nil concrete store, so
 	// it is never a typed-nil interface (ADR-0019 §6).
 	store io.Closer
+	// actions is the Action Kernel store's closer (Trust Layer Etapa 1,
+	// lote 3b): opened at boot on the SAME storage file with its OWN
+	// lifecycle (sealed decision 1), nil when stateless. Closed alongside
+	// the conversation store.
+	actions io.Closer
 	// adminServer is the observability HTTP server (/metrics + /healthz). nil
 	// when observability is disabled. Started FIRST in Run and stopped LAST in
 	// Shutdown so it stays observable across the whole drain (ADR-0020 §4).
@@ -143,6 +150,10 @@ type builder struct {
 	// store is the shared conversation memory injected into every brain. A true
 	// nil interface (no storage configured) leaves each Orchestrator stateless.
 	store conversation.Store
+	// actions is the Action Kernel's store, shared into every AgentBrain
+	// through the recorder adapter. nil when stateless (no storage block —
+	// recording off, zero new config, the sealed decisions).
+	actions *actionsqlite.Store
 	// metrics is the observability backend injected into the domain. Defaults to
 	// metrics.Nop; set to the Prometheus impl when observability is enabled.
 	metrics metrics.Metrics
@@ -274,6 +285,16 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	}
 	if store != nil {
 		b.store = store // concrete non-nil -> real conversation.Store, never typed-nil
+		// The Action Kernel's store opens on the SAME file with its OWN
+		// migrations and lifecycle (its recovery pass runs inside Open).
+		// A storage-configured boot that cannot record actions is a fatal
+		// boot error — proof is part of execution (blueprint §7.8).
+		actions, err := actionsqlite.Open(storagePath(cfg))
+		if err != nil {
+			_ = store.Close()
+			return nil, fmt.Errorf("app: open action store: %w", err)
+		}
+		b.actions = actions
 	}
 
 	// The router gets the app-level error funnel (logs + counts +, when the bus is
@@ -352,6 +373,9 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		if store != nil {
 			_ = store.Close()
 		}
+		if b.actions != nil {
+			_ = b.actions.Close()
+		}
 		return nil, err
 	}
 	// Build the SSE live-view over the bus (ADR-0024) when both exist (i.e.
@@ -396,6 +420,9 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	}
 	if store != nil {
 		app.store = store // owned closer, set only from a non-nil concrete store
+	}
+	if b.actions != nil {
+		app.actions = b.actions
 	}
 	// Mount the read-only control API on the EXISTING admin server (ADR-0022 §1):
 	// Handle runs here in Build, before Run starts the server. When observability
@@ -587,19 +614,43 @@ func openStore(cfg *config.Config) (*sqlite.SqliteStore, error) {
 	if cfg.Storage == nil {
 		return nil, nil
 	}
-	path := cfg.Storage.Path
-	if path == "" {
-		dir, err := os.UserConfigDir()
-		if err != nil {
-			return nil, fmt.Errorf("app: resolve default storage dir: %w", err)
-		}
-		path = filepath.Join(dir, "korvun", "korvun.db")
-	}
-	s, err := sqlite.Open(path)
+	s, err := sqlite.Open(storagePath(cfg))
 	if err != nil {
 		return nil, fmt.Errorf("app: open conversation store: %w", err)
 	}
 	return s, nil
+}
+
+// storagePath resolves the configured storage path, defaulting to
+// <os.UserConfigDir>/korvun/korvun.db — ONE resolution shared by the
+// conversation store and the Action Kernel store so "the same file" is
+// true by construction. An unresolvable home falls back to the relative
+// default the sqlite mold will surface loudly.
+func storagePath(cfg *config.Config) string {
+	if cfg.Storage != nil && cfg.Storage.Path != "" {
+		return cfg.Storage.Path
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return filepath.Join("korvun", "korvun.db")
+	}
+	return filepath.Join(dir, "korvun", "korvun.db")
+}
+
+// actionRecorder adapts the kernel's sqlite store to the brain's
+// consumer-side ActionRecorder seam.
+type actionRecorder struct {
+	store *actionsqlite.Store
+}
+
+// RecordAttempt implements brain.ActionRecorder.
+func (r actionRecorder) RecordAttempt(ctx context.Context, env action.Envelope, outcome, rule string, state action.State) error {
+	return r.store.RecordAttempt(ctx, env, actionsqlite.Decision{Outcome: outcome, Rule: rule}, state)
+}
+
+// Finish implements brain.ActionRecorder.
+func (r actionRecorder) Finish(ctx context.Context, actionID string, to action.State, finishedAt time.Time) error {
+	return r.store.Finish(ctx, actionID, to, finishedAt)
 }
 
 // wire registers brains, builds and registers channels, and binds routes. It
@@ -949,6 +1000,11 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		if block != "" {
 			opts = append(opts, brain.WithAgentSkillsBlock(block))
 		}
+	}
+	// The Action Kernel's recorder rides into every agent brain when the
+	// store exists (lote 3b): every tool attempt lands with its decision.
+	if b.actions != nil {
+		opts = append(opts, brain.WithActionRecorder(actionRecorder{store: b.actions}))
 	}
 	b.logger.Info("agent brain wired", "brain", bc.Name, "tools", bc.Agent.Tools, "max_iterations", bc.Agent.MaxIterations)
 	return brain.NewAgentBrain(selected[0], reg, opts...), nil
@@ -1470,6 +1526,15 @@ func (a *App) Shutdown(ctx context.Context) error {
 			if err := a.store.Close(); err != nil {
 				errs = append(errs, fmt.Errorf("app: close conversation store: %w", err))
 			}
+		}
+	}
+	if a.actions != nil {
+		if routerErr == nil {
+			if err := a.actions.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("app: close action store: %w", err))
+			}
+		} else {
+			a.logger.Warn("action store left open: router did not drain within the shutdown deadline")
 		}
 	}
 	// Unblock the live-view BEFORE draining the admin server: SSE connections are
