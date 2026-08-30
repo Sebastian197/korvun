@@ -147,14 +147,22 @@ type AuthorityGrant struct {
 	// DelegationDepthRemaining bounds further delegation (§14.3: a child
 	// must have strictly less).
 	DelegationDepthRemaining int
+	// EffectCeiling bounds the effect class this authority may reach
+	// (Etapa 3, FR-CEIL-1): the empty value means NO ceiling — the house
+	// zero-is-unlimited law, which is exactly what keeps the root and the
+	// config-derived grants byte-for-byte intact.
+	EffectCeiling EffectClass
 	// Status is the runtime lifecycle — NOT part of the grant digest.
 	Status LifecycleStatus
 }
 
 // Digest returns the deterministic grant digest — same discipline as the
-// contract digest: terms only, runtime Status excluded.
+// contract digest: terms only, runtime Status excluded. The effect
+// ceiling (Etapa 3) enters ONLY when present: an absent ceiling means
+// unlimited and contributes no term, so every pre-E3 digest and derived
+// id stays byte-identical across the stage (AS-7).
 func (g AuthorityGrant) Digest() string {
-	return HashCanonical(contractTerms(map[string]any{
+	terms := map[string]any{
 		"grant_id":   g.GrantID,
 		"intent_id":  g.IntentID,
 		"issuer":     g.IssuerPrincipalID,
@@ -166,7 +174,11 @@ func (g AuthorityGrant) Digest() string {
 		"valid_from": timeTerm(g.ValidFrom),
 		"expires_at": timeTerm(g.ExpiresAt),
 		"depth":      g.DelegationDepthRemaining,
-	}))
+	}
+	if g.EffectCeiling != "" {
+		terms["effect_ceiling"] = string(g.EffectCeiling)
+	}
+	return HashCanonical(contractTerms(terms))
 }
 
 // sortedSet renders a string slice as a SET: sorted, so serialization

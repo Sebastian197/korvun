@@ -107,3 +107,30 @@ func TestDeriveConfigGrant_deterministicIdsAndShape(t *testing.T) {
 		}
 	}
 }
+
+// TestGrantDigest_ceilingTermEntersOnlyWhenPresent (Etapa 3): an absent
+// ceiling contributes NO digest term, so every pre-E3 grant digest and
+// every derived id stays byte-identical (AS-7 across stages) — while a
+// present ceiling is a real term that moves the digest.
+func TestGrantDigest_ceilingTermEntersOnlyWhenPresent(t *testing.T) {
+	t.Parallel()
+	// Literals captured on the pre-ceiling implementation (2026-08-30):
+	// stability across the stage is the contract.
+	if got := DeriveConfigGrant("asistente", []string{"calc", "time"}, []string{"*"}).GrantID; got != "grant_cfg_5446517958b987c7" {
+		t.Fatalf("derived ids must not move across E3: got %q", got)
+	}
+	base := AuthorityGrant{GrantID: "grant_1", IntentID: "int_root", Operations: []string{"calc"}}
+	if got := base.Digest(); got != "sha256:1b5c9e13f7bfa1bcb478793843d81d143b3ef1a085308b910e4c024cb9d4595d" {
+		t.Fatalf("uncapped grant digests must not move across E3: got %q", got)
+	}
+	ceilinged := base
+	ceilinged.EffectCeiling = EffectReadExternal
+	if ceilinged.Digest() == base.Digest() {
+		t.Fatal("a present ceiling is a TERM: it must move the digest")
+	}
+	other := base
+	other.EffectCeiling = EffectCritical
+	if other.Digest() == ceilinged.Digest() {
+		t.Fatal("different ceilings, different digests")
+	}
+}

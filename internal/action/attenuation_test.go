@@ -30,6 +30,7 @@ func parentGrant() AuthorityGrant {
 		ValidFrom:                attBase,
 		ExpiresAt:                attBase.Add(48 * time.Hour),
 		DelegationDepthRemaining: 3,
+		EffectCeiling:            EffectWriteReversible,
 		Status:                   LifecycleActive,
 	}
 }
@@ -46,6 +47,7 @@ func childOf(p AuthorityGrant) AuthorityGrant {
 		ValidFrom:                attBase.Add(time.Hour),
 		ExpiresAt:                attBase.Add(24 * time.Hour),
 		DelegationDepthRemaining: 1,
+		EffectCeiling:            EffectReadExternal,
 		Status:                   LifecycleActive,
 	}
 }
@@ -69,6 +71,9 @@ func TestAttenuation_everyWideningDimensionIsRejectedAndNamed(t *testing.T) {
 		"intent":     func(c *AuthorityGrant) { c.IntentID = "int_other" },
 		"parent":     func(c *AuthorityGrant) { c.ParentGrantID = "grant_stranger" },
 		"issuer":     func(c *AuthorityGrant) { c.IssuerPrincipalID = "principal_ch_hooks" },
+		// Tenth dimension (Etapa 3): the parent caps at read_external; a
+		// child reaching for writes widens.
+		"effect_ceiling": func(c *AuthorityGrant) { c.EffectCeiling = EffectWriteIrreversible },
 	}
 	for dimension, widen := range cases {
 		child := childOf(parentGrant())
@@ -193,6 +198,14 @@ func naiveSubsetOracle(parent, child AuthorityGrant) bool {
 		child.IssuerPrincipalID != parent.SubjectPrincipalID {
 		return false
 	}
+	// Tenth dimension: ceiling child <= parent on the TOTAL ORDER; the
+	// zero-is-unlimited trap in ceiling form — a limited parent with an
+	// absent child ceiling is a WIDENING (the budget/expiry mold).
+	if parent.EffectCeiling != "" {
+		if child.EffectCeiling == "" || child.EffectCeiling.Rank() > parent.EffectCeiling.Rank() {
+			return false
+		}
+	}
 	return true
 }
 
@@ -211,10 +224,13 @@ func TestAttenuation_propertyAgainstTheOracle(t *testing.T) {
 			}
 			return out
 		}
+		ceilings := []EffectClass{"", EffectPure, EffectReadExternal,
+			EffectWriteReversible, EffectWriteIrreversible, EffectCritical, "bogus_class"}
 		parent := parentGrant()
 		parent.Operations = pick(ops)
 		parent.Budgets.MaxActions = rng.Intn(4) * 5
 		parent.DelegationDepthRemaining = rng.Intn(3)
+		parent.EffectCeiling = ceilings[rng.Intn(len(ceilings))]
 		if rng.Intn(3) == 0 {
 			parent.ExpiresAt = time.Time{}
 		}
@@ -222,6 +238,7 @@ func TestAttenuation_propertyAgainstTheOracle(t *testing.T) {
 		child.Operations = pick(ops)
 		child.Budgets.MaxActions = rng.Intn(4) * 5
 		child.DelegationDepthRemaining = rng.Intn(3)
+		child.EffectCeiling = ceilings[rng.Intn(len(ceilings))]
 		child.ExpiresAt = attBase.Add(time.Duration(rng.Intn(96)) * time.Hour)
 		if rng.Intn(4) == 0 {
 			child.ExpiresAt = time.Time{}
@@ -238,14 +255,17 @@ func TestAttenuation_propertyAgainstTheOracle(t *testing.T) {
 // FuzzAttenuation drives arbitrary pairs: never a panic, and NEVER an
 // accepted pair the oracle rejects (no widening slips through).
 func FuzzAttenuation(f *testing.F) {
-	f.Add("calc,time", "calc", 10, 5, 3, 1, int64(24), int64(12))
-	f.Add("*", "*", 0, 0, 2, 1, int64(0), int64(0))
-	f.Add("calc", "calc,extra", 5, 50, 1, 0, int64(1), int64(100))
-	f.Fuzz(func(t *testing.T, parentOps, childOps string, parentBudget, childBudget, parentDepth, childDepth int, parentExpH, childExpH int64) {
+	f.Add("calc,time", "calc", 10, 5, 3, 1, int64(24), int64(12), "read_external", "pure")
+	f.Add("*", "*", 0, 0, 2, 1, int64(0), int64(0), "", "")
+	f.Add("calc", "calc,extra", 5, 50, 1, 0, int64(1), int64(100), "pure", "critical")
+	f.Add("calc", "calc", 5, 5, 2, 1, int64(24), int64(12), "write_reversible", "")
+	f.Add("calc", "calc", 5, 5, 2, 1, int64(24), int64(12), "read_external", "garbage")
+	f.Fuzz(func(t *testing.T, parentOps, childOps string, parentBudget, childBudget, parentDepth, childDepth int, parentExpH, childExpH int64, parentCeil, childCeil string) {
 		parent := parentGrant()
 		parent.Operations = strings.Split(parentOps, ",")
 		parent.Budgets.MaxActions = parentBudget
 		parent.DelegationDepthRemaining = parentDepth
+		parent.EffectCeiling = EffectClass(parentCeil)
 		if parentExpH > 0 {
 			parent.ExpiresAt = attBase.Add(time.Duration(parentExpH%100000) * time.Hour)
 		} else {
@@ -255,6 +275,7 @@ func FuzzAttenuation(f *testing.F) {
 		child.Operations = strings.Split(childOps, ",")
 		child.Budgets.MaxActions = childBudget
 		child.DelegationDepthRemaining = childDepth
+		child.EffectCeiling = EffectClass(childCeil)
 		if childExpH > 0 {
 			child.ExpiresAt = attBase.Add(time.Duration(childExpH%100000) * time.Hour)
 		} else {
@@ -264,4 +285,45 @@ func FuzzAttenuation(f *testing.F) {
 			t.Fatalf("validator accepted a widening the oracle rejects:\nparent=%+v\nchild=%+v", parent, child)
 		}
 	})
+}
+
+// TestAttenuation_ceilingZeroIsUnlimitedTrap pins the tenth dimension's
+// zero form explicitly: an unlimited parent accepts any child ceiling; a
+// LIMITED parent rejects an absent (unlimited) child ceiling.
+func TestAttenuation_ceilingZeroIsUnlimitedTrap(t *testing.T) {
+	t.Parallel()
+	parent := parentGrant()
+	parent.EffectCeiling = ""
+	child := childOf(parent)
+	child.EffectCeiling = EffectCritical
+	if err := ValidateAttenuation(parent, child); err != nil {
+		t.Fatalf("an unlimited parent ceiling accepts any child ceiling, got %v", err)
+	}
+	parent = parentGrant() // ceilinged at write_reversible
+	child = childOf(parent)
+	child.EffectCeiling = ""
+	err := ValidateAttenuation(parent, child)
+	if !errors.Is(err, ErrAttenuationViolated) || !strings.Contains(err.Error(), "effect_ceiling") {
+		t.Fatalf("absent child ceiling under a limited parent WIDENS, named: got %v", err)
+	}
+}
+
+// TestAttenuation_unknownClassUnderAnyFiniteCeilingIsRejected is the
+// ladder and the ceiling swearing together: an unknown class ranks above
+// critical, so it can never fit under ANY finite ceiling.
+func TestAttenuation_unknownClassUnderAnyFiniteCeilingIsRejected(t *testing.T) {
+	t.Parallel()
+	for _, ceiling := range []EffectClass{
+		EffectPure, EffectReadExternal, EffectWriteReversible,
+		EffectWriteCompensatable, EffectWriteIrreversible, EffectCritical,
+	} {
+		parent := parentGrant()
+		parent.EffectCeiling = ceiling
+		child := childOf(parent)
+		child.EffectCeiling = EffectClass("corrupted_or_future")
+		err := ValidateAttenuation(parent, child)
+		if !errors.Is(err, ErrAttenuationViolated) || !strings.Contains(err.Error(), "effect_ceiling") {
+			t.Fatalf("unknown class under finite ceiling %s must be rejected naming the dimension, got %v", ceiling, err)
+		}
+	}
 }

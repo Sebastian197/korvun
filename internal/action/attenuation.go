@@ -80,6 +80,20 @@ func ValidateAttenuation(parent, child AuthorityGrant) error {
 		(child.ExpiresAt.IsZero() || child.ExpiresAt.After(parent.ExpiresAt)) {
 		return widens("expiry", "child must expire no later than the parent")
 	}
+	// Effect ceiling (Etapa 3, the tenth dimension): child <= parent on
+	// the TOTAL ORDER, with the zero-is-unlimited trap in ceiling form —
+	// a limited parent with an absent child ceiling widens (the
+	// budget/expiry mold). Unknown classes rank above critical, so they
+	// can never fit under any finite ceiling: the ladder and the ceiling
+	// fail closed together.
+	if parent.EffectCeiling != "" {
+		if child.EffectCeiling == "" {
+			return widens("effect_ceiling", "child must carry a ceiling within the parent's")
+		}
+		if child.EffectCeiling.Rank() > parent.EffectCeiling.Rank() {
+			return widens("effect_ceiling", "child ceiling exceeds the parent's on the effect ladder")
+		}
+	}
 	if child.ValidFrom.Before(parent.ValidFrom) {
 		return widens("window", "child validity must not start before the parent's")
 	}
