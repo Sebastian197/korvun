@@ -37,3 +37,34 @@ func (a *AgentBrain) classifyEffect(name string) (string, bool) {
 	}
 	return string(descriptor.Class), true
 }
+
+// effectGateRule is the effect tier of the action gate (Etapa 3, spec
+// FR-CEIL-3 + FR-REQ, sealed NC-2(b)), a PURE function with DETERMINISTIC
+// precedence (§13.3 subset) — the first applicable denial wins:
+//
+//  1. effect_ceiling — the class exceeds the bounded authority's ceiling
+//     (unknown classes rank above critical and never fit).
+//  2. approval_unavailable — under BOUNDED authority (a ceiling present;
+//     never the root's standing authority), write_irreversible and
+//     critical demand human approval, and no approval workflow exists
+//     until E5: the honest no that E5 will turn into an approval card.
+//  3. prepare_unavailable — whatever demands a prepare phase dies while
+//     no connector supports one (the demand signal stays structurally
+//     unreachable until the descriptor's prepare field wakes in E5/E6;
+//     the wall exists NOW, authority-independent).
+//
+// "" means the effect tier lets the attempt proceed.
+func effectGateRule(class action.EffectClass, ceiling action.EffectClass, requiresPrepare bool) string {
+	if ceiling != "" {
+		if class.Rank() > ceiling.Rank() {
+			return "effect_ceiling"
+		}
+		if class == action.EffectWriteIrreversible || class == action.EffectCritical {
+			return "approval_unavailable"
+		}
+	}
+	if requiresPrepare {
+		return "prepare_unavailable"
+	}
+	return ""
+}
