@@ -93,6 +93,34 @@ gh attestation verify checksums.txt --repo Sebastian197/korvun   --bundle korvun
 (Desktop family: `checksums-desktop.txt` with
 `korvun_desktop_checksums_provenance.intoto.jsonl`.)
 
+## Action ledger and receipts
+
+Since the Trust Layer's fourth stage, every terminal action outcome —
+allowed, denied, shadowed, succeeded or failed — is recorded as a signed
+receipt in a hash-linked, per-partition chain inside the local store,
+born in the same transaction as the outcome itself. Receipts carry
+digests and finite labels only: raw tool parameters and raw results are
+NEVER persisted (the result is attested by an on-the-fly digest). The
+operator verifies offline, against the file, with the built-in CLI:
+`korvun receipt verify` re-judges one receipt (hash, Ed25519 signature
+against the registered key, key validity window, chain link, coherence
+with the action row — every failure named), and `korvun ledger check`
+walks a whole partition, denouncing the first gap, clone or tampered
+link. `korvun receipt rotate-key` rotates the signing key; retired keys
+are kept forever so each era of the chain verifies with the key of its
+era.
+
+**Honest scope**: the ledger is **tamper-evident, not tamper-proof**.
+The signing key lives on the same machine as the store, so an attacker
+with full control of the profile can rewrite history with the resident
+key, and truncation of the chain's tail leaves no hole to detect. What
+the design guarantees is that any out-of-band edit, deletion or
+reordering made without the active key — or with a retired one — is
+detected and NAMED by the verifier. We deliberately avoid the words
+"immutable", "unforgeable" or "blockchain-grade" anywhere in Korvun's
+public materials; reports of public copy overstating these properties
+are welcome exactly like any other invariant violation.
+
 ## Supply chain
 
 Dependencies are minimized and each one is justified by an ADR.

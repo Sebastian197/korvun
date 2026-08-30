@@ -302,3 +302,37 @@ small piece inside this stage when ordering allows.
    SECURITY.md, the mini-act for Chano (tamper a byte, watch the check
    name it) — plus the Windows first-run-deadline hardening as its own
    small piece if ordering allows.
+
+---
+
+## STAGE CLOSE — 2026-08-30 (lote 5)
+
+Lotes 1-5: IMPLEMENTED + VERIFIED local. The five blueprint-mandatory
+scenarios are green and mapped to executable tests:
+
+| Scenario | Test(s) | Where |
+|---|---|---|
+| AS-1 tampering detected (edit / delete / reorder) | `TestLedgerCheck_editedReceiptNamedAtItsLink`, `TestLedgerCheck_deletedReceiptDenouncedByItsHole`, `TestLedgerCheck_reorderedChainDenounced`, `TestLedgerCheck_duplicateSeqDenounced`, `TestReceiptVerify_namesEveryFailure` | `internal/cli/ledger_test.go`, `receipt_test.go` |
+| AS-2 rotation preserves history (+ post-retirement forgery fails) | `TestReceiptRotateKey_historicalReceiptsStillVerify`, key-window case of `TestReceiptVerify_namesEveryFailure` | `internal/cli/rotatekey_test.go`, `receipt_test.go` |
+| AS-3 backup/restore verifiable | `TestLedgerCheck_backupRestoresVerifiable` | `internal/cli/ledger_test.go` |
+| AS-4 no secrets on shared surfaces (negative sweep) | `TestSurfaces_noReceiptMaterialLeaks` (slog + bus/SSE source, real sealed store, real key material), `TestLedger_rawResultNeverTouchesTheDisk` (NC-3 byte-scan) | `internal/brain/agent_surfaces_test.go`, `internal/app/app_ledger_test.go` |
+| AS-5 every outcome receipts or dies | `TestReceipt_appendFailureFailsTheWholeRecordClosed`, `TestReceipt_deniedIsBornSealedWithItsRow`, `TestReceipt_concurrentHammerNoGapsNoDuplicates` | `internal/action/sqlite/ledger_test.go` |
+
+Non-mandatory scenarios: AS-6 determinism (`FuzzReceiptCanonical` +
+signing sabotage table over all 16 sealed fields), AS-7 verifier honesty
+(`custody_mismatch` case), AS-8 migration crash mold (v5 AND v6 re-armed
+against hand-built era files).
+
+Toll, final (the ink inside): identified+classified hot path 0.885 ms/op
+→ sealed 1.252 ms/op (canonical + sha256 + Ed25519 + chain-head read +
+receipt insert ≈ +0.37 ms). The 5 ms p95 ceiling stands with ~4×
+margin. §24's sixteen compatibility points re-run green via the whole
+suite (38 packages, -race); six fuzzers in the smoke; `go.mod`
+untouched.
+
+Exit criterion, standing: a third party holding only the store file and
+the `korvun` binary can verify what was requested (action digests),
+which policy decided (decision digest, policy pin, rule), and what
+result was recorded (outcome + result digest) — offline, with every
+failure named. Honest limit in public language (SECURITY.md): the
+ledger is tamper-evident, never "immutable".
