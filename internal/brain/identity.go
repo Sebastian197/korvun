@@ -28,6 +28,10 @@ type ActionIdentity struct {
 	IntentID string
 	// GrantID is the derived grant referenced on rule "granted".
 	GrantID string
+	// EffectCeiling bounds the effect class this identity's authority may
+	// reach (Etapa 3, FR-CEIL-3): "" = no ceiling — production's derived
+	// grants carry none today, which keeps the exterior byte-for-byte.
+	EffectCeiling action.EffectClass
 }
 
 // IdentifiedRecorder is the OPTIONAL identity-aware extension of the

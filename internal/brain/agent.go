@@ -721,6 +721,24 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 			return deniedObservation(name)
 		}
 	}
+	// The effect ceiling (Etapa 3, FR-CEIL-3): the action's class is
+	// judged against the governing authority's ceiling at decision time —
+	// AFTER the capability gate (shadow keeps observing intention without
+	// effect) and BEFORE the authorized record. An unknown class ranks
+	// above critical, so it fits under nothing finite: the ladder and the
+	// ceiling fail closed together. No ceiling wired ("" — production's
+	// derived grants today) = today's behavior byte-for-byte.
+	if a.identity != nil && a.identity.EffectCeiling != "" && a.effects != nil {
+		if descriptor, declared := a.effects(name); declared &&
+			descriptor.Class.Rank() > a.identity.EffectCeiling.Rank() {
+			a.logger.Warn("agent: tool denied",
+				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+				"rule", "effect_ceiling", "args_prefix", boundedArgs(args))
+			a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: "effect_ceiling"})
+			a.recordAttempt(ctx, env, lane, name, args, "deny", "effect_ceiling", action.StateDenied)
+			return deniedObservation(name)
+		}
+	}
 	// The action gate WRAPS the existing decision, never replaces it: the
 	// attempt is AUTHORIZED here (granted, or ungoverned = today's allow)
 	// and must land durably BEFORE any effect. An unrecordable attempt
