@@ -194,6 +194,14 @@ transactions (E6), broker (E7), mature Console surfaces (E8), MCP/A2A
     neither expired nor revoked, and labeling it either would lie to the
     audit trail. Vocabulary rigor only; no scope change: the label is as
     unreachable by today's root-intent flows as the other six.
+  - **Addendum (adjudicated by Chano, 2026-08-30, batch 5):** two more
+    finite labels for the operator's CLI acts. `operator` — the operator
+    wields the root's standing authority directly; calling that act
+    `granted` or `ungoverned` would lie to the trail. And
+    `attenuation_violated` — a CLI delegation refused by the §14.3 wall;
+    the widened dimension stays in the human-facing error, keeping the
+    trail's grammar finite. Vocabulary rigor only; no scope change:
+    neither label is reachable from the hot path.
 
 ## Acceptance scenarios (Given / When / Then)
 
