@@ -309,6 +309,14 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 			_ = store.Close()
 			return nil, err
 		}
+		// The ledger's ink (Etapa 4, FR-KEY-1): the signing key lives
+		// beside the store, generated idempotently, permissions verified
+		// on every boot — boot-fatal on any refusal.
+		if _, err := ensureSigningKey(context.Background(), actions, filepath.Dir(storagePath(cfg))); err != nil {
+			_ = actions.Close()
+			_ = store.Close()
+			return nil, err
+		}
 	}
 
 	// The router gets the app-level error funnel (logs + counts +, when the bus is
