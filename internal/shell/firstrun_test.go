@@ -269,7 +269,7 @@ func postConfigReload(t *testing.T, client *http.Client, baseURL string, body []
 		t.Fatalf("POST response %q carries no handle (err %v)", raw, err)
 	}
 
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(firstRunBootTimeout)
 	for time.Now().Before(deadline) {
 		st, err := client.Get(baseURL + "/api/reload/" + accepted.Handle)
 		if err != nil {
@@ -299,6 +299,20 @@ func postConfigReload(t *testing.T, client *http.Client, baseURL string, body []
 	t.Fatalf("reload %s did not succeed within the deadline", accepted.Handle)
 }
 
+// First-run deadlines, generous ON PURPOSE (Etapa 4 lote 5, the piece
+// filed during the v0.13.0 release): on a COLD windows-latest runner the
+// very first boot of the freshly linked binary has been observed to blow
+// a 10-15s budget — Defender scans the new executable, the sqlite driver
+// pages in, and the shell cycle pays it all at once. A healthy boot
+// finishes in well under a second on every platform, so these deadlines
+// exist only to catch a genuine hang; making them generous costs nothing
+// on the green path and removes the first-run flake (which burned a
+// rerun on a docs-only master push). Do not "optimize" them back down.
+const (
+	firstRunBootTimeout = 120 * time.Second
+	firstRunStopTimeout = 60 * time.Second
+)
+
 // The NC-1 flow end to end (the decision's whole point): the channel-less
 // first-run template boots, the builder's mutation API adds the FIRST
 // channel via a reload THROUGH the SP4 proxy, the channel list turns
@@ -319,14 +333,14 @@ func TestFirstRun_builderAddsFirstChannel(t *testing.T) {
 	if err := c.LoadConfig(path); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), firstRunBootTimeout)
 	defer cancel()
 	if err := c.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	t.Cleanup(func() {
 		if c.Status().Running {
-			sctx, sc := context.WithTimeout(context.Background(), 10*time.Second)
+			sctx, sc := context.WithTimeout(context.Background(), firstRunStopTimeout)
 			defer sc()
 			_ = c.Stop(sctx)
 		}
@@ -383,7 +397,7 @@ func TestFirstRun_builderAddsFirstChannel(t *testing.T) {
 		t.Fatalf("back-to-zero /api/channels = %q, want []", body)
 	}
 
-	sctx, sc := context.WithTimeout(context.Background(), 10*time.Second)
+	sctx, sc := context.WithTimeout(context.Background(), firstRunStopTimeout)
 	defer sc()
 	if err := c.Stop(sctx); err != nil {
 		t.Fatalf("Stop after the reload cycle: %v", err)
@@ -419,14 +433,14 @@ func TestFirstRun_templateBoots(t *testing.T) {
 	if err := c.LoadConfig(path); err != nil {
 		t.Fatalf("LoadConfig on the first-run template: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), firstRunBootTimeout)
 	defer cancel()
 	if err := c.Start(ctx); err != nil {
 		t.Fatalf("Start on the first-run template: %v", err)
 	}
 	t.Cleanup(func() {
 		if c.Status().Running {
-			sctx, sc := context.WithTimeout(context.Background(), 10*time.Second)
+			sctx, sc := context.WithTimeout(context.Background(), firstRunStopTimeout)
 			defer sc()
 			_ = c.Stop(sctx)
 		}
@@ -446,7 +460,7 @@ func TestFirstRun_templateBoots(t *testing.T) {
 		}
 	}
 
-	sctx, sc := context.WithTimeout(context.Background(), 10*time.Second)
+	sctx, sc := context.WithTimeout(context.Background(), firstRunStopTimeout)
 	defer sc()
 	if err := c.Stop(sctx); err != nil {
 		t.Fatalf("Stop after the first-run boot: %v", err)
