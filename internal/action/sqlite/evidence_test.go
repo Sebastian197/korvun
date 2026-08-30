@@ -159,3 +159,34 @@ func TestEvidence_prunedWithItsAction(t *testing.T) {
 		t.Fatalf("the surviving action keeps its evidence: %v", err)
 	}
 }
+
+// TestRecordIdentified_emptyAuthorityRefsStoreAsSQLNull: an act with no
+// authority refs (the operator's own CLI acts) stores SQL NULL — never
+// the JSON text "null" — so audit queries render their honest dash.
+func TestRecordIdentified_emptyAuthorityRefsStoreAsSQLNull(t *testing.T) {
+	t.Parallel()
+	store, _ := openTemp(t)
+	defer func() { _ = store.Close() }()
+	ident := testIdentity()
+	ident.AuthorityRefs = nil
+	if err := store.RecordAttemptIdentified(context.Background(), testEnvelope("act_norefs"),
+		Decision{Outcome: "allow", Rule: "operator"}, action.StateAuthorized, ident); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	var isNull int
+	if err := store.db.QueryRow(
+		`SELECT authority_refs IS NULL FROM actions WHERE action_id = 'act_norefs'`,
+	).Scan(&isNull); err != nil {
+		t.Fatalf("inspect: %v", err)
+	}
+	if isNull != 1 {
+		t.Fatal("empty refs must land as SQL NULL, not the JSON text \"null\"")
+	}
+	rec, err := store.Get(context.Background(), "act_norefs")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if rec.Identity == nil || len(rec.Identity.AuthorityRefs) != 0 {
+		t.Fatalf("round-trip: %+v", rec.Identity)
+	}
+}

@@ -48,10 +48,16 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 	default:
 		return fmt.Errorf("%w: %s", ErrNotADecisionState, state)
 	}
-	refs, err := json.Marshal(ident.AuthorityRefs)
-	if err != nil {
-		// Unreachable for a string slice; kept for honesty.
-		return fmt.Errorf("action/sqlite: marshal authority refs %q: %w", env.ActionID, err)
+	// Empty refs land as SQL NULL (never the JSON text "null"), so audit
+	// queries render their honest dash for acts with no explaining grant.
+	var refs any
+	if len(ident.AuthorityRefs) > 0 {
+		raw, err := json.Marshal(ident.AuthorityRefs)
+		if err != nil {
+			// Unreachable for a string slice; kept for honesty.
+			return fmt.Errorf("action/sqlite: marshal authority refs %q: %w", env.ActionID, err)
+		}
+		refs = string(raw)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -70,7 +76,7 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 		env.Source.Kind, env.Source.Protocol, env.Source.Channel,
 		env.Operation.Namespace, env.Operation.Name, env.Operation.Version,
 		env.ParametersDigest, env.Effect.Class, string(state), requestedAt,
-		ident.PrincipalID, ident.IntentID, string(refs),
+		ident.PrincipalID, ident.IntentID, refs,
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert identified action %q: %w", env.ActionID, err)
 	}
