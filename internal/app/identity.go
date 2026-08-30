@@ -81,6 +81,12 @@ func derivedConfigGrant(bc config.BrainConfig) (action.AuthorityGrant, bool) {
 	return action.DeriveConfigGrant(bc.Name, operations, resources), true
 }
 
+// StoragePath exposes the shared storage-path resolution to the CLI
+// (Etapa 2, lote 5): ONE resolution for the conversation store, the
+// kernel store and the operator's CLI, so "the same file" stays true by
+// construction everywhere.
+func StoragePath(cfg *config.Config) string { return storagePath(cfg) }
+
 // rootIntentStore is the slice of the kernel store the boot needs.
 type rootIntentStore interface {
 	GetIntent(ctx context.Context, intentID string) (action.IntentContract, error)

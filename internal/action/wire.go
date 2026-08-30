@@ -10,6 +10,8 @@
 package action
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"strings"
 )
 
@@ -27,6 +29,23 @@ type PrincipalRef struct {
 	EvidenceID string
 	// ResponsibleHumanID names the human behind an agent principal.
 	ResponsibleHumanID string
+}
+
+// NewIntentID generates a fresh operator-intent identity ("int_" + 16
+// random bytes hex, the NewID mold).
+func NewIntentID() string {
+	b := make([]byte, 16)
+	// crypto/rand.Read is documented (Go ≥1.24) to always succeed.
+	_, _ = rand.Read(b)
+	return "int_" + hex.EncodeToString(b)
+}
+
+// NewGrantID generates a fresh operator-grant identity ("grant_" + 16
+// random bytes hex).
+func NewGrantID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return "grant_" + hex.EncodeToString(b)
 }
 
 // RootIntent returns the root intent contract: the operator's standing

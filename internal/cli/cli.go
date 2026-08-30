@@ -104,6 +104,8 @@ func (c *cli) run(args []string) int {
 		return c.configCmd(args[1:])
 	case "status":
 		return c.statusCmd(args[1:])
+	case "intent":
+		return c.intentCmd(args[1:])
 	}
 
 	// Retrocompat shim: the pre-CLI `korvun -config x.json` invocation (a leading
