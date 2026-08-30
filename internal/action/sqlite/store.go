@@ -45,6 +45,12 @@ type Decision struct {
 	PolicyDigest  string
 }
 
+// PolicyPin is the law identity one adapter stamps on every decision.
+type PolicyPin struct {
+	Version int64
+	Digest  string
+}
+
 // Record is one stored action with its decision and lifecycle facts.
 type Record struct {
 	// Envelope is the ActionEnvelope v1 as persisted (round-trips verbatim).
