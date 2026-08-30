@@ -199,3 +199,32 @@ func TestEffects_shadowedRowsCarryTheClassToo(t *testing.T) {
 	}
 	_ = strings.TrimSpace("")
 }
+
+// TestEffects_productionRegistryCombination pins the EXACT combination
+// the app wires: real builtin tools classified by tool.BuiltinEffects —
+// calc records pure, with the receipt digest stable.
+func TestEffects_productionRegistryCombination(t *testing.T) {
+	t.Parallel()
+	journal := &[]string{}
+	rec := &fakeRecorder{journal: journal}
+	calc, ok := tool.Builtin("calc")
+	if !ok {
+		t.Fatal("calc must exist")
+	}
+	a := NewAgentBrain(
+		&scriptedModel{},
+		tool.Registry{"calc": calc},
+		WithActionRecorder(rec),
+		WithEffectClassifier(tool.BuiltinEffects),
+	)
+	env := &envelope.Envelope{ID: "env-prod", Channel: "console"}
+	if out := a.runTool(context.Background(), env, nil, laneText, "calc", "2+2"); out != "4" {
+		t.Fatalf("calc must keep answering: %q", out)
+	}
+	if rec.envs[0].Effect.Class != string(action.EffectPure) {
+		t.Fatalf("the production registry classifies calc pure, got %q", rec.envs[0].Effect.Class)
+	}
+	if rec.envs[0].ParametersDigest != action.Digest(rec.envs[0].Operation, "2+2") {
+		t.Fatal("the receipt digest stays the E1 algorithm")
+	}
+}

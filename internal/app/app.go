@@ -1023,6 +1023,10 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	// grant — the recorded EXPLANATION of its governed allows.
 	if b.actions != nil {
 		opts = append(opts, brain.WithActionRecorder(actionRecorder{store: b.actions}))
+		// The effect engine (Etapa 3): the brain classifies every attempt
+		// from the DECLARED registry — the same single safe-toolset
+		// boundary the preflight above already validated.
+		opts = append(opts, brain.WithEffectClassifier(tool.BuiltinEffects))
 		identityCfg := b.cfg
 		if identityCfg == nil {
 			identityCfg = &config.Config{} // direct unit-test builds: console-only registry
