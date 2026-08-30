@@ -16,6 +16,7 @@ import (
 	"crypto/ed25519"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -47,12 +48,17 @@ func TestEnsureSigningKey_generatesOnFirstBootWithTightPermissions(t *testing.T)
 	if err != nil {
 		t.Fatalf("the private seed file must exist: %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("the private key file must be 0600, got %o", info.Mode().Perm())
-	}
-	dirInfo, err := os.Stat(filepath.Join(dir, "keys"))
-	if err != nil || dirInfo.Mode().Perm() != 0o700 {
-		t.Fatalf("the keys dir must be 0700, got %v %o", err, dirInfo.Mode().Perm())
+	// POSIX permission asserts only: Windows has no POSIX bits (Perm()
+	// reports 0666 regardless) — there the profile ACLs protect the key,
+	// declared in the keystore doc.
+	if runtime.GOOS != "windows" {
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("the private key file must be 0600, got %o", info.Mode().Perm())
+		}
+		dirInfo, err := os.Stat(filepath.Join(dir, "keys"))
+		if err != nil || dirInfo.Mode().Perm() != 0o700 {
+			t.Fatalf("the keys dir must be 0700, got %v %o", err, dirInfo.Mode().Perm())
+		}
 	}
 	active, err := store.ActiveSigningKey(context.Background())
 	if err != nil {
@@ -91,6 +97,9 @@ func TestEnsureSigningKey_idempotentAcrossBoots(t *testing.T) {
 
 func TestEnsureSigningKey_worldReadableIsRefusedClosed(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission refusal does not apply on Windows (no POSIX bits; profile ACLs protect the key)")
+	}
 	store, dir := signingHarness(t)
 	if _, err := ensureSigningKey(context.Background(), store, dir); err != nil {
 		t.Fatalf("boot 1: %v", err)

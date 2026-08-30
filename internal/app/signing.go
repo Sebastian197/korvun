@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
@@ -43,8 +44,11 @@ func ensureSigningKey(ctx context.Context, store *actionsqlite.Store, profileDir
 
 	if info, err := os.Stat(keyPath); err == nil {
 		// Every boot verifies the permissions: the private ink must be
-		// owner-only. Anything looser is refused CLOSED.
-		if info.Mode().Perm() != 0o600 {
+		// owner-only. Anything looser is refused CLOSED. POSIX only —
+		// Windows has no POSIX permission bits (Perm() reports 0666
+		// regardless); there the profile directory's ACLs are the
+		// protection, honestly declared rather than pretended.
+		if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 			return nil, fmt.Errorf("app: signing key %q has mode %o; it must be 0600 — refusing to boot with a readable private key", keyPath, info.Mode().Perm())
 		}
 		raw, err := os.ReadFile(keyPath) // #nosec G304 -- profile-owned fixed path derived from the storage dir
