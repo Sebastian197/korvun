@@ -115,7 +115,7 @@ func (c *cli) grantIssue(args []string) int {
 		_, _ = fmt.Fprint(c.stderr, "korvun grant issue: --config, --intent, --subject and --operations are required\n")
 		return 2
 	}
-	store, err := openOperatorStore(*gf.configPath)
+	store, err := openOperatorStoreSealed(*gf.configPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun grant issue: %v\n", err)
 		return 1
@@ -216,7 +216,7 @@ func (c *cli) grantDelegate(args []string) int {
 		_, _ = fmt.Fprint(c.stderr, "korvun grant delegate: --config, --parent, --subject and --operations are required\n")
 		return 2
 	}
-	store, err := openOperatorStore(*gf.configPath)
+	store, err := openOperatorStoreSealed(*gf.configPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun grant delegate: %v\n", err)
 		return 1
@@ -294,7 +294,7 @@ func (c *cli) grantRevoke(args []string) int {
 		return 2
 	}
 	id := fs.Arg(0)
-	store, err := openOperatorStore(*configPath)
+	store, err := openOperatorStoreSealed(*configPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun grant revoke: %v\n", err)
 		return 1

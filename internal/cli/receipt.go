@@ -1,0 +1,186 @@
+// Copyright 2026 Sebastián Moreno Saavedra
+// SPDX-License-Identifier: Apache-2.0
+
+// The operator's verifier — Etapa 4, lote 4 (spec FR-VER, the E2 CLI
+// mold): `korvun receipt verify` re-judges one receipt OFFLINE against
+// the store file, trusting nothing — not even its own base. Every check
+// fails with a NAMED reason, never a generic "invalid":
+//
+//	canonical_roundtrip_broken — the sealed form no longer survives the
+//	                             fuzzed strict parser
+//	hash_mismatch              — the stored hash is not the recomputed one
+//	key_unknown                — the signing key id is not registered
+//	signature_invalid          — the ink does not verify against the
+//	                             REGISTERED public key
+//	key_window_violated        — sealed outside the key's life
+//	chain_link_broken          — the previous hash does not match the
+//	                             predecessor (or the genesis link)
+//	custody_mismatch           — the receipt and its aduana row disagree
+//
+// Verification is READ-ONLY: it opens the store plainly (no sealer, no
+// key generation) and records nothing.
+package cli
+
+import (
+	"context"
+	"crypto/ed25519"
+	"encoding/hex"
+	"flag"
+	"fmt"
+	"strings"
+
+	"github.com/Sebastian197/korvun/internal/action"
+	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
+)
+
+// receiptCmd dispatches the `receipt` noun's verbs.
+func (c *cli) receiptCmd(args []string) int {
+	if len(args) == 0 {
+		_, _ = fmt.Fprint(c.stderr, "korvun receipt: expected a subcommand: verify | rotate-key\nRun 'korvun help' for usage.\n")
+		return 2
+	}
+	switch args[0] {
+	case "verify":
+		return c.receiptVerify(args[1:])
+	default:
+		_, _ = fmt.Fprintf(c.stderr, "korvun receipt: unknown subcommand %q\nRun 'korvun help' for usage.\n", args[0])
+		return 2
+	}
+}
+
+// receiptVerify implements `korvun receipt verify`: one positional id —
+// a receipt id ("rcpt_…") or an action id (every receipt of the action).
+func (c *cli) receiptVerify(args []string) int {
+	fs := flag.NewFlagSet("receipt verify", flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
+	configPath := fs.String("config", "", "path to the korvun config (required)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *configPath == "" || fs.NArg() != 1 {
+		_, _ = fmt.Fprint(c.stderr, "korvun receipt verify: usage: korvun receipt verify --config <path> <receipt-id | action-id>\n")
+		return 2
+	}
+	id := fs.Arg(0)
+	store, err := openOperatorStore(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun receipt verify: %v\n", err)
+		return 1
+	}
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	var receipts []action.Receipt
+	if strings.HasPrefix(id, "rcpt_") {
+		r, err := store.GetReceipt(ctx, id)
+		if err != nil {
+			_, _ = fmt.Fprintf(c.stderr, "korvun receipt verify: %s: %v\n", id, err)
+			return 1
+		}
+		receipts = []action.Receipt{r}
+	} else {
+		receipts, err = store.ReceiptsByAction(ctx, id)
+		if err != nil {
+			_, _ = fmt.Fprintf(c.stderr, "korvun receipt verify: %s: %v\n", id, err)
+			return 1
+		}
+		if len(receipts) == 0 {
+			_, _ = fmt.Fprintf(c.stderr, "korvun receipt verify: %s: no receipts recorded\n", id)
+			return 1
+		}
+	}
+	code := 0
+	for _, r := range receipts {
+		if failures := verifyReceiptChecks(ctx, store, r); len(failures) > 0 {
+			code = 1
+			for _, f := range failures {
+				_, _ = fmt.Fprintf(c.stdout, "receipt %s (seq %d): FAIL %s\n", r.ReceiptID, r.ChainSeq, f)
+			}
+			continue
+		}
+		_, _ = fmt.Fprintf(c.stdout, "receipt %s (seq %d): OK\n", r.ReceiptID, r.ChainSeq)
+	}
+	return code
+}
+
+// verifyReceiptChecks runs the full named-check ladder over one receipt.
+// It returns every failure found ("name: detail"), empty = sound.
+func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r action.Receipt) []string {
+	var failures []string
+	fail := func(name, format string, args ...any) {
+		failures = append(failures, name+": "+fmt.Sprintf(format, args...))
+	}
+	// 1. Canonical roundtrip through the fuzzed strict parser: the sealed
+	// form must survive its own wire format.
+	if parsed, err := action.ParseCanonicalReceipt(action.CanonicalReceipt(r)); err != nil {
+		fail("canonical_roundtrip_broken", "%v", err)
+	} else if action.ComputeReceiptHash(parsed) != action.ComputeReceiptHash(r) {
+		fail("canonical_roundtrip_broken", "the parsed form diverges from the stored one")
+	}
+	// 2. Hash recompute.
+	if recomputed := action.ComputeReceiptHash(r); recomputed != r.ReceiptHash {
+		fail("hash_mismatch", "stored %s, recomputed %s", r.ReceiptHash, recomputed)
+	}
+	// 3-5. The key: registered, valid ink, sealed inside its life.
+	key, err := store.GetSigningKey(ctx, r.SigningKeyID)
+	if err != nil {
+		fail("key_unknown", "signing key %q is not registered", r.SigningKeyID)
+	} else {
+		pub, decodeErr := hex.DecodeString(key.PublicKey)
+		switch {
+		case decodeErr != nil || len(pub) != ed25519.PublicKeySize:
+			fail("key_unknown", "registered public key for %q is unreadable", r.SigningKeyID)
+		case action.VerifyReceiptSignature(ed25519.PublicKey(pub), r) != nil:
+			fail("signature_invalid", "the signature does not verify against the registered public key %q", r.SigningKeyID)
+		}
+		sealedAt := r.FinishedAt
+		if sealedAt.Before(key.CreatedAt) {
+			fail("key_window_violated", "sealed %s but key %q was created %s",
+				sealedAt.Format("2006-01-02T15:04:05Z07:00"), r.SigningKeyID, key.CreatedAt.Format("2006-01-02T15:04:05Z07:00"))
+		}
+		if !key.RetiredAt.IsZero() && sealedAt.After(key.RetiredAt) {
+			fail("key_window_violated", "sealed %s but key %q was retired %s",
+				sealedAt.Format("2006-01-02T15:04:05Z07:00"), r.SigningKeyID, key.RetiredAt.Format("2006-01-02T15:04:05Z07:00"))
+		}
+	}
+	// 6. The chain link.
+	if r.ChainSeq == 0 {
+		if r.PreviousReceiptHash != action.GenesisPreviousHash {
+			fail("chain_link_broken", "seq 0 must link to the genesis hash, links to %s", r.PreviousReceiptHash)
+		}
+	} else {
+		pred, err := store.ReceiptAt(ctx, r.Partition, r.ChainSeq-1)
+		switch {
+		case err != nil:
+			fail("chain_link_broken", "predecessor %s/%d is missing", r.Partition, r.ChainSeq-1)
+		case r.PreviousReceiptHash != pred.ReceiptHash:
+			fail("chain_link_broken", "links to %s but predecessor %s carries %s",
+				r.PreviousReceiptHash, pred.ReceiptID, pred.ReceiptHash)
+		}
+	}
+	// 7. Coherence with the aduana row.
+	rec, err := store.Get(ctx, r.ActionID)
+	if err != nil {
+		fail("custody_mismatch", "aduana row %q is missing: %v", r.ActionID, err)
+		return failures
+	}
+	if last := lastReceiptOutcome(ctx, store, r); last && string(rec.State) != r.Outcome {
+		fail("custody_mismatch", "receipt attests %q but the aduana row says %q", r.Outcome, rec.State)
+	}
+	if rec.Envelope.ParametersDigest != r.ActionDigest {
+		fail("custody_mismatch", "receipt action digest %s but the aduana row carries %s",
+			r.ActionDigest, rec.Envelope.ParametersDigest)
+	}
+	return failures
+}
+
+// lastReceiptOutcome reports whether r is the LAST receipt of its
+// action — only the last one must agree with the row's current state
+// (an AUTHORIZED row records no receipt; a finished one records the
+// terminal receipt after any earlier ones).
+func lastReceiptOutcome(ctx context.Context, store *actionsqlite.Store, r action.Receipt) bool {
+	receipts, err := store.ReceiptsByAction(ctx, r.ActionID)
+	if err != nil || len(receipts) == 0 {
+		return true
+	}
+	return receipts[len(receipts)-1].ReceiptID == r.ReceiptID
+}

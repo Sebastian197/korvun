@@ -108,6 +108,8 @@ func (c *cli) run(args []string) int {
 		return c.intentCmd(args[1:])
 	case "grant":
 		return c.grantCmd(args[1:])
+	case "receipt":
+		return c.receiptCmd(args[1:])
 	}
 
 	// Retrocompat shim: the pre-CLI `korvun -config x.json` invocation (a leading

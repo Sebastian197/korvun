@@ -449,3 +449,39 @@ func TestLedger_intentDigestAndFinishBranches(t *testing.T) {
 		t.Fatal("a corrupt requested_at must fail the receipted close loud")
 	}
 }
+
+func TestLedger_getReceiptAndReceiptAt(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	if err := store.RecordAttempt(ctx, testEnvelope("act_get1"),
+		Decision{Outcome: "deny", Rule: "not_granted"}, action.StateDenied); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	receipts, err := store.ReceiptsByAction(ctx, "act_get1")
+	if err != nil || len(receipts) != 1 {
+		t.Fatalf("seed receipt: %v %d", err, len(receipts))
+	}
+	got, err := store.GetReceipt(ctx, receipts[0].ReceiptID)
+	if err != nil || got.ReceiptHash != receipts[0].ReceiptHash {
+		t.Fatalf("GetReceipt round-trips the row: %v %+v", err, got)
+	}
+	at, err := store.ReceiptAt(ctx, ledgerPartition, 0)
+	if err != nil || at.ReceiptID != receipts[0].ReceiptID {
+		t.Fatalf("ReceiptAt(0) is the genesis receipt: %v %+v", err, at)
+	}
+	if _, err := store.GetReceipt(ctx, "rcpt_ghost"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown receipt id: %v", err)
+	}
+	if _, err := store.ReceiptAt(ctx, ledgerPartition, 99); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("empty chain position: %v", err)
+	}
+	closed, _ := openTemp(t)
+	_ = closed.Close()
+	if _, err := closed.GetReceipt(ctx, "rcpt_x"); err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("closed store must fail loud, not not-found: %v", err)
+	}
+	if _, err := closed.ReceiptAt(ctx, ledgerPartition, 0); err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("closed store must fail loud, not not-found: %v", err)
+	}
+}

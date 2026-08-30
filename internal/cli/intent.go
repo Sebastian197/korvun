@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -63,6 +64,32 @@ func openOperatorStore(configPath string) (*actionsqlite.Store, error) {
 		return nil, err
 	}
 	return actionsqlite.Open(app.StoragePath(cfg))
+}
+
+// openOperatorStoreSealed opens the store WITH the profile's ink wired
+// (Etapa 4 FR-VER): the operator's mutating acts leave SIGNED receipts,
+// sealed with the same key the server boot uses (generated idempotently
+// if the profile is fresh — the boot's own semantics). Read-only verbs
+// keep the plain opener: verification must never write, not even a key.
+func openOperatorStoreSealed(configPath string) (*actionsqlite.Store, error) {
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return nil, err
+	}
+	storage := app.StoragePath(cfg)
+	store, err := actionsqlite.Open(storage)
+	if err != nil {
+		return nil, err
+	}
+	priv, err := app.EnsureSigningKey(context.Background(), store, filepath.Dir(storage))
+	if err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	store.SetReceiptSealer(func(r action.Receipt) action.Receipt {
+		return action.SignReceipt(priv, r)
+	})
+	return store, nil
 }
 
 // recordOperatorAct wraps one CLI mutation in its receipt: the identified
@@ -189,7 +216,7 @@ func (c *cli) intentCreate(args []string) int {
 		Status:            action.LifecycleDraft,
 		Version:           1,
 	}
-	store, err := openOperatorStore(*configPath)
+	store, err := openOperatorStoreSealed(*configPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun intent create: %v\n", err)
 		return 1
@@ -235,7 +262,7 @@ func (c *cli) intentTransition(args []string, verb string, to action.LifecycleSt
 		return 2
 	}
 	id := fs.Arg(0)
-	store, err := openOperatorStore(*configPath)
+	store, err := openOperatorStoreSealed(*configPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: %v\n", verb, err)
 		return 1

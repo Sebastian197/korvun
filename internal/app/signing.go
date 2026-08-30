@@ -109,3 +109,11 @@ func registerPublicKey(ctx context.Context, store *actionsqlite.Store, priv ed25
 		return fmt.Errorf("app: read active signing key: %w", err)
 	}
 }
+
+// EnsureSigningKey exposes the boot keystore to the operator CLI (Etapa
+// 4 FR-VER): same idempotent generation, same verified permissions, same
+// boot-fatal refusals — the operator's acts sign with the SAME profile
+// ink the server uses.
+func EnsureSigningKey(ctx context.Context, store *actionsqlite.Store, profileDir string) (ed25519.PrivateKey, error) {
+	return ensureSigningKey(ctx, store, profileDir)
+}

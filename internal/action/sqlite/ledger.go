@@ -240,9 +240,9 @@ func (s *Store) ListReceipts(ctx context.Context, partition string) ([]action.Re
 		   FROM receipts WHERE partition = ? ORDER BY chain_seq ASC`, partition)
 }
 
-// queryReceipts shares the scan.
-func (s *Store) queryReceipts(ctx context.Context, query string, arg any) ([]action.Receipt, error) {
-	rows, err := s.db.QueryContext(ctx, query, arg)
+// queryReceipts shares the scan across every receipt read.
+func (s *Store) queryReceipts(ctx context.Context, query string, args ...any) ([]action.Receipt, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("action/sqlite: query receipts: %w", err)
 	}
@@ -275,4 +275,40 @@ func (s *Store) queryReceipts(ctx context.Context, query string, arg any) ([]act
 		return nil, fmt.Errorf("action/sqlite: iterate receipts: %w", err)
 	}
 	return out, nil
+}
+
+// GetReceipt returns one receipt by id (ErrNotFound if absent) — the
+// verifier's entry point (Etapa 4 FR-VER).
+func (s *Store) GetReceipt(ctx context.Context, receiptID string) (action.Receipt, error) {
+	receipts, err := s.queryReceipts(ctx,
+		`SELECT receipt_id, action_id, intent_digest, principal_id, authority_digest,
+		        decision_digest, action_digest, effect_class, attempt, outcome,
+		        result_digest, started_at, finished_at, partition, chain_seq,
+		        previous_receipt_hash, receipt_hash, signing_key_id, signature
+		   FROM receipts WHERE receipt_id = ?`, receiptID)
+	if err != nil {
+		return action.Receipt{}, err
+	}
+	if len(receipts) == 0 {
+		return action.Receipt{}, fmt.Errorf("action/sqlite: receipt %q: %w", receiptID, ErrNotFound)
+	}
+	return receipts[0], nil
+}
+
+// ReceiptAt returns the receipt at one chain position (ErrNotFound if
+// absent) — the verifier's predecessor lookup.
+func (s *Store) ReceiptAt(ctx context.Context, partition string, seq int64) (action.Receipt, error) {
+	receipts, err := s.queryReceipts(ctx,
+		`SELECT receipt_id, action_id, intent_digest, principal_id, authority_digest,
+		        decision_digest, action_digest, effect_class, attempt, outcome,
+		        result_digest, started_at, finished_at, partition, chain_seq,
+		        previous_receipt_hash, receipt_hash, signing_key_id, signature
+		   FROM receipts WHERE partition = ? AND chain_seq = ?`, partition, seq)
+	if err != nil {
+		return action.Receipt{}, err
+	}
+	if len(receipts) == 0 {
+		return action.Receipt{}, fmt.Errorf("action/sqlite: receipt at %s/%d: %w", partition, seq, ErrNotFound)
+	}
+	return receipts[0], nil
 }
