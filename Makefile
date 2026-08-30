@@ -189,6 +189,7 @@ fuzz-smoke:
 	go test ./internal/action/ -run '^$$' -fuzz FuzzCanonicalize -fuzztime 3s
 	go test ./internal/action/ -run '^$$' -fuzz FuzzDigest -fuzztime 3s
 	go test ./internal/action/ -run '^$$' -fuzz FuzzAttenuation -fuzztime 3s
+	go test ./internal/action/ -run '^$$' -fuzz FuzzEffectClassRank -fuzztime 3s
 
 quality: guard-gopkgs lint test cover fuzz-smoke
 	@echo "Quality gate passed."
