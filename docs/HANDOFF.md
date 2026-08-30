@@ -115,9 +115,89 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-30, night)
+## Current state (as of 2026-08-30, session close)
 
-> **CURRENT (2026-08-30): TRUST LAYER ETAPA 4 — COMPLETA. Five batches
+> **CURRENT (2026-08-30): TRUST LAYER ETAPA 4 — COMPLETA y v0.14.0
+> PUBLICADA E INSTALADA.** Master at `2b82337` (= the v0.14.0 tag).
+> Ceremony verdict: mini-bash APPROVED by Chano — "the judge approved":
+> the seven seals on his real receipt, the forgery caught in triplicate
+> with the hashes face to face, the mid-chain hole denounced with its
+> position, and the tail-truncation limit shown ON PURPOSE as the
+> documented feature. Release published draft-until-complete (23 signed
+> assets, cosign OK ×2 families, SLSA provenance verified OFFLINE ×2),
+> installed on the iMac, app AND Telegram alive, the director's two
+> "hola"s done.
+>
+> **The weekend: four Trust Layer stages, four releases, ONE day
+> (2026-08-30, public release history):**
+> - **v0.11.0 (05:20Z)** — the Action Kernel: every tool action born as
+>   a canonical envelope, decided BEFORE any effect, durably recorded.
+> - **v0.12.0 (09:29Z)** — identity, intent and authority: who asked,
+>   under which intention, with authority that can only shrink; the
+>   operator's `korvun intent`/`korvun grant`.
+> - **v0.13.0 (11:42Z)** — effects and per-action policy: the
+>   consequence ladder, effect ceilings as the tenth attenuation
+>   dimension, every decision pinning its exact law.
+> - **v0.14.0 (17:25Z)** — the ledger and the verifiable receipts:
+>   Ed25519-signed receipts on an append-only hash chain born in the
+>   same transaction; the offline verifier with seven NAMED checks;
+>   tamper-evident, never "immutable" (SECURITY.md).
+>
+> **Public truth cured at the root**: `website/src/releaseFacts.ts` is
+> the ONLY place a release version is spelled; `check-release-facts.mjs`
+> breaks the build on any literal elsewhere. First real release through
+> the guard: v0.14.0 verified at the ORIGIN (github.io, cache-buster,
+> EN+ES — hero, install block and notes href all coherent).
+>
+> **Incidents of the day, with their lessons (all cured):**
+> - **Paso E of the ceremony**: a canned caption printed a FAIL the
+>   command never produced (his book had ONE receipt; deleting seq 0 was
+>   tail truncation — correctly "chain intact"). Cures now law in the
+>   script: the LEY DE LOS LETREROS (every caption derives from the
+>   captured REAL output; unexpected = declared and STOP) + seeding
+>   precondition (≥3 receipts, mid-chain delete) + the honest E-bis
+>   showing tail truncation AS the documented limit.
+> - **AppData leak**: TestBuild_storage_emptyPathUsesDefault redirected
+>   HOME/XDG but never AppData — on Windows it always resolved the REAL
+>   profile; invisible until the keystore wrote keys/. The shell
+>   tripwire caught it; the test now sandboxes all three.
+> - **gosec nosec placement**: a `// #nosec` after an opening brace is
+>   not recognized — move the call to its own line with the nosec at
+>   end-of-line.
+> - **Monitor script death (no effect)**: the tag-workflows monitor died
+>   on its own bash (associative arrays under set -u); state was
+>   verified directly — both release workflows were green.
+> - **Fuzz-smoke flake FILED (needs a mandate, touches Makefile)**:
+>   FuzzReceiptCanonical intermittently dies with "context deadline
+>   exceeded" at ~4.1s under -fuzztime 3s — the 232-entry corpus
+>   baseline plus fuzzing brushes the deadline on a loaded machine
+>   (reproduced FAIL→PASS back to back at session close). Candidate
+>   cure: a larger -fuzztime for corpus-heavy targets in the smoke.
+>
+> A product wording find is filed in
+> `design-drafts/teaser-v014/README.md`: the CLI's EN output says "the
+> aduana row says" (internal Spanish term in public copy) — candidate
+> for a future batch, NOT touched in the docs-only close.
+
+## Next steps (in order)
+
+> 1. **Teaser v0.14** — mandate DELIVERED, drafts READY in
+>    `design-drafts/teaser-v014/` (3 post drafts EN + LinkedIn ES, two
+>    sanitized frames from the real ceremony, 60s clip script, claim→
+>    source table). Copilot review + Chano's eyes decide; NOTHING
+>    publishes without his yes. The Show HN / Product Hunt / reddit
+>    cartridge stays untouched in the drawer.
+> 2. **DNS move Cloudflare → grey cloud** (Chano's clicks, guided,
+>    Monday).
+> 3. **korvun.ai on Dynadot** this week.
+> 4. **Etapa 5 (approvals) = the Trust Layer PREMIERE** — starts on
+>    Chano's "seguimos".
+> 5. **Scorecard weekly re-scan** — the two levers (Signed-Releases,
+>    Pinned-Dependencies) should now read 10.
+
+## Previous state (as of 2026-08-30, night)
+
+> **PREVIOUS (2026-08-30): TRUST LAYER ETAPA 4 — COMPLETA. Five batches
 > on master through the green path, mini-bash APPROVED by Chano
 > 2026-08-30 (full function: the seven seals on his real receipt, the
 > forgery caught in triplicate with the hashes face to face, the
