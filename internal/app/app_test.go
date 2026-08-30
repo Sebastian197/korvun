@@ -649,12 +649,15 @@ func TestBuild_storage_openFailureIsFatal(t *testing.T) {
 }
 
 // TestBuild_storage_emptyPathUsesDefault confirms an empty Path resolves to the
-// OS config dir default. HOME (darwin) and XDG_CONFIG_HOME (linux) are redirected
-// to a temp dir so the test never writes to the real user config dir.
+// OS config dir default. HOME (darwin), XDG_CONFIG_HOME (linux) and AppData
+// (windows) are ALL redirected to a temp dir so the test never writes to the
+// real user config dir — the missing AppData redirect leaked the profile on
+// Windows once the boot started writing keys/ beside the store.
 func TestBuild_storage_emptyPathUsesDefault(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)            // darwin: <HOME>/Library/Application Support
 	t.Setenv("XDG_CONFIG_HOME", tmp) // linux: <XDG_CONFIG_HOME>
+	t.Setenv("AppData", tmp)         // windows: %AppData%
 	cfg := cfgWith(ollamaBrain())
 	cfg.Storage = &config.StorageConfig{} // present, empty path → default
 	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
