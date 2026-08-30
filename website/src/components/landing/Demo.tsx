@@ -18,7 +18,7 @@ export function Demo({ copy }: { copy: LandingCopy["demo"] }) {
           </div>
           <Link
             className={styles.textLink}
-            href="https://github.com/Sebastian197/korvun/releases/tag/v0.10.0"
+            href="https://github.com/Sebastian197/korvun/releases/tag/v0.11.0"
           >
             {copy.release} <span aria-hidden="true">↗</span>
           </Link>

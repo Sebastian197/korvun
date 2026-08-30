@@ -119,7 +119,7 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
-**Download v0.10.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.11.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
@@ -169,6 +169,18 @@ one governed decision, one controlled reply out — animated on
 [korvun.dev](https://korvun.dev/), opening this README, on the desktop app
 icon for all three platforms, and in the CLI's startup banner. See the
 [v0.10.0 release notes](docs/releases/v0.10.0.md).
+
+## The Action Kernel — v0.11.0
+
+The first release of the **Execution Trust Layer** era (stage 1 of 10).
+Every tool action is now born as a canonical action envelope with a
+deterministic digest, receives an explainable decision BEFORE any effect
+(shadow keeps NEVER executing — now with a receipt; a hallucinated tool is
+denied with its rule; an unrecordable attempt fails closed), and leaves a
+durable, self-managing record — while the product experience does not move
+one pixel. One machine-enforced path to execution, ~1ms measured toll
+(ceiling 5ms), parsers fuzzed from birth, zero new configuration. See the
+[v0.11.0 release notes](docs/releases/v0.11.0.md).
 
 ## The quality pass — v0.9.1 & v0.9.2
 
@@ -269,13 +281,13 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.10.0` — Beta — is the current release.** Every beta criterion is met and the
+**`v0.11.0` — Beta — is the current release.** Every beta criterion is met and the
 platform keeps growing: channels, multi-brain routing, the policy engine,
 resilience, the no-code builder, the operator console, governed tools & skills,
 governed memory, the universal model gateway, and now the honest desktop —
 brain selection on New chat, the Secrets panel, a gateway-aware onboarding,
 and a chat that names who is thinking and says so when a request dies — each
-validated on real hardware. See [the release notes](docs/releases/v0.10.0.md),
+validated on real hardware. See [the release notes](docs/releases/v0.11.0.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 

@@ -115,7 +115,24 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-29)
+## Current state (as of 2026-08-30)
+
+> **CURRENT (2026-08-30): TRUST LAYER ETAPA 1 — COMPLETA. Lotes 1-3 on
+> master (`a81ffc4`), mini-bash APPROVED by Chano over the packaged build
+> (identical chat + a real customs receipt seen with his eyes: calc,
+> allow/granted, digest, native lane, AUTHORIZED→SUCCEEDED on his REAL
+> profile).** The Action Kernel: canonical envelopes + deterministic
+> digests (fuzzed from birth), the fail-closed state machine, the sqlite
+> store on the shared file with its own lifecycle (honest crash recovery,
+> capped retention), the Executor Registry as the machine-trapped single
+> path to Tool.Execute, runTool as the wrapping adapter (record BEFORE
+> effect, shadow with receipt and never executing, fail-closed on an
+> unrecordable attempt), boot wiring with zero new config. Toll measured:
+> full kernel ~0.85-1.06ms/op (ceiling 5ms p95). v0.11.0 release in
+> flight. Next stage on mandate: Etapa 2 (identidad, intención,
+> autoridad).
+
+## Previous state (as of 2026-08-29)
 
 > **CURRENT (2026-08-29, release close): v0.10.0 IS PUBLISHED AND
 > INSTALLED — with the new face.** Tag `v0.10.0` at `6be71d3`,

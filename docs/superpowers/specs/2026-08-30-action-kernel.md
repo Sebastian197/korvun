@@ -1,6 +1,10 @@
 # Trust Layer Etapa 1 — Action Kernel: Design Spec
 
-> **Status:** approved for TDD — **APROBADO POR CHANO 2026-08-30**, with
+> **Status: VERIFIED — lotes 1-3 implemented, whole gates green, and the
+> stage closed by the director's mini-bash over the packaged build
+> (2026-08-30): identical chat plus a real customs receipt on his own
+> profile. Shipped as v0.11.0.**
+> Original approval: approved for TDD — **APROBADO POR CHANO 2026-08-30**, with
 > the three `[NEEDS CLARIFICATION]` forks resolved by his call:
 > **(1)** SAME SQLite file as conversations, with the action tables under
 > their OWN migration versioning and lifecycle;
