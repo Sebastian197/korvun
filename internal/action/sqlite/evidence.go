@@ -81,8 +81,10 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 		return fmt.Errorf("action/sqlite: insert identified action %q: %w", env.ActionID, err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at, policy_version, policy_digest)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
 		env.ActionID, d.Outcome, d.Rule, requestedAt,
+		d.PolicyVersion, d.PolicyDigest,
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert decision %q: %w", env.ActionID, err)
 	}

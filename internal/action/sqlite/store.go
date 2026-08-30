@@ -37,6 +37,12 @@ type Decision struct {
 	Outcome string
 	// Rule names the deciding dimension (the ADR-0041 audit grammar).
 	Rule string
+	// PolicyVersion / PolicyDigest pin the EXACT law that took the
+	// decision (Etapa 3, FR-POL-1): version is monotonic per loaded
+	// config, digest is canonical over the brain's effective governance +
+	// the effect-registry snapshot. Zero values = the pre-pin era.
+	PolicyVersion int64
+	PolicyDigest  string
 }
 
 // Record is one stored action with its decision and lifecycle facts.
@@ -108,7 +114,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 3
+const schemaVersionCurrent = 4
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -185,6 +191,12 @@ CREATE TABLE budget_spent (
 	// transaction (the AS-8 crash mold, re-armed by test for v3).
 	2: `
 ALTER TABLE grants ADD COLUMN effect_ceiling TEXT NOT NULL DEFAULT '';`,
+	// v3→v4 (Trust Layer Etapa 3, FR-POL-1): every gate decision pins the
+	// EXACT law that took it. Additive columns; pre-pin rows read back
+	// version 0 / empty digest — the honest "no pinned law" of their era.
+	3: `
+ALTER TABLE action_decisions ADD COLUMN policy_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE action_decisions ADD COLUMN policy_digest TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per
@@ -447,8 +459,10 @@ func (s *Store) RecordAttempt(ctx context.Context, env action.Envelope, d Decisi
 		return fmt.Errorf("action/sqlite: insert action %q: %w", env.ActionID, err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at, policy_version, policy_digest)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
 		env.ActionID, d.Outcome, d.Rule, env.RequestedAt.UTC().Format(time.RFC3339Nano),
+		d.PolicyVersion, d.PolicyDigest,
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert decision %q: %w", env.ActionID, err)
 	}
@@ -528,7 +542,7 @@ func (s *Store) Get(ctx context.Context, actionID string) (Record, error) {
 		        a.parameters_digest, a.effect_class, a.state,
 		        a.recovery_marker, a.requested_at, a.finished_at,
 		        a.principal_id, a.intent_id, a.authority_refs,
-		        d.outcome, d.rule
+		        d.outcome, d.rule, d.policy_version, d.policy_digest
 		   FROM actions a JOIN action_decisions d ON d.action_id = a.action_id
 		  WHERE a.action_id = ?`, actionID,
 	).Scan(
@@ -539,6 +553,7 @@ func (s *Store) Get(ctx context.Context, actionID string) (Record, error) {
 		&rec.RecoveryMarker, &requestedAt, &finishedAt,
 		&principalID, &intentID, &authorityRefs,
 		&rec.Decision.Outcome, &rec.Decision.Rule,
+		&rec.Decision.PolicyVersion, &rec.Decision.PolicyDigest,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Record{}, fmt.Errorf("%w: %q", ErrNotFound, actionID)

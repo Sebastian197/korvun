@@ -125,8 +125,11 @@ func TestMigrationV3_freshFileLandsOnV3WithTheCeilingColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version: %v", err)
 	}
-	if v != 3 {
-		t.Fatalf("a fresh store lands on v3, got %d", v)
+	// Number-independent by the established precedent: a fresh store
+	// lands on the CURRENT version (the ceiling column check below is
+	// this test's real subject).
+	if v != schemaVersionCurrent {
+		t.Fatalf("a fresh store lands on the current version, got %d", v)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("close: %v", err)
@@ -149,8 +152,8 @@ func TestMigrationV3_v2FileMigratesAndOldGrantsReadUnlimited(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version: %v", err)
 	}
-	if v != 3 {
-		t.Fatalf("v2 file must migrate to 3, got %d", v)
+	if v != schemaVersionCurrent {
+		t.Fatalf("v2 file must migrate to the current version, got %d", v)
 	}
 	grant, err := store.GetGrant(context.Background(), "grant_v2")
 	if err != nil {
@@ -208,8 +211,8 @@ func TestMigrationV3_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 		t.Fatalf("the next boot must complete: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	if v, _ := store.SchemaVersion(context.Background()); v != 3 {
-		t.Fatalf("completed migration must land on 3, got %v", v)
+	if v, _ := store.SchemaVersion(context.Background()); v != schemaVersionCurrent {
+		t.Fatalf("completed migration must land on the current version, got %v", v)
 	}
 }
 
