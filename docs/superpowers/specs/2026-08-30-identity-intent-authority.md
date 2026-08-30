@@ -188,6 +188,12 @@ transactions (E6), broker (E7), mature Console surfaces (E8), MCP/A2A
   (`intent_inactive`, `intent_expired`, `authority_expired`,
   `authority_revoked`, `budget_exhausted`, `principal_disabled`) — none
   reachable by today's flows under the root intent.
+  - **Addendum (adjudicated by Chano, 2026-08-30, batch 2):**
+    `authority_inactive` joins the finite set — a grant that is not yet
+    in force (DRAFT, unknown status, or before its validity window) is
+    neither expired nor revoked, and labeling it either would lie to the
+    audit trail. Vocabulary rigor only; no scope change: the label is as
+    unreachable by today's root-intent flows as the other six.
 
 ## Acceptance scenarios (Given / When / Then)
 
