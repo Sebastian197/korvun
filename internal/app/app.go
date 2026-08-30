@@ -926,6 +926,12 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		}
 		reg[tl.Name()] = tl
 	}
+	// Effect-registry preflight (Etapa 3, FR-REG-3): every operation the
+	// brain can reach must classify from the declared registry — an
+	// undeclared tool fails the boot loudly, never silently unclassified.
+	if err := validateToolEffects(reg); err != nil {
+		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+	}
 	// No WithAgentPerModelTimeout: since ADR-0031 sub-phase 4 the retry decorator
 	// (wired in buildCatalog) owns the per-attempt deadline for the agent's model
 	// calls too — a single owner (SV3 final state). The agent's per-model call
