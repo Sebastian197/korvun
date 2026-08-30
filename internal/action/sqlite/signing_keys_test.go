@@ -207,3 +207,100 @@ func TestSigningKeys_failClosedEdges(t *testing.T) {
 		t.Fatal("closed store must fail loud on List")
 	}
 }
+
+func TestSigningKeys_deepErrorBranches(t *testing.T) {
+	t.Parallel()
+	// Corrupt stored cells fail loud naming the cell.
+	store, _ := openTemp(t)
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	if err := store.PutSigningKey(ctx, "ed25519:corrupt000000000", "aa", keysT0); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	corruptCell(t, store, "signing_keys", "created_at", "key_id", "ed25519:corrupt000000000", "garbage")
+	if _, err := store.GetSigningKey(ctx, "ed25519:corrupt000000000"); err == nil {
+		t.Fatal("a corrupt created_at must fail loud")
+	}
+	if _, err := store.ListSigningKeys(ctx); err == nil {
+		t.Fatal("the corrupt row must fail the listing too")
+	}
+	if _, err := store.ActiveSigningKey(ctx); err == nil {
+		t.Fatal("the corrupt active row must fail loud")
+	}
+	// Closed store: the remaining surfaces.
+	closed, _ := openTemp(t)
+	_ = closed.Close()
+	if err := closed.RotateSigningKey(ctx, "k", "p", keysT0); err == nil {
+		t.Fatal("closed store must fail loud on Rotate")
+	}
+	if _, err := closed.ActiveSigningKey(ctx); err == nil {
+		t.Fatal("closed store must fail loud on Active")
+	}
+	if _, err := closed.GetSigningKey(ctx, "k"); err == nil {
+		t.Fatal("closed store must fail loud on Get")
+	}
+	// A blocked retire surfaces the error and changes nothing.
+	blocked, _ := openTemp(t)
+	defer func() { _ = blocked.Close() }()
+	if err := blocked.PutSigningKey(ctx, "ed25519:block00000000000", "bb", keysT0); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if _, err := blocked.db.Exec(
+		`CREATE TRIGGER block_key_update BEFORE UPDATE ON signing_keys
+		 BEGIN SELECT RAISE(ABORT, 'blocked by test'); END;`,
+	); err != nil {
+		t.Fatalf("install blocker: %v", err)
+	}
+	if err := blocked.RotateSigningKey(ctx, "ed25519:new0000000000000", "cc", keysT0.Add(time.Hour)); err == nil {
+		t.Fatal("a blocked rotation must surface the error")
+	}
+	active, err := blocked.ActiveSigningKey(ctx)
+	if err != nil || active.KeyID != "ed25519:block00000000000" {
+		t.Fatalf("a failed rotation must change NOTHING: %v %+v", err, active)
+	}
+}
+
+func TestSigningKeys_moreBlockedWrites(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	// Blocked INSERT: Put surfaces the error with nothing landed.
+	store, _ := openTemp(t)
+	defer func() { _ = store.Close() }()
+	if _, err := store.db.Exec(
+		`CREATE TRIGGER block_key_insert BEFORE INSERT ON signing_keys
+		 BEGIN SELECT RAISE(ABORT, 'blocked by test'); END;`,
+	); err != nil {
+		t.Fatalf("install blocker: %v", err)
+	}
+	if err := store.PutSigningKey(ctx, "ed25519:blockedput000000", "aa", keysT0); err == nil {
+		t.Fatal("a blocked insert must surface the error")
+	}
+	if _, err := store.db.Exec(`DROP TRIGGER block_key_insert`); err != nil {
+		t.Fatalf("drop: %v", err)
+	}
+	// Rotation whose INSERT half fails: atomic — the retire rolls back.
+	if err := store.PutSigningKey(ctx, "ed25519:rotatomic0000000", "bb", keysT0); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if _, err := store.db.Exec(
+		`CREATE TRIGGER block_key_insert2 BEFORE INSERT ON signing_keys
+		 BEGIN SELECT RAISE(ABORT, 'blocked by test'); END;`,
+	); err != nil {
+		t.Fatalf("install blocker 2: %v", err)
+	}
+	if err := store.RotateSigningKey(ctx, "ed25519:rotatomic0000001", "cc", keysT0.Add(time.Hour)); err == nil {
+		t.Fatal("a rotation whose insert fails must surface the error")
+	}
+	if _, err := store.db.Exec(`DROP TRIGGER block_key_insert2`); err != nil {
+		t.Fatalf("drop 2: %v", err)
+	}
+	active, err := store.ActiveSigningKey(ctx)
+	if err != nil || active.KeyID != "ed25519:rotatomic0000000" {
+		t.Fatalf("the failed rotation must leave the old key ACTIVE (atomicity): %v %+v", err, active)
+	}
+	// Corrupt retired_at fails the scan branch.
+	corruptCell(t, store, "signing_keys", "retired_at", "key_id", "ed25519:rotatomic0000000", "garbage")
+	if _, err := store.GetSigningKey(ctx, "ed25519:rotatomic0000000"); err == nil {
+		t.Fatal("a corrupt retired_at must fail loud")
+	}
+}
