@@ -109,6 +109,7 @@ type AgentBrain struct {
 	// NewAgentBrain).
 	exec         *executor.Executor
 	actions      ActionRecorder
+	identity     *ActionIdentity
 	perModelCall time.Duration
 	fallback     string
 	systemPrompt string
@@ -778,6 +779,20 @@ func (a *AgentBrain) recordAttempt(ctx context.Context, env *envelope.Envelope, 
 		return
 	}
 	e := a.buildActionEnvelope(env, lane, name, args)
+	// The identity-aware seam (Etapa 2, lote 4): a resolvable provenance
+	// records identified; an unknown channel degrades to the identity-less
+	// record with a WARN — NULL identity, never an invented principal.
+	if ir, ok := a.identifiedRecorder(); ok {
+		if evidence, resolved := a.identify(env, &e, rule); resolved {
+			if err := ir.RecordAttemptIdentified(ctx, e, outcome, rule, st, evidence); err != nil {
+				a.logger.Warn("agent: action record failed",
+					"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
+			}
+			return
+		}
+		a.logger.Warn("agent: unknown provenance, recording without identity",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name))
+	}
 	if err := a.actions.RecordAttempt(ctx, e, outcome, rule, st); err != nil {
 		a.logger.Warn("agent: action record failed",
 			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
@@ -792,6 +807,24 @@ func (a *AgentBrain) recordAuthorized(ctx context.Context, env *envelope.Envelop
 		return "", true
 	}
 	e := a.buildActionEnvelope(env, lane, name, args)
+	// The identity-aware seam (Etapa 2, lote 4): before an EFFECT, unknown
+	// provenance fails CLOSED — an attempt whose identity cannot be
+	// resolved cannot produce its identified record, and proof is part of
+	// execution (the E1 record_failed law, no principal ever invented).
+	if ir, ok := a.identifiedRecorder(); ok {
+		evidence, resolved := a.identify(env, &e, rule)
+		if !resolved {
+			a.logger.Warn("agent: unknown provenance, refusing to execute",
+				"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name))
+			return "", false
+		}
+		if err := ir.RecordAttemptIdentified(ctx, e, "allow", rule, action.StateAuthorized, evidence); err != nil {
+			a.logger.Warn("agent: action record failed",
+				"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
+			return "", false
+		}
+		return e.ActionID, true
+	}
 	if err := a.actions.RecordAttempt(ctx, e, "allow", rule, action.StateAuthorized); err != nil {
 		a.logger.Warn("agent: action record failed",
 			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
