@@ -150,6 +150,10 @@ type builder struct {
 	// store is the shared conversation memory injected into every brain. A true
 	// nil interface (no storage configured) leaves each Orchestrator stateless.
 	store conversation.Store
+	// policyLoadedAt is the config-load instant: the monotonic policy
+	// VERSION of every law pin this build stamps (FR-POL-1) — one instant
+	// per loaded config, zero mutable globals.
+	policyLoadedAt time.Time
 	// actions is the Action Kernel's store, shared into every AgentBrain
 	// through the recorder adapter. nil when stateless (no storage block —
 	// recording off, zero new config, the sealed decisions).
@@ -233,6 +237,7 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		perModelTimeout: DefaultPerModelTimeout,
 		newChannel:      defaultChannelFactory,
 		metrics:         metrics.Nop{},
+		policyLoadedAt:  time.Now(),
 	}
 	for _, o := range opts {
 		o(b)
@@ -650,11 +655,18 @@ func storagePath(cfg *config.Config) string {
 // consumer-side ActionRecorder seam.
 type actionRecorder struct {
 	store *actionsqlite.Store
+	// pin is the law this adapter stamps on every decision (FR-POL-1):
+	// computed per brain at config load, immutable for the adapter's life.
+	pin actionsqlite.PolicyPin
 }
 
-// RecordAttempt implements brain.ActionRecorder.
+// RecordAttempt implements brain.ActionRecorder. The adapter stamps the
+// law pin on every decision (FR-POL-1).
 func (r actionRecorder) RecordAttempt(ctx context.Context, env action.Envelope, outcome, rule string, state action.State) error {
-	return r.store.RecordAttempt(ctx, env, actionsqlite.Decision{Outcome: outcome, Rule: rule}, state)
+	return r.store.RecordAttempt(ctx, env, actionsqlite.Decision{
+		Outcome: outcome, Rule: rule,
+		PolicyVersion: r.pin.Version, PolicyDigest: r.pin.Digest,
+	}, state)
 }
 
 // Finish implements brain.ActionRecorder.
@@ -1022,7 +1034,11 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	// provenance registry, the root intent, and this brain's derived
 	// grant — the recorded EXPLANATION of its governed allows.
 	if b.actions != nil {
-		opts = append(opts, brain.WithActionRecorder(actionRecorder{store: b.actions}))
+		// The law pin (Etapa 3, FR-POL-1): computed per brain at config
+		// load — governance + effect-registry snapshot, versioned by the
+		// load instant — and stamped by the adapter on every decision.
+		pin := policyPin(bc, b.policyLoadedAt)
+		opts = append(opts, brain.WithActionRecorder(actionRecorder{store: b.actions, pin: pin}))
 		// The effect engine (Etapa 3): the brain classifies every attempt
 		// from the DECLARED registry — the same single safe-toolset
 		// boundary the preflight above already validated.

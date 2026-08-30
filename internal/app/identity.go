@@ -116,7 +116,10 @@ func ensureRootIntent(ctx context.Context, store rootIntentStore) error {
 // ONE store transaction (FR-EVID-2 live).
 func (r actionRecorder) RecordAttemptIdentified(ctx context.Context, env action.Envelope, outcome, rule string, state action.State, evidence action.IdentityEvidence) error {
 	return r.store.RecordAttemptIdentified(ctx, env,
-		actionsqlite.Decision{Outcome: outcome, Rule: rule}, state,
+		actionsqlite.Decision{
+			Outcome: outcome, Rule: rule,
+			PolicyVersion: r.pin.Version, PolicyDigest: r.pin.Digest,
+		}, state,
 		actionsqlite.AttemptIdentity{
 			PrincipalID:   env.Principal.PrincipalID,
 			IntentID:      env.IntentID,
