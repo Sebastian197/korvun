@@ -29,7 +29,7 @@ func BenchmarkRunToolHotPath(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if out := a.runTool(ctx, env, nil, "echo", `{"say":"hola"}`); out == "" {
+		if out := a.runTool(ctx, env, nil, laneText, "echo", `{"say":"hola"}`); out == "" {
 			b.Fatal("echo must produce an observation")
 		}
 	}

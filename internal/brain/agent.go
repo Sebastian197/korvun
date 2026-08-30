@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/action/executor"
 	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/conversation"
@@ -107,6 +108,7 @@ type AgentBrain struct {
 	// exec is the Action Kernel's single execution path (never nil after
 	// NewAgentBrain).
 	exec         *executor.Executor
+	actions      ActionRecorder
 	perModelCall time.Duration
 	fallback     string
 	systemPrompt string
@@ -615,7 +617,7 @@ func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *m
 		// Tool call: execute, then feed the model its own request turn + the
 		// result as an OBSERVATION. Appending to req.Messages keeps the trace
 		// LOCAL to this Handle (§5).
-		observation := a.runTool(ctx, env, decisions, name, args)
+		observation := a.runTool(ctx, env, decisions, laneText, name, args)
 		req.Messages = append(req.Messages,
 			model.Message{Role: model.RoleAssistant, Content: content},
 			model.Message{Role: model.RoleUser, Content: observationPrefix + observation},
@@ -626,6 +628,29 @@ func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *m
 	a.logger.Warn("agent: iteration cap reached without an answer",
 		"envelope_id", env.ID, "channel", env.Channel, "max_iters", a.maxIters)
 	return "", false
+}
+
+// The kernel's lane labels for ActionEnvelope.Source.Protocol.
+const (
+	laneText   = "text"
+	laneNative = "native"
+)
+
+// ActionRecorder is the Action Kernel's persistence seam (lote 3, spec
+// FR-ADAPT): every attempt lands with its decision BEFORE any effect, and
+// executed attempts close with a terminal state. The interface lives on
+// the consumer side; the app adapts the kernel's sqlite store to it. A
+// nil recorder means recording off — the pre-kernel behavior verbatim.
+type ActionRecorder interface {
+	// RecordAttempt persists one attempt and its decision atomically.
+	RecordAttempt(ctx context.Context, env action.Envelope, outcome, rule string, state action.State) error
+	// Finish closes an AUTHORIZED action into SUCCEEDED or FAILED.
+	Finish(ctx context.Context, actionID string, to action.State, finishedAt time.Time) error
+}
+
+// WithActionRecorder wires the kernel's persistence seam into the brain.
+func WithActionRecorder(r ActionRecorder) AgentOption {
+	return func(a *AgentBrain) { a.actions = r }
 }
 
 // runTool executes the named tool and returns the OBSERVATION body. A tool error
@@ -639,7 +664,7 @@ func (a *AgentBrain) runLoop(ctx context.Context, env *envelope.Envelope, req *m
 // call is NEVER executed and feeds the simulation observation back; a denied or
 // undecided call feeds the denial observation. The bounded args prefix goes to
 // LOCAL slog only (ADR-0024 §1 law).
-func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisions map[string]policy.ToolDecision, name, args string) string {
+func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisions map[string]policy.ToolDecision, lane, name, args string) string {
 	if !a.exec.Has(name) {
 		// A hallucinated tool name is exactly the behavior the audit
 		// surfaces exist to observe (estreno E-3 / red-team): a denial with
@@ -653,6 +678,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name),
 			"rule", "unknown_tool", "args_prefix", boundedArgs(args))
 		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: "unknown", Outcome: "denied", Rule: "unknown_tool"})
+		a.recordAttempt(ctx, env, lane, boundedArgs(name), args, "deny", "unknown_tool", action.StateDenied)
 		return fmt.Sprintf("tool %q not found", name)
 	}
 	if decisions != nil {
@@ -663,6 +689,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
 				"args_prefix", boundedArgs(args))
 			a.auditTool(ctx, env, bus.Event{Type: bus.ToolShadowed, Tool: name, Outcome: "shadowed"})
+			a.recordAttempt(ctx, env, lane, name, args, "shadow", "shadow", action.StateShadowed)
 			return shadowObservation(name)
 		case !decided || d.Mode != policy.ToolAllow:
 			rule := policy.ToolRuleNotGranted
@@ -673,8 +700,26 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
 				"rule", string(rule), "args_prefix", boundedArgs(args))
 			a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: string(rule)})
+			a.recordAttempt(ctx, env, lane, name, args, "deny", string(rule), action.StateDenied)
 			return deniedObservation(name)
 		}
+	}
+	// The action gate WRAPS the existing decision, never replaces it: the
+	// attempt is AUTHORIZED here (granted, or ungoverned = today's allow)
+	// and must land durably BEFORE any effect. An unrecordable attempt
+	// fails CLOSED — proof is part of execution (blueprint §7.8) — with
+	// the finite record_failed rule on the audit surfaces.
+	grantRule := "granted"
+	if decisions == nil {
+		grantRule = "ungoverned"
+	}
+	actionID, recorded := a.recordAuthorized(ctx, env, lane, name, args, grantRule)
+	if !recorded {
+		a.logger.Warn("agent: tool denied",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+			"rule", "record_failed", "args_prefix", boundedArgs(args))
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: "record_failed"})
+		return deniedObservation(name)
 	}
 	// Execution flows through the kernel's single seam: per-tool timeout,
 	// the OPTIONAL scope capability (minimal-memory FR-TOOL-2 — envelope
@@ -695,6 +740,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
 			"rule", rule, "args_prefix", boundedArgs(args))
 		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: rule})
+		a.finishAction(ctx, actionID, action.StateFailed)
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
 
@@ -707,9 +753,63 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 		"outcome", outcome, "latency", latency, "args_prefix", boundedArgs(args))
 	a.auditTool(ctx, env, bus.Event{Type: bus.ToolUsed, Tool: name, Outcome: outcome, Latency: latency})
 	if err != nil {
+		a.finishAction(ctx, actionID, action.StateFailed)
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
+	a.finishAction(ctx, actionID, action.StateSucceeded)
 	return result
+}
+
+// buildActionEnvelope reifies one attempt as an ActionEnvelope v1 (lote 1
+// domain): fresh id, the inbound envelope as correlation, the lane as the
+// source protocol, and the canonical parameters digest.
+func (a *AgentBrain) buildActionEnvelope(env *envelope.Envelope, lane, name, args string) action.Envelope {
+	return action.NewEnvelope(action.NewID(), env.ID,
+		action.Source{Kind: "agent_brain", Protocol: lane, Channel: env.Channel},
+		action.Operation{Namespace: "tool", Name: name, Version: 1},
+		args, a.now())
+}
+
+// recordAttempt persists a terminal decision outcome (DENIED/SHADOWED).
+// Recording is best-effort for outcomes that never execute: a failure is a
+// local WARN, never a behavior change — there is no effect to refuse.
+func (a *AgentBrain) recordAttempt(ctx context.Context, env *envelope.Envelope, lane, name, args, outcome, rule string, st action.State) {
+	if a.actions == nil {
+		return
+	}
+	e := a.buildActionEnvelope(env, lane, name, args)
+	if err := a.actions.RecordAttempt(ctx, e, outcome, rule, st); err != nil {
+		a.logger.Warn("agent: action record failed",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
+	}
+}
+
+// recordAuthorized persists the AUTHORIZED attempt BEFORE the effect. A
+// nil recorder reports success with no id (recording off, pre-kernel
+// behavior); a store failure reports false so the caller fails closed.
+func (a *AgentBrain) recordAuthorized(ctx context.Context, env *envelope.Envelope, lane, name, args, rule string) (string, bool) {
+	if a.actions == nil {
+		return "", true
+	}
+	e := a.buildActionEnvelope(env, lane, name, args)
+	if err := a.actions.RecordAttempt(ctx, e, "allow", rule, action.StateAuthorized); err != nil {
+		a.logger.Warn("agent: action record failed",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
+		return "", false
+	}
+	return e.ActionID, true
+}
+
+// finishAction closes an AUTHORIZED action after execution. The effect
+// already happened, so a failing terminal write is a local WARN — the
+// store's crash recovery will close the row honestly on the next boot.
+func (a *AgentBrain) finishAction(ctx context.Context, actionID string, to action.State) {
+	if a.actions == nil || actionID == "" {
+		return
+	}
+	if err := a.actions.Finish(ctx, actionID, to, a.now()); err != nil {
+		a.logger.Warn("agent: action finish failed", "action_id", actionID, "err", err)
+	}
 }
 
 // cageRule classifies a tool error as a cage or shield denial (ADR-0041 §5).

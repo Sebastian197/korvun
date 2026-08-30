@@ -124,7 +124,7 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 				// shadowed/denied call must produce the gate's observation
 				// and audit even when its args would not parse — a field
 				// error must never smuggle the attempt past the gate.
-				observation = a.runTool(ctx, env, decisions, call.Name, nativeArgs(call))
+				observation = a.runTool(ctx, env, decisions, laneNative, call.Name, nativeArgs(call))
 			} else if args, argErr := a.nativeCallArgs(advertised, call); argErr != nil {
 				// A useful, model-facing field error (the ParamTool contract)
 				// — same failure class as a tool error, loop stays alive, and
@@ -135,7 +135,7 @@ func (a *AgentBrain) runLoopNative(ctx context.Context, env *envelope.Envelope, 
 				a.auditTool(ctx, env, bus.Event{Type: bus.ToolUsed, Tool: call.Name, Outcome: "error"})
 				observation = fmt.Sprintf("tool %s failed: %v", call.Name, argErr)
 			} else {
-				observation = a.runTool(ctx, env, decisions, call.Name, args)
+				observation = a.runTool(ctx, env, decisions, laneNative, call.Name, args)
 			}
 			// An empty observation (http_fetch on a 200-empty body, read_file
 			// of a 0-byte file) must not become an empty RoleTool turn: the
