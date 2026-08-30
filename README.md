@@ -126,7 +126,7 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
-**Download v0.13.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.14.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
@@ -204,6 +204,23 @@ leaving an identified receipt. Zero new configuration, an automatic
 crash-proof v1→v2 store migration, and byte-compatible receipts. See the
 [v0.12.0 release notes](docs/releases/v0.12.0.md) and the
 [operator CLI reference](https://korvun.dev/reference/operator-cli/).
+
+## The ledger and the verifiable receipts — v0.14.0
+
+Stage 4 of the Execution Trust Layer. Korvun keeps a book of records:
+every terminal action outcome — denied, shadowed, succeeded or failed —
+leaves a canonical receipt signed with Ed25519 on an append-only hash
+chain, born in the SAME transaction as the outcome (an unreceipted
+effect cannot exist). The operator re-judges the book offline with
+seven named checks — `korvun receipt verify`, `korvun ledger check`,
+`korvun receipt rotate-key` (each era of the chain verifies with the
+key of its era) — a forged outcome is caught in triplicate, a deleted
+receipt is denounced by its hole, and the limit is confessed out loud:
+tamper-evident, never "immutable", because the operator controls
+storage and keys. Raw results never touch the disk — digests only.
+Automatic crash-proof v4→v6 migrations; receipts exempt from the
+retention prune; ~1.25 ms per governed action, under the 5 ms ceiling
+with 4× margin. See the [v0.14.0 release notes](docs/releases/v0.14.0.md).
 
 ## Effects and per-action policy — v0.13.0
 
@@ -320,17 +337,19 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.13.0` — Beta — is the current release.** Every beta criterion is met and the
+**`v0.14.0` — Beta — is the current release.** Every beta criterion is met and the
 platform keeps growing: channels, multi-brain routing, the policy engine,
 resilience, the no-code builder, the operator console, governed tools & skills,
 governed memory, the universal model gateway, the honest desktop, the Action
 Kernel — and now identity, intent and authority: every action with its
 principal, its human intention and its only-shrinking authority, plus the
-operator's own `korvun intent` / `korvun grant` tools, and now effects
+operator's own `korvun intent` / `korvun grant` tools, effects
 and per-action policy: the consequence ladder, effect ceilings as the
 tenth attenuation dimension, and every decision pinning its exact law —
-each validated on real hardware. See
-[the release notes](docs/releases/v0.13.0.md),
+and now the ledger: every terminal outcome leaving its signed receipt
+on a hash chain the operator re-judges offline, tamper-evident and
+honestly so — each validated on real hardware. See
+[the release notes](docs/releases/v0.14.0.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { releaseFacts } from '../src/releaseFacts'
 
 const locales = [
   {
@@ -62,7 +63,7 @@ for (const locale of locales) {
       // independent of CSS text-transform (badges render uppercase).
       const main = (await page.locator('main').textContent()) ?? ''
 
-      expect(main).toContain('v0.13.0')
+      expect(main).toContain(releaseFacts.tag)
       expect(main).toContain('Beta')
       expect(main).toContain('Apache-2.0')
       expect(main).toContain('6')

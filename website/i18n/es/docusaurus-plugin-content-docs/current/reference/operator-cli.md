@@ -116,6 +116,44 @@ workflow de aprobación, muere con el no honesto `approval_unavailable`.
 Los grants sin techo (la autoridad permanente de la raíz y los derivados
 de config) se comportan exactamente como antes.
 
+## El verificador (v0.14.0)
+
+Desde v0.14.0 cada desenlace terminal deja un recibo firmado en una
+cadena hash de solo-añadir, y la CLI lleva al juez.
+
+```sh
+korvun receipt verify --config korvun.json rcpt_…
+```
+
+Un recibo (o todos los de un id `act_…`), re-juzgado offline contra el fichero del store con siete
+checks nombrados: roundtrip canónico, recomputación del hash, firma
+Ed25519 contra la clave pública REGISTRADA, la ventana de validez de la
+clave, el eslabón de cadena con su predecesor y la coherencia con la
+fila de la acción. Cada fallo lleva su nombre (`hash_mismatch`,
+`signature_invalid`, `custody_mismatch`, …) — jamás un «invalid»
+genérico.
+
+```sh
+korvun ledger check --config korvun.json
+```
+
+La cadena entera, estructura primero: un recibo borrado se denuncia por
+su hueco (`chain_seq_gap` con la posición que falta), una posición
+clonada como `chain_seq_duplicate`, y después cada eslabón por los
+mismos siete checks — el PRIMER eslabón roto detiene el veredicto con
+su id de recibo y su motivo.
+
+```sh
+korvun receipt rotate-key --config korvun.json
+```
+
+Rotación atómica retira-y-activa de la clave de firma del perfil. El
+acto de rotación deja SU PROPIO recibo sellado con la clave NUEVA; las
+claves retiradas se conservan para siempre, así cada era de la cadena
+verifica con la clave de su era. La verificación es de solo lectura; el
+alcance honesto está documentado: el libro es tamper-evident, jamás
+«immutable» — el operador controla almacenamiento y claves.
+
 ## Leer el rastro
 
 Los recibos viven en el registro de acciones junto a todas las demás

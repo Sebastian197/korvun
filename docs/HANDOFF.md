@@ -117,7 +117,31 @@ explicit decision.
 
 ## Current state (as of 2026-08-30, night)
 
-> **CURRENT (2026-08-30): TRUST LAYER ETAPA 3 — COMPLETA. Five batches
+> **CURRENT (2026-08-30): TRUST LAYER ETAPA 4 — COMPLETA. Five batches
+> on master through the green path, mini-bash APPROVED by Chano
+> 2026-08-30 (full function: the seven seals on his real receipt, the
+> forgery caught in triplicate with the hashes face to face, the
+> mid-chain hole denounced with its position, the tail-truncation limit
+> named as a FEATURE, and his real book intact).** The stage: the
+> canonical Receipt v1 (digest-only, birth-fuzzed strict parser), the
+> Ed25519 profile keystore (0600 seed beside the store, permissions
+> verified every boot, retired ink never signs again), the persisted
+> ledger (v5/v6 anti-zombie migrations; every terminal outcome births
+> its SIGNED receipt in the same transaction — an unreceipted effect
+> cannot exist; genesis-linked hash chain, race-hammered, prune-exempt),
+> the live result digest (NC-3: raw results never touch the disk), and
+> the operator's verifier (receipt verify with seven NAMED checks;
+> ledger check denouncing the first broken link, gap or clone;
+> rotate-key with each era verifying under its era's key). The honest
+> scope is now public law in SECURITY.md: tamper-evident, never
+> "immutable". Toll ~1.25ms sealed (ceiling 5ms, 4x margin). The
+> public-truth guard (releaseFacts.ts + check-release-facts) born from
+> the field find. v0.14.0 release in flight. Next on mandate: Etapa 5
+> (approval workflow) or the Console cards (E8 pieces, Sixth Law).
+
+## Previous state (as of 2026-08-30, night, earlier)
+
+> **PREVIOUS (2026-08-30): TRUST LAYER ETAPA 3 — COMPLETA. Five batches
 > on master through the green path, mini-bash APPROVED by Chano
 > 2026-08-30 (normal life intact + receipts carrying their class + the
 > tenth-dimension wall stopping the operator himself — the ceremony run

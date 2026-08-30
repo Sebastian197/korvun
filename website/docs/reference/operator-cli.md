@@ -109,6 +109,42 @@ which, until the approval workflow ships, dies with the honest
 `approval_unavailable`. Grants without a ceiling (the root's standing
 authority and the config-derived grants) behave exactly as before.
 
+## The verifier (v0.14.0)
+
+Since v0.14.0 every terminal outcome leaves a signed receipt on an
+append-only hash chain, and the CLI carries the judge.
+
+```sh
+korvun receipt verify --config korvun.json rcpt_…
+```
+
+One receipt (or every receipt of an `act_…` id), re-judged offline against the store file with seven named
+checks: canonical roundtrip, hash recompute, Ed25519 signature against
+the REGISTERED public key, the key's validity window, the chain link to
+the predecessor, and coherence with the action row. Every failure
+carries its name (`hash_mismatch`, `signature_invalid`,
+`custody_mismatch`, …) — never a generic "invalid".
+
+```sh
+korvun ledger check --config korvun.json
+```
+
+The whole chain, structure first: a deleted receipt is denounced by its
+hole (`chain_seq_gap` with the missing position), a cloned position as
+`chain_seq_duplicate`, then every link through the same seven checks —
+the FIRST broken link stops the verdict with its receipt id and reason.
+
+```sh
+korvun receipt rotate-key --config korvun.json
+```
+
+Atomic retire-and-activate rotation of the profile's signing key. The
+rotation act leaves its OWN receipt sealed with the NEW key; retired
+keys are kept forever, so each era of the chain verifies with the key
+of its era. Verification is read-only; the honest scope is documented:
+the ledger is tamper-evident, never "immutable" — the operator controls
+storage and keys.
+
 ## Reading the trail
 
 Receipts live in the action ledger next to every other recorded action.
