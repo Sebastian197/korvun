@@ -203,6 +203,27 @@ explicit decision.
 > Maintained 0 se cura solo con la edad del repo (~mediados de sept.).
 > Sin fix upstream aún: image-size (npm) y el advisory de openpgp
 > (x/crypto) — fichados, se re-evalúan en cada govulncheck.
+>
+> **Scorecard lote 2 (2026-08-30, tras v0.12.0):** las dos palancas
+> restantes ejecutadas. Signed-Releases 8→10: build provenance por
+> familia — el bundle in-toto (attest-build-provenance, SHA-pinned,
+> mismo pin que el existente) se publica ADEMÁS como asset
+> `*_provenance.intoto.jsonl` en la release (headless en release.yml,
+> desktop en el finalizer ANTES del flip — provenance es parte de
+> draft-until-complete); verificación documentada en SECURITY.md junto a
+> cosign (`gh attestation verify`, online y offline). Vía slsa-github-
+> generator DESCARTADA con evidencia: su reusable workflow exige
+> referencia por TAG (su propio README) y Scorecard no lo exceptúa del
+> pin por hash (verificado en su código) — habría comprado un punto
+> vendiendo otro. Pinned-Dependencies 9→10: el hint exacto era
+> chocoCommand sin `--require-checksums` (release-desktop.yml:100-101;
+> el matcher verificado en shell_download_validate.go) — añadido.
+> AMBAS palancas computan EN EL PRÓXIMO TAG (los workflows de release
+> solo corren en tags): el score sube al publicar v0.13.0, no antes.
+> CALENDARIO: Maintained (0→) se cura solo a mediados de septiembre
+> (edad del repo); Vulnerabilities (7→) al publicar los upstreams sus
+> fixes (image-size npm, openpgp/x-crypto) — re-evaluados en cada
+> govulncheck del camino verde.
 
 > **Adjudicated (2026-08-29):** the two orphan files a parallel session
 > left in the tree (an LCP spec + a font-preload e2e) are WITHDRAWN by

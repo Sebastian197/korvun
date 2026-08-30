@@ -97,8 +97,8 @@ jobs:
         run: |
           # Pinned versions (Scorecard pinned-deps; verified at chocolatey.org
           # 2026-08-30): supply-chain determinism over floating latest.
-          choco install -y make --version=4.4.1
-          choco install -y nsis --version=3.12.0
+          choco install -y make --version=4.4.1 --require-checksums
+          choco install -y nsis --version=3.12.0 --require-checksums
           echo 'C:\Program Files (x86)\NSIS' >> "$GITHUB_PATH"
 
       - name: Verify make + makensis on PATH (Windows)
@@ -267,6 +267,7 @@ jobs:
     permissions:
       contents: write # tag mode: upload the manifest + publish the release
       id-token: write # keyless cosign: mint the OIDC token to sign checksums-desktop.txt
+      attestations: write # SLSA build provenance for the desktop manifest (mirrors release.yml)
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -315,6 +316,24 @@ jobs:
             --certificate checksums-desktop.txt.pem \
             --certificate-identity-regexp "https://github.com/$GH_REPO/.*" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+      # Mirror of the headless provenance (release.yml): attest the signed
+      # desktop manifest and ship the SAME in-toto provenance bundle as a
+      # release asset under the canonical .intoto.jsonl suffix, BEFORE the
+      # visibility flip — provenance is part of draft-until-complete.
+      - name: Attest desktop manifest provenance (tag push only)
+        if: github.event_name == 'push'
+        id: attest_desktop
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: dist-desktop/checksums-desktop.txt
+
+      - name: Upload desktop provenance bundle (tag push only)
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          cp "${{ steps.attest_desktop.outputs.bundle-path }}" korvun_desktop_checksums_provenance.intoto.jsonl
+          gh release upload "$GITHUB_REF_NAME" korvun_desktop_checksums_provenance.intoto.jsonl --clobber
 
       - name: Upload manifest + publish the release (tag push only)
         if: github.event_name == 'push'

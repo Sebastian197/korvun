@@ -95,6 +95,21 @@ jobs:
       # attesting a throwaway snapshot checksum would be meaningless anyway.
       - name: Attest build provenance
         if: github.event_name == 'push'
+        id: attest
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: dist/checksums.txt
+
+      # The attestation lives in GitHub's store (gh attestation verify), but
+      # verifiers — human and machine (Scorecard Signed-Releases) — also get
+      # the SAME in-toto provenance as a release asset: the Sigstore bundle
+      # wraps a DSSE-signed in-toto SLSA provenance statement, uploaded under
+      # the canonical .intoto.jsonl suffix. Verification: SECURITY.md.
+      - name: Upload provenance bundle to the release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cp "${{ steps.attest.outputs.bundle-path }}" korvun_checksums_provenance.intoto.jsonl
+          gh release upload "$GITHUB_REF_NAME" korvun_checksums_provenance.intoto.jsonl
