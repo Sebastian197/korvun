@@ -312,11 +312,18 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// The ledger's ink (Etapa 4, FR-KEY-1): the signing key lives
 		// beside the store, generated idempotently, permissions verified
 		// on every boot — boot-fatal on any refusal.
-		if _, err := ensureSigningKey(context.Background(), actions, filepath.Dir(storagePath(cfg))); err != nil {
+		signingKey, err := ensureSigningKey(context.Background(), actions, filepath.Dir(storagePath(cfg)))
+		if err != nil {
 			_ = actions.Close()
 			_ = store.Close()
 			return nil, err
 		}
+		// The live ink (FR-LED): every terminal outcome is born signed
+		// with the profile's active key, inside the outcome's own
+		// transaction.
+		actions.SetReceiptSealer(func(r action.Receipt) action.Receipt {
+			return action.SignReceipt(signingKey, r)
+		})
 	}
 
 	// The router gets the app-level error funnel (logs + counts +, when the bus is
@@ -680,6 +687,13 @@ func (r actionRecorder) RecordAttempt(ctx context.Context, env action.Envelope, 
 // Finish implements brain.ActionRecorder.
 func (r actionRecorder) Finish(ctx context.Context, actionID string, to action.State, finishedAt time.Time) error {
 	return r.store.Finish(ctx, actionID, to, finishedAt)
+}
+
+// FinishWithResult implements the brain's optional result-recorder
+// extension (Etapa 4, FR-LED): the terminal close carries the on-the-fly
+// result digest onto the receipt — never the raw result (NC-3).
+func (r actionRecorder) FinishWithResult(ctx context.Context, actionID string, to action.State, finishedAt time.Time, resultDigest string) error {
+	return r.store.FinishWithResult(ctx, actionID, to, finishedAt, resultDigest)
 }
 
 // wire registers brains, builds and registers channels, and binds routes. It

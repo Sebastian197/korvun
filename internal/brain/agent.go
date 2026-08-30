@@ -650,6 +650,15 @@ type ActionRecorder interface {
 	Finish(ctx context.Context, actionID string, to action.State, finishedAt time.Time) error
 }
 
+// actionResultRecorder is the OPTIONAL extension of the recorder seam
+// (Etapa 4, spec FR-LED): a recorder that can close an executed action
+// WITH the result digest, so the receipt attests what the tool produced
+// without the raw bytes ever traveling to the store (NC-3). Detected by
+// interface assertion, the RecordAttemptIdentified mold.
+type actionResultRecorder interface {
+	FinishWithResult(ctx context.Context, actionID string, to action.State, finishedAt time.Time, resultDigest string) error
+}
+
 // WithActionRecorder wires the kernel's persistence seam into the brain.
 func WithActionRecorder(r ActionRecorder) AgentOption {
 	return func(a *AgentBrain) { a.actions = r }
@@ -776,7 +785,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
 			"rule", rule, "args_prefix", boundedArgs(args))
 		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: rule})
-		a.finishAction(ctx, actionID, action.StateFailed)
+		a.finishAction(ctx, actionID, action.StateFailed, "")
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
 
@@ -789,10 +798,12 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 		"outcome", outcome, "latency", latency, "args_prefix", boundedArgs(args))
 	a.auditTool(ctx, env, bus.Event{Type: bus.ToolUsed, Tool: name, Outcome: outcome, Latency: latency})
 	if err != nil {
-		a.finishAction(ctx, actionID, action.StateFailed)
+		a.finishAction(ctx, actionID, action.StateFailed, "")
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
-	a.finishAction(ctx, actionID, action.StateSucceeded)
+	// NC-3: the digest is computed ON THE FLY over the observation; the
+	// raw result never travels to the recorder.
+	a.finishAction(ctx, actionID, action.StateSucceeded, action.HashCanonical(result))
 	return result
 }
 
@@ -880,11 +891,21 @@ func (a *AgentBrain) recordAuthorized(ctx context.Context, env *envelope.Envelop
 // finishAction closes an AUTHORIZED action after execution. The effect
 // already happened, so a failing terminal write is a local WARN — the
 // store's crash recovery will close the row honestly on the next boot.
-func (a *AgentBrain) finishAction(ctx context.Context, actionID string, to action.State) {
+// resultDigest is the on-the-fly digest of the observation on SUCCESS
+// and honestly empty otherwise; a recorder carrying the optional
+// FinishWithResult extension receives it, any other recorder keeps the
+// plain Finish path verbatim.
+func (a *AgentBrain) finishAction(ctx context.Context, actionID string, to action.State, resultDigest string) {
 	if a.actions == nil || actionID == "" {
 		return
 	}
-	if err := a.actions.Finish(ctx, actionID, to, a.now()); err != nil {
+	var err error
+	if rr, ok := a.actions.(actionResultRecorder); ok {
+		err = rr.FinishWithResult(ctx, actionID, to, a.now(), resultDigest)
+	} else {
+		err = a.actions.Finish(ctx, actionID, to, a.now())
+	}
+	if err != nil {
 		a.logger.Warn("agent: action finish failed", "action_id", actionID, "err", err)
 	}
 }
