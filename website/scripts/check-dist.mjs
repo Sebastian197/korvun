@@ -179,8 +179,8 @@ for (const contract of landingContracts) {
       violations.push(`${contract.file}: unverified landing claim: ${claim}`)
     }
   }
-  if ((html.match(/data-k-section=/g) ?? []).length !== 6) {
-    violations.push(`${contract.file}: expected 6 landing story sections`)
+  if ((html.match(/data-k-section=/g) ?? []).length !== 7) {
+    violations.push(`${contract.file}: expected 7 landing story sections`)
   }
   const landingHtml = html.match(/<main\b[\s\S]*?<\/main>/)?.[0] ?? ''
   if (/href=["']#["']/.test(landingHtml)) {

@@ -7,6 +7,7 @@ const locales = [
     path: '/korvun/',
     hero: ['One binary.', 'Your models.', 'Your rules.'],
     headings: [
+      'Kernel for Orchestrated Routing — Versatile Unified Nodes',
       'Install with proof, not promises.',
       'Eight pillars. One binary.',
       'Sensitive data never leaves the machine.',
@@ -21,6 +22,7 @@ const locales = [
     path: '/korvun/es/',
     hero: ['Un binario.', 'Tus modelos.', 'Tus reglas.'],
     headings: [
+      'Núcleo de Orquestación y Routing sobre Nodos Versátiles y Unificados',
       'Instala con pruebas, no promesas.',
       'Ocho pilares. Un binario.',
       'Los datos sensibles no salen de tu equipo.',
@@ -42,7 +44,7 @@ for (const locale of locales) {
       for (const line of locale.hero) await expect(h1).toContainText(line)
 
       const sections = page.locator('main [data-k-section]')
-      await expect(sections).toHaveCount(6)
+      await expect(sections).toHaveCount(7)
       const sectionNames = await sections.evaluateAll((elements) =>
         elements.map((element) => element.getAttribute('data-k-section') ?? ''),
       )

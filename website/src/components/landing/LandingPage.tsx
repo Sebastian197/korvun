@@ -6,6 +6,7 @@ import { Demo } from "./Demo";
 import { FinalCta } from "./FinalCta";
 import { Hero } from "./Hero";
 import { InstallProof } from "./InstallProof";
+import { NameMeaning } from "./NameMeaning";
 import type { LandingCopy } from "./landingCopy";
 import { PrivacyDiagram } from "./PrivacyDiagram";
 import { RoutingJourney } from "./RoutingJourney";
@@ -26,6 +27,7 @@ export function LandingPage({ copy }: { copy: LandingCopy }) {
     <main className={styles.page}>
       <RoutingJourney />
       <Hero copy={copy.hero} quickstart="/guide/quickstart" />
+      <NameMeaning copy={copy.name} />
       <InstallProof copy={copy.install} installGuide="/guide/install" />
       <Capabilities copy={copy.capabilities} />
       <PrivacyDiagram

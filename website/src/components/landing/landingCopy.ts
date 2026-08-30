@@ -6,6 +6,12 @@ export type Capability = {
   to: string
 }
 
+export type NameReading = {
+  letters: string
+  title: string
+  body: string
+}
+
 export type LandingCopy = {
   metaDescription: string
   hero: {
@@ -15,6 +21,13 @@ export type LandingCopy = {
     primary: string
     secondary: string
     releaseLabel: string
+  }
+  name: {
+    kicker: string
+    title: string
+    readings: [NameReading, NameReading, NameReading]
+    rhymeLead: string
+    rhymeBody: string
   }
   install: {
     kicker: string
@@ -82,6 +95,30 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       primary: 'Start the quickstart',
       secondary: 'View on GitHub',
       releaseLabel: 'Current release',
+    },
+    name: {
+      kicker: 'The name',
+      title: 'Kernel for Orchestrated Routing — Versatile Unified Nodes',
+      readings: [
+        {
+          letters: 'K',
+          title: 'Kernel',
+          body: 'One binary at the center. The same kernel from a Raspberry Pi to the cloud.',
+        },
+        {
+          letters: 'OR',
+          title: 'Orchestrated Routing',
+          body: 'Policies decide which model answers — where it runs, and how far your data travels.',
+        },
+        {
+          letters: 'VUN',
+          title: 'Versatile Unified Nodes',
+          body: 'Channels, brains, models and agents living under one roof, as one mesh.',
+        },
+      ],
+      rhymeLead: 'The name is the logo.',
+      rhymeBody:
+        'Signals enter, the kernel decides, one governed reply exits — the K has been drawing the acronym all along.',
     },
     install: {
       kicker: 'Verified delivery',
@@ -199,6 +236,30 @@ export const landingCopy: Record<'en' | 'es', LandingCopy> = {
       primary: 'Empezar el inicio rápido',
       secondary: 'Ver en GitHub',
       releaseLabel: 'Release actual',
+    },
+    name: {
+      kicker: 'El nombre',
+      title: 'Núcleo de Orquestación y Routing sobre Nodos Versátiles y Unificados',
+      readings: [
+        {
+          letters: 'K',
+          title: 'Núcleo (kernel)',
+          body: 'Un único binario en el centro. El mismo núcleo de una Raspberry Pi a la nube.',
+        },
+        {
+          letters: 'OR',
+          title: 'Orquestación y routing',
+          body: 'Las políticas deciden qué modelo responde: dónde se ejecuta y hasta dónde viajan tus datos.',
+        },
+        {
+          letters: 'VUN',
+          title: 'Nodos versátiles y unificados',
+          body: 'Canales, cerebros, modelos y agentes bajo el mismo techo, como una sola malla.',
+        },
+      ],
+      rhymeLead: 'El nombre es el logo.',
+      rhymeBody:
+        'Las señales entran, el núcleo decide, una salida gobernada — la K llevaba dibujando el acrónimo desde el principio.',
     },
     install: {
       kicker: 'Entrega verificable',

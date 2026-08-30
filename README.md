@@ -6,9 +6,11 @@
 <h1 align="center">Korvun</h1>
 
 <p align="center">
-  <strong>Kernel for Orchestrated Routing — Versatile Unified Nodes</strong><br>
-  A self-hosted AI messaging gateway, multi-model router, and multi-brain
-  orchestrator in a single Go binary.
+  <strong>K</strong>ernel for <strong>O</strong>rchestrated <strong>R</strong>outing
+  — <strong>V</strong>ersatile <strong>U</strong>nified <strong>N</strong>odes<br>
+  One kernel routes every request. Policies decide which model, where, and how.<br>
+  Channels, brains, models and agents — unified nodes under one roof, from a
+  Raspberry Pi to the cloud.
 </p>
 
 <p align="center">
