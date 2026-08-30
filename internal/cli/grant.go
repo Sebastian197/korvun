@@ -68,6 +68,7 @@ type grantFlags struct {
 	validFrom  *string
 	expires    *string
 	depth      *int
+	ceiling    *string
 }
 
 func newGrantFlags(name string, stderr *cli) *grantFlags {
@@ -83,7 +84,22 @@ func newGrantFlags(name string, stderr *cli) *grantFlags {
 		validFrom:  fs.String("valid-from", "", "window start, RFC3339 (default: now)"),
 		expires:    fs.String("expires", "", "window end, RFC3339 (default: inherit/no expiry)"),
 		depth:      fs.Int("depth", -1, "delegation depth remaining (-1 = default)"),
+		ceiling:    fs.String("effect-ceiling", "", "effect-class ceiling (pure|read_external|write_reversible|write_compensatable|write_irreversible|critical; empty = no ceiling / inherit)"),
 	}
+}
+
+// parseCeilingFlag validates --effect-ceiling against the finite ladder:
+// "" means no ceiling (or inherit, on delegate); anything off-ladder is
+// a usage error naming the valid classes.
+func parseCeilingFlag(raw string) (action.EffectClass, error) {
+	if raw == "" {
+		return "", nil
+	}
+	class := action.EffectClass(raw)
+	if !class.Known() {
+		return "", fmt.Errorf("--effect-ceiling: %q is not on the effect ladder (pure, read_external, write_reversible, write_compensatable, write_irreversible, critical)", raw)
+	}
+	return class, nil
 }
 
 // grantIssue implements `korvun grant issue`: a grant born directly from
@@ -165,6 +181,11 @@ func (c *cli) buildGrantFromFlags(gf *grantFlags, intentID, issuer string, now t
 	if *gf.depth >= 0 {
 		depth = *gf.depth
 	}
+	ceiling, err := parseCeilingFlag(*gf.ceiling)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun grant %s: %v\n", verb, err)
+		return action.AuthorityGrant{}, 2
+	}
 	return action.AuthorityGrant{
 		GrantID:                  action.NewGrantID(),
 		IntentID:                 intentID,
@@ -176,6 +197,7 @@ func (c *cli) buildGrantFromFlags(gf *grantFlags, intentID, issuer string, now t
 		ValidFrom:                from,
 		ExpiresAt:                until,
 		DelegationDepthRemaining: depth,
+		EffectCeiling:            ceiling,
 		Status:                   action.LifecycleActive,
 	}, 0
 }
@@ -229,6 +251,10 @@ func (c *cli) grantDelegate(args []string) int {
 	if *gf.maxActions < 0 && parent.Budgets.MaxActions != 0 {
 		inherited := parent.Budgets.MaxActions
 		gf.maxActions = &inherited
+	}
+	if *gf.ceiling == "" && parent.EffectCeiling != "" {
+		inherited := string(parent.EffectCeiling)
+		gf.ceiling = &inherited
 	}
 	child, code := c.buildGrantFromFlags(gf, parent.IntentID,
 		parent.SubjectPrincipalID, now, parent.DelegationDepthRemaining-1, "delegate")
