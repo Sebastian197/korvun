@@ -2,8 +2,9 @@ import Link from "@docusaurus/Link";
 import { useState } from "react";
 import type { LandingCopy } from "./landingCopy";
 import styles from "./landing.module.css";
+import { releaseFacts } from "../../releaseFacts";
 
-const installCommands = `VERSION=0.11.0
+const installCommands = `VERSION=${releaseFacts.version}
 curl -LO https://github.com/Sebastian197/korvun/releases/download/v\${VERSION}/korvun_\${VERSION}_linux_amd64.tar.gz
 curl -LO https://github.com/Sebastian197/korvun/releases/download/v\${VERSION}/checksums.txt
 sha256sum --check checksums.txt --ignore-missing

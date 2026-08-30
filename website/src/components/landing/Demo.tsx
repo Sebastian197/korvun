@@ -2,6 +2,7 @@ import Link from "@docusaurus/Link";
 import useBaseUrl from "@docusaurus/useBaseUrl";
 import type { LandingCopy } from "./landingCopy";
 import styles from "./landing.module.css";
+import { releaseFacts } from "../../releaseFacts";
 
 export function Demo({ copy }: { copy: LandingCopy["demo"] }) {
   const poster = useBaseUrl("/media/gateway-demo-poster.jpg");
@@ -18,7 +19,7 @@ export function Demo({ copy }: { copy: LandingCopy["demo"] }) {
           </div>
           <Link
             className={styles.textLink}
-            href="https://github.com/Sebastian197/korvun/releases/tag/v0.11.0"
+            href={`https://github.com/Sebastian197/korvun/releases/tag/${releaseFacts.tag}`}
           >
             {copy.release} <span aria-hidden="true">↗</span>
           </Link>

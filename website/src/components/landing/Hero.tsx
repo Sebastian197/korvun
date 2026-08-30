@@ -2,6 +2,7 @@ import Link from "@docusaurus/Link";
 import type { LandingCopy } from "./landingCopy";
 import { KorvunMasthead } from "./KorvunMasthead";
 import styles from "./landing.module.css";
+import { releaseFacts } from "../../releaseFacts";
 
 type Props = {
   copy: LandingCopy["hero"];
@@ -40,10 +41,10 @@ export function Hero({ copy, quickstart }: Props) {
             </div>
             <div
               className={styles.releaseLine}
-              aria-label={`${copy.releaseLabel} v0.11.0 — Beta`}
+              aria-label={`${copy.releaseLabel} ${releaseFacts.tag} — Beta`}
             >
               <span>{copy.releaseLabel}</span>
-              <strong>v0.11.0 — Beta</strong>
+              <strong>{releaseFacts.tag} — Beta</strong>
               <span>Apache-2.0</span>
             </div>
           </div>

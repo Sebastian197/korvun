@@ -18,7 +18,8 @@
     "check:docs": "node scripts/check-docs.mjs",
     "check:motion": "node scripts/check-motion.mjs",
     "check:parity": "node scripts/check-parity.mjs",
-    "check": "npm run test:unit && npm run typecheck && npm run check:parity && npm run build && npm run check:dist && npm run check:docs && npm run check:contrast && npm run check:motion"
+    "check:release-facts": "node scripts/check-release-facts.mjs",
+    "check": "npm run test:unit && npm run typecheck && npm run check:release-facts && npm run check:parity && npm run build && npm run check:dist && npm run check:docs && npm run check:contrast && npm run check:motion"
   },
   "overrides": {
     "serialize-javascript": "7.0.5",
