@@ -85,3 +85,40 @@ func TestListByOperation_filtersExactly(t *testing.T) {
 		t.Fatalf("no matches lists nothing: %v %v", none, err)
 	}
 }
+
+func TestList_deepErrorBranches(t *testing.T) {
+	t.Parallel()
+	// A closed store fails loud on both listing surfaces.
+	closed, _ := openTemp(t)
+	if err := closed.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, err := closed.ListIntents(context.Background()); err == nil {
+		t.Fatal("ListIntents over a closed store must fail loud")
+	}
+	if _, err := closed.ListByOperation(context.Background(), "intent", "create"); err == nil {
+		t.Fatal("ListByOperation over a closed store must fail loud")
+	}
+	// A corrupt stored row propagates its parse failure through the list.
+	store, _ := openTemp(t)
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	if err := store.CreateIntent(ctx, draftIntent("int_corrupt")); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	corruptCell(t, store, "intents", "operations", "intent_id", "int_corrupt", "{not json")
+	if _, err := store.ListIntents(ctx); err == nil {
+		t.Fatal("a corrupt intent row must fail the listing loud")
+	}
+	env := testEnvelope("act_corrupt")
+	env.Operation = action.Operation{Namespace: "intent", Name: "create", Version: 1}
+	if err := store.RecordAttempt(ctx, env, Decision{Outcome: "allow", Rule: "granted"},
+		action.StateAuthorized); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	corruptCell(t, store, "actions", "principal_id", "action_id", "act_corrupt", "principal_operator")
+	corruptCell(t, store, "actions", "authority_refs", "action_id", "act_corrupt", "{not json")
+	if _, err := store.ListByOperation(ctx, "intent", "create"); err == nil {
+		t.Fatal("a corrupt action row must fail the listing loud")
+	}
+}
