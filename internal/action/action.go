@@ -78,6 +78,13 @@ type Envelope struct {
 	Effect Effect
 	// RequestedAt is the request instant, normalized to UTC.
 	RequestedAt time.Time
+	// Principal / IntentID / AuthorityRefs are the Etapa-2 identity refs
+	// (spec FR-ENV-1): the E1 reserved fields awake. They are ROW DATA,
+	// never digest inputs — receipt compatibility (FR-ENV-2) is a tested
+	// contract. Zero values mean an identity-less (E1-path) action.
+	Principal     PrincipalRef
+	IntentID      string
+	AuthorityRefs []string
 }
 
 // CanonicalParams returns the deterministic canonical byte form of a tool's
