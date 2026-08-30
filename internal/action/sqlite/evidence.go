@@ -99,6 +99,12 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert evidence for %q: %w", env.ActionID, err)
 	}
+	// Terminal identified outcomes birth their receipt here too.
+	if state != action.StateAuthorized {
+		if err := s.appendReceiptTx(ctx, tx, s.receiptForRecord(ctx, tx, env, d, state)); err != nil {
+			return err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit identified record %q: %w", env.ActionID, err)
 	}

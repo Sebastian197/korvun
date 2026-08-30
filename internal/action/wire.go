@@ -48,6 +48,14 @@ func NewGrantID() string {
 	return "grant_" + hex.EncodeToString(b)
 }
 
+// NewReceiptID generates a fresh receipt identity ("rcpt_" + 16 random
+// bytes hex, the NewID mold).
+func NewReceiptID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return "rcpt_" + hex.EncodeToString(b)
+}
+
 // RootIntent returns the root intent contract: the operator's standing
 // authority made explicit. TIMELESS (zero ValidFrom/ExpiresAt) and
 // unlimited (FR-BUD-2), so its digest is deterministic across every

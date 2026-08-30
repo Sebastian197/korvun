@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 5
+const schemaVersionCurrent = 6
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -214,6 +214,34 @@ CREATE TABLE signing_keys (
     created_at TEXT NOT NULL,
     retired_at TEXT
 ) WITHOUT ROWID;`,
+	// v5→v6 (Trust Layer Etapa 4, FR-LED-1): the receipts ledger. NO
+	// foreign key to actions ON PURPOSE — the sealed exemption: the E1
+	// prune takes operational action rows while the evidence stays. The
+	// UNIQUE (partition, chain_seq) pair is the chain's belt.
+	5: `
+CREATE TABLE receipts (
+    receipt_id            TEXT    NOT NULL PRIMARY KEY,
+    action_id             TEXT    NOT NULL,
+    intent_digest         TEXT    NOT NULL,
+    principal_id          TEXT    NOT NULL,
+    authority_digest      TEXT    NOT NULL DEFAULT '',
+    decision_digest       TEXT    NOT NULL,
+    action_digest         TEXT    NOT NULL,
+    effect_class          TEXT    NOT NULL,
+    attempt               INTEGER NOT NULL,
+    outcome               TEXT    NOT NULL,
+    result_digest         TEXT    NOT NULL DEFAULT '',
+    started_at            TEXT,
+    finished_at           TEXT,
+    partition             TEXT    NOT NULL,
+    chain_seq             INTEGER NOT NULL,
+    previous_receipt_hash TEXT    NOT NULL,
+    receipt_hash          TEXT    NOT NULL,
+    signing_key_id        TEXT    NOT NULL,
+    signature             TEXT    NOT NULL,
+    UNIQUE (partition, chain_seq)
+) WITHOUT ROWID;
+CREATE INDEX receipts_by_action ON receipts(action_id);`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per
@@ -282,6 +310,10 @@ type Store struct {
 	// so tests exercise small caps without mutable package state.
 	capRows    int
 	pruneEvery int
+	// sealer, when non-nil, signs and appends one receipt per terminal
+	// outcome INSIDE the recording transaction (Etapa 4, FR-LED). The app
+	// injects it with the active profile key; nil = pre-stage behavior.
+	sealer func(action.Receipt) action.Receipt
 	// writes counts RecordAttempt commits toward the periodic prune;
 	// mutex-guarded because callers are concurrent brain workers (the DB
 	// pool serializes statements, not this counter).
@@ -483,6 +515,13 @@ func (s *Store) RecordAttempt(ctx context.Context, env action.Envelope, d Decisi
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert decision %q: %w", env.ActionID, err)
 	}
+	// Terminal decision outcomes (DENIED, SHADOWED — the sealed NC-1/NC-2
+	// yeses) birth their receipt in this same transaction.
+	if state != action.StateAuthorized {
+		if err := s.appendReceiptTx(ctx, tx, s.receiptForRecord(ctx, tx, env, d, state)); err != nil {
+			return err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit record %q: %w", env.ActionID, err)
 	}
@@ -505,41 +544,9 @@ func (s *Store) noteWrite(ctx context.Context) error {
 	return nil
 }
 
-// Finish closes an action into a terminal state, validating the machine's
-// edge from the CURRENT stored state (only AUTHORIZED has terminal exits
-// in Etapa 1). The terminal write commits before returning — restart
-// durability is the AS-6 contract.
-func (s *Store) Finish(ctx context.Context, actionID string, to action.State, finishedAt time.Time) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("action/sqlite: begin finish: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	var current string
-	err = tx.QueryRowContext(ctx, `SELECT state FROM actions WHERE action_id = ?`, actionID).Scan(&current)
-	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("%w: %q", ErrNotFound, actionID)
-	}
-	if err != nil {
-		return fmt.Errorf("action/sqlite: read state %q: %w", actionID, err)
-	}
-	if err := action.Transition(action.State(current), to); err != nil {
-		return fmt.Errorf("action/sqlite: finish %q: %w", actionID, err)
-	}
-	// No separate terminality guard: in Etapa 1 every valid exit from a
-	// stored decision state IS terminal (the machine's table proves it),
-	// so Transition above already rejects any non-terminal destination.
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE actions SET state = ?, finished_at = ? WHERE action_id = ?`,
-		string(to), finishedAt.UTC().Format(time.RFC3339Nano), actionID,
-	); err != nil {
-		return fmt.Errorf("action/sqlite: finish %q: %w", actionID, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("action/sqlite: commit finish %q: %w", actionID, err)
-	}
-	return nil
-}
+// Finish moved to ledger.go (Etapa 4): FinishWithResult births the
+// receipt in the same closing transaction; Finish is its empty-digest
+// form — the E1 seam signature unchanged.
 
 // Get returns one stored record, envelope round-tripped verbatim.
 func (s *Store) Get(ctx context.Context, actionID string) (Record, error) {
