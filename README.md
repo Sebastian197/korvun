@@ -99,12 +99,17 @@ Everything below is **on `master` today** — no roadmap item is counted as pres
   Windows on x86-64 and ARM64.
 - **Signed releases** — each release ships cosign keyless signatures over the
   checksums and a per-artifact SBOM (SPDX via Syft).
-- **First-class CLI** — `serve`, `config check`, `status`, `version`, `help`:
+- **First-class CLI** — `serve`, `config check`, `status`, `intent`, `grant`,
+  `version`, `help`:
 
   ```sh
   korvun serve --config korvun.json            # load config, wire, serve
   korvun config check --preflight korvun.json  # validate offline (+ online checks)
   korvun status                                # live wiring of a running instance
+  korvun intent create --config korvun.json \
+    --purpose "test week" --operations calc    # operator intents (v0.12.0)
+  korvun grant issue --config korvun.json \
+    --intent int_... --subject principal_brain_a --operations calc
   korvun version                               # build identity
   korvun help                                  # usage
   ```
@@ -121,7 +126,7 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
-**Download v0.11.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.12.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
@@ -183,6 +188,22 @@ durable, self-managing record — while the product experience does not move
 one pixel. One machine-enforced path to execution, ~1ms measured toll
 (ceiling 5ms), parsers fuzzed from birth, zero new configuration. See the
 [v0.11.0 release notes](docs/releases/v0.11.0.md).
+
+## Identity, intent and authority — v0.12.0
+
+Stage 2 of the Execution Trust Layer. Every recorded action now knows WHO
+asked for it (a principal born from authenticated provenance — a forged
+sender can never mint the operator), under WHICH human intention, and with
+HOW MUCH authority — which can only shrink: the attenuation wall
+(oracle-judged, property-tested, fuzzed in the permanent quality gate)
+rejects any widening delegation naming the dimension, and governs the
+operator too. The engine stays invisible in the app, but it ships its
+first operator tool: `korvun intent` and `korvun grant` — contracts and
+bounded authority from your own terminal, every act (refusals included)
+leaving an identified receipt. Zero new configuration, an automatic
+crash-proof v1→v2 store migration, and byte-compatible receipts. See the
+[v0.12.0 release notes](docs/releases/v0.12.0.md) and the
+[operator CLI reference](https://korvun.dev/reference/operator-cli/).
 
 ## The quality pass — v0.9.1 & v0.9.2
 
@@ -283,13 +304,14 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.11.0` — Beta — is the current release.** Every beta criterion is met and the
+**`v0.12.0` — Beta — is the current release.** Every beta criterion is met and the
 platform keeps growing: channels, multi-brain routing, the policy engine,
 resilience, the no-code builder, the operator console, governed tools & skills,
-governed memory, the universal model gateway, and now the honest desktop —
-brain selection on New chat, the Secrets panel, a gateway-aware onboarding,
-and a chat that names who is thinking and says so when a request dies — each
-validated on real hardware. See [the release notes](docs/releases/v0.11.0.md),
+governed memory, the universal model gateway, the honest desktop, the Action
+Kernel — and now identity, intent and authority: every action with its
+principal, its human intention and its only-shrinking authority, plus the
+operator's own `korvun intent` / `korvun grant` tools — each validated on
+real hardware. See [the release notes](docs/releases/v0.12.0.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 

@@ -115,9 +115,35 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-30)
+## Current state (as of 2026-08-30, evening)
 
-> **CURRENT (2026-08-30): TRUST LAYER ETAPA 1 — COMPLETA. Lotes 1-3 on
+> **CURRENT (2026-08-30): TRUST LAYER ETAPA 2 — COMPLETA. Five batches on
+> master through the green path, the operator's ceremony APPROVED by
+> Chano on his REAL profile (2026-08-30): a limited intent («semana de
+> pruebas») created and activated, bounded authority issued, a
+> deliberately widening delegation dying at the §14.3 wall with its
+> dimension named, and four receipts with live identity columns
+> (operator / attenuation_violated rules, principal_operator, loopback
+> evidence).** The stage: identity from authenticated provenance (a
+> forged Sender never mints the operator), intent contracts and
+> authority grants with deterministic term digests and a fail-closed
+> lifecycle, the oracle-judged/property-tested/fuzzed attenuation
+> validator, clock-injected validity with the sealed finite rules
+> (+ operator/attenuation_violated/authority_inactive adjudicated),
+> durable serialized budgets, the crash-proof v1→v2 store migration
+> (FR-EVID-2: evidence in the same transaction), the hot-path adapter
+> filling identity refs with receipts byte-compatible (~0.8-1.1ms/op,
+> ceiling 5ms), boot wiring (provenance registry from config, root
+> intent idempotent and boot-fatal, config-derived grants), and the
+> operator CLI (`korvun intent` / `korvun grant`) — every act, refusals
+> included, leaving an identified receipt. Also shipped: the name
+> meaning section on the landing (EN/ES, approved variant A) and the
+> README deployment line. v0.12.0 release in flight. Next on mandate:
+> the Console intent card (own Sixth-Law piece), Etapa 3.
+
+## Previous state (as of 2026-08-30, morning)
+
+> **PREVIOUS (2026-08-30): TRUST LAYER ETAPA 1 — COMPLETA. Lotes 1-3 on
 > master (`a81ffc4`), mini-bash APPROVED by Chano over the packaged build
 > (identical chat + a real customs receipt seen with his eyes: calc,
 > allow/granted, digest, native lane, AUTHORIZED→SUCCEEDED on his REAL

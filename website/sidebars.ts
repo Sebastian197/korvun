@@ -29,7 +29,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Reference',
-      items: ['reference/configuration'],
+      items: ['reference/configuration', 'reference/operator-cli'],
     },
     'releases/index',
   ],
