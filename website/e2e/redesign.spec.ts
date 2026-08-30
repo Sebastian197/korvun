@@ -62,7 +62,7 @@ for (const locale of locales) {
       // independent of CSS text-transform (badges render uppercase).
       const main = (await page.locator('main').textContent()) ?? ''
 
-      expect(main).toContain('v0.12.0')
+      expect(main).toContain('v0.13.0')
       expect(main).toContain('Beta')
       expect(main).toContain('Apache-2.0')
       expect(main).toContain('6')

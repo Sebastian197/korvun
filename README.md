@@ -126,7 +126,7 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
-**Download v0.12.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.13.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
@@ -204,6 +204,22 @@ leaving an identified receipt. Zero new configuration, an automatic
 crash-proof v1→v2 store migration, and byte-compatible receipts. See the
 [v0.12.0 release notes](docs/releases/v0.12.0.md) and the
 [operator CLI reference](https://korvun.dev/reference/operator-cli/).
+
+## Effects and per-action policy — v0.13.0
+
+Stage 3 of the Execution Trust Layer. Korvun decides on the CONSEQUENCE
+of an action, not only on its name: every operation carries a declared
+class on a consequence ladder with a total order (`pure` …
+`critical`; unknown ranks above critical, fail-closed); effect ceilings
+wake as attenuation's tenth dimension (`--effect-ceiling` on the
+operator's grants — delegation must shrink here too); every gate
+decision pins the exact law that took it (governance + effect registry,
+versioned and digested); and under bounded authority the irreversible
+demands a human yes — which, until the approval workflow ships, dies
+with the honest `approval_unavailable`. Receipts untouched by
+construction, automatic crash-proof v2→v4 store migrations, the
+exterior byte-for-byte. See the
+[v0.13.0 release notes](docs/releases/v0.13.0.md).
 
 ## The quality pass — v0.9.1 & v0.9.2
 
@@ -304,14 +320,17 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.12.0` — Beta — is the current release.** Every beta criterion is met and the
+**`v0.13.0` — Beta — is the current release.** Every beta criterion is met and the
 platform keeps growing: channels, multi-brain routing, the policy engine,
 resilience, the no-code builder, the operator console, governed tools & skills,
 governed memory, the universal model gateway, the honest desktop, the Action
 Kernel — and now identity, intent and authority: every action with its
 principal, its human intention and its only-shrinking authority, plus the
-operator's own `korvun intent` / `korvun grant` tools — each validated on
-real hardware. See [the release notes](docs/releases/v0.12.0.md),
+operator's own `korvun intent` / `korvun grant` tools, and now effects
+and per-action policy: the consequence ladder, effect ceilings as the
+tenth attenuation dimension, and every decision pinning its exact law —
+each validated on real hardware. See
+[the release notes](docs/releases/v0.13.0.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 

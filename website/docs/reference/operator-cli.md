@@ -86,6 +86,29 @@ korvun grant revoke --config korvun.json grant_…
 
 A revoked grant delegates nothing anymore (`authority_revoked`).
 
+### Effect ceilings (v0.13.0)
+
+A grant can carry an **effect ceiling**: the highest consequence class
+its authority may reach, on the ladder `pure < read_external <
+write_reversible < write_compensatable < write_irreversible < critical`.
+
+```sh
+korvun grant issue --config korvun.json \
+  --intent int_… \
+  --subject principal_brain_default \
+  --operations calc \
+  --effect-ceiling read_external
+```
+
+Delegation must shrink here too: the child inherits the parent's ceiling
+unless narrowed, and a child reaching ABOVE it is denied naming
+`effect_ceiling` — the tenth attenuation dimension, judged by the same
+validator everywhere. Under a ceilinged (bounded) grant,
+`write_irreversible` and `critical` actions also require human approval —
+which, until the approval workflow ships, dies with the honest
+`approval_unavailable`. Grants without a ceiling (the root's standing
+authority and the config-derived grants) behave exactly as before.
+
 ## Reading the trail
 
 Receipts live in the action ledger next to every other recorded action.

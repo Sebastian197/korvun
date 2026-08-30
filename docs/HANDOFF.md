@@ -115,9 +115,32 @@ explicit decision.
 
 ---
 
-## Current state (as of 2026-08-30, evening)
+## Current state (as of 2026-08-30, night)
 
-> **CURRENT (2026-08-30): TRUST LAYER ETAPA 2 — COMPLETA. Five batches on
+> **CURRENT (2026-08-30): TRUST LAYER ETAPA 3 — COMPLETA. Five batches
+> on master through the green path, mini-bash APPROVED by Chano
+> 2026-08-30 (normal life intact + receipts carrying their class + the
+> tenth-dimension wall stopping the operator himself — the ceremony run
+> by delegation on his REAL profile, verdict his).** The stage: the
+> consequence ladder (finite EffectClass with a declared total order;
+> unknown ranks above critical, fail-closed), the validated registry
+> (honest declarations for all seven builtins; boot preflight + the
+> effect_undeclared gate wall; the §9.7 name-only trap pinned), the
+> envelope waking its real class with receipts untouched BY CONSTRUCTION,
+> effect_ceiling as attenuation's tenth dimension (oracle/property/fuzz
+> extended; store frontier; CLI --effect-ceiling with inheritance; the
+> effect_ceiling gate rule), the versioned Policy Decision (v3/v4
+> anti-zombie migrations; every decision pins policy_version+digest; the
+> three blueprint contracts green end to end), and the honest noes
+> (approval_unavailable under bounded authority for
+> write_irreversible/critical — never the root; prepare_unavailable
+> authority-independent). Toll ~0.9-1.7ms classified (ceiling 5ms).
+> v0.13.0 release in flight. Next on mandate: Etapa 4 (ledger durable y
+> receipts) or the Console cards (E8 pieces, Sixth Law).
+
+## Previous state (as of 2026-08-30, evening)
+
+> **PREVIOUS (2026-08-30): TRUST LAYER ETAPA 2 — COMPLETA. Five batches on
 > master through the green path, the operator's ceremony APPROVED by
 > Chano on his REAL profile (2026-08-30): a limited intent («semana de
 > pruebas») created and activated, bounded authority issued, a

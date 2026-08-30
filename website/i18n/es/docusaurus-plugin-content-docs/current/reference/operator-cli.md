@@ -91,6 +91,31 @@ korvun grant revoke --config korvun.json grant_…
 
 Un grant revocado ya no delega nada (`authority_revoked`).
 
+### Techos de efecto (v0.13.0)
+
+Un grant puede llevar un **techo de efecto**: la clase de consecuencia
+más alta que su autoridad puede alcanzar, sobre la escalera `pure <
+read_external < write_reversible < write_compensatable <
+write_irreversible < critical`.
+
+```sh
+korvun grant issue --config korvun.json \
+  --intent int_… \
+  --subject principal_brain_default \
+  --operations calc \
+  --effect-ceiling read_external
+```
+
+Delegar también tiene que menguar aquí: el hijo hereda el techo del
+padre salvo que lo estreches, y un hijo que alcance POR ENCIMA se
+deniega nombrando `effect_ceiling` — la décima dimensión de la
+atenuación, juzgada por el mismo validador en todas partes. Bajo un
+grant con techo (autoridad acotada), las acciones `write_irreversible`
+y `critical` exigen además aprobación humana — que, hasta que llegue el
+workflow de aprobación, muere con el no honesto `approval_unavailable`.
+Los grants sin techo (la autoridad permanente de la raíz y los derivados
+de config) se comportan exactamente como antes.
+
 ## Leer el rastro
 
 Los recibos viven en el registro de acciones junto a todas las demás
