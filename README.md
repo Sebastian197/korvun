@@ -16,14 +16,17 @@
   · <a href="https://korvun.dev/es/">en español</a>
 </p>
 
+<!-- Badge row, curated (2026-08-30): security -> quality -> identity, every
+     badge backed by verified truth. Go Report Card deliberately absent: the
+     service is retired (its badge literally reads "go report: retired"). -->
 <p align="center">
-  <a href="https://github.com/Sebastian197/korvun/actions/workflows/quality.yml"><img src="https://github.com/Sebastian197/korvun/actions/workflows/quality.yml/badge.svg" alt="Quality Gate"></a>
-  <a href="https://github.com/Sebastian197/korvun/actions/workflows/codeql.yml"><img src="https://github.com/Sebastian197/korvun/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/Sebastian197/korvun"><img src="https://api.scorecard.dev/projects/github.com/Sebastian197/korvun/badge" alt="OpenSSF Scorecard"></a>
   <a href="https://www.bestpractices.dev/projects/14360"><img src="https://www.bestpractices.dev/projects/14360/badge" alt="OpenSSF Best Practices"></a>
+  <a href="https://github.com/Sebastian197/korvun/actions/workflows/codeql.yml"><img src="https://github.com/Sebastian197/korvun/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+  <a href="https://github.com/Sebastian197/korvun/actions/workflows/quality.yml"><img src="https://github.com/Sebastian197/korvun/actions/workflows/quality.yml/badge.svg" alt="Quality Gate"></a>
+  <a href="https://github.com/Sebastian197/korvun/blob/master/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/Sebastian197/korvun" alt="Go version"></a>
   <a href="https://github.com/Sebastian197/korvun/releases"><img src="https://img.shields.io/github/v/release/Sebastian197/korvun" alt="Latest release"></a>
   <a href="https://github.com/Sebastian197/korvun/releases"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform: macOS, Windows, Linux"></a>
-  <a href="https://github.com/Sebastian197/korvun/blob/master/go.mod"><img src="https://img.shields.io/github/go-mod/go-version/Sebastian197/korvun" alt="Go version"></a>
   <a href="https://github.com/Sebastian197/korvun/releases"><img src="https://img.shields.io/github/downloads/Sebastian197/korvun/total" alt="GitHub downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License: Apache-2.0"></a>
 </p>
