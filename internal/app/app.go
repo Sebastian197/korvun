@@ -295,6 +295,15 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 			return nil, fmt.Errorf("app: open action store: %w", err)
 		}
 		b.actions = actions
+		// The root intent auto-materializes here (Etapa 2, sealed
+		// decision 1): deterministic, idempotent across boots, and
+		// boot-fatal — a boot that cannot state the operator's standing
+		// authority must not run.
+		if err := ensureRootIntent(context.Background(), actions); err != nil {
+			_ = actions.Close()
+			_ = store.Close()
+			return nil, err
+		}
 	}
 
 	// The router gets the app-level error funnel (logs + counts +, when the bus is
@@ -1003,8 +1012,23 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	}
 	// The Action Kernel's recorder rides into every agent brain when the
 	// store exists (lote 3b): every tool attempt lands with its decision.
+	// The identity context rides with it (Etapa 2, lote 4): the config
+	// provenance registry, the root intent, and this brain's derived
+	// grant — the recorded EXPLANATION of its governed allows.
 	if b.actions != nil {
 		opts = append(opts, brain.WithActionRecorder(actionRecorder{store: b.actions}))
+		identityCfg := b.cfg
+		if identityCfg == nil {
+			identityCfg = &config.Config{} // direct unit-test builds: console-only registry
+		}
+		identity := brain.ActionIdentity{
+			Registry: provenanceRegistry(identityCfg),
+			IntentID: action.RootIntentID,
+		}
+		if grant, ok := derivedConfigGrant(bc); ok {
+			identity.GrantID = grant.GrantID
+		}
+		opts = append(opts, brain.WithActionIdentity(identity))
 	}
 	b.logger.Info("agent brain wired", "brain", bc.Name, "tools", bc.Agent.Tools, "max_iterations", bc.Agent.MaxIterations)
 	return brain.NewAgentBrain(selected[0], reg, opts...), nil
