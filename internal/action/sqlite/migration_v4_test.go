@@ -52,8 +52,10 @@ func TestMigrationV4_freshFileLandsOnV4WithThePinColumns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version: %v", err)
 	}
-	if v != 4 {
-		t.Fatalf("a fresh store lands on v4, got %d", v)
+	// Number-independent by the established precedent: the pin-column
+	// check below is this test's real subject.
+	if v != schemaVersionCurrent {
+		t.Fatalf("a fresh store lands on the current version, got %d", v)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("close: %v", err)
@@ -77,8 +79,8 @@ func TestMigrationV4_v3FileMigratesAndOldDecisionsReadUnpinned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("version: %v", err)
 	}
-	if v != 4 {
-		t.Fatalf("v3 file must migrate to 4, got %d", v)
+	if v != schemaVersionCurrent {
+		t.Fatalf("v3 file must migrate to the current version, got %d", v)
 	}
 	rec, err := store.Get(context.Background(), "act_v1")
 	if err != nil {
@@ -133,8 +135,8 @@ func TestMigrationV4_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 		t.Fatalf("the next boot must complete: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	if v, _ := store.SchemaVersion(context.Background()); v != 4 {
-		t.Fatalf("completed migration must land on 4, got %v", v)
+	if v, _ := store.SchemaVersion(context.Background()); v != schemaVersionCurrent {
+		t.Fatalf("completed migration must land on the current version, got %v", v)
 	}
 }
 

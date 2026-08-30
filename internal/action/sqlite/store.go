@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 4
+const schemaVersionCurrent = 5
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -203,6 +203,17 @@ ALTER TABLE grants ADD COLUMN effect_ceiling TEXT NOT NULL DEFAULT '';`,
 	3: `
 ALTER TABLE action_decisions ADD COLUMN policy_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE action_decisions ADD COLUMN policy_digest TEXT NOT NULL DEFAULT '';`,
+	// v4→v5 (Trust Layer Etapa 4, FR-KEY): the signing_keys table — the
+	// ledger's ink registry. Retired keys are KEPT FOREVER (no delete
+	// path exists on this table); at most one row has retired_at NULL
+	// (the active key). Receipts arrive with v6 (batch 3).
+	4: `
+CREATE TABLE signing_keys (
+    key_id     TEXT NOT NULL PRIMARY KEY,
+    public_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    retired_at TEXT
+) WITHOUT ROWID;`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per
