@@ -1,6 +1,14 @@
 # Trust Layer Etapa 3 — Effects and per-action policy: Design Spec
 
-> **Status:** APROBADO POR CHANO — sealed for TDD, 2026-08-30. The two
+> **Status:** APROBADO POR CHANO — sealed for TDD, 2026-08-30. **Batches
+> 1-5 IMPLEMENTED + VERIFIED locally (2026-08-30): AS-1 through AS-8
+> green** — the five blueprint-mandatory tests included (args force a new
+> decision; reload never alters recorded decisions; read vs write under
+> one pinned law; undeclared operations die at preflight AND at the gate;
+> the current channel/sensitivity/locality rules untouched by the whole
+> pre-existing suite). Classified hot-path toll ~0.9-1.7 ms/op (machine
+> noise included) under the 5 ms ceiling. Stage acceptance pending
+> Chano's review and the mini-bash mandate. The two
 > forks resolved with the house votes: **NC-1** `memory_note` =
 > `write_reversible` («la escalera mide consecuencia, no distancia de
 > red: una nota que persiste ES una escritura»); **NC-2** = option (b) —
