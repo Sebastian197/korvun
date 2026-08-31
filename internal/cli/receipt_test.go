@@ -327,3 +327,44 @@ func TestReceiptVerify_besideALiveServerLeavesInFlightActionsIntact(t *testing.T
 		t.Fatalf("the server must still own its lifecycle: %v", err)
 	}
 }
+
+// R2 of the external-audit consolidation: honest custody under
+// retention. The receipts are the evidence that SURVIVES the E1 prune
+// (the sealed exemption) — so a verify of a receipt whose action row
+// is GONE must not scream custody_mismatch (a lie: retention removes
+// rows legitimately, and the verifier cannot distinguish prune from
+// deletion — which is exactly why the digest-sealed receipt, not the
+// live row, is the custody). The row's absence degrades to a NAMED
+// non-fatal note; a PRESENT row that contradicts keeps failing loud.
+func TestReceiptVerify_prunedActionRowIsANamedNoteNotALie(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, receiptID, actionID := operatorReceipt(t)
+	// The retention reality: the action row leaves; the receipt stays.
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM actions WHERE action_id = ?`, actionID); err != nil {
+		t.Fatalf("prune the row: %v", err)
+	}
+	_ = db.Close()
+	code, stdout, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
+	if code != 0 {
+		t.Fatalf("a pruned action row must NOT fail the verify (the receipt IS the surviving evidence): %d %q %q", code, stdout, stderr)
+	}
+	out := stdout + stderr
+	if !strings.Contains(out, "OK") {
+		t.Fatalf("the receipt still verifies: %q", out)
+	}
+	if !strings.Contains(out, "action_row_absent") {
+		t.Fatalf("the absence is NAMED, never silent: %q", out)
+	}
+	if strings.Contains(out, "custody_mismatch") {
+		t.Fatalf("never the lying custody_mismatch for an absent row: %q", out)
+	}
+	// The ledger check walks the same truth.
+	code, stdout, stderr = runIntentCLI(t, "ledger", "check", "--config", cfgPath)
+	if code != 0 || !strings.Contains(stdout+stderr, "chain intact") {
+		t.Fatalf("the chain over pruned rows stays green: %d %q %q", code, stdout, stderr)
+	}
+}

@@ -82,12 +82,18 @@ func (c *cli) ledgerCheck(args []string) int {
 	}
 	// Pass 2 — every link: hash, signature, key window, predecessor
 	// linkage, custody. The FIRST broken link stops the verdict.
+	var noted int
 	for _, r := range receipts {
-		if failures := verifyReceiptChecks(ctx, store, r); len(failures) > 0 {
+		failures, notes := verifyReceiptChecks(ctx, store, r)
+		if len(failures) > 0 {
 			_, _ = fmt.Fprintf(c.stdout, "ledger %s: FAIL at receipt %s (seq %d): %s\n",
 				*partition, r.ReceiptID, r.ChainSeq, failures[0])
 			return 1
 		}
+		noted += len(notes)
+	}
+	if noted > 0 {
+		_, _ = fmt.Fprintf(c.stdout, "ledger %s: NOTE %d receipt(s) with their action row pruned by retention — digest-sealed evidence stands\n", *partition, noted)
 	}
 	_, _ = fmt.Fprintf(c.stdout, "ledger %s: %d receipts, chain intact\n", *partition, len(receipts))
 	return 0

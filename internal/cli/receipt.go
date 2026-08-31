@@ -25,6 +25,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"path/filepath"
@@ -95,7 +96,8 @@ func (c *cli) receiptVerify(args []string) int {
 	}
 	code := 0
 	for _, r := range receipts {
-		if failures := verifyReceiptChecks(ctx, store, r); len(failures) > 0 {
+		failures, notes := verifyReceiptChecks(ctx, store, r)
+		if len(failures) > 0 {
 			code = 1
 			for _, f := range failures {
 				_, _ = fmt.Fprintf(c.stdout, "receipt %s (seq %d): FAIL %s\n", r.ReceiptID, r.ChainSeq, f)
@@ -103,14 +105,20 @@ func (c *cli) receiptVerify(args []string) int {
 			continue
 		}
 		_, _ = fmt.Fprintf(c.stdout, "receipt %s (seq %d): OK\n", r.ReceiptID, r.ChainSeq)
+		for _, n := range notes {
+			_, _ = fmt.Fprintf(c.stdout, "receipt %s (seq %d): NOTE %s\n", r.ReceiptID, r.ChainSeq, n)
+		}
 	}
 	return code
 }
 
 // verifyReceiptChecks runs the full named-check ladder over one receipt.
-// It returns every failure found ("name: detail"), empty = sound.
-func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r action.Receipt) []string {
-	var failures []string
+// It returns every failure found ("name: detail") plus non-fatal NAMED
+// notes (R2, cross-check law: an absent action row under retention is a
+// degraded check stated out loud — never a lying custody_mismatch,
+// because the digest-sealed receipt IS the evidence that survives the
+// prune, and absence-by-prune is indistinguishable from absence).
+func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r action.Receipt) (failures, notes []string) {
 	fail := func(name, format string, args ...any) {
 		failures = append(failures, name+": "+fmt.Sprintf(format, args...))
 	}
@@ -162,11 +170,17 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 				r.PreviousReceiptHash, pred.ReceiptID, pred.ReceiptHash)
 		}
 	}
-	// 7. Coherence with the aduana row.
+	// 7. Coherence with the action row — WHEN it still exists. The E1
+	// retention prune legitimately removes action rows while receipts
+	// stay (the sealed exemption): absence degrades to a named note.
 	rec, err := store.Get(ctx, r.ActionID)
-	if err != nil {
-		fail("custody_mismatch", "aduana row %q is missing: %v", r.ActionID, err)
-		return failures
+	switch {
+	case errors.Is(err, actionsqlite.ErrNotFound):
+		notes = append(notes, "action_row_absent: row "+r.ActionID+" is gone (retention prunes action rows; the digest-sealed receipt is the surviving evidence)")
+		return failures, notes
+	case err != nil:
+		fail("custody_mismatch", "aduana row %q is unreadable: %v", r.ActionID, err)
+		return failures, notes
 	}
 	if last := lastReceiptOutcome(ctx, store, r); last && string(rec.State) != r.Outcome {
 		fail("custody_mismatch", "receipt attests %q but the aduana row says %q", r.Outcome, rec.State)
@@ -175,7 +189,7 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 		fail("custody_mismatch", "receipt action digest %s but the aduana row carries %s",
 			r.ActionDigest, rec.Envelope.ParametersDigest)
 	}
-	return failures
+	return failures, notes
 }
 
 // lastReceiptOutcome reports whether r is the LAST receipt of its
