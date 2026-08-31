@@ -14,25 +14,30 @@ import (
 	"testing"
 )
 
-// etapa1States are the reachable states of this stage.
+// reachableStates are the states the machine can actually reach (E1 +
+// the sealed Etapa-5 approval trio).
 var etapa1States = []State{
 	StateReceived, StateNormalized, StateDenied, StateShadowed,
 	StateAuthorized, StateSucceeded, StateFailed,
+	StatePendingApproval, StateRejected, StateApproved,
 }
 
-// reservedStates are declared for later stages and unreachable in Etapa 1.
+// reservedStates are declared for later stages and unreachable today
+// (the Etapa-5 seal woke the approval trio; the E6 set stays closed).
 var reservedStates = []State{
-	StatePendingApproval, StateRejected, StateApproved,
 	StatePreparing, StatePrepareFailed, StatePrepared,
 	StateCommitting, StateOutcomeUnknown,
 	StateCompensating, StateCompensated, StateCompensationFailed,
 }
 
-// validTransitions is the COMPLETE Etapa-1 transition table.
+// validTransitions is the COMPLETE transition table (E1 + the sealed
+// Etapa-5 approval edges).
 var validTransitions = map[State][]State{
-	StateReceived:   {StateNormalized},
-	StateNormalized: {StateDenied, StateShadowed, StateAuthorized},
-	StateAuthorized: {StateSucceeded, StateFailed},
+	StateReceived:        {StateNormalized},
+	StateNormalized:      {StateDenied, StateShadowed, StateAuthorized, StatePendingApproval},
+	StateAuthorized:      {StateSucceeded, StateFailed},
+	StatePendingApproval: {StateRejected, StateApproved},
+	StateApproved:        {StateSucceeded, StateFailed},
 }
 
 func allowed(from, to State) bool {
@@ -101,6 +106,7 @@ func TestTerminal_truthTable(t *testing.T) {
 	terminal := map[State]bool{
 		StateReceived: false, StateNormalized: false, StateAuthorized: false,
 		StateDenied: true, StateShadowed: true, StateSucceeded: true, StateFailed: true,
+		StatePendingApproval: false, StateApproved: false, StateRejected: true,
 	}
 	for s, want := range terminal {
 		if got := s.Terminal(); got != want {

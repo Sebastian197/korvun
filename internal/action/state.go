@@ -35,11 +35,11 @@ const (
 // approvals (Etapa 5), prepare/commit and outcome reconciliation and
 // compensation (Etapa 6).
 const (
-	// StatePendingApproval is reserved for Etapa 5.
+	// StatePendingApproval parks an action awaiting the human (Etapa 5).
 	StatePendingApproval State = "PENDING_APPROVAL"
-	// StateRejected is reserved for Etapa 5.
+	// StateRejected closes an action whose approval was denied/expired.
 	StateRejected State = "REJECTED"
-	// StateApproved is reserved for Etapa 5.
+	// StateApproved marks the human's yes; execution follows (Etapa 5).
 	StateApproved State = "APPROVED"
 	// StatePreparing is reserved for Etapa 6.
 	StatePreparing State = "PREPARING"
@@ -62,12 +62,19 @@ const (
 // ErrInvalidTransition is the sentinel every rejected transition wraps.
 var ErrInvalidTransition = errors.New("action: invalid state transition")
 
-// transitions is the COMPLETE Etapa-1 table; anything absent is invalid,
-// which makes reserved and unknown states fail closed by construction.
+// transitions is the COMPLETE table; anything absent is invalid, which
+// makes reserved and unknown states fail closed by construction. The
+// Etapa-5 seal woke EXACTLY the approval edges (spec FR-STATE-1): the
+// gate parks BEFORE authorization (NORMALIZED→PENDING_APPROVAL), the
+// human decides (→REJECTED | →APPROVED), and an approved action
+// executes directly in E5 (→SUCCEEDED | →FAILED; PREPARING waits for
+// E6). Everything else stays closed.
 var transitions = map[State]map[State]bool{
-	StateReceived:   {StateNormalized: true},
-	StateNormalized: {StateDenied: true, StateShadowed: true, StateAuthorized: true},
-	StateAuthorized: {StateSucceeded: true, StateFailed: true},
+	StateReceived:        {StateNormalized: true},
+	StateNormalized:      {StateDenied: true, StateShadowed: true, StateAuthorized: true, StatePendingApproval: true},
+	StateAuthorized:      {StateSucceeded: true, StateFailed: true},
+	StatePendingApproval: {StateRejected: true, StateApproved: true},
+	StateApproved:        {StateSucceeded: true, StateFailed: true},
 }
 
 // Transition validates one state-machine edge. It returns nil for the
@@ -101,11 +108,13 @@ func (e *invalidTransitionError) Unwrap() error {
 	return ErrInvalidTransition
 }
 
-// Terminal reports whether s is an Etapa-1 terminal state — a state with
-// no outgoing edges that the stage can actually reach.
+// Terminal reports whether s is a reachable terminal state — a state
+// with no outgoing edges. REJECTED joined with the Etapa-5 seal: a
+// rejected (or expired-at-touch) approval closes its action and births
+// a receipt like every other terminal outcome.
 func (s State) Terminal() bool {
 	switch s {
-	case StateDenied, StateShadowed, StateSucceeded, StateFailed:
+	case StateDenied, StateShadowed, StateSucceeded, StateFailed, StateRejected:
 		return true
 	default:
 		return false
