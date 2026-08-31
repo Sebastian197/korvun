@@ -184,15 +184,23 @@ guard-gopkgs:
 # Fuzz smoke (spec 2026-08-30-action-kernel FR-DOM-5, Chano's mandate):
 # seconds-long native fuzz over the kernel's parsers on every gate run.
 # Long campaigns are the documented manual/nightly task, not this gate.
+# Fuzz smoke budgets are WORK-bounded (-fuzztime Nx = exactly N inputs),
+# never time-bounded: the 3s time mode intermittently blew its own
+# teardown deadline ("context deadline exceeded" at ~4s) once a target's
+# corpus grew past ~200 entries on a loaded machine — reproduced
+# FAIL->PASS back to back on 2026-08-31 (filed 2026-08-30; cure granted
+# by mandate). N executions finish when the work finishes, whatever the
+# machine is doing. Do not "simplify" these back to seconds.
 fuzz-smoke:
 	@echo "Fuzz smoke: action kernel parsers (FR-DOM-5)..."
-	go test ./internal/action/ -run '^$$' -fuzz FuzzCanonicalize -fuzztime 3s
-	go test ./internal/action/ -run '^$$' -fuzz FuzzDigest -fuzztime 3s
-	go test ./internal/action/ -run '^$$' -fuzz FuzzAttenuation -fuzztime 3s
-	go test ./internal/action/ -run '^$$' -fuzz FuzzEffectClassRank -fuzztime 3s
-	go test ./internal/action/ -run '^$$' -fuzz FuzzReceiptCanonical -fuzztime 3s
-	go test ./internal/action/ -run '^$$' -fuzz FuzzParseSigningKeySeed -fuzztime 3s
-	go test ./internal/action/ -run '^$$' -fuzz FuzzApprovalCanonical -fuzztime 3s
+	go test ./internal/action/ -run '^$$' -fuzz FuzzCanonicalize -fuzztime 25000x
+	go test ./internal/action/ -run '^$$' -fuzz FuzzDigest -fuzztime 25000x
+	go test ./internal/action/ -run '^$$' -fuzz FuzzAttenuation -fuzztime 25000x
+	go test ./internal/action/ -run '^$$' -fuzz FuzzEffectClassRank -fuzztime 25000x
+	go test ./internal/action/ -run '^$$' -fuzz FuzzReceiptCanonical -fuzztime 25000x
+	go test ./internal/action/ -run '^$$' -fuzz FuzzParseSigningKeySeed -fuzztime 25000x
+	go test ./internal/action/ -run '^$$' -fuzz FuzzApprovalCanonical -fuzztime 25000x
+	go test ./internal/action/ -run '^$$' -fuzz FuzzPreviewCanonical -fuzztime 25000x
 
 quality: guard-gopkgs lint test cover fuzz-smoke
 	@echo "Quality gate passed."
