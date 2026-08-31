@@ -115,6 +115,32 @@ starting work, confirm no other session is live; a second session shares
 the working tree, the branches and the copilot report paths, and will
 step on them.
 
+## La ley de la verificación cruzada (2026-08-31) — CRITICAL
+
+Born from the 2026-08-31 external audit (three reproducible failures
+unit tests never saw; precedent: the ceremony's CLI migrating the real
+profile during a "read-only" verify was narrated instead of stopped).
+
+1. No ABSOLUTE claim ("read-only", "X cannot exist without Y",
+   "never", "always") is accepted without an adversarial test FROM
+   OUTSIDE the component: another process, another feature, another
+   open path. Without that test the claim is SCOPED DOWN in the docs —
+   never published as an absolute.
+2. An observed anomaly that contradicts a prior pin or promise is a
+   STOP with mandatory adjudication — never a color note in a report.
+3. Behavior pins cover THE WHOLE DOOR, not the room: a "does not
+   write" pin covers the open path (migrations, recovery, prune), not
+   only the command's own writes.
+4. Every stage spec includes a mandatory CROSS-SCENARIOS section
+   (CLI×server, retention×verification, cross-process concurrency) as
+   first-class AS-*.
+5. Review verdicts declare their scope: what was read, what was
+   executed, what remains unverified. "ACCEPTED" on reading ≠ proven
+   in execution.
+6. Releases carrying security promises pass external eyes of another
+   family before the tag when the director so orders — an
+   institutionalized gate, not a suggestion.
+
 ## The sixth law — UX-DESIGN-FIRST + MANOS-DE-CHANO (2026-08-23) — CRITICAL
 
 UX-DESIGN-FIRST + MANOS-DE-CHANO: ninguna pieza visible para el usuario

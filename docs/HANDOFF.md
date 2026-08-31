@@ -34,6 +34,39 @@
 
 ---
 
+## LA LEY DE LA VERIFICACIÓN CRUZADA (2026-08-31) — PERMANENTE
+
+> Origen: auditoría externa independiente del 2026-08-31 sobre master
+> `b54f3af` — tres fallos reproducibles que las pruebas unitarias no
+> vieron. Caso precedente: durante la ceremonia v0.14, la CLI migró el
+> perfil real con un `receipt verify` — una anomalía que CONTRADECÍA el
+> pin de solo-lectura del verify y se narró como nota de color en vez
+> de pararse; el revisor externo tiró de ese mismo hilo y encontró que
+> un verify podía matar acciones en vuelo (Open = migraciones +
+> recovery + prune).
+>
+> 1. Ninguna afirmación ABSOLUTA de un lote («solo-lectura», «no puede
+>    existir X sin Y», «jamás», «siempre») se acepta sin un test
+>    adversarial DESDE FUERA del componente: otro proceso, otra
+>    feature, otro camino de apertura. Sin ese test, la afirmación se
+>    ACOTA en la doc — no se publica en absoluto.
+> 2. Una anomalía observada que contradiga un pin o promesa previa es
+>    un STOP con adjudicación obligatoria — jamás una nota de color en
+>    un reporte.
+> 3. Los pins de comportamiento cubren LA PUERTA ENTERA, no la
+>    habitación: un pin de «no escribe» cubre el camino de apertura
+>    (migraciones, recuperación, poda), no solo las escrituras propias
+>    del comando.
+> 4. Toda spec de etapa incluye una sección obligatoria de ESCENARIOS
+>    CRUZADOS (CLI×servidor, retención×verificación, concurrencia entre
+>    procesos) como AS-* de primera clase.
+> 5. Los veredictos de review declaran su alcance: qué se leyó, qué se
+>    ejecutó, qué queda sin verificar. «ACCEPTED» sobre lectura ≠
+>    demostrado en ejecución.
+> 6. Las releases que sostienen promesas de seguridad pasan por ojos
+>    externos de otra familia antes del tag cuando el director lo
+>    disponga — puerta institucionalizada, no sugerencia.
+
 ## Ciclo de revisión cruzada con Codex (vigente desde 2026-08-15)
 
 En fases estructurales, tras quality gate verde y ANTES del push:
