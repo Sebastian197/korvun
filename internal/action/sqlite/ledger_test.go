@@ -485,3 +485,57 @@ func TestLedger_getReceiptAndReceiptAt(t *testing.T) {
 		t.Fatalf("closed store must fail loud, not not-found: %v", err)
 	}
 }
+
+// The cross-check family (external audit 2026-08-31, law point 4):
+// the REAL retention prune meets every read the verifier performs.
+// Prune takes action rows (the sealed exemption keeps receipts); every
+// verifier read — receipt fetch, chain walk, key lookup, the action
+// row's honest absence — must keep working over the pruned store.
+func TestCrossCheck_realPruneMeetsTheVerifierReads(t *testing.T) {
+	t.Parallel()
+	store, err := openWithCap(t.TempDir()+"/korvun.db", 1)
+	if err != nil {
+		t.Fatalf("open with cap: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	sealer, pub := testSealer(t)
+	store.SetReceiptSealer(sealer)
+	ctx := context.Background()
+	ids := []string{"act_x1", "act_x2", "act_x3"}
+	for _, id := range ids {
+		if err := store.RecordAttempt(ctx, testEnvelope(id),
+			Decision{Outcome: "deny", Rule: "not_granted"}, action.StateDenied); err != nil {
+			t.Fatalf("record %s: %v", id, err)
+		}
+	}
+	pruned, err := store.Prune(ctx)
+	if err != nil || pruned == 0 {
+		t.Fatalf("the REAL prune must take rows: %v %d", err, pruned)
+	}
+	receipts, err := store.ListReceipts(ctx, "main")
+	if err != nil || len(receipts) != 3 {
+		t.Fatalf("every receipt survives the real prune: %v %d", err, len(receipts))
+	}
+	prunedRows := 0
+	for i, r := range receipts {
+		// The verifier's reads, one by one, over the pruned store.
+		if r.ReceiptHash != action.ComputeReceiptHash(r) {
+			t.Fatalf("receipt %d hash must recompute", i)
+		}
+		if err := action.VerifyReceiptSignature(pub, r); err != nil {
+			t.Fatalf("receipt %d signature: %v", i, err)
+		}
+		if i > 0 {
+			pred, err := store.ReceiptAt(ctx, "main", r.ChainSeq-1)
+			if err != nil || r.PreviousReceiptHash != pred.ReceiptHash {
+				t.Fatalf("receipt %d chain link over pruned store: %v", i, err)
+			}
+		}
+		if _, err := store.Get(ctx, r.ActionID); errors.Is(err, ErrNotFound) {
+			prunedRows++
+		}
+	}
+	if prunedRows == 0 {
+		t.Fatal("the scenario needs at least one receipt whose action row is GONE")
+	}
+}
