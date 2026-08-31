@@ -55,15 +55,19 @@ func (c *cli) intentCmd(args []string) int {
 	}
 }
 
-// openOperatorStore loads the config strictly and opens the kernel store
-// on the SAME resolved file the server uses. The caller closes it — the
-// brief-access discipline of the shared single-writer file.
+// openOperatorStore loads the config strictly and opens the kernel
+// store READ-ONLY on the SAME resolved file the server uses (the R1
+// door, cross-check law point 3): consultation and verification run no
+// migration, no crash recovery, no prune, and their connection refuses
+// every write at the SQLite level — a verify beside a LIVE server can
+// never touch an in-flight action. Mutating operator commands use
+// openOperatorStoreSealed, which keeps the full lifecycle open path.
 func openOperatorStore(configPath string) (*actionsqlite.Store, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return nil, err
 	}
-	return actionsqlite.Open(app.StoragePath(cfg))
+	return actionsqlite.OpenReadOnly(app.StoragePath(cfg))
 }
 
 // openOperatorStoreSealed opens the store WITH the profile's ink wired

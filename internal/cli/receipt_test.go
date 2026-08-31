@@ -293,3 +293,37 @@ func operatorProbeEnvelope(id string) action.Envelope {
 		action.Operation{Namespace: "tool", Name: "echo", Version: 1},
 		`{}`, time.Now().UTC())
 }
+
+// The R1 regression pin at the CLI level — the reviewer's EXACT
+// scenario: the server holds the store open with an action IN FLIGHT;
+// a verify runs beside it; the action must stay intact and the server
+// must close it successfully. Before the read-only door, this verify
+// migrated schemas and crash-closed in-flight actions.
+func TestReceiptVerify_besideALiveServerLeavesInFlightActionsIntact(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, receiptID, _ := operatorReceipt(t)
+	server, err := actionsqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("server open: %v", err)
+	}
+	defer func() { _ = server.Close() }()
+	ctx := context.Background()
+	env := operatorProbeEnvelope("act_flight")
+	if err := server.RecordAttempt(ctx, env,
+		actionsqlite.Decision{Outcome: "allow", Rule: "granted"}, action.StateAuthorized); err != nil {
+		t.Fatalf("in-flight record: %v", err)
+	}
+	if code, _, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID); code != 0 {
+		t.Fatalf("verify beside the live server: %d %q", code, stderr)
+	}
+	if code, _, stderr := runIntentCLI(t, "ledger", "check", "--config", cfgPath); code != 0 {
+		t.Fatalf("check beside the live server: %d %q", code, stderr)
+	}
+	rec, err := server.Get(ctx, "act_flight")
+	if err != nil || rec.State != action.StateAuthorized || rec.RecoveryMarker != "" {
+		t.Fatalf("AUDIT REGRESSION: the consult touched the in-flight action: %v state=%v marker=%q", err, rec.State, rec.RecoveryMarker)
+	}
+	if err := server.Finish(ctx, "act_flight", action.StateSucceeded, time.Now().UTC()); err != nil {
+		t.Fatalf("the server must still own its lifecycle: %v", err)
+	}
+}

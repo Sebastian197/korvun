@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 )
 
 // seedChain drives N operator acts so the ledger carries a real chain.
@@ -129,10 +131,32 @@ func TestLedgerCheck_duplicateSeqDenounced(t *testing.T) {
 
 func TestLedgerCheck_emptyPartitionIsHonestlyEmpty(t *testing.T) {
 	t.Parallel()
-	cfgPath, _ := intentTestConfig(t)
+	// The store must EXIST (a mutating act creates it); the R1 read-only
+	// door never creates files — adjusted under the consolidation
+	// mandate when the door changed.
+	cfgPath, dbPath := intentTestConfig(t)
+	store, err := actionsqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+	_ = store.Close()
 	code, stdout, _ := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
 	if code != 0 || !strings.Contains(stdout, "0 receipts") {
-		t.Fatalf("an empty ledger checks green saying so: %d %q", code, stdout)
+		t.Fatalf("an empty EXISTING ledger checks green saying so: %d %q", code, stdout)
+	}
+}
+
+func TestLedgerCheck_missingStoreFailsHonestWithoutCreatingIt(t *testing.T) {
+	t.Parallel()
+	// R1: a consult over a profile with no store fails honest and
+	// leaves NO files behind (the old door silently created the db).
+	cfgPath, dbPath := intentTestConfig(t)
+	code, _, stderr := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
+	if code != 1 {
+		t.Fatalf("a missing store must fail the consult: %d %q", code, stderr)
+	}
+	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
+		t.Fatalf("the read-only door must not create the store: %v", err)
 	}
 }
 

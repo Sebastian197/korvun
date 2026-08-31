@@ -310,6 +310,10 @@ type Store struct {
 	// so tests exercise small caps without mutable package state.
 	capRows    int
 	pruneEvery int
+	// readOnly marks a store opened through OpenReadOnly (the R1 door):
+	// the connection is sealed with PRAGMA query_only and no lifecycle
+	// pass (migration/recovery/prune) has run.
+	readOnly bool
 	// sealer, when non-nil, signs and appends one receipt per terminal
 	// outcome INSIDE the recording transaction (Etapa 4, FR-LED). The app
 	// injects it with the active profile key; nil = pre-stage behavior.
@@ -617,4 +621,46 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("action/sqlite: count: %w", err)
 	}
 	return n, nil
+}
+
+// OpenReadOnly opens the store for verification and consultation — the
+// R1 door born from the 2026-08-31 external audit (the cross-check
+// law, point 3: a "does not write" pin covers the WHOLE door). It runs
+// NO bootstrap, NO migration, NO crash recovery and NO retention prune,
+// never creates files or directories, and locks the connection itself
+// with PRAGMA query_only so every write — domain path or hand-written
+// SQL — dies at the SQLite level. WAL-compatible in every state: the
+// file opens through the normal VFS path (a live writer's readers do
+// not block it), only the connection is sealed. A schema OLDER than
+// this binary's current version is REFUSED by name, never migrated —
+// the ceremony's "verify migrated the profile" precedent can not
+// recur; a NEWER schema is refused too (an older binary must not
+// misread a future store).
+func OpenReadOnly(path string) (*Store, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: resolve path %q: %w", path, err)
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return nil, fmt.Errorf("action/sqlite: read-only open %q: %w", abs, err)
+	}
+	db, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(abs)))
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: read-only open %q: %w", abs, err)
+	}
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`PRAGMA query_only = 1`); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("action/sqlite: seal read-only connection %q: %w", abs, err)
+	}
+	var version int
+	if err := db.QueryRow(`SELECT version FROM action_schema`).Scan(&version); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("action/sqlite: read schema version of %q (not a korvun store?): %w", abs, err)
+	}
+	if version != schemaVersionCurrent {
+		_ = db.Close()
+		return nil, fmt.Errorf("action/sqlite: store %q is at schema v%d, this binary reads v%d — a read-only consult never migrates; run the server or a mutating operator command to lift the schema", abs, version, schemaVersionCurrent)
+	}
+	return &Store{db: db, capRows: defaultCapRows, pruneEvery: defaultPruneEvery, readOnly: true}, nil
 }
