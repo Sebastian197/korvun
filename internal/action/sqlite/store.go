@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 6
+const schemaVersionCurrent = 7
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -242,6 +242,37 @@ CREATE TABLE receipts (
     UNIQUE (partition, chain_seq)
 ) WITHOUT ROWID;
 CREATE INDEX receipts_by_action ON receipts(action_id);`,
+
+	// v6 -> v7 (Trust Layer Etapa 5, spec FR-APR/FR-PRV): the approvals
+	// table — the §10.8 request with its sealed preview AND the parked
+	// action's canonical parameters. The E1 no-raw law holds for resting
+	// history: a parked request IS pending work, its params are the very
+	// object under approval, and they are PURGED at any close without
+	// execution. UNIQUE(action_id): one request per parked action.
+	6: `
+CREATE TABLE approvals (
+    approval_id           TEXT    NOT NULL PRIMARY KEY,
+    schema_version        INTEGER NOT NULL,
+    action_id             TEXT    NOT NULL UNIQUE,
+    action_digest         TEXT    NOT NULL,
+    preview_digest        TEXT    NOT NULL,
+    canonical_preview     TEXT    NOT NULL,
+    canonical_params      TEXT    NOT NULL,
+    requested_from        TEXT    NOT NULL,
+    reason                TEXT    NOT NULL,
+    risk_summary          TEXT    NOT NULL,
+    policy_version        INTEGER NOT NULL,
+    policy_digest         TEXT    NOT NULL,
+    requested_at          TEXT    NOT NULL,
+    expires_at            TEXT,
+    status                TEXT    NOT NULL,
+    decision_principal_id TEXT    NOT NULL DEFAULT '',
+    decision              TEXT    NOT NULL DEFAULT '',
+    decision_at           TEXT,
+    comment               TEXT    NOT NULL DEFAULT '',
+    decision_receipt_id   TEXT    NOT NULL DEFAULT ''
+) WITHOUT ROWID;
+CREATE INDEX approvals_by_status ON approvals(status);`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per
