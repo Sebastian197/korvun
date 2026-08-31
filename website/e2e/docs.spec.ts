@@ -14,21 +14,21 @@ const pages: Array<[string, RegExp]> = [
 
 test('every English documentation route renders real content', async ({ page }) => {
   for (const [route, title] of pages) {
-    await page.goto(`/korvun/${route}/`)
+    await page.goto(`/${route}/`)
     await expect(page.locator('main h1').first(), route).toHaveText(title)
     await expect(page.locator('main')).not.toContainText(/Stub \(SP|Stub — SP/)
   }
 })
 
 test('documentation navigation reaches the complete public map', async ({ page }) => {
-  await page.goto('/korvun/guide/quickstart/')
+  await page.goto('/guide/quickstart/')
   const hrefs = await page.locator('nav a, aside a').evaluateAll((links) =>
     links.map((link) => link.getAttribute('href') ?? ''),
   )
 
   for (const [route] of pages) {
     expect(
-      hrefs.some((href) => href.includes(`/korvun/${route}`)),
+      hrefs.some((href) => href.includes(`/${route}`)),
       `${route} must be reachable from the documentation navigation`,
     ).toBe(true)
   }
@@ -40,7 +40,7 @@ test('documentation does not make third-party runtime requests', async ({ page, 
     if (!request.url().startsWith(baseURL!)) externalRequests.push(request.url())
   })
 
-  await page.goto('/korvun/guide/quickstart/')
+  await page.goto('/guide/quickstart/')
   await page.waitForLoadState('networkidle')
   expect(externalRequests).toEqual([])
 })

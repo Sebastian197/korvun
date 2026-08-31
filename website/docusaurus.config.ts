@@ -7,16 +7,19 @@ const normalizeBaseUrl = (value: string) => {
   return segment ? `/${segment}/` : '/'
 }
 
-const siteUrl = (process.env.SITE_URL ?? 'https://sebastian197.github.io').replace(
+const siteUrl = (process.env.SITE_URL ?? 'https://korvun.dev').replace(
   /\/$/,
   '',
 )
-const baseUrl = normalizeBaseUrl(process.env.SITE_BASE_URL ?? '/korvun/')
+const baseUrl = normalizeBaseUrl(process.env.SITE_BASE_URL ?? '/')
 
-// The legacy GitHub Pages deployment forwards visitors to the canonical
-// https://korvun.dev (see src/redirect-legacy-host.ts). The module and its
-// no-JS fallback are only included when this build targets that host, so
-// the Cloudflare Pages build stays untouched.
+// Since the 2026-08-31 cutover GitHub Pages IS the canonical host: the
+// build defaults to url=https://korvun.dev, baseUrl=/, and ships a CNAME
+// (static/CNAME) so every deploy re-pins the custom domain. The legacy
+// redirect module below only rides when a build explicitly targets a
+// *.github.io host (SITE_URL override) — kept as a safety net for the
+// propagation window; GitHub itself 301s the old host once the custom
+// domain is set.
 const targetsLegacyGithubPages = new URL(siteUrl).hostname.endsWith('.github.io')
 
 const config: Config = {

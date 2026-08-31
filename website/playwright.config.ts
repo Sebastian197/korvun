@@ -1,8 +1,8 @@
 import { defineConfig } from '@playwright/test'
 
-// Landing e2e over `vitepress preview` — the BUILT site served under the
-// real '/korvun/' project-page base (spec AS-1 realism: never a root dev
-// server). The ADR-0029 §5 pattern rides on this config: the same-origin
+// Landing e2e over `vitepress preview` — the BUILT site served at the
+// real domain-root base (the single canonical edition since the
+// 2026-08-31 cutover; never a dev server). The ADR-0029 §5 pattern rides on this config: the same-origin
 // assertion in e2e/landing.spec.ts is the zero-CDN gate, not a text grep.
 export default defineConfig({
   testDir: './e2e',
@@ -18,7 +18,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'npm run preview -- --port 4174',
-    url: 'http://localhost:4174/korvun/',
+    url: 'http://localhost:4174/',
     reuseExistingServer: !process.env.CI,
   },
 })

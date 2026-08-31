@@ -1,9 +1,9 @@
 // Link + asset integrity over the built site (design spec AS-1, ADR-0040).
 //
-// The site is a GitHub *project* page served under /korvun/ — a root-absolute
-// URL that does not start with the base 404s in production while working fine
-// on a local dev server, which is exactly the regression this guard exists to
-// catch. Stdlib Node only; run from website/ (the Makefile website-check
+// Since the 2026-08-31 cutover the site is served at the domain root
+// (korvun.dev on GitHub Pages, baseUrl /). The base check stays: an
+// override build (SITE_BASE_URL) must still keep every root-absolute URL
+// under its base, and the file-resolution checks are base-independent. Stdlib Node only; run from website/ (the Makefile website-check
 // target does) after `vitepress build`.
 //
 // Checks, over every .html in .vitepress/dist:
@@ -19,7 +19,7 @@ import path from 'node:path'
 
 await import('./check-brand.mjs')
 
-const BASE = process.env.SITE_BASE_URL ?? '/korvun/'
+const BASE = process.env.SITE_BASE_URL ?? '/'
 const DIST = fileURLToPath(new URL('../.vitepress/dist/', import.meta.url))
 
 if (!existsSync(DIST)) {

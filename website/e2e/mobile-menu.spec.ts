@@ -9,13 +9,13 @@ import { expect, test } from '@playwright/test'
 const locales = [
   {
     label: 'EN',
-    docPath: '/korvun/guide/quickstart/',
-    installHref: '/korvun/guide/install/',
+    docPath: '/guide/quickstart/',
+    installHref: '/guide/install/',
   },
   {
     label: 'ES',
-    docPath: '/korvun/es/guide/quickstart/',
-    installHref: '/korvun/es/guide/install/',
+    docPath: '/es/guide/quickstart/',
+    installHref: '/es/guide/install/',
   },
 ] as const
 

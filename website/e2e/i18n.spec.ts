@@ -13,23 +13,23 @@ const mirroredPages = [
 ]
 
 test('the locale switcher connects both real homepages', async ({ page }) => {
-  await page.goto('/korvun/')
+  await page.goto('/')
   // The locale links live inside the navbar dropdown; open it first.
   await page.locator('nav .dropdown').hover()
-  await page.locator('nav a[href="/korvun/es/"]').click()
-  await expect(page).toHaveURL(/\/korvun\/es\/$/)
+  await page.locator('nav a[href="/es/"]').click()
+  await expect(page).toHaveURL(/\/es\/$/)
   await expect(page.locator('main h1')).toContainText('Un binario')
 
   await page.locator('nav .dropdown').hover()
-  await page.locator('nav a[href="/korvun/"]').click()
-  await expect(page).toHaveURL(/\/korvun\/$/)
+  await page.locator('nav a[href="/"]').click()
+  await expect(page).toHaveURL(/\/$/)
   await expect(page.locator('main h1')).toContainText('One binary')
 })
 
 test('every public English route has a Spanish mirror', async ({ page }) => {
   for (const route of mirroredPages) {
-    const en = await page.request.get(`/korvun/${route}/`)
-    const es = await page.request.get(`/korvun/es/${route}/`)
+    const en = await page.request.get(`/${route}/`)
+    const es = await page.request.get(`/es/${route}/`)
     expect(en.status(), `English route ${route}`).toBe(200)
     expect(es.status(), `Spanish route ${route}`).toBe(200)
   }
@@ -54,9 +54,9 @@ test('English and Spanish documentation expose the same route tree', async ({ pa
     return [...new Set(routes)].sort()
   }
 
-  const en = (await collect('/korvun/guide/quickstart/', '/korvun/')).filter(
+  const en = (await collect('/guide/quickstart/', '/')).filter(
     (route) => !route.startsWith('es/'),
   )
-  const es = await collect('/korvun/es/guide/quickstart/', '/korvun/es/')
+  const es = await collect('/es/guide/quickstart/', '/es/')
   expect(es).toEqual(en)
 })

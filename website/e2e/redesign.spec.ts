@@ -5,7 +5,7 @@ import { releaseFacts } from '../src/releaseFacts'
 const locales = [
   {
     label: 'EN',
-    path: '/korvun/',
+    path: '/',
     hero: ['One binary.', 'Your models.', 'Your rules.'],
     headings: [
       'Kernel for Orchestrated Routing — Versatile Unified Nodes',
@@ -15,12 +15,12 @@ const locales = [
       'A cloud model, governed tools, one config.',
       'Run it today.',
     ],
-    quickstart: '/korvun/guide/quickstart/',
-    mediaPrefix: '/korvun/media/',
+    quickstart: '/guide/quickstart/',
+    mediaPrefix: '/media/',
   },
   {
     label: 'ES',
-    path: '/korvun/es/',
+    path: '/es/',
     hero: ['Un binario.', 'Tus modelos.', 'Tus reglas.'],
     headings: [
       'Núcleo de Orquestación y Routing sobre Nodos Versátiles y Unificados',
@@ -30,8 +30,8 @@ const locales = [
       'Un modelo de nube, herramientas gobernadas, una sola config.',
       'Ponlo en marcha hoy.',
     ],
-    quickstart: '/korvun/es/guide/quickstart/',
-    mediaPrefix: '/korvun/es/media/',
+    quickstart: '/es/guide/quickstart/',
+    mediaPrefix: '/es/media/',
   },
 ] as const
 
@@ -137,7 +137,7 @@ test.describe('390 px landing', () => {
 
 test('reduced motion removes meaningful animation', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto('/korvun/')
+  await page.goto('/')
   const animated = page.locator('[data-motion]').first()
   await expect(animated).toBeVisible()
   const timing = await animated.evaluate((element) => {
@@ -154,7 +154,7 @@ test('reduced motion removes meaningful animation', async ({ page }) => {
 
 test('below-fold storytelling reveals once on viewport entry', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  await page.goto('/korvun/')
+  await page.goto('/')
 
   const hero = page.locator('[data-k-section="hero"] [data-motion]').first()
   const firstCapability = page
@@ -188,7 +188,7 @@ test('below-fold storytelling reveals once on viewport entry', async ({ page }) 
 
 test('routes through every landing block in order', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  await page.goto('/korvun/')
+  await page.goto('/')
   const journey = page.locator('[data-k-journey]')
   await expect(journey).toHaveCount(1)
   await expect(page.locator('[data-k-route-port]')).toHaveCount(6)
@@ -202,7 +202,7 @@ test('routes through every landing block in order', async ({ page }) => {
 test('the journey switches to the mobile rail at 390px without overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  await page.goto('/korvun/')
+  await page.goto('/')
   await expect(page.locator('[data-k-journey]')).toHaveAttribute('data-k-journey-mode', 'mobile')
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -212,7 +212,7 @@ test('the journey switches to the mobile rail at 390px without overflow', async 
 
 test('reduced motion shows the complete static circuit with no signal head', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  await page.goto('/korvun/')
+  await page.goto('/')
   await expect(page.locator('[data-k-journey]')).toHaveAttribute('data-k-static', 'true')
   await expect(page.locator('[data-k-route-signal]')).toBeHidden()
 })
@@ -221,7 +221,7 @@ test('client-side navigation back home re-arms the routing journey', async ({ pa
   // The director's finding (2026-08-29): landing on a docs page and then
   // clicking the navbar brand must yield a LIVE landing — the circuit
   // re-measures, draws and follows the scroll exactly like a fresh load.
-  await page.goto('/korvun/guide/what-is-korvun/')
+  await page.goto('/guide/what-is-korvun/')
   await page.click('.navbar__brand')
   await expect(page.locator('[data-k-journey]')).toHaveAttribute('data-k-journey-mode', /desktop|mobile/)
   const base = page.locator('[data-k-route-path-base]')
