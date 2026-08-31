@@ -111,6 +111,14 @@ are kept forever so each era of the chain verifies with the key of its
 era.
 
 **Honest scope**: the ledger is **tamper-evident, not tamper-proof**.
+Atomicity holds INSIDE the store: a terminal outcome and its receipt
+are written in one transaction, and an attempt that cannot be recorded
+fails closed BEFORE any effect. The converse window is documented, not
+hidden: an EXTERNAL effect that completed and whose terminal close then
+failed (disk full, crash between effect and write) leaves a real-world
+effect with its evidence at risk — logged at ERROR with rule
+`record_failed`, and open until stage 6's reconciliation
+(`OUTCOME_UNKNOWN` and status queries) ships.
 The signing key lives on the same machine as the store, so an attacker
 with full control of the profile can rewrite history with the resident
 key, and truncation of the chain's tail leaves no hole to detect. What

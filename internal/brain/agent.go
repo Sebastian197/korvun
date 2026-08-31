@@ -906,7 +906,14 @@ func (a *AgentBrain) finishAction(ctx context.Context, actionID string, to actio
 		err = a.actions.Finish(ctx, actionID, to, a.now())
 	}
 	if err != nil {
-		a.logger.Warn("agent: action finish failed", "action_id", actionID, "err", err)
+		// SERIOUS noise (external-audit R4): the effect already happened
+		// in the real world and its terminal record could not be
+		// written — a loss of evidence, not a routine degradation. The
+		// honest gap until E6's reconciliation: inside the store,
+		// outcome and receipt are atomic; an external effect completed
+		// before a failed close is the one documented window.
+		a.logger.Error("agent: action finish failed AFTER the effect — evidence at risk",
+			"action_id", actionID, "rule", "record_failed", "err", err)
 	}
 }
 

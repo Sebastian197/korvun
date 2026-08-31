@@ -12,8 +12,11 @@
 package brain
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,4 +93,40 @@ func TestRunTool_recorderWithoutTheExtensionKeepsPlainFinish(t *testing.T) {
 	if len(rec.finishes) != 1 || rec.finishes[0] != action.StateSucceeded {
 		t.Fatalf("a recorder without the extension closes through plain Finish: %v %v", rec.finishes, *journal)
 	}
+}
+
+// R4 of the external-audit consolidation: a failed terminal close
+// AFTER the effect happened is a LOSS OF EVIDENCE for a real-world
+// action — serious noise (ERROR), never a routine warning. The honest
+// gap it names is documented until E6's reconciliation: inside the
+// store, outcome and receipt are atomic; an external effect completed
+// before a failed close is the one window left.
+func TestRunTool_failedTerminalCloseIsSeriousNoise(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	journal := &[]string{}
+	rec := &failingFinishRecorder{fakeRecorder{journal: journal}}
+	a := NewAgentBrain(
+		&scriptedModel{},
+		tool.Registry{"journal": &journalTool{journal: journal}},
+		WithActionRecorder(rec),
+		WithAgentLogger(slog.New(slog.NewTextHandler(&buf, nil))),
+	)
+	if out := a.runTool(context.Background(), kernelEnv(), nil, laneText, "journal", `{}`); out != "done" {
+		t.Fatalf("the effect happened: %q", out)
+	}
+	logged := buf.String()
+	if !strings.Contains(logged, "level=ERROR") {
+		t.Fatalf("a failed close after a real effect must log at ERROR: %q", logged)
+	}
+	if !strings.Contains(logged, "record_failed") {
+		t.Fatalf("the gap is named with its rule: %q", logged)
+	}
+}
+
+// failingFinishRecorder records fine but cannot close.
+type failingFinishRecorder struct{ fakeRecorder }
+
+func (f *failingFinishRecorder) Finish(ctx context.Context, actionID string, to action.State, at time.Time) error {
+	return errors.New("disk full at the worst moment")
 }

@@ -210,8 +210,10 @@ crash-proof v1→v2 store migration, and byte-compatible receipts. See the
 Stage 4 of the Execution Trust Layer. Korvun keeps a book of records:
 every terminal action outcome — denied, shadowed, succeeded or failed —
 leaves a canonical receipt signed with Ed25519 on an append-only hash
-chain, born in the SAME transaction as the outcome (an unreceipted
-effect cannot exist). The operator re-judges the book offline with
+chain, born in the SAME transaction as the outcome — atomic INSIDE the
+store: an attempt that cannot be recorded fails closed before any
+effect, and an external effect completed before a FAILED close is the
+documented gap until stage 6's reconciliation. The operator re-judges the book offline with
 seven named checks — `korvun receipt verify`, `korvun ledger check`,
 `korvun receipt rotate-key` (each era of the chain verifies with the
 key of its era) — a forged outcome is caught in triplicate, a deleted
