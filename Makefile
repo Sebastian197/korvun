@@ -154,18 +154,22 @@ fmt:
 lint: fmt vet
 	$(GOLANGCI_LINT) run $(GO_LINT_DIRS)
 
+# cover fails LOUD (external-audit consolidation R3): the old recipe
+# piped go test through `grep -q ok` (losing its exit code — one green
+# package satisfied the grep while another FAILED) and ended in a
+# benign `|| echo skipping` that swallowed EVERY failure, threshold
+# breaches included. Reproduced 2026-08-31 with a planted failing test:
+# exit 0, happy percentage. Now: go test's own exit code stops the
+# target, and the threshold check has no fallback to hide behind.
+# scripts/verify-cover-fails.sh re-demonstrates the guarantee on demand.
 cover:
-	@go test -race -coverprofile=coverage.out ./internal/... 2>&1 | tee /dev/stderr | grep -q 'ok' && \
-	grep -q '^mode:' coverage.out 2>/dev/null && \
-	grep -v '^mode:' coverage.out | grep -q '.' 2>/dev/null && \
-	{ \
-		total=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | tr -d '%'); \
-		echo "Coverage: $${total}%"; \
-		if [ "$$(echo "$${total} < $(COVERAGE_THRESHOLD)" | bc)" -eq 1 ]; then \
-			echo "FAIL: coverage $${total}% < $(COVERAGE_THRESHOLD)% threshold"; \
-			exit 1; \
-		fi; \
-	} || echo "No testable packages yet — skipping coverage threshold"
+	@go test -race -coverprofile=coverage.out ./internal/...
+	@total=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | tr -d '%'); \
+	echo "Coverage: $${total}%"; \
+	if [ "$$(echo "$${total} < $(COVERAGE_THRESHOLD)" | bc)" -eq 1 ]; then \
+		echo "FAIL: coverage $${total}% < $(COVERAGE_THRESHOLD)% threshold"; \
+		exit 1; \
+	fi
 # Note: coverage scope is intentionally internal/... only — the cmd/
 # packages today are temporary live-skeleton CLIs (cmd/demo-model,
 # cmd/demo-groq) that are exercised manually against real backends,
