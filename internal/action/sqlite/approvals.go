@@ -123,8 +123,14 @@ func (s *Store) DecideApprovalUnderLaw(ctx context.Context, approvalID, decision
 		if err != nil {
 			return "", err
 		}
-		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
-			return "", fmt.Errorf("action/sqlite: %s (%s): the request was parked under law v%d %s but the current law is v%d %s — nothing was decided; re-request under the current law or reject this one", rule, dim, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
+		// F1: the CLOCK is consulted FIRST — an expired or already-
+		// decided request falls through to the mechanics, whose touch
+		// closes it by the E2 mold (FR-APR-4: no zombie PENDING rows).
+		// Only a still-consumable approve must happen under the law.
+		if rule := action.ApprovalConsumableAt(a, at); rule == "" {
+			if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+				return "", fmt.Errorf("action/sqlite: %s (%s): the request was parked under law v%d %s but the current law is v%d %s — nothing was decided; re-request under the current law or reject this one", rule, dim, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
+			}
 		}
 	}
 	return s.decideApproval(ctx, approvalID, decision, at, operatorEnv, ident, comment)
