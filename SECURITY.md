@@ -124,6 +124,10 @@ executor may already have fired) closes the action as
 would misstate what happened. Idempotency, reconciliation of uncertain
 outcomes and status re-queries against the external system are stage
 6's scope, declared, not implied.
+Since the R3 consolidation the boot's recovery closes land in the
+ledger with their era's signed receipt like every other terminal;
+recovery rows closed by BINARIES BEFORE that consolidation carry no
+receipt — a declared historical fact, never rewritten.
 The signing key lives on the same machine as the store, so an attacker
 with full control of the profile can rewrite history with the resident
 key, and truncation of the chain's tail leaves no hole to detect. What

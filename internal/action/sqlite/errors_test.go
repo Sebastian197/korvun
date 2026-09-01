@@ -173,9 +173,15 @@ func TestOpen_recoveryFailureIsBootFatal(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if reopened, err := Open(path); err == nil {
-		_ = reopened.Close()
-		t.Fatal("a failing recovery pass must fail Open (boot-fatal), not limp on")
+	// R3 re-map: the recovery moved out of Open (the boot calls it after
+	// wiring the sealer); the boot-fatal pin now covers the explicit pass.
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open no longer recovers and must succeed: %v", err)
+	}
+	defer func() { _ = reopened.Close() }()
+	if err := reopened.RecoverPreviousLife(context.Background()); err == nil {
+		t.Fatal("a failing recovery pass must fail loud (boot-fatal), not limp on")
 	}
 }
 

@@ -295,7 +295,9 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	if store != nil {
 		b.store = store // concrete non-nil -> real conversation.Store, never typed-nil
 		// The Action Kernel's store opens on the SAME file with its OWN
-		// migrations and lifecycle (its recovery pass runs inside Open).
+		// migrations and lifecycle (R3: the recovery pass runs BELOW,
+		// after the keystore and sealer are wired — its closes are
+		// terminals and every terminal is born with its receipt).
 		// A storage-configured boot that cannot record actions is a fatal
 		// boot error — proof is part of execution (blueprint §7.8).
 		actions, err := actionsqlite.Open(storagePath(cfg))
@@ -328,6 +330,14 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		actions.SetReceiptSealer(func(r action.Receipt) action.Receipt {
 			return action.SignReceipt(signingKey, r)
 		})
+		// R3: the recovery pass runs AFTER the sealer is wired, so its
+		// terminal closes land in the ledger signed like every other —
+		// no terminal is born without its receipt. Boot-fatal on refusal.
+		if err := actions.RecoverPreviousLife(context.Background()); err != nil {
+			_ = actions.Close()
+			_ = store.Close()
+			return nil, fmt.Errorf("app: recover previous life: %w", err)
+		}
 		// The Etapa-5 approvals knob rides the builder into the brain
 		// wiring; a malformed TTL is boot-fatal (ADR-0017).
 		ttl, err := approvalTTL(cfg.Approvals)

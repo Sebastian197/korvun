@@ -707,6 +707,9 @@ func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
+	if err := reopened.RecoverPreviousLife(context.Background()); err != nil {
+		t.Fatalf("recovery pass: %v", err)
+	}
 	defer func() { _ = reopened.Close() }()
 	if rec, _ := reopened.Get(ctx, "act_park"); rec.State != action.StatePendingApproval || rec.RecoveryMarker != "" {
 		t.Fatalf("a PARKED action must survive the reopen: %v %q", rec.State, rec.RecoveryMarker)
@@ -743,6 +746,9 @@ func TestRecovery_rejectedIsTerminalAndSurvives(t *testing.T) {
 	reopened, err := Open(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
+	}
+	if err := reopened.RecoverPreviousLife(context.Background()); err != nil {
+		t.Fatalf("recovery pass: %v", err)
 	}
 	defer func() { _ = reopened.Close() }()
 	rec, _ := reopened.Get(ctx, "act_rejsur")

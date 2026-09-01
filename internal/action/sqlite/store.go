@@ -404,10 +404,9 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := store.recoverPreviousLife(context.Background()); err != nil {
-		_ = store.Close()
-		return nil, err
-	}
+	// R3: the recovery pass no longer runs here — its closes are
+	// terminals and no terminal is born without its receipt, so the
+	// BOOT calls RecoverPreviousLife AFTER wiring the keystore/sealer.
 	if _, err := store.Prune(context.Background()); err != nil {
 		_ = store.Close()
 		return nil, err
@@ -499,46 +498,107 @@ func open(path string) (*Store, error) {
 	return &Store{db: db, capRows: defaultCapRows, pruneEvery: defaultPruneEvery}, nil
 }
 
-// recoverPreviousLife closes every non-terminal action left behind by a
-// previous process life: FAILED, marked, finished-stamped — and NEVER
-// re-executed (the blueprint's §16.4 honesty applied early: the kernel
-// does not invent idempotency it does not have yet).
-func (s *Store) recoverPreviousLife(ctx context.Context) error {
-	// The Etapa-5 exemptions (found by the cross-check family): a
-	// PARKED action (PENDING_APPROVAL) waits for a human BY DESIGN —
-	// the approval's expiry clock governs it, never this pass. An
-	// APPROVED action whose canonical params are still held awaits its
-	// deferred execution and survives too; APPROVED whose params were
-	// CLAIMED is a true orphan (crash between claim and close) and
-	// closes honestly like every other one.
-	// C5: an APPROVED action whose params were CLAIMED was mid-execution
-	// — the external effect may or may not have fired before the crash.
-	// Closing it FAILED would be a lie; it falls to OUTCOME_UNKNOWN with
-	// the uncertainty NAMED (idempotency/reconciliation are E6's stage).
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
-		  WHERE state = ? AND NOT EXISTS (
-		        SELECT 1 FROM approvals
-		         WHERE approvals.action_id = actions.action_id
-		           AND approvals.canonical_params != '')`,
-		string(action.StateOutcomeUnknown), recoveryMarkerOutcomeUnknown, now,
-		string(action.StateApproved),
-	)
-	if err != nil {
-		return fmt.Errorf("action/sqlite: recovery pass (claimed): %w", err)
+// RecoverPreviousLife closes every non-terminal action left behind by
+// a previous process life — and NEVER re-executes (the blueprint's
+// §16.4 honesty applied early: the kernel does not invent idempotency
+// it does not have yet). Exported by R3: the BOOT calls it AFTER the
+// keystore and sealer are wired, so every recovery close is a terminal
+// like any other — recorded WITH its era's signed receipt, row by row.
+//
+// The Etapa-5 exemptions (found by the cross-check family): a PARKED
+// action (PENDING_APPROVAL) waits for a human BY DESIGN — the expiry
+// clock governs it, never this pass. An APPROVED action whose params
+// are still held awaits its deferred execution and survives. C5: an
+// APPROVED action whose params were CLAIMED was mid-execution — the
+// external effect may or may not have fired; it closes OUTCOME_UNKNOWN
+// with the uncertainty NAMED, never a FAILED lie.
+func (s *Store) RecoverPreviousLife(ctx context.Context) error {
+	passes := []struct {
+		query  string
+		args   []any
+		to     action.State
+		marker string
+	}{
+		{
+			query: `SELECT action_id FROM actions
+			         WHERE state = ? AND NOT EXISTS (
+			               SELECT 1 FROM approvals
+			                WHERE approvals.action_id = actions.action_id
+			                  AND approvals.canonical_params != '')`,
+			args:   []any{string(action.StateApproved)},
+			to:     action.StateOutcomeUnknown,
+			marker: recoveryMarkerOutcomeUnknown,
+		},
+		{
+			query: `SELECT action_id FROM actions
+			         WHERE state NOT IN (?, ?, ?, ?, ?, ?, ?, ?)`,
+			args: []any{
+				string(action.StateDenied), string(action.StateShadowed),
+				string(action.StateSucceeded), string(action.StateFailed),
+				string(action.StateRejected), string(action.StatePendingApproval),
+				string(action.StateApproved), string(action.StateOutcomeUnknown),
+			},
+			to:     action.StateFailed,
+			marker: recoveryMarkerCrash,
+		},
 	}
-	_, err = s.db.ExecContext(ctx,
-		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
-		  WHERE state NOT IN (?, ?, ?, ?, ?, ?, ?, ?)`,
-		string(action.StateFailed), recoveryMarkerCrash, now,
-		string(action.StateDenied), string(action.StateShadowed),
-		string(action.StateSucceeded), string(action.StateFailed),
-		string(action.StateRejected), string(action.StatePendingApproval),
-		string(action.StateApproved), string(action.StateOutcomeUnknown),
-	)
+	now := time.Now().UTC()
+	for _, pass := range passes {
+		ids, err := s.collectIDs(ctx, pass.query, pass.args...)
+		if err != nil {
+			return fmt.Errorf("action/sqlite: recovery pass: %w", err)
+		}
+		for _, id := range ids {
+			if err := s.closeCrashOrphan(ctx, id, pass.to, pass.marker, now); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// collectIDs runs a SELECT of action ids.
+func (s *Store) collectIDs(ctx context.Context, query string, args ...any) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("action/sqlite: recovery pass: %w", err)
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// closeCrashOrphan closes ONE crash orphan in its own transaction:
+// the state close and its terminal receipt land together — no terminal
+// is born without its receipt, recovery's included (R3).
+func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action.State, marker string, at time.Time) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("action/sqlite: begin crash close %q: %w", actionID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
+		  WHERE action_id = ?`,
+		string(to), marker, at.Format(time.RFC3339Nano), actionID); err != nil {
+		return fmt.Errorf("action/sqlite: crash close %q: %w", actionID, err)
+	}
+	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "")
+	if err != nil {
+		return err
+	}
+	if err := s.appendReceiptTx(ctx, tx, r); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("action/sqlite: commit crash close %q: %w", actionID, err)
 	}
 	return nil
 }
