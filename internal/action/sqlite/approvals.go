@@ -54,6 +54,14 @@ func (s *Store) CreateApprovalRequest(ctx context.Context, env action.Envelope, 
 	if a.ActionID != env.ActionID || p.ActionID != env.ActionID {
 		return fmt.Errorf("action/sqlite: approval request %q: id mismatch across request parts", a.ApprovalID)
 	}
+	// R1: born-whole includes the CROSS LINKS — the approval, its
+	// preview and the gate decision must tell ONE story at birth.
+	if err := action.ValidatePreviewBinding(a, p); err != nil {
+		return fmt.Errorf("action/sqlite: approval request %q: %w", a.ApprovalID, err)
+	}
+	if d.Rule != a.Reason {
+		return fmt.Errorf("action/sqlite: approval request %q: preview_rule_mismatch: the gate decided by rule %q but the request claims %q", a.ApprovalID, d.Rule, a.Reason)
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin approval request: %w", err)
@@ -156,9 +164,10 @@ func (s *Store) decideApproval(ctx context.Context, approvalID, decision string,
 	if err != nil {
 		return "", err
 	}
-	// C2: the DECISION touch re-verifies the sealed preview inside the
-	// same transaction — no decision is recorded over a preview that no
-	// longer re-derives what the request pinned.
+	// C2+R1: the DECISION touch re-verifies the sealed preview and its
+	// WHOLE cross binding inside the same transaction — no decision is
+	// recorded over a preview that lies about the digest, the law, the
+	// args or the rule.
 	var rawPreview string
 	if err := tx.QueryRowContext(ctx,
 		`SELECT canonical_preview FROM approvals WHERE approval_id = ?`, approvalID).Scan(&rawPreview); err != nil {
@@ -166,9 +175,8 @@ func (s *Store) decideApproval(ctx context.Context, approvalID, decision string,
 	}
 	if p, err := action.ParseCanonicalPreview([]byte(rawPreview)); err != nil {
 		return "", fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
-	} else if got := p.Digest(); got != a.PreviewDigest {
-		return "", fmt.Errorf(
-			"action/sqlite: approval %q: preview_digest_mismatch — the stored preview re-derives %s but the request pinned %s; refusing the decision", approvalID, got, a.PreviewDigest)
+	} else if err := action.ValidatePreviewBinding(a, p); err != nil {
+		return "", fmt.Errorf("action/sqlite: approval %q: %w; refusing the decision", approvalID, err)
 	}
 	if rule := action.ApprovalConsumableAt(a, at); rule != "" {
 		if rule == action.RuleApprovalAlreadyDecided {

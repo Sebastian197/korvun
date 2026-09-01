@@ -235,6 +235,26 @@ func ValidateApprovalBinding(a Approval, actionDigest string, policyVersion int6
 	return "", ""
 }
 
+// ValidatePreviewBinding enforces the born-whole CROSS LINKS (R1,
+// third Codex pass): the approval and its preview must tell ONE story.
+// A preview consistent with itself but lying about the law, the args
+// or the rule refuses BY NAME — at birth and at every decision touch.
+func ValidatePreviewBinding(a Approval, p ActionPreview) error {
+	if got := p.Digest(); got != a.PreviewDigest {
+		return fmt.Errorf("preview_digest_mismatch: the stored preview re-derives %s but the request pinned %s", got, a.PreviewDigest)
+	}
+	if p.PolicyVersion != a.PolicyVersion || p.PolicyDigest != a.PolicyDigest {
+		return fmt.Errorf("preview_policy_mismatch: the preview claims law v%d %s but the approval pinned v%d %s", p.PolicyVersion, p.PolicyDigest, a.PolicyVersion, a.PolicyDigest)
+	}
+	if p.ArgsDigest != a.ActionDigest {
+		return fmt.Errorf("preview_args_mismatch: the preview shows args %s but the approval binds %s", p.ArgsDigest, a.ActionDigest)
+	}
+	if p.RequiredRule != a.Reason {
+		return fmt.Errorf("preview_rule_mismatch: the preview claims rule %q but the request was born from %q", p.RequiredRule, a.Reason)
+	}
+	return nil
+}
+
 // EffectiveStatusAt reports the status the CLOCK gives the approval at
 // the injected instant (C6): a PENDING request past its window is
 // EXPIRED for every consult, even though the row itself closes only at
