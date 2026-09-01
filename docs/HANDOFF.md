@@ -239,6 +239,19 @@ explicit decision.
 >    Chano's "seguimos".
 > 5. **Scorecard weekly re-scan** — the two levers (Signed-Releases,
 >    Pinned-Dependencies) should now read 10.
+> 6. **image-size HIGH alerts (2, DoS) — NO CURE PUBLISHED (verified
+>    2026-09-01)**: 2.0.2 is the latest npm release; the advisories mark
+>    <=2.0.2 with first_patched null. Build-time transitive of
+>    Docusaurus (own-repo images only; not in the binary or the served
+>    static site) — LOW real risk, stated honestly. Watch weekly with
+>    the Scorecard sweep; pin the fix the day it publishes; Chano may
+>    dismiss the alerts with reason meanwhile.
+> 7. **FILED from the 2026-08-31 external audit (maintainability, non
+>    blocking)**: app.go size/structure, Console.tsx size, and moving
+>    load-bearing narrative from batch reports into ADRs — each its own
+>    piece under a future mandate. (This entry was PROMISED by commit
+>    38ea69c whose silent-replace edit never landed — repaired
+>    2026-09-01, the miss declared in the session annex.)
 
 ## Previous state (as of 2026-08-30, night)
 
