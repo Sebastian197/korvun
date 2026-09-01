@@ -719,6 +719,11 @@ func (s *Store) noteWrite(ctx context.Context) error {
 		if _, err := s.Prune(ctx); err != nil {
 			return err
 		}
+		// R4: the prune cadence also pays the expiry sweep, so a parked
+		// request nobody touches cannot outlive its window forever.
+		if _, err := s.SweepExpiredApprovals(ctx, time.Now().UTC()); err != nil {
+			return err
+		}
 	}
 	return nil
 }

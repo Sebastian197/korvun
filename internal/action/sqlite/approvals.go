@@ -294,6 +294,56 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 	return s.appendReceiptTx(ctx, tx, r)
 }
 
+// SweepExpiredApprovals closes every PENDING approval whose window is
+// past at the injected instant (R4): EXPIRED approval, REJECTED action
+// WITH its signed receipt, params purged — the same close the consume
+// touch performs, now server-owned so an untouched expired request
+// cannot outlive its window forever. Runs at boot (after the sealer is
+// wired) and on the existing prune cadence. Returns how many swept.
+//
+// Retention note, DECLARED (R4): approval rows themselves are
+// retention-exempt BY DESIGN — they are the evidence the verifier's
+// 8th check (approval_mismatch) re-derives, so they are never pruned;
+// the approvals table has no FK cascade to actions, and an approval
+// orphaned by its action's prune stays coherent: the sealed receipt
+// survives beside it. Growth is bounded by the same cap as actions
+// (one approval per parked action, UNIQUE action_id).
+func (s *Store) SweepExpiredApprovals(ctx context.Context, at time.Time) (int, error) {
+	ids, err := s.collectIDs(ctx,
+		`SELECT approval_id FROM approvals
+		  WHERE status = ? AND expires_at IS NOT NULL AND expires_at != ''
+		    AND expires_at <= ?`,
+		string(action.ApprovalPending), at.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return 0, fmt.Errorf("action/sqlite: expiry sweep: %w", err)
+	}
+	swept := 0
+	for _, id := range ids {
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return swept, fmt.Errorf("action/sqlite: begin expiry sweep %q: %w", id, err)
+		}
+		a, err := s.approvalTx(ctx, tx, id)
+		if err != nil {
+			_ = tx.Rollback()
+			return swept, err
+		}
+		if err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", "clock", at, "", ""); err != nil {
+			_ = tx.Rollback()
+			return swept, err
+		}
+		if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
+			_ = tx.Rollback()
+			return swept, err
+		}
+		if err := tx.Commit(); err != nil {
+			return swept, fmt.Errorf("action/sqlite: commit expiry sweep %q: %w", id, err)
+		}
+		swept++
+	}
+	return swept, nil
+}
+
 // recordDecisionActTx records the operator's decision act — a real
 // action, terminal SUCCEEDED, receipted — inside the shared
 // transaction, and returns the receipt id (the proof of decision).
