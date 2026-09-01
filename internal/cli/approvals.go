@@ -31,7 +31,7 @@ import (
 // approvalsCmd dispatches the `approvals` noun's verbs.
 func (c *cli) approvalsCmd(args []string) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprint(c.stderr, "korvun approvals: expected a subcommand: list | show | approve | reject\nRun 'korvun help' for usage.\n")
+		_, _ = fmt.Fprint(c.stderr, "korvun approvals: expected a subcommand: list | show | approve | reject | execute\nRun 'korvun help' for usage.\n")
 		return 2
 	}
 	switch args[0] {
@@ -43,6 +43,8 @@ func (c *cli) approvalsCmd(args []string) int {
 		return c.approvalsDecide(args[1:], "approve")
 	case "reject":
 		return c.approvalsDecide(args[1:], "reject")
+	case "execute":
+		return c.approvalsExecute(args[1:])
 	default:
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals: unknown subcommand %q\nRun 'korvun help' for usage.\n", args[0])
 		return 2
@@ -211,22 +213,73 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 		return 0
 	}
 	// approve: the lote-3 deferred execution of the EXACT object.
+	return c.runApprovedExecution(ctx, store, cfg, approvalID, law, "approve", "approved — executed the exact approved object")
+}
+
+// approvalsExecute implements `korvun approvals execute` (C3): the
+// resume act for an APPROVED request whose deferred execution never
+// happened — a crash between the decision and the execution leaves
+// the approval consumed and the params held, and this verb picks it
+// up through the SAME one-executor path (the atomic claim guarantees
+// single effect; a consumed one reports honestly instead of re-running).
+func (c *cli) approvalsExecute(args []string) int {
+	fs := flag.NewFlagSet("approvals execute", flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
+	configPath := fs.String("config", "", "path to the korvun config (required)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *configPath == "" || fs.NArg() != 1 {
+		_, _ = fmt.Fprint(c.stderr, "korvun approvals execute: usage: korvun approvals execute --config <path> <apr_…>\n")
+		return 2
+	}
+	approvalID := fs.Arg(0)
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
+		return 1
+	}
+	store, err := openOperatorStoreSealed(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
+		return 1
+	}
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	_, p, err := store.GetApproval(ctx, approvalID)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
+		return 1
+	}
+	// C1 holds here too: the resume re-derives the CURRENT law.
+	law, err := app.PolicyPinFor(cfg, strings.TrimPrefix(p.PrincipalID, "principal_brain_"))
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
+		return 1
+	}
+	return c.runApprovedExecution(ctx, store, cfg, approvalID, law, "execute", "resumed — executed the exact approved object")
+}
+
+// runApprovedExecution is the one deferred-execution path shared by
+// approve and execute: rebuild from the CURRENT config, claim, belt,
+// run, report the REAL outcome.
+func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Store, cfg *config.Config, approvalID string, law actionsqlite.PolicyPin, verb, headline string) int {
 	a, p, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
-		_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: %v\n", err)
+		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
 	}
 	exec, err := app.BuildApprovalExecutor(cfg, p)
 	if err != nil {
-		_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: %v\n", err)
+		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
 	}
 	result, err := app.ExecuteApprovedAction(ctx, store, exec, approvalID, law)
 	if err != nil {
-		_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: execution: %v\n", err)
+		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: execution: %v\n", verb, err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(c.stdout, "approval %s approved — executed the exact approved object (digest %s)\noutcome: SUCCEEDED\nresult: %s\n",
-		approvalID, a.ActionDigest, result)
+	_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: SUCCEEDED\nresult: %s\n",
+		approvalID, headline, a.ActionDigest, result)
 	return 0
 }
