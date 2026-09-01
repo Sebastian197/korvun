@@ -52,6 +52,39 @@ function walk(dir) {
   }
 }
 
+// Phase 2 (2026-09-01, after the v0.14.1 lag): the fact must MATCH the
+// published reality. releaseFacts sat at v0.14.0 while the latest tag
+// was v0.14.1 — a stale token the literal sweep cannot see. In CI (and
+// any online run) the guard compares releaseFacts.tag against the
+// repository's published latest release and BREAKS on divergence;
+// offline it SKIPS OUT LOUD, never silently.
+async function checkAgainstLatest() {
+  const factsSrc = readFileSync(factsFile, 'utf8');
+  const tagMatch = factsSrc.match(/tag:\s*"(v\d+\.\d+\.\d+)"/);
+  if (!tagMatch) {
+    console.error('check-release-facts: FAIL — cannot read releaseFacts.tag');
+    process.exit(1);
+  }
+  const factTag = tagMatch[1];
+  let latest;
+  try {
+    const res = await fetch(
+      'https://api.github.com/repos/Sebastian197/korvun/releases/latest',
+      { headers: { accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(10000) },
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    latest = (await res.json()).tag_name;
+  } catch (err) {
+    console.log(`check-release-facts: latest-release comparison SKIPPED (offline/unreachable: ${err.message}) — the literal sweep above still ran`);
+    return;
+  }
+  if (latest !== factTag) {
+    console.error(`check-release-facts: FAIL — releaseFacts.tag is ${factTag} but the published latest release is ${latest}: bump src/releaseFacts.ts`);
+    process.exit(1);
+  }
+  console.log(`check-release-facts: latest-release comparison OK (${factTag})`);
+}
+
 walk(srcDir);
 
 if (offenders.length > 0) {
@@ -59,4 +92,5 @@ if (offenders.length > 0) {
   for (const line of offenders) console.error('  ' + line);
   process.exit(1);
 }
-console.log('check-release-facts: OK — every release version flows from releaseFacts.ts');
+console.log('check-release-facts: OK — every release version flows from releaseFacts.ts')
+await checkAgainstLatest();

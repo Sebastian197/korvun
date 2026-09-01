@@ -67,6 +67,14 @@
 >    externos de otra familia antes del tag cuando el director lo
 >    disponga — puerta institucionalizada, no sugerencia.
 
+## LA PUERTA CODEX (sellada 2026-08-31) — PERMANENTE
+
+> Origen: la auditoría externa del 2026-08-31 que parió la v0.14.1.
+> Auditoría de FAMILIA EXTERNA (Codex u otro modelo rival) antes de
+> cada release que sostenga promesas de seguridad, a disposición del
+> director. Primera aplicación prevista: pre-v0.15.0 (el estreno de la
+> Trust Layer).
+
 ## Ciclo de revisión cruzada con Codex (vigente desde 2026-08-15)
 
 En fases estructurales, tras quality gate verde y ANTES del push:
@@ -220,8 +228,12 @@ explicit decision.
 >    source table). Copilot review + Chano's eyes decide; NOTHING
 >    publishes without his yes. The Show HN / Product Hunt / reddit
 >    cartridge stays untouched in the drawer.
-> 2. **DNS move Cloudflare → grey cloud** (Chano's clicks, guided,
->    Monday).
+> 2. **DNS move Cloudflare → GitHub Pages — COMPLETED 2026-08-31/09-01**:
+>    single canonical edition at the root, cert emitted, verified from
+>    outside twice (cutover + post-retirement by the copilot: canonical
+>    root, coherent links); Chano's retirement clicks done (git
+>    integration disconnected + custom domains removed from the CF Pages
+>    project, frozen not deleted).
 > 3. **korvun.ai on Dynadot** this week.
 > 4. **Etapa 5 (approvals) = the Trust Layer PREMIERE** — starts on
 >    Chano's "seguimos".
