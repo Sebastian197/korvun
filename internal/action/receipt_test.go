@@ -169,6 +169,11 @@ func TestParseCanonicalReceipt_failsClosedOnGarbage(t *testing.T) {
 func FuzzReceiptCanonical(f *testing.F) {
 	seed := testReceipt()
 	f.Add(CanonicalReceipt(seed))
+	// The v2 era seed (Etapa 5, NC-3α): the fuzzer walks both wires.
+	seedV2 := testReceipt()
+	seedV2.SchemaVersion = 2
+	seedV2.ApprovalDigest = "sha256:approval"
+	f.Add(CanonicalReceipt(seedV2))
 	f.Add([]byte(`{}`))
 	f.Add([]byte(`{"receipt_id":"rcpt_x","chain_seq":-1}`))
 	f.Add([]byte("\x00\xff garbage"))

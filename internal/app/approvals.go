@@ -240,6 +240,9 @@ func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*e
 		if err != nil {
 			return nil, fmt.Errorf("app: approval executor: %w", err)
 		}
+		if _, pure := tool.Builtin(toolName); !pure && bc.Agent == nil {
+			return nil, fmt.Errorf("app: approval executor: brain %q has no agent block — caged tool %q cannot be rebuilt", brainName, toolName)
+		}
 		b := &builder{logger: slog.New(slog.DiscardHandler)}
 		t, err := b.agentTool(bc, toolName, attrs, sens)
 		if err != nil {

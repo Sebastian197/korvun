@@ -54,6 +54,13 @@ func buildV5File(t *testing.T) string {
 	return path
 }
 
+// sealerKeys registers each test sealer's private half so mixed-era
+// tests can hand-sign historical receipts with the SAME key.
+var (
+	sealerKeysMu sync.Mutex
+	sealerKeys   = map[string]ed25519.PrivateKey{}
+)
+
 // testSealer wires a REAL Ed25519 signer as the store's sealer seam.
 func testSealer(t *testing.T) (func(action.Receipt) action.Receipt, ed25519.PublicKey) {
 	t.Helper()
@@ -61,6 +68,9 @@ func testSealer(t *testing.T) (func(action.Receipt) action.Receipt, ed25519.Publ
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
+	sealerKeysMu.Lock()
+	sealerKeys[string(pub)] = priv
+	sealerKeysMu.Unlock()
 	return func(r action.Receipt) action.Receipt {
 		return action.SignReceipt(priv, r)
 	}, pub

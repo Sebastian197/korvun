@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"strings"
 	"testing"
@@ -197,5 +198,79 @@ func TestApprovalsCmd_usage(t *testing.T) {
 	}
 	if code, _, stderr := runIntentCLI(t, "approvals", "show", "--config", "x.json"); code != 2 || !strings.Contains(stderr, "usage") {
 		t.Fatalf("show without id: %d %q", code, stderr)
+	}
+}
+
+// The v2 receipt meets the judge — Etapa 5 lote 4 pieza 2 (FR-RCP):
+// a receipt that references its approval must COHERE with the approval
+// row, or fail by name; v1 historical receipts verify forever; mixed
+// chains walk whole.
+func TestReceiptVerify_approvalCoherence(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, approvalID := parkedRequest(t)
+	if code, _, stderr := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, approvalID); code != 0 {
+		t.Fatalf("approve: %q", stderr)
+	}
+	// The executed outcome receipt seals the approval — verify green.
+	store, err := actionsqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	receipts, _ := store.ReceiptsByAction(context.Background(), "act_inbox1")
+	_ = store.Close()
+	if len(receipts) != 1 || receipts[0].ApprovalDigest == "" {
+		t.Fatalf("the outcome receipt must seal its approval: %+v", receipts)
+	}
+	receiptID := receipts[0].ReceiptID
+	if code, stdout, _ := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID); code != 0 || !strings.Contains(stdout, "OK") {
+		t.Fatalf("the sealed-approval receipt verifies: %d %q", code, stdout)
+	}
+	// The saboteur rewrites the approval row's decision out of band:
+	// the receipt's sealed reference no longer matches — FAIL by name.
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatalf("raw: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE approvals SET decision_principal_id = 'principal_forged' WHERE approval_id = ?`, approvalID); err != nil {
+		t.Fatalf("tamper: %v", err)
+	}
+	_ = db.Close()
+	code, stdout, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
+	if code != 1 || !strings.Contains(stdout+stderr, "approval_mismatch") {
+		t.Fatalf("a rewritten approval row must FAIL by name: %d %q %q", code, stdout, stderr)
+	}
+	// And ledger check names it too.
+	if code, stdout, _ := runIntentCLI(t, "ledger", "check", "--config", cfgPath); code != 1 || !strings.Contains(stdout, "approval_mismatch") {
+		t.Fatalf("the chain walk names the approval mismatch: %d %q", code, stdout)
+	}
+}
+
+func TestApprovals_moreErrorPaths(t *testing.T) {
+	t.Parallel()
+	// Ghost ids fail loud on every verb.
+	cfgPath, _, _ := parkedRequest(t)
+	if code, _, stderr := runIntentCLI(t, "approvals", "show", "--config", cfgPath, "apr_ghost"); code != 1 || !strings.Contains(stderr, "apr_ghost") {
+		t.Fatalf("ghost show: %d %q", code, stderr)
+	}
+	if code, _, _ := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, "apr_ghost"); code != 1 {
+		t.Fatal("ghost approve must fail")
+	}
+	if code, _, _ := runIntentCLI(t, "approvals", "reject", "--config", cfgPath, "apr_ghost"); code != 1 {
+		t.Fatal("ghost reject must fail")
+	}
+	// Usage paths.
+	if code, _, _ := runIntentCLI(t, "approvals", "list"); code != 2 {
+		t.Fatal("list without config: usage")
+	}
+	if code, _, _ := runIntentCLI(t, "approvals", "approve", "--config", cfgPath); code != 2 {
+		t.Fatal("approve without id: usage")
+	}
+	// Double-decide at the CLI surface: the second verb reports the rule.
+	cfg2, _, apr2 := parkedRequest(t)
+	if code, _, _ := runIntentCLI(t, "approvals", "reject", "--config", cfg2, apr2); code != 0 {
+		t.Fatal("first reject")
+	}
+	if code, _, stderr := runIntentCLI(t, "approvals", "reject", "--config", cfg2, apr2); code != 1 || !strings.Contains(stderr, "approval_already_decided") {
+		t.Fatalf("second decide reports the rule: %d %q", code, stderr)
 	}
 }

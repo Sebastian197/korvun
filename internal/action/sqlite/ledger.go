@@ -70,13 +70,14 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 		`INSERT INTO receipts (receipt_id, action_id, intent_digest, principal_id,
 		    authority_digest, decision_digest, action_digest, effect_class, attempt,
 		    outcome, result_digest, started_at, finished_at, partition, chain_seq,
-		    previous_receipt_hash, receipt_hash, signing_key_id, signature)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		    previous_receipt_hash, receipt_hash, signing_key_id, signature,
+		    schema_version, approval_digest)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.ReceiptID, r.ActionID, r.IntentDigest, r.PrincipalID,
 		r.AuthorityDigest, r.DecisionDigest, r.ActionDigest, string(r.EffectClass), r.Attempt,
 		r.Outcome, r.ResultDigest, timeOrNull(r.StartedAt), timeOrNull(r.FinishedAt),
 		r.Partition, r.ChainSeq, r.PreviousReceiptHash, r.ReceiptHash,
-		r.SigningKeyID, r.Signature,
+		r.SigningKeyID, r.Signature, r.SchemaVersion, r.ApprovalDigest,
 	); err != nil {
 		return fmt.Errorf("action/sqlite: append receipt for %q: %w", r.ActionID, err)
 	}
@@ -91,6 +92,7 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 // digest honestly absent (declared in the spec).
 func (s *Store) receiptForRecord(ctx context.Context, tx *sql.Tx, env action.Envelope, d Decision, state action.State) action.Receipt {
 	return action.Receipt{
+		SchemaVersion:  2,
 		ReceiptID:      action.NewReceiptID(),
 		ActionID:       env.ActionID,
 		IntentDigest:   s.intentDigestTx(ctx, tx, env.IntentID),
@@ -103,6 +105,26 @@ func (s *Store) receiptForRecord(ctx context.Context, tx *sql.Tx, env action.Env
 		StartedAt:      env.RequestedAt.UTC(),
 		FinishedAt:     env.RequestedAt.UTC(),
 	}
+}
+
+// approvalDigestTx resolves the CONSUMED approval's decision digest for
+// one action ("" when no approved request exists — the honest empty of
+// every unapproved outcome, FR-RCPT-2).
+func (s *Store) approvalDigestTx(ctx context.Context, tx *sql.Tx, actionID string) string {
+	row := tx.QueryRowContext(ctx,
+		`SELECT approval_id, action_digest, decision_principal_id, decision, decision_at
+		   FROM approvals WHERE action_id = ? AND status = ?`,
+		actionID, string(action.ApprovalApproved))
+	var a action.Approval
+	var decisionAt sql.NullString
+	if err := row.Scan(&a.ApprovalID, &a.ActionDigest, &a.DecisionPrincipalID,
+		&a.Decision, &decisionAt); err != nil {
+		return ""
+	}
+	if t, err := parseNullTime(decisionAt); err == nil {
+		a.DecisionAt = t
+	}
+	return a.Digest()
 }
 
 // intentDigestTx resolves the stored intent's term digest ("" if absent).
@@ -202,10 +224,12 @@ func (s *Store) receiptForFinish(ctx context.Context, tx *sql.Tx, actionID strin
 		return action.Receipt{}, fmt.Errorf("action/sqlite: parse requested_at of %q: %w", actionID, err)
 	}
 	return action.Receipt{
-		ReceiptID:    action.NewReceiptID(),
-		ActionID:     actionID,
-		IntentDigest: s.intentDigestTx(ctx, tx, intentID.String),
-		PrincipalID:  principalID.String,
+		SchemaVersion:  2,
+		ApprovalDigest: s.approvalDigestTx(ctx, tx, actionID),
+		ReceiptID:      action.NewReceiptID(),
+		ActionID:       actionID,
+		IntentDigest:   s.intentDigestTx(ctx, tx, intentID.String),
+		PrincipalID:    principalID.String,
 		DecisionDigest: decisionDigest(Decision{
 			Outcome: outcome, Rule: rule,
 			PolicyVersion: policyVer, PolicyDigest: policyDig,
@@ -226,7 +250,8 @@ func (s *Store) ReceiptsByAction(ctx context.Context, actionID string) ([]action
 		`SELECT receipt_id, action_id, intent_digest, principal_id, authority_digest,
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
-		        previous_receipt_hash, receipt_hash, signing_key_id, signature
+		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
+		        schema_version, approval_digest
 		   FROM receipts WHERE action_id = ? ORDER BY chain_seq ASC`, actionID)
 }
 
@@ -236,7 +261,8 @@ func (s *Store) ListReceipts(ctx context.Context, partition string) ([]action.Re
 		`SELECT receipt_id, action_id, intent_digest, principal_id, authority_digest,
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
-		        previous_receipt_hash, receipt_hash, signing_key_id, signature
+		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
+		        schema_version, approval_digest
 		   FROM receipts WHERE partition = ? ORDER BY chain_seq ASC`, partition)
 }
 
@@ -259,7 +285,7 @@ func (s *Store) queryReceipts(ctx context.Context, query string, args ...any) ([
 			&r.AuthorityDigest, &r.DecisionDigest, &r.ActionDigest, &class, &r.Attempt,
 			&r.Outcome, &r.ResultDigest, &startedAt, &finishedAt, &r.Partition,
 			&r.ChainSeq, &r.PreviousReceiptHash, &r.ReceiptHash,
-			&r.SigningKeyID, &r.Signature); err != nil {
+			&r.SigningKeyID, &r.Signature, &r.SchemaVersion, &r.ApprovalDigest); err != nil {
 			return nil, fmt.Errorf("action/sqlite: scan receipt: %w", err)
 		}
 		r.EffectClass = action.EffectClass(class)
@@ -284,7 +310,8 @@ func (s *Store) GetReceipt(ctx context.Context, receiptID string) (action.Receip
 		`SELECT receipt_id, action_id, intent_digest, principal_id, authority_digest,
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
-		        previous_receipt_hash, receipt_hash, signing_key_id, signature
+		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
+		        schema_version, approval_digest
 		   FROM receipts WHERE receipt_id = ?`, receiptID)
 	if err != nil {
 		return action.Receipt{}, err
@@ -302,7 +329,8 @@ func (s *Store) ReceiptAt(ctx context.Context, partition string, seq int64) (act
 		`SELECT receipt_id, action_id, intent_digest, principal_id, authority_digest,
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
-		        previous_receipt_hash, receipt_hash, signing_key_id, signature
+		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
+		        schema_version, approval_digest
 		   FROM receipts WHERE partition = ? AND chain_seq = ?`, partition, seq)
 	if err != nil {
 		return action.Receipt{}, err

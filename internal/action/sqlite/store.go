@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 7
+const schemaVersionCurrent = 8
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -273,6 +273,14 @@ CREATE TABLE approvals (
     decision_receipt_id   TEXT    NOT NULL DEFAULT ''
 ) WITHOUT ROWID;
 CREATE INDEX approvals_by_status ON approvals(status);`,
+
+	// v7 -> v8 (Trust Layer Etapa 5, sealed NC-3α): the receipts gain
+	// their era column and the approval reference INSIDE the sealed
+	// form. Historical rows default to schema_version 1 — the frozen v1
+	// era whose bytes verify forever; the live code writes 2.
+	7: `
+ALTER TABLE receipts ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE receipts ADD COLUMN approval_digest TEXT NOT NULL DEFAULT '';`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per

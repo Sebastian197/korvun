@@ -27,6 +27,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/action/executor"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
+	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/tool"
 
 	_ "modernc.org/sqlite"
@@ -268,5 +269,44 @@ func BenchmarkRequestApproval(b *testing.B) {
 		if _, err := ar.RequestApproval(ctx, env, "require_approval", `{"url":"https://a.example"}`); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestApprovalExecutor_errorBranches(t *testing.T) {
+	t.Parallel()
+	cfg := kernelWiringConfig(filepath.Join(t.TempDir(), "korvun.db"))
+	// A non-brain principal refuses by name.
+	if _, err := BuildApprovalExecutor(cfg, action.ActionPreview{
+		PrincipalID: "principal_operator", Operation: "tool/calc"}); err == nil {
+		t.Fatal("a non-brain principal must refuse")
+	}
+	// An unknown brain refuses by name.
+	if _, err := BuildApprovalExecutor(cfg, action.ActionPreview{
+		PrincipalID: "principal_brain_ghost", Operation: "tool/calc"}); err == nil {
+		t.Fatal("an unknown brain must refuse")
+	}
+	// A caged tool without its cage block fails loud (the boot's own
+	// constructor semantics ride here).
+	if _, err := BuildApprovalExecutor(cfg, action.ActionPreview{
+		PrincipalID: "principal_brain_a", Operation: "tool/webhook_call"}); err == nil {
+		t.Fatal("a caged tool without its cage must fail loud")
+	}
+	// The pure builtin builds.
+	if _, err := BuildApprovalExecutor(cfg, action.ActionPreview{
+		PrincipalID: "principal_brain_a", Operation: "tool/calc"}); err != nil {
+		t.Fatalf("the pure builtin must build: %v", err)
+	}
+	// TTL parsing: malformed dies, valid parses, absent defaults.
+	if _, err := approvalTTL(&config.ApprovalsConfig{TTL: "garbage"}); err == nil {
+		t.Fatal("malformed ttl must die")
+	}
+	if _, err := approvalTTL(&config.ApprovalsConfig{TTL: "-1h"}); err == nil {
+		t.Fatal("non-positive ttl must die")
+	}
+	if d, err := approvalTTL(&config.ApprovalsConfig{TTL: "30m"}); err != nil || d != 30*time.Minute {
+		t.Fatalf("valid ttl: %v %v", d, err)
+	}
+	if d, _ := approvalTTL(nil); d != defaultApprovalTTL {
+		t.Fatalf("absent config defaults: %v", d)
 	}
 }

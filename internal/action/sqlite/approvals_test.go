@@ -17,6 +17,7 @@ package sqlite
 
 import (
 	"context"
+	"crypto/ed25519"
 	"database/sql"
 	"errors"
 	"path/filepath"
@@ -745,5 +746,285 @@ func TestRecovery_rejectedIsTerminalAndSurvives(t *testing.T) {
 	rec, _ := reopened.Get(ctx, "act_rejsur")
 	if rec.State != action.StateRejected || rec.RecoveryMarker != "" {
 		t.Fatalf("REJECTED is terminal and survives: %v %q", rec.State, rec.RecoveryMarker)
+	}
+}
+
+// rawV7Delta is the v6→v7 DDL restated literally (oracle discipline).
+const rawV7Delta = `
+CREATE TABLE approvals (
+    approval_id           TEXT    NOT NULL PRIMARY KEY,
+    schema_version        INTEGER NOT NULL,
+    action_id             TEXT    NOT NULL UNIQUE,
+    action_digest         TEXT    NOT NULL,
+    preview_digest        TEXT    NOT NULL,
+    canonical_preview     TEXT    NOT NULL,
+    canonical_params      TEXT    NOT NULL,
+    requested_from        TEXT    NOT NULL,
+    reason                TEXT    NOT NULL,
+    risk_summary          TEXT    NOT NULL,
+    policy_version        INTEGER NOT NULL,
+    policy_digest         TEXT    NOT NULL,
+    requested_at          TEXT    NOT NULL,
+    expires_at            TEXT,
+    status                TEXT    NOT NULL,
+    decision_principal_id TEXT    NOT NULL DEFAULT '',
+    decision              TEXT    NOT NULL DEFAULT '',
+    decision_at           TEXT,
+    comment               TEXT    NOT NULL DEFAULT '',
+    decision_receipt_id   TEXT    NOT NULL DEFAULT ''
+) WITHOUT ROWID;
+CREATE INDEX approvals_by_status ON approvals(status);
+UPDATE action_schema SET version = 7;`
+
+func TestMigrationV8_receiptsGainTheApprovalSeal(t *testing.T) {
+	t.Parallel()
+	// Fresh file lands on current with the new receipt columns.
+	path := filepath.Join(t.TempDir(), "korvun.db")
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if v, _ := store.SchemaVersion(context.Background()); v != schemaVersionCurrent {
+		t.Fatalf("fresh store lands on current, got %d", v)
+	}
+	_ = store.Close()
+	if n := inspect(t, path,
+		`SELECT COUNT(*) FROM pragma_table_info('receipts') WHERE name IN ('schema_version','approval_digest')`); n != 2 {
+		t.Fatalf("the v8 receipt columns must exist, got %d", n)
+	}
+	// AS-8 crash mold against a HAND-BUILT v7.
+	crashPath := buildV6File(t)
+	db, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(crashPath)))
+	if err != nil {
+		t.Fatalf("open raw: %v", err)
+	}
+	if _, err := db.Exec(rawV7Delta); err != nil {
+		t.Fatalf("build v7 delta: %v", err)
+	}
+	if _, err := db.Exec(
+		`CREATE TRIGGER crash_mid_v8 BEFORE UPDATE ON action_schema
+		 BEGIN SELECT RAISE(ABORT, 'crash mid v8'); END;`); err != nil {
+		t.Fatalf("install crash trigger: %v", err)
+	}
+	_ = db.Close()
+	if _, err := Open(crashPath); err == nil {
+		t.Fatal("an aborted v8 migration must be boot-fatal")
+	}
+	if v := inspect(t, crashPath, `SELECT version FROM action_schema`); v != 7 {
+		t.Fatalf("aborted migration must leave version 7, got %d", v)
+	}
+	db2, _ := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(crashPath)))
+	if _, err := db2.Exec(`DROP TRIGGER crash_mid_v8`); err != nil {
+		t.Fatalf("drop trigger: %v", err)
+	}
+	_ = db2.Close()
+	recovered, err := Open(crashPath)
+	if err != nil {
+		t.Fatalf("next boot completes: %v", err)
+	}
+	defer func() { _ = recovered.Close() }()
+	if v, _ := recovered.SchemaVersion(context.Background()); v != schemaVersionCurrent {
+		t.Fatalf("completed migration lands on current, got %v", v)
+	}
+}
+
+func TestReceiptsAreBornV2_withTheApprovalSealWhenApproved(t *testing.T) {
+	t.Parallel()
+	store, pub := sealedStore(t)
+	ctx := context.Background()
+	// An unapproved terminal: v2 with the honest empty approval digest.
+	if err := store.RecordAttempt(ctx, testEnvelope("act_v2a"),
+		Decision{Outcome: "deny", Rule: "not_granted"}, action.StateDenied); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	receipts, _ := store.ReceiptsByAction(ctx, "act_v2a")
+	if len(receipts) != 1 || receipts[0].SchemaVersion != 2 || receipts[0].ApprovalDigest != "" {
+		t.Fatalf("new receipts are v2 with honest empties: %+v", receipts)
+	}
+	if err := action.VerifyReceiptSignature(pub, receipts[0]); err != nil {
+		t.Fatalf("v2 verifies: %v", err)
+	}
+	// An APPROVED-then-executed action: the receipt seals the approval.
+	a, _ := pendingRequest(t, store, "act_v2b")
+	env, ident := operatorDecisionEnv("approve", a.ApprovalID)
+	if _, err := store.DecideApproval(ctx, a.ApprovalID, "approved",
+		a.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if err := store.FinishWithResult(ctx, "act_v2b", action.StateSucceeded,
+		a.RequestedAt.Add(2*time.Minute), "sha256:result"); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	outcome, _ := store.ReceiptsByAction(ctx, "act_v2b")
+	if len(outcome) != 1 {
+		t.Fatalf("one outcome receipt: %d", len(outcome))
+	}
+	consumed, _, _ := store.GetApproval(ctx, a.ApprovalID)
+	if outcome[0].ApprovalDigest == "" || outcome[0].ApprovalDigest != consumed.Digest() {
+		t.Fatalf("the receipt must seal the CONSUMED approval's digest: %q vs %q",
+			outcome[0].ApprovalDigest, consumed.Digest())
+	}
+	if err := action.VerifyReceiptSignature(pub, outcome[0]); err != nil {
+		t.Fatalf("the sealed approval verifies: %v", err)
+	}
+}
+
+func TestMixedEraChain_verifiesWhole(t *testing.T) {
+	t.Parallel()
+	store, pub := sealedStore(t)
+	ctx := context.Background()
+	// Insert a HAND-BUILT v1 receipt at the chain's genesis (the frozen
+	// era: canonicalized, hashed and signed with the v1 form), then let
+	// the live code append v2 receipts after it.
+	_, priv := pubPrivOf(t, pub)
+	v1 := action.Receipt{
+		ReceiptID: "rcpt_v1era0000000000000000000000001", ActionID: "act_old",
+		IntentDigest: "", PrincipalID: "", DecisionDigest: action.HashCanonical(`{}`),
+		ActionDigest: "sha256:old", EffectClass: action.EffectPure, Attempt: 1,
+		Outcome:    string(action.StateDenied),
+		StartedAt:  time.Date(2026, 8, 30, 9, 0, 0, 0, time.UTC),
+		FinishedAt: time.Date(2026, 8, 30, 9, 0, 0, 0, time.UTC),
+		Partition:  "main", ChainSeq: 0, PreviousReceiptHash: action.GenesisPreviousHash,
+	}
+	v1.ReceiptHash = action.ComputeReceiptHash(v1)
+	v1 = action.SignReceipt(priv, v1)
+	insertReceiptRow(t, store, v1)
+	// The live era appends after it.
+	if err := store.RecordAttempt(ctx, testEnvelope("act_new"),
+		Decision{Outcome: "deny", Rule: "not_granted"}, action.StateDenied); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	chain, err := store.ListReceipts(ctx, "main")
+	if err != nil || len(chain) != 2 {
+		t.Fatalf("mixed chain: %v %d", err, len(chain))
+	}
+	if chain[0].SchemaVersion >= 2 || chain[1].SchemaVersion != 2 {
+		t.Fatalf("eras: %d then %d", chain[0].SchemaVersion, chain[1].SchemaVersion)
+	}
+	// BOTH eras verify — each with the canonical form of its era.
+	for i, r := range chain {
+		if r.ReceiptHash != action.ComputeReceiptHash(r) {
+			t.Fatalf("receipt %d hash must recompute under its own era", i)
+		}
+		if err := action.VerifyReceiptSignature(pub, r); err != nil {
+			t.Fatalf("receipt %d signature: %v", i, err)
+		}
+	}
+	// And the chain links across the era boundary.
+	if chain[1].PreviousReceiptHash != chain[0].ReceiptHash {
+		t.Fatal("the chain must link across mixed eras")
+	}
+}
+
+// pubPrivOf regenerates nothing: the sealedStore helper owns the pair,
+// so tests that need the private half re-derive the SAME sealer pair
+// via a shared registry. Simplest honest shape: sealedStore is changed
+// to also expose the private key through this map.
+func pubPrivOf(t *testing.T, pub ed25519.PublicKey) (ed25519.PublicKey, ed25519.PrivateKey) {
+	t.Helper()
+	sealerKeysMu.Lock()
+	defer sealerKeysMu.Unlock()
+	priv, ok := sealerKeys[string(pub)]
+	if !ok {
+		t.Fatal("no private half registered for this sealer public key")
+	}
+	return pub, priv
+}
+
+// insertReceiptRow writes one pre-sealed receipt row directly (the
+// hand-built historical era for mixed-chain tests).
+func insertReceiptRow(t *testing.T, store *Store, r action.Receipt) {
+	t.Helper()
+	if _, err := store.db.Exec(
+		`INSERT INTO receipts (receipt_id, action_id, intent_digest, principal_id,
+		    authority_digest, decision_digest, action_digest, effect_class, attempt,
+		    outcome, result_digest, started_at, finished_at, partition, chain_seq,
+		    previous_receipt_hash, receipt_hash, signing_key_id, signature,
+		    schema_version, approval_digest)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.ReceiptID, r.ActionID, r.IntentDigest, r.PrincipalID,
+		r.AuthorityDigest, r.DecisionDigest, r.ActionDigest, string(r.EffectClass), r.Attempt,
+		r.Outcome, r.ResultDigest,
+		r.StartedAt.UTC().Format(time.RFC3339Nano), r.FinishedAt.UTC().Format(time.RFC3339Nano),
+		r.Partition, r.ChainSeq, r.PreviousReceiptHash, r.ReceiptHash,
+		r.SigningKeyID, r.Signature, r.SchemaVersion, r.ApprovalDigest,
+	); err != nil {
+		t.Fatalf("insert historical receipt: %v", err)
+	}
+}
+
+func TestApprovalByAction_branches(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	a, _ := pendingRequest(t, store, "act_byact")
+	got, _, err := store.GetApprovalByAction(ctx, "act_byact")
+	if err != nil || got.ApprovalID != a.ApprovalID {
+		t.Fatalf("by-action lookup: %v %+v", err, got)
+	}
+	if _, _, err := store.GetApprovalByAction(ctx, "act_ghost"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("ghost action: %v", err)
+	}
+	closed, _ := openTemp(t)
+	_ = closed.Close()
+	if _, _, err := closed.GetApprovalByAction(ctx, "act_byact"); err == nil {
+		t.Fatal("closed store must fail loud")
+	}
+	// approvalDigestTx honest empty: an unapproved action's finish.
+	if err := store.RecordAttempt(ctx, testEnvelope("act_plain"),
+		Decision{Outcome: "allow", Rule: "granted"}, action.StateAuthorized); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if err := store.Finish(ctx, "act_plain", action.StateSucceeded, time.Now().UTC()); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	receipts, _ := store.ReceiptsByAction(ctx, "act_plain")
+	if len(receipts) != 1 || receipts[0].ApprovalDigest != "" {
+		t.Fatalf("unapproved outcomes carry the honest empty: %+v", receipts)
+	}
+}
+
+func TestApprovalDigestTx_corruptDecisionFallsToHonestEmpty(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	a, _ := pendingRequest(t, store, "act_corrd")
+	env, ident := operatorDecisionEnv("approve", a.ApprovalID)
+	if _, err := store.DecideApproval(ctx, a.ApprovalID, "approved",
+		a.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	corruptCell(t, store, "approvals", "decision_at", "approval_id", a.ApprovalID, "garbage")
+	// The finish still lands; the unresolvable approval digest falls to
+	// the honest empty rather than blocking the terminal close.
+	if err := store.FinishWithResult(ctx, "act_corrd", action.StateSucceeded,
+		a.RequestedAt.Add(2*time.Minute), "sha256:r"); err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	receipts, _ := store.ReceiptsByAction(ctx, "act_corrd")
+	if len(receipts) != 1 {
+		t.Fatalf("one receipt: %d", len(receipts))
+	}
+}
+
+func TestClaimApprovalParams_branches(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	a, _ := pendingRequest(t, store, "act_claim2")
+	params, err := store.ClaimApprovalParams(ctx, a.ApprovalID)
+	if err != nil || len(params) == 0 {
+		t.Fatalf("first claim wins: %v %d", err, len(params))
+	}
+	if _, err := store.ClaimApprovalParams(ctx, a.ApprovalID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second claim loses by name: %v", err)
+	}
+	if _, err := store.ClaimApprovalParams(ctx, "apr_ghost"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("ghost claim: %v", err)
+	}
+	closed, _ := openTemp(t)
+	_ = closed.Close()
+	if _, err := closed.ClaimApprovalParams(ctx, a.ApprovalID); err == nil {
+		t.Fatal("closed store must fail loud")
 	}
 }

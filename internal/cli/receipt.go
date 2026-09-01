@@ -170,6 +170,18 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 				r.PreviousReceiptHash, pred.ReceiptID, pred.ReceiptHash)
 		}
 	}
+	// 7b. Approval coherence (Etapa 5, FR-RCP): a v2 receipt that
+	// references its approval must match the approval row's CONSUMED
+	// decision digest — a rewritten approval row (decider, decision,
+	// timing) breaks the sealed reference BY NAME. Approvals are never
+	// pruned, so an absent row here is itself a failure.
+	if r.SchemaVersion >= 2 && r.ApprovalDigest != "" {
+		if consumed, _, err := store.GetApprovalByAction(ctx, r.ActionID); err != nil {
+			fail("approval_mismatch", "receipt seals approval digest %s but no approval row exists for %s", r.ApprovalDigest, r.ActionID)
+		} else if got := consumed.Digest(); got != r.ApprovalDigest {
+			fail("approval_mismatch", "receipt seals %s but the approval row re-derives %s", r.ApprovalDigest, got)
+		}
+	}
 	// 7. Coherence with the action row — WHEN it still exists. The E1
 	// retention prune legitimately removes action rows while receipts
 	// stay (the sealed exemption): absence degrades to a named note.

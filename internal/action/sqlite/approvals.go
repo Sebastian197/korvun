@@ -445,3 +445,18 @@ func (s *Store) ClaimApprovalParams(ctx context.Context, approvalID string) ([]b
 	}
 	return []byte(params), nil
 }
+
+// GetApprovalByAction returns the approval bound to one action (the
+// verifier's approval-coherence lookup).
+func (s *Store) GetApprovalByAction(ctx context.Context, actionID string) (action.Approval, action.ActionPreview, error) {
+	var approvalID string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT approval_id FROM approvals WHERE action_id = ?`, actionID).Scan(&approvalID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval for action %q: %w", actionID, ErrNotFound)
+	}
+	if err != nil {
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval for action %q: %w", actionID, err)
+	}
+	return s.GetApproval(ctx, approvalID)
+}

@@ -34,6 +34,10 @@ import (
 type Receipt struct {
 	// ReceiptID is the receipt identity ("rcpt_" namespace).
 	ReceiptID string
+	// SchemaVersion pins the sealed wire form: 0/1 = the frozen v1 era
+	// (historical bytes verify FOREVER), 2 = the Etapa-5 era with the
+	// approval reference inside the seal (sealed NC-3α).
+	SchemaVersion int
 	// ActionID ties the receipt to its aduana row.
 	ActionID string
 	// IntentDigest / AuthorityDigest / DecisionDigest / ActionDigest are
@@ -52,6 +56,9 @@ type Receipt struct {
 	// over the observation (sealed NC-3) — raw content never persisted.
 	Outcome      string
 	ResultDigest string
+	// ApprovalDigest references the CONSUMED approval's decision digest
+	// (v2 seal, §10.10): honest empty for unapproved outcomes.
+	ApprovalDigest string
 	// StartedAt / FinishedAt bound the attempt, UTC.
 	StartedAt  time.Time
 	FinishedAt time.Time
@@ -95,11 +102,65 @@ type receiptWire struct {
 	PreviousReceiptHash string `json:"previous_receipt_hash"`
 }
 
+// receiptWireV2 is the Etapa-5 sealed form: the v1 fields PLUS the
+// schema version and the approval reference — inside the seal, so a
+// re-pointed approval breaks hash and signature alike (NC-3α).
+type receiptWireV2 struct {
+	SchemaVersion       int    `json:"schema_version"`
+	ReceiptID           string `json:"receipt_id"`
+	ActionID            string `json:"action_id"`
+	IntentDigest        string `json:"intent_digest"`
+	PrincipalID         string `json:"principal_id"`
+	AuthorityDigest     string `json:"authority_digest"`
+	DecisionDigest      string `json:"decision_digest"`
+	ActionDigest        string `json:"action_digest"`
+	ApprovalDigest      string `json:"approval_digest"`
+	EffectClass         string `json:"effect_class"`
+	Attempt             int    `json:"attempt"`
+	Outcome             string `json:"outcome"`
+	ResultDigest        string `json:"result_digest"`
+	StartedAt           string `json:"started_at"`
+	FinishedAt          string `json:"finished_at"`
+	Partition           string `json:"partition"`
+	ChainSeq            int64  `json:"chain_seq"`
+	PreviousReceiptHash string `json:"previous_receipt_hash"`
+}
+
 // CanonicalReceipt returns the deterministic signable byte form of a
-// receipt: the canonical JSON of its v1 fields — ReceiptHash,
-// SigningKeyID and Signature EXCLUDED (they seal these bytes). Rides
-// the fuzzed E1 canonicalizer for the fixed-point guarantee.
+// receipt, dispatching on its era: SchemaVersion 0/1 renders the
+// FROZEN v1 wire byte-for-byte (historical hashes recompute forever);
+// 2 renders the v2 wire with the approval reference inside the seal.
+// ReceiptHash, SigningKeyID and Signature stay EXCLUDED (they seal
+// these bytes). Rides the fuzzed E1 canonicalizer.
 func CanonicalReceipt(r Receipt) []byte {
+	if r.SchemaVersion >= 2 {
+		wire := receiptWireV2{
+			SchemaVersion:       r.SchemaVersion,
+			ReceiptID:           r.ReceiptID,
+			ActionID:            r.ActionID,
+			IntentDigest:        r.IntentDigest,
+			PrincipalID:         r.PrincipalID,
+			AuthorityDigest:     r.AuthorityDigest,
+			DecisionDigest:      r.DecisionDigest,
+			ActionDigest:        r.ActionDigest,
+			ApprovalDigest:      r.ApprovalDigest,
+			EffectClass:         string(r.EffectClass),
+			Attempt:             r.Attempt,
+			Outcome:             r.Outcome,
+			ResultDigest:        r.ResultDigest,
+			StartedAt:           timeTerm(r.StartedAt),
+			FinishedAt:          timeTerm(r.FinishedAt),
+			Partition:           r.Partition,
+			ChainSeq:            r.ChainSeq,
+			PreviousReceiptHash: r.PreviousReceiptHash,
+		}
+		raw, err := json.Marshal(wire)
+		if err != nil {
+			// Unreachable: plain strings and ints.
+			panic("action: canonical receipt v2 encoding failed: " + err.Error())
+		}
+		return raw
+	}
 	wire := receiptWire{
 		ReceiptID:           r.ReceiptID,
 		ActionID:            r.ActionID,
@@ -147,6 +208,51 @@ func LinkReceipt(next *Receipt, prev Receipt) {
 // JSON object of the wire shape. Times parse from their canonical form;
 // a zero-time term ("") stays zero.
 func ParseCanonicalReceipt(raw []byte) (Receipt, error) {
+	// Version sniff (lax, fields only), then the STRICT parse of the
+	// matching era's wire. Unknown versions fail closed.
+	var sniff struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	_ = json.Unmarshal(raw, &sniff)
+	switch sniff.SchemaVersion {
+	case 0:
+		// The frozen v1 era (no schema_version field on the wire).
+	case 2:
+		var w2 receiptWireV2
+		if err := strictUnmarshal(raw, &w2); err != nil {
+			return Receipt{}, fmt.Errorf("action: parse canonical receipt v2: %w", err)
+		}
+		startedAt, err := parseTimeTerm(w2.StartedAt)
+		if err != nil {
+			return Receipt{}, fmt.Errorf("action: parse receipt v2 started_at: %w", err)
+		}
+		finishedAt, err := parseTimeTerm(w2.FinishedAt)
+		if err != nil {
+			return Receipt{}, fmt.Errorf("action: parse receipt v2 finished_at: %w", err)
+		}
+		return Receipt{
+			SchemaVersion:       w2.SchemaVersion,
+			ReceiptID:           w2.ReceiptID,
+			ActionID:            w2.ActionID,
+			IntentDigest:        w2.IntentDigest,
+			PrincipalID:         w2.PrincipalID,
+			AuthorityDigest:     w2.AuthorityDigest,
+			DecisionDigest:      w2.DecisionDigest,
+			ActionDigest:        w2.ActionDigest,
+			ApprovalDigest:      w2.ApprovalDigest,
+			EffectClass:         EffectClass(w2.EffectClass),
+			Attempt:             w2.Attempt,
+			Outcome:             w2.Outcome,
+			ResultDigest:        w2.ResultDigest,
+			StartedAt:           startedAt,
+			FinishedAt:          finishedAt,
+			Partition:           w2.Partition,
+			ChainSeq:            w2.ChainSeq,
+			PreviousReceiptHash: w2.PreviousReceiptHash,
+		}, nil
+	default:
+		return Receipt{}, fmt.Errorf("action: parse canonical receipt: unknown schema version %d", sniff.SchemaVersion)
+	}
 	var wire receiptWire
 	if err := strictUnmarshal(raw, &wire); err != nil {
 		return Receipt{}, fmt.Errorf("action: parse canonical receipt: %w", err)
@@ -179,7 +285,7 @@ func ParseCanonicalReceipt(raw []byte) (Receipt, error) {
 
 // strictUnmarshal decodes exactly one JSON object with known fields —
 // unknown fields and trailing garbage fail closed (untrusted input).
-func strictUnmarshal(raw []byte, into *receiptWire) error {
+func strictUnmarshal(raw []byte, into any) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(into); err != nil {
