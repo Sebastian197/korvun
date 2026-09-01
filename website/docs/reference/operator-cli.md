@@ -145,6 +145,44 @@ of its era. Verification is read-only; the honest scope is documented:
 the ledger is tamper-evident, never "immutable" — the operator controls
 storage and keys.
 
+## The approvals inbox (v0.15.0)
+
+When `approvals.enabled` is on, an action whose effect class demands a
+human yes no longer dies with the honest `approval_unavailable`: it
+PARKS as a pending request with a sealed preview, and the CLI is where
+you decide.
+
+```sh
+korvun approvals list --config korvun.json
+```
+
+Every request with its status and expiry — consults go through the
+read-only door (no migration, no recovery, nothing written).
+
+```sh
+korvun approvals show --config korvun.json apr_…
+```
+
+THE DIGEST you approve, first and prominent; then the full preview —
+purpose, actor and delegation position, operation, resources, what
+data leaves, cost, effect class and reversibility, the pinned law —
+and the RAW parameters (loopback only: they exist nowhere else).
+
+```sh
+korvun approvals approve --config korvun.json apr_…
+korvun approvals reject --config korvun.json --comment "why" apr_…
+```
+
+Both are recorded operator acts with their own signed receipts.
+Approving executes THE stored object — recovered whole, re-verified
+against the approved digest, claimed atomically so racing approvals
+cannot fire the effect twice — and reports the real outcome; the
+receipt of an approved action seals its approval reference (canonical
+v2), and `receipt verify` gains the `approval_mismatch` check.
+Rejection, cancellation or expiry close the parked action with a
+receipt and no execution path remains. Requests expire on their TTL
+(default 1h, `approvals.ttl`), judged at the decision touch.
+
 ## Reading the trail
 
 Receipts live in the action ledger next to every other recorded action.

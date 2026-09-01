@@ -154,6 +154,46 @@ verifica con la clave de su era. La verificación es de solo lectura; el
 alcance honesto está documentado: el libro es tamper-evident, jamás
 «immutable» — el operador controla almacenamiento y claves.
 
+## El buzón de aprobaciones (v0.15.0)
+
+Con `approvals.enabled` activado, una acción cuya clase de efecto
+exige un sí humano ya no muere con el honesto `approval_unavailable`:
+se APARCA como solicitud pendiente con su preview sellado, y la CLI
+es donde decides.
+
+```sh
+korvun approvals list --config korvun.json
+```
+
+Cada solicitud con su estado y su caducidad — las consultas van por la
+puerta de solo lectura (sin migración, sin recovery, nada se escribe).
+
+```sh
+korvun approvals show --config korvun.json apr_…
+```
+
+EL DIGEST que apruebas, primero y bien visible; después el preview
+completo — propósito, actor y posición en la delegación, operación,
+recursos, qué datos salen, coste, clase de efecto y reversibilidad,
+la ley pineada — y los parámetros CRUDOS (solo loopback: no existen
+en ningún otro sitio).
+
+```sh
+korvun approvals approve --config korvun.json apr_…
+korvun approvals reject --config korvun.json --comment "why" apr_…
+```
+
+Ambos son actos de operador registrados con su recibo firmado.
+Aprobar ejecuta EL objeto guardado — recuperado íntegro, re-verificado
+contra el digest aprobado, reclamado atómicamente para que dos
+aprobaciones en carrera no disparen el efecto dos veces — y reporta el
+desenlace real; el recibo de una acción aprobada sella su referencia
+de aprobación (canónico v2), y `receipt verify` gana el check
+`approval_mismatch`. El rechazo, la cancelación o la caducidad
+cierran la acción aparcada con recibo y no queda ningún camino de
+ejecución. Las solicitudes caducan por su TTL (por defecto 1h,
+`approvals.ttl`), juzgado al toque de la decisión.
+
 ## Leer el rastro
 
 Los recibos viven en el registro de acciones junto a todas las demás

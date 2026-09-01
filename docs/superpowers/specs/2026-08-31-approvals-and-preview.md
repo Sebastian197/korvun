@@ -349,3 +349,43 @@ console (E8), API/MCP/A2A (E9), multitenant (E10).
    Law):** UX-TEMPLATE + mockup + Chano's visual yes BEFORE any RED;
    loopback control-API extension + desktop inbox view; moves to E8
    intact if the design round does not close with the stage.
+
+---
+
+## STAGE CLOSE — 2026-09-01 (lote 5)
+
+Lotes 1-5: IMPLEMENTED + VERIFIED local (the director's bash pending).
+The acceptance scenarios, green and mapped to executable tests:
+
+| Scenario | Test(s) | Where |
+|---|---|---|
+| AS-1 changed parameter invalidates | `TestValidateApprovalBinding_theInvalidationLaw` + `_isAnchoredToTheRealEnvelopeDigest`; execution belt in `TestExecuteApproved_theDigestBelt` | `internal/action/approval_test.go`, `internal/app/approvals_exec_test.go` |
+| AS-2 no double approval | `TestApproval_decideOneShotAtomicUnderTheHammer` (24 racers, one winner); flow-level `TestExecuteApproved_raceOverTheFullFlow` + `_neverTwice` | `internal/action/sqlite/approvals_test.go`, `internal/app/approvals_exec_test.go` |
+| AS-3 expired never executes | `TestApproval_expiryJudgedAtTheTouch` + `TestExecuteApproved_aNoNeverExecutes` | sqlite + app |
+| AS-4 no effects before commit | `TestGate_theArmWakes` (zero executions on park), `TestGate_shadowNeverTouchesTheApprovalPath`, `TestApprovalsReject_closesWithItsInk` (no execution after a no) | `internal/brain/agent_approval_test.go`, `internal/cli/approvals_test.go` |
+| AS-5 the preview tells the truth | `TestApprovalsShow_theFullTruthForTheHuman` (egress, cost, reversibility, raw params, THE digest — verbatim on the CLI) | `internal/cli/approvals_test.go` |
+| AS-6 policy change invalidates | policy half of `TestValidateApprovalBinding_theInvalidationLaw` | `internal/action/approval_test.go` |
+| AS-7 the receipt attests its approval | `TestReceiptsAreBornV2_withTheApprovalSealWhenApproved`, `TestReceiptVerify_approvalCoherence` (approval_mismatch by name), `TestMixedEraChain_verifiesWhole`, `TestReceiptV1_bytesAreFrozenForever` | sqlite + cli + action |
+| AS-8 migrations v7/v8 | `TestMigrationV7_freshAndCrash`, `TestMigrationV8_receiptsGainTheApprovalSeal` (both against hand-built prior eras) | `internal/action/sqlite/approvals_test.go` |
+| AS-9 disabled = today byte-for-byte | `TestGate_theSacredPin_withoutTheExtensionE3ByteForByte`, `TestApprovalsKnob_absentMeansOffAndNoExtension` + the whole untouched E3 suite | brain + app |
+
+Stage discoveries fixed under the cross-check law, pinned: the E1
+crash recovery killed legitimately parked actions (PENDING_APPROVAL
+now always survives; APPROVED survives while unclaimed) and flattened
+the new REJECTED terminal to FAILED — both found by the lote-4 RED.
+
+Toll, final: the NEW path costs ~1.02 ms per parked request (preview
+assembly + born-whole birth), paid ONLY when an irreversible action
+parks; the normal sealed hot path re-measured at ~1.17 ms/op with the
+knob code in the tree — the 5 ms ceiling stands with >4× margin, and
+the disabled lane is the E3 lane byte-for-byte. §24's sixteen points
+re-run green via the whole suite (37 packages, -race); nine fuzzers
+in the smoke, FuzzReceiptCanonical walking BOTH wire eras.
+
+Exit criterion, standing and test-proven: an irreversible action
+cannot execute until the human approves EXACTLY the version shown —
+the approval binds the E1 digest, the preview seals what was shown,
+approve executes the stored object by identity after an atomic claim
+and a digest belt, and every no (reject, cancel, expiry) closes the
+action receipted without any execution path remaining. Pending only:
+the director's bash (the Sixth Law).
