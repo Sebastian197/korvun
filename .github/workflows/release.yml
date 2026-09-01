@@ -46,17 +46,17 @@ jobs:
           echo "::error::Manual dispatch supports dry_run=true only; publish a real release by pushing a v* tag."
           exit 1
 
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # full history so the changelog can diff from the previous tag
 
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
       # Syft generates the per-release SBOM (ADR-0025 §6).
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
 
       # cosign signs checksums.txt keyless via the workflow OIDC identity (ADR-0026).
       # Pin the cosign BINARY to v2.6.3 (installer SHA stays v4.1.2): cosign v3
@@ -74,7 +74,7 @@ jobs:
       # --snapshot dry-run (builds + signs + attests, publishes nothing). Snapshot
       # still runs the `signs:` block, so keyless cosign is exercised for real.
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29 # v7.0.0
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
           version: '~> v2'
@@ -96,7 +96,7 @@ jobs:
       - name: Attest build provenance
         if: github.event_name == 'push'
         id: attest
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/checksums.txt
 
