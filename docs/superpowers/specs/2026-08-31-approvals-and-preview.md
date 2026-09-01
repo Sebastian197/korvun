@@ -345,10 +345,11 @@ console (E8), API/MCP/A2A (E9), multitenant (E10).
    invalidation sweep (AS-1/6), §24 re-run, toll declared, docs — plus
    the two filed cures as their own piece (fuzz-smoke Makefile budget;
    LiveView SSE frame-order hardening).
-6. **Lote 6 — the Console card (M-L, ONLY under NC-1(b) and the Sixth
-   Law):** UX-TEMPLATE + mockup + Chano's visual yes BEFORE any RED;
-   loopback control-API extension + desktop inbox view; moves to E8
-   intact if the design round does not close with the stage.
+6. **Lote 6 — the Console card: MOVED INTACT TO ETAPA 8** (Chano's
+   NC-1b resolution, 2026-09-01, exactly as this spec provided): the
+   CLI closed the stage and satisfies the exit criterion; the desktop
+   inbox ships with E8 under the full Sixth Law (UX-TEMPLATE + mockup
+   + the visual yes before any RED). This spec does not reopen.
 
 ---
 

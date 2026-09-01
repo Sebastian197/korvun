@@ -235,8 +235,11 @@ explicit decision.
 >    integration disconnected + custom domains removed from the CF Pages
 >    project, frozen not deleted).
 > 3. **korvun.ai on Dynadot** this week.
-> 4. **Etapa 5 (approvals) = the Trust Layer PREMIERE** — starts on
->    Chano's "seguimos".
+> 4. **Etapa 5 (approvals) = the Trust Layer PREMIERE** — lotes 1-5
+>    built; lote 5 awaiting push; the director's bash pending. NC-1b
+>    RESOLVED by Chano 2026-09-01: the Console approvals card moves
+>    INTACT to Etapa 8 (as the sealed spec provided) — first E8 piece,
+>    full Sixth Law.
 > 5. **Scorecard weekly re-scan** — the two levers (Signed-Releases,
 >    Pinned-Dependencies) should now read 10.
 > 6. **image-size HIGH alerts (2, DoS) — NO CURE PUBLISHED (verified
