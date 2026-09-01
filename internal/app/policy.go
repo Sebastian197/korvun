@@ -1,17 +1,22 @@
 // Copyright 2026 Sebastián Moreno Saavedra
 // SPDX-License-Identifier: Apache-2.0
 
-// The versioned policy pin (Trust Layer Etapa 3, lote 4, spec FR-POL-1):
-// every gate decision records the EXACT law that took it. The law is the
-// brain's effective governance PLUS the effect-registry snapshot — a
-// change in either is a different law. The version is the config load
-// instant (UnixNano): monotonic across loads with zero mutable globals.
+// The policy pin (Trust Layer E3 FR-POL-1, rebuilt by the E5
+// consolidation C1): every gate decision records the EXACT law that
+// took it, and that identity must be STABLE — a digest of the
+// EFFECTIVE content that governs the brain's cage (grant list, cages
+// and allowlists, tool attrs, sensitivity, effect ceiling, effect
+// registry). The first cut versioned the pin with the config-load
+// instant, which made every reboot "a different law" and left the
+// validator unwired — the second external audit's finding. The
+// version is now the pin FORMAT (bump only when the digested content
+// set changes shape); sameness of law is sameness of digest.
 package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
-	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
@@ -19,14 +24,21 @@ import (
 	"github.com/Sebastian197/korvun/internal/tool"
 )
 
-// policyDigestFrom computes the canonical law digest over one brain's
-// governance and an effect-registry snapshot. Deterministic: governance
-// rides in its declared order (order IS part of the operator's config),
-// the snapshot as a sorted map via the canonical hasher.
-func policyDigestFrom(gov []config.ToolGrantConfig, effects map[string]action.EffectDescriptor) string {
+// policyPinFormat identifies the SHAPE of the digested content, not an
+// instant: two loads of the same effective config are the SAME law.
+const policyPinFormat = 2
+
+// policyDigestFor computes the canonical law digest over everything
+// that governs one brain's cage. The whole agent block rides in (grant
+// list in declared order — order IS part of the operator's config —
+// governance, attrs, per-tool cages and allowlists, ceiling), plus the
+// brain's sensitivity and the effect-registry snapshot. Deterministic:
+// struct fields marshal in declared order, maps sort by key.
+func policyDigestFor(bc config.BrainConfig, effects map[string]action.EffectDescriptor) string {
 	raw, err := json.Marshal(map[string]any{
-		"governance": gov,
-		"effects":    effects,
+		"agent":       bc.Agent,
+		"sensitivity": bc.Sensitivity,
+		"effects":     effects,
 	})
 	if err != nil {
 		// Unreachable for these plain types; kept for honesty.
@@ -49,14 +61,22 @@ func effectSnapshot() map[string]action.EffectDescriptor {
 	return out
 }
 
-// policyPin builds one brain's law pin at config-load time.
-func policyPin(bc config.BrainConfig, loadedAt time.Time) actionsqlite.PolicyPin {
-	var gov []config.ToolGrantConfig
-	if bc.Agent != nil {
-		gov = bc.Agent.Governance
-	}
+// policyPin builds one brain's stable law pin.
+func policyPin(bc config.BrainConfig) actionsqlite.PolicyPin {
 	return actionsqlite.PolicyPin{
-		Version: loadedAt.UnixNano(),
-		Digest:  policyDigestFrom(gov, effectSnapshot()),
+		Version: policyPinFormat,
+		Digest:  policyDigestFor(bc, effectSnapshot()),
 	}
+}
+
+// PolicyPinFor computes the CURRENT law pin for one brain of a loaded
+// config — the operator-side entry the C1 consolidation wires into
+// decide and execute: the approval's pinned law must still BE the law.
+func PolicyPinFor(cfg *config.Config, brainName string) (actionsqlite.PolicyPin, error) {
+	for _, bc := range cfg.Brains {
+		if bc.Name == brainName {
+			return policyPin(bc), nil
+		}
+	}
+	return actionsqlite.PolicyPin{}, fmt.Errorf("app: policy pin: brain %q is not in the current config", brainName)
 }

@@ -100,7 +100,31 @@ func (s *Store) CreateApprovalRequest(ctx context.Context, env action.Envelope, 
 // touch lands past the window (the approval closes EXPIRED and the
 // action REJECTED, receipted); approval_already_decided when another
 // operator won the race.
-func (s *Store) DecideApproval(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string) (string, error) {
+// DecideApprovalUnderLaw is the ONLY exported decision surface (E5
+// consolidation C1): an approve consumes authority, so it must happen
+// under the SAME law that parked the request — the caller passes the
+// CURRENT pin (app.PolicyPinFor) and a moved law refuses by name,
+// mutating nothing: the request stays PENDING for an explicit human
+// act. reject and cancelled stay safe under ANY law (withdrawing
+// authority never needs one), so the pin is not consulted for them.
+func (s *Store) DecideApprovalUnderLaw(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string, law PolicyPin) (string, error) {
+	if decision == "approved" {
+		a, _, err := s.GetApproval(ctx, approvalID)
+		if err != nil {
+			return "", err
+		}
+		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+			return "", fmt.Errorf("action/sqlite: %s (%s): the request was parked under law v%d %s but the current law is v%d %s — nothing was decided; re-request under the current law or reject this one", rule, dim, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
+		}
+	}
+	return s.decideApproval(ctx, approvalID, decision, at, operatorEnv, ident, comment)
+}
+
+// decideApproval is the decision mechanics: the one-shot consume, the
+// operator's proof-of-decision act, the parked action's transition.
+// Unexported on purpose — the law-validating surface above is the only
+// door out of the package.
+func (s *Store) decideApproval(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string) (string, error) {
 	switch decision {
 	case "approved", "rejected", "cancelled":
 	default:

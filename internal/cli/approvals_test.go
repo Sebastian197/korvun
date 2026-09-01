@@ -24,6 +24,8 @@ import (
 
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
+	"github.com/Sebastian197/korvun/internal/app"
+	"github.com/Sebastian197/korvun/internal/config"
 )
 
 // parkedRequest hand-parks a calc action with its approval (the gate
@@ -32,6 +34,16 @@ import (
 func parkedRequest(t *testing.T) (cfgPath, dbPath, approvalID string) {
 	t.Helper()
 	cfgPath, dbPath = intentTestConfig(t)
+	// The park records the REAL current law (C1): the pin the approve
+	// will re-derive from the same config and validate against.
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	law, err := app.PolicyPinFor(cfg, "a")
+	if err != nil {
+		t.Fatalf("law: %v", err)
+	}
 	store, err := actionsqlite.Open(dbPath)
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -51,7 +63,7 @@ func parkedRequest(t *testing.T) (cfgPath, dbPath, approvalID string) {
 		DataEgress: "no declared data egress", ArgsDigest: env.ParametersDigest,
 		CostLine: "unbudgeted", EffectClass: action.EffectPure,
 		Reversibility: "pure — no external effect", ToolCage: "calc",
-		PolicyVersion: 3, PolicyDigest: "sha256:law", RequiredRule: "require_approval",
+		PolicyVersion: law.Version, PolicyDigest: law.Digest, RequiredRule: "require_approval",
 	}
 	a := action.Approval{
 		ApprovalID: action.NewApprovalID(), SchemaVersion: 1,
@@ -59,12 +71,12 @@ func parkedRequest(t *testing.T) (cfgPath, dbPath, approvalID string) {
 		PreviewDigest: preview.Digest(),
 		RequestedFrom: action.OperatorPrincipal().PrincipalID,
 		Reason:        "require_approval", RiskSummary: "pure — no external effect",
-		PolicyVersion: 3, PolicyDigest: "sha256:law",
+		PolicyVersion: law.Version, PolicyDigest: law.Digest,
 		RequestedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour),
 		Status: action.ApprovalPending,
 	}
 	if err := store.CreateApprovalRequest(context.Background(), env,
-		actionsqlite.Decision{Outcome: "require_approval", Rule: "require_approval", PolicyVersion: 3, PolicyDigest: "sha256:law"},
+		actionsqlite.Decision{Outcome: "require_approval", Rule: "require_approval", PolicyVersion: law.Version, PolicyDigest: law.Digest},
 		a, preview, `7*6`); err != nil {
 		t.Fatalf("park: %v", err)
 	}
@@ -116,7 +128,7 @@ func TestApprovalsShow_theFullTruthForTheHuman(t *testing.T) {
 		"no declared data egress",   // egress
 		"unbudgeted",                // cost
 		"pure — no external effect", // reversibility
-		"sha256:law",                // pinned law
+		"sha256:",                   // pinned law digest, visible
 		`7*6`,                       // RAW params — the operator's right
 		"digest",                    // the digest label, prominent
 	} {

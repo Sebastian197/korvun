@@ -54,27 +54,40 @@ func (t echoPolicyTool) Execute(ctx context.Context, args string) (string, error
 	return "ok", nil
 }
 
+// Re-mapped by the C1 consolidation: the digest surface is now the
+// whole cage-governing content of one brain (policyDigestFor); the
+// governance and effect-registry axes it always covered stay pinned.
 func TestPolicyDigest_coversGovernanceAndTheEffectSnapshot(t *testing.T) {
 	t.Parallel()
-	gov := []config.ToolGrantConfig{{Tool: "calc", Mode: "allow"}}
+	bc := config.BrainConfig{
+		Sensitivity: "public",
+		Agent: &config.AgentConfig{
+			Tools:      []string{"calc"},
+			Governance: []config.ToolGrantConfig{{Tool: "calc", Mode: "allow"}},
+		},
+	}
 	effects := map[string]action.EffectDescriptor{
 		"calc": {Class: action.EffectPure},
 	}
-	first := policyDigestFrom(gov, effects)
+	first := policyDigestFor(bc, effects)
 	if !strings.HasPrefix(first, "sha256:") {
 		t.Fatalf("the law digest carries the pinned algorithm, got %q", first)
 	}
-	if policyDigestFrom(gov, effects) != first {
+	if policyDigestFor(bc, effects) != first {
 		t.Fatal("the law digest must be deterministic")
 	}
-	tightened := []config.ToolGrantConfig{{Tool: "calc", Mode: "deny"}}
-	if policyDigestFrom(tightened, effects) == first {
+	tightened := bc
+	tightened.Agent = &config.AgentConfig{
+		Tools:      []string{"calc"},
+		Governance: []config.ToolGrantConfig{{Tool: "calc", Mode: "deny"}},
+	}
+	if policyDigestFor(tightened, effects) == first {
 		t.Fatal("a governance change is a DIFFERENT law")
 	}
 	reclassified := map[string]action.EffectDescriptor{
 		"calc": {Class: action.EffectCritical},
 	}
-	if policyDigestFrom(gov, reclassified) == first {
+	if policyDigestFor(bc, reclassified) == first {
 		t.Fatal("an effect-registry change is a DIFFERENT law")
 	}
 }

@@ -257,7 +257,7 @@ func TestApproval_decideOneShotAtomicUnderTheHammer(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			env, ident := operatorDecisionEnv("approve", a.ApprovalID)
-			rule, err := store.DecideApproval(ctx, a.ApprovalID, "approved",
+			rule, err := store.decideApproval(ctx, a.ApprovalID, "approved",
 				a.RequestedAt.Add(30*time.Minute), env, ident, "")
 			mu.Lock()
 			defer mu.Unlock()
@@ -291,7 +291,7 @@ func TestApproval_rejectClosesWithBothReceiptsOrNothing(t *testing.T) {
 	ctx := context.Background()
 	a, _ := pendingRequest(t, store, "act_rej")
 	env, ident := operatorDecisionEnv("reject", a.ApprovalID)
-	rule, err := store.DecideApproval(ctx, a.ApprovalID, "rejected",
+	rule, err := store.decideApproval(ctx, a.ApprovalID, "rejected",
 		a.RequestedAt.Add(30*time.Minute), env, ident, "not today")
 	if err != nil || rule != "" {
 		t.Fatalf("reject: %q %v", rule, err)
@@ -331,7 +331,7 @@ func TestApproval_rejectClosesWithBothReceiptsOrNothing(t *testing.T) {
 		t.Fatalf("install blocker: %v", err)
 	}
 	env2, ident2 := operatorDecisionEnv("reject", a2.ApprovalID)
-	if _, err := store2.DecideApproval(ctx, a2.ApprovalID, "rejected",
+	if _, err := store2.decideApproval(ctx, a2.ApprovalID, "rejected",
 		a2.RequestedAt.Add(30*time.Minute), env2, ident2, ""); err == nil {
 		t.Fatal("an unreceiptable decision must fail whole")
 	}
@@ -358,7 +358,7 @@ func TestApproval_expiryJudgedAtTheTouch(t *testing.T) {
 	// The touch arrives PAST the window: the E2 clock rule closes it.
 	late := a.ExpiresAt.Add(time.Minute)
 	env, ident := operatorDecisionEnv("approve", a.ApprovalID)
-	rule, err := store.DecideApproval(ctx, a.ApprovalID, "approved", late, env, ident, "")
+	rule, err := store.decideApproval(ctx, a.ApprovalID, "approved", late, env, ident, "")
 	if err != nil {
 		t.Fatalf("expiry close: %v", err)
 	}
@@ -389,11 +389,11 @@ func TestApproval_finiteDecisionsFailClosed(t *testing.T) {
 	store, _ := sealedStore(t)
 	a, _ := pendingRequest(t, store, "act_fin")
 	env, ident := operatorDecisionEnv("burn", a.ApprovalID)
-	if _, err := store.DecideApproval(context.Background(), a.ApprovalID, "burn",
+	if _, err := store.decideApproval(context.Background(), a.ApprovalID, "burn",
 		a.RequestedAt.Add(time.Minute), env, ident, ""); err == nil {
 		t.Fatal("an unknown decision verb must fail closed")
 	}
-	if _, err := store.DecideApproval(context.Background(), "apr_ghost", "approved",
+	if _, err := store.decideApproval(context.Background(), "apr_ghost", "approved",
 		a.RequestedAt.Add(time.Minute), env, ident, ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("a ghost approval id reports not-found: %v", err)
 	}
@@ -406,7 +406,7 @@ func TestApproval_listSurface(t *testing.T) {
 	a1, _ := pendingRequest(t, store, "act_l1")
 	a2, _ := pendingRequest(t, store, "act_l2")
 	env, ident := operatorDecisionEnv("reject", a2.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a2.ApprovalID, "rejected",
+	if _, err := store.decideApproval(ctx, a2.ApprovalID, "rejected",
 		a2.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
 		t.Fatalf("reject: %v", err)
 	}
@@ -465,7 +465,7 @@ func TestApproval_deepErrorBranches(t *testing.T) {
 		t.Fatal("closed store params must fail loud")
 	}
 	envD, identD := operatorDecisionEnv("approve", a.ApprovalID)
-	if _, err := closed.DecideApproval(ctx, a.ApprovalID, "approved", a.RequestedAt.Add(time.Minute), envD, identD, ""); err == nil {
+	if _, err := closed.decideApproval(ctx, a.ApprovalID, "approved", a.RequestedAt.Add(time.Minute), envD, identD, ""); err == nil {
 		t.Fatal("closed store decide must fail loud")
 	}
 	// Corrupt cells break the scan by name.
@@ -491,7 +491,7 @@ func TestApproval_deepErrorBranches(t *testing.T) {
 		t.Fatalf("birth 3: %v", err)
 	}
 	env3d, ident3 := operatorDecisionEnv("reject", a3.ApprovalID)
-	if _, err := store2.DecideApproval(ctx, a3.ApprovalID, "rejected", a3.RequestedAt.Add(time.Minute), env3d, ident3, ""); err != nil {
+	if _, err := store2.decideApproval(ctx, a3.ApprovalID, "rejected", a3.RequestedAt.Add(time.Minute), env3d, ident3, ""); err != nil {
 		t.Fatalf("reject: %v", err)
 	}
 	if _, err := store2.ApprovalParams(ctx, a3.ApprovalID); err == nil {
@@ -515,7 +515,7 @@ func TestApproval_txFailureBranches(t *testing.T) {
 		t.Fatalf("blocker: %v", err)
 	}
 	env, ident := operatorDecisionEnv("approve", a.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a.ApprovalID, "approved",
+	if _, err := store.decideApproval(ctx, a.ApprovalID, "approved",
 		a.ExpiresAt.Add(time.Minute), env, ident, ""); err == nil {
 		t.Fatal("an unreceiptable expiry close must fail whole")
 	}
@@ -532,7 +532,7 @@ func TestApproval_txFailureBranches(t *testing.T) {
 		t.Fatalf("blocker 2: %v", err)
 	}
 	env2, ident2 := operatorDecisionEnv("approve", a2.ApprovalID)
-	if _, err := store2.DecideApproval(ctx, a2.ApprovalID, "approved",
+	if _, err := store2.decideApproval(ctx, a2.ApprovalID, "approved",
 		a2.RequestedAt.Add(time.Minute), env2, ident2, ""); err == nil {
 		t.Fatal("an unrecordable decision act must fail whole")
 	}
@@ -548,7 +548,7 @@ func TestApproval_txFailureBranches(t *testing.T) {
 	store3, _ := sealedStore(t)
 	a3, _ := pendingRequest(t, store3, "act_txc")
 	env3, ident3 := operatorDecisionEnv("cancel", a3.ApprovalID)
-	rule, err := store3.DecideApproval(ctx, a3.ApprovalID, "cancelled",
+	rule, err := store3.decideApproval(ctx, a3.ApprovalID, "cancelled",
 		a3.RequestedAt.Add(time.Minute), env3, ident3, "changed my mind")
 	if err != nil || rule != "" {
 		t.Fatalf("cancel: %q %v", rule, err)
@@ -575,7 +575,7 @@ func TestApproval_moreBranches(t *testing.T) {
 		t.Fatalf("move row: %v", err)
 	}
 	env, ident := operatorDecisionEnv("approve", a.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a.ApprovalID, "approved",
+	if _, err := store.decideApproval(ctx, a.ApprovalID, "approved",
 		a.RequestedAt.Add(time.Minute), env, ident, ""); err == nil {
 		t.Fatal("a foreign-handed row must fail the transition whole")
 	}
@@ -594,7 +594,7 @@ func TestApproval_moreBranches(t *testing.T) {
 	}
 	// And it consumes far in the future (no expiry means none).
 	env2d, ident2 := operatorDecisionEnv("approve", a2.ApprovalID)
-	rule, err := store2.DecideApproval(ctx, a2.ApprovalID, "approved",
+	rule, err := store2.decideApproval(ctx, a2.ApprovalID, "approved",
 		a2.RequestedAt.Add(1000*time.Hour), env2d, ident2, "")
 	if err != nil || rule != "" {
 		t.Fatalf("no-expiry consume: %q %v", rule, err)
@@ -612,7 +612,7 @@ func TestApproval_rejectPathErrorBranches(t *testing.T) {
 		t.Fatalf("move: %v", err)
 	}
 	env, ident := operatorDecisionEnv("reject", a.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a.ApprovalID, "rejected",
+	if _, err := store.decideApproval(ctx, a.ApprovalID, "rejected",
 		a.RequestedAt.Add(time.Minute), env, ident, ""); err == nil {
 		t.Fatal("reject over a moved row must fail whole")
 	}
@@ -622,7 +622,7 @@ func TestApproval_rejectPathErrorBranches(t *testing.T) {
 	a2, _ := pendingRequest(t, store2, "act_rcorr")
 	corruptCell(t, store2, "actions", "requested_at", "action_id", "act_rcorr", "garbage")
 	env2, ident2 := operatorDecisionEnv("reject", a2.ApprovalID)
-	if _, err := store2.DecideApproval(ctx, a2.ApprovalID, "rejected",
+	if _, err := store2.decideApproval(ctx, a2.ApprovalID, "rejected",
 		a2.RequestedAt.Add(time.Minute), env2, ident2, ""); err == nil {
 		t.Fatal("an unreifiable terminal receipt must fail the reject whole")
 	}
@@ -639,7 +639,7 @@ func TestApproval_rejectPathErrorBranches(t *testing.T) {
 		t.Fatalf("blocker: %v", err)
 	}
 	env3, ident3 := operatorDecisionEnv("approve", a3.ApprovalID)
-	if _, err := store3.DecideApproval(ctx, a3.ApprovalID, "approved",
+	if _, err := store3.decideApproval(ctx, a3.ApprovalID, "approved",
 		a3.ExpiresAt.Add(time.Minute), env3, ident3, ""); err == nil {
 		t.Fatal("a blocked expiry close must fail loud")
 	}
@@ -687,14 +687,14 @@ func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 	a1, _ := pendingRequest(t, store, "act_park")
 	a2, _ := pendingRequest(t, store, "act_appr")
 	env, ident := operatorDecisionEnv("approve", a2.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a2.ApprovalID, "approved",
+	if _, err := store.decideApproval(ctx, a2.ApprovalID, "approved",
 		a2.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 	// And an approved one whose params were CLAIMED (the true orphan).
 	a3, _ := pendingRequest(t, store, "act_claimed")
 	env3, ident3 := operatorDecisionEnv("approve", a3.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a3.ApprovalID, "approved",
+	if _, err := store.decideApproval(ctx, a3.ApprovalID, "approved",
 		a3.RequestedAt.Add(time.Minute), env3, ident3, ""); err != nil {
 		t.Fatalf("approve 3: %v", err)
 	}
@@ -733,7 +733,7 @@ func TestRecovery_rejectedIsTerminalAndSurvives(t *testing.T) {
 	ctx := context.Background()
 	a, _ := pendingRequest(t, store, "act_rejsur")
 	env, ident := operatorDecisionEnv("reject", a.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a.ApprovalID, "rejected",
+	if _, err := store.decideApproval(ctx, a.ApprovalID, "rejected",
 		a.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
 		t.Fatalf("reject: %v", err)
 	}
@@ -847,7 +847,7 @@ func TestReceiptsAreBornV2_withTheApprovalSealWhenApproved(t *testing.T) {
 	// An APPROVED-then-executed action: the receipt seals the approval.
 	a, _ := pendingRequest(t, store, "act_v2b")
 	env, ident := operatorDecisionEnv("approve", a.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a.ApprovalID, "approved",
+	if _, err := store.decideApproval(ctx, a.ApprovalID, "approved",
 		a.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -990,7 +990,7 @@ func TestApprovalDigestTx_corruptDecisionFallsToHonestEmpty(t *testing.T) {
 	ctx := context.Background()
 	a, _ := pendingRequest(t, store, "act_corrd")
 	env, ident := operatorDecisionEnv("approve", a.ApprovalID)
-	if _, err := store.DecideApproval(ctx, a.ApprovalID, "approved",
+	if _, err := store.decideApproval(ctx, a.ApprovalID, "approved",
 		a.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
 		t.Fatalf("approve: %v", err)
 	}

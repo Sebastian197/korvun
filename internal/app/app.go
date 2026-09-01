@@ -154,10 +154,6 @@ type builder struct {
 	// store is the shared conversation memory injected into every brain. A true
 	// nil interface (no storage configured) leaves each Orchestrator stateless.
 	store conversation.Store
-	// policyLoadedAt is the config-load instant: the monotonic policy
-	// VERSION of every law pin this build stamps (FR-POL-1) — one instant
-	// per loaded config, zero mutable globals.
-	policyLoadedAt time.Time
 	// actions is the Action Kernel's store, shared into every AgentBrain
 	// through the recorder adapter. nil when stateless (no storage block —
 	// recording off, zero new config, the sealed decisions).
@@ -246,7 +242,6 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		perModelTimeout: DefaultPerModelTimeout,
 		newChannel:      defaultChannelFactory,
 		metrics:         metrics.Nop{},
-		policyLoadedAt:  time.Now(),
 	}
 	for _, o := range opts {
 		o(b)
@@ -1077,10 +1072,10 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	// provenance registry, the root intent, and this brain's derived
 	// grant — the recorded EXPLANATION of its governed allows.
 	if b.actions != nil {
-		// The law pin (Etapa 3, FR-POL-1): computed per brain at config
-		// load — governance + effect-registry snapshot, versioned by the
-		// load instant — and stamped by the adapter on every decision.
-		pin := policyPin(bc, b.policyLoadedAt)
+		// The law pin (FR-POL-1, C1-stable): the digest of the effective
+		// cage-governing content, stamped by the adapter on every
+		// decision — the SAME law across reboots of the same config.
+		pin := policyPin(bc)
 		opts = append(opts, brain.WithActionRecorder(newBrainRecorder(b.actions, pin, b.approvalsCfg, b.approvalTTL)))
 		// The effect engine (Etapa 3): the brain classifies every attempt
 		// from the DECLARED registry — the same single safe-toolset

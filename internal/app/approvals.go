@@ -168,13 +168,19 @@ func (a *App) recorderForTest() brain.ActionRecorder {
 // belt, execute, and close the parked action with its era's E4 receipt
 // and the on-the-fly result digest. A request that is not APPROVED —
 // pending, rejected, cancelled or expired — never executes.
-func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string) (string, error) {
+func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string, law actionsqlite.PolicyPin) (string, error) {
 	approval, _, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
 		return "", err
 	}
 	if approval.Status != action.ApprovalApproved {
 		return "", fmt.Errorf("app: approval %s is %s — only APPROVED requests execute", approvalID, approval.Status)
+	}
+	// C1: execution consumes authority too — the law is re-checked at
+	// THIS touch, not only at decide (a config change between the two
+	// must refuse here as well).
+	if rule, dim := action.ValidateApprovalBinding(approval, approval.ActionDigest, law.Version, law.Digest); rule != "" {
+		return "", fmt.Errorf("app: %s (%s): approval %s was parked under law v%d %s but the current law is v%d %s — refusing execution", rule, dim, approvalID, approval.PolicyVersion, approval.PolicyDigest, law.Version, law.Digest)
 	}
 	rec, err := store.Get(ctx, approval.ActionID)
 	if err != nil {
@@ -231,6 +237,21 @@ func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*e
 	for _, bc := range cfg.Brains {
 		if bc.Name != brainName {
 			continue
+		}
+		// C1 depth check: rebuild ONLY from the CURRENT grant list — a
+		// tool revoked from agent.tools after the park never executes,
+		// even if every other gate were blind to the change.
+		granted := false
+		if bc.Agent != nil {
+			for _, name := range bc.Agent.Tools {
+				if name == toolName {
+					granted = true
+					break
+				}
+			}
+		}
+		if !granted {
+			return nil, fmt.Errorf("app: approval executor: tool %q is not in brain %q's CURRENT grant list — a revoked tool never executes", toolName, brainName)
 		}
 		attrs := map[string]policy.ToolAttrs{}
 		if a, ok := tool.BuiltinAttrs(toolName); ok {

@@ -45,6 +45,10 @@ func (c *countingTool) Execute(ctx context.Context, args string) (string, error)
 
 // approvedFlow drives request→approve on a real boot and returns the
 // pieces for execution.
+// testLaw mirrors the recorderForTest pin — the law the test-seam
+// parks under, passed back at decide/execute (C1).
+var testLaw = actionsqlite.PolicyPin{Version: 1, Digest: "sha256:test-seam"}
+
 func approvedFlow(t *testing.T) (*actionsqlite.Store, *executor.Executor, *countingTool, string) {
 	store, exec, fake, approvalID, _ := approvedFlowWithPath(t)
 	return store, exec, fake, approvalID
@@ -73,7 +77,7 @@ func approvedFlowWithPath(t *testing.T) (*actionsqlite.Store, *executor.Executor
 	}
 	store := app.actions.(*actionsqlite.Store)
 	envD, identD := operatorApprovalEnv("approve", approvalID)
-	rule, err := store.DecideApproval(ctx, approvalID, "approved", time.Now().UTC(), envD, identD, "")
+	rule, err := store.DecideApprovalUnderLaw(ctx, approvalID, "approved", time.Now().UTC(), envD, identD, "", testLaw)
 	if err != nil || rule != "" {
 		t.Fatalf("approve: %q %v", rule, err)
 	}
@@ -114,7 +118,7 @@ func TestExecuteApproved_theExactObjectRuns(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, approvalID := approvedFlow(t)
 	ctx := context.Background()
-	result, err := ExecuteApprovedAction(ctx, store, exec, approvalID)
+	result, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw)
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -143,10 +147,10 @@ func TestExecuteApproved_neverTwice(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, approvalID := approvedFlow(t)
 	ctx := context.Background()
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID); err != nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID); err == nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw); err == nil {
 		t.Fatal("a second execution must refuse by name")
 	}
 	if fake.runs.Load() != 1 {
@@ -161,7 +165,7 @@ func TestExecuteApproved_theDigestBelt(t *testing.T) {
 	// The saboteur swaps the stored params AFTER approval (raw handle,
 	// behind the API's back).
 	tamperApprovalParams(t, dbPath, approvalID, `{"url":"https://EVIL.example"}`)
-	_, err := ExecuteApprovedAction(ctx, store, exec, approvalID)
+	_, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw)
 	if err == nil || !strings.Contains(err.Error(), "digest") {
 		t.Fatalf("tampered params must refuse EXECUTION naming the digest: %v", err)
 	}
@@ -192,12 +196,12 @@ func TestExecuteApproved_aNoNeverExecutes(t *testing.T) {
 	}
 	store := app.actions.(*actionsqlite.Store)
 	envD, identD := operatorApprovalEnv("reject", approvalID)
-	if _, err := store.DecideApproval(ctx, approvalID, "rejected", time.Now().UTC(), envD, identD, "no"); err != nil {
+	if _, err := store.DecideApprovalUnderLaw(ctx, approvalID, "rejected", time.Now().UTC(), envD, identD, "no", testLaw); err != nil {
 		t.Fatalf("reject: %v", err)
 	}
 	fake := &countingTool{}
 	exec := executor.New(tool.Registry{"webhook_call": fake}, 0, time.Now)
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID); err == nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw); err == nil {
 		t.Fatal("a REJECTED request must never execute")
 	}
 	if fake.runs.Load() != 0 {
@@ -215,7 +219,7 @@ func TestExecuteApproved_raceOverTheFullFlow(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID); err == nil {
+			if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw); err == nil {
 				succeeded.Add(1)
 			}
 		}()
@@ -233,7 +237,7 @@ func TestExecuteApproved_ghostAndPending(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, _ := approvedFlow(t)
 	ctx := context.Background()
-	if _, err := ExecuteApprovedAction(ctx, store, exec, "apr_ghost"); !errors.Is(err, actionsqlite.ErrNotFound) {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, "apr_ghost", testLaw); !errors.Is(err, actionsqlite.ErrNotFound) {
 		t.Fatalf("ghost request: %v", err)
 	}
 	_ = fake
@@ -285,16 +289,23 @@ func TestApprovalExecutor_errorBranches(t *testing.T) {
 		PrincipalID: "principal_brain_ghost", Operation: "tool/calc"}); err == nil {
 		t.Fatal("an unknown brain must refuse")
 	}
-	// A caged tool without its cage block fails loud (the boot's own
-	// constructor semantics ride here).
+	// C1: NOTHING rebuilds outside the CURRENT grant list — not even a
+	// pure builtin (the brain here has no agent block at all).
+	if _, err := BuildApprovalExecutor(cfg, action.ActionPreview{
+		PrincipalID: "principal_brain_a", Operation: "tool/calc"}); err == nil {
+		t.Fatal("an ungranted tool must refuse — revoked tools never execute")
+	}
+	// With the grant in place: the caged tool without its cage block
+	// still fails loud (the boot's own constructor semantics), and the
+	// granted pure builtin builds.
+	cfg.Brains[0].Agent = &config.AgentConfig{Tools: []string{"calc", "webhook_call"}}
 	if _, err := BuildApprovalExecutor(cfg, action.ActionPreview{
 		PrincipalID: "principal_brain_a", Operation: "tool/webhook_call"}); err == nil {
 		t.Fatal("a caged tool without its cage must fail loud")
 	}
-	// The pure builtin builds.
 	if _, err := BuildApprovalExecutor(cfg, action.ActionPreview{
 		PrincipalID: "principal_brain_a", Operation: "tool/calc"}); err != nil {
-		t.Fatalf("the pure builtin must build: %v", err)
+		t.Fatalf("the granted pure builtin must build: %v", err)
 	}
 	// TTL parsing: malformed dies, valid parses, absent defaults.
 	if _, err := approvalTTL(&config.ApprovalsConfig{TTL: "garbage"}); err == nil {

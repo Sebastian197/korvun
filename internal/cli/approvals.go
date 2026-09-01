@@ -19,6 +19,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
@@ -176,10 +177,27 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
 	}
-	rule, err := store.DecideApproval(ctx, approvalID, decision, time.Now().UTC(),
+	// C1: an approve consumes authority — compute the CURRENT law pin
+	// for the requesting brain so the decision happens under the law
+	// that governs it TODAY. A reject needs no law (withdrawing
+	// authority is safe under any), so a vanished brain still rejects.
+	var law actionsqlite.PolicyPin
+	if verb == "approve" {
+		_, p0, err := store.GetApproval(ctx, approvalID)
+		if err != nil {
+			_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: %v\n", err)
+			return 1
+		}
+		law, err = app.PolicyPinFor(cfg, strings.TrimPrefix(p0.PrincipalID, "principal_brain_"))
+		if err != nil {
+			_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: %v\n", err)
+			return 1
+		}
+	}
+	rule, err := store.DecideApprovalUnderLaw(ctx, approvalID, decision, time.Now().UTC(),
 		env, actionsqlite.AttemptIdentity{
 			PrincipalID: ident.PrincipalID, IntentID: ident.IntentID, Evidence: ident.Evidence,
-		}, *comment)
+		}, *comment, law)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
@@ -203,7 +221,7 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: %v\n", err)
 		return 1
 	}
-	result, err := app.ExecuteApprovedAction(ctx, store, exec, approvalID)
+	result, err := app.ExecuteApprovedAction(ctx, store, exec, approvalID, law)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: execution: %v\n", err)
 		return 1

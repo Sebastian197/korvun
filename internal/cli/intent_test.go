@@ -35,6 +35,7 @@ func intentTestConfig(t *testing.T) (string, string) {
 			"name": "a", "sensitivity": "public",
 			"policy": map[string]any{"kind": "priority"},
 			"models": []map[string]any{{"provider": "ollama", "model_id": "m", "locality": "local"}},
+			"agent":  map[string]any{"tools": []any{"calc"}},
 		}},
 	}
 	raw, err := json.Marshal(cfg)
