@@ -65,7 +65,9 @@ func TestPolicyPin_coversWhatGovernsTheCage(t *testing.T) {
 			c.Brains[0].Agent.WebhookCall = &config.WebhookCallToolConfig{AllowHosts: []string{"evil.example"}}
 		},
 		func(c *config.Config) {
-			c.Brains[0].Agent.ToolAttrs = map[string]config.ToolAttrsConfig{"calc": {}}
+			// R5 re-map: an EMPTY override is the same conduct (same
+			// law); a REAL override moves the effective cage.
+			c.Brains[0].Agent.ToolAttrs = map[string]config.ToolAttrsConfig{"calc": {Network: boolPtr(true)}}
 		},
 	}
 	for i, mutate := range mutations {

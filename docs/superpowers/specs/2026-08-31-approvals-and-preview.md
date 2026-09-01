@@ -390,11 +390,15 @@ tool-call to PENDING_APPROVAL, end to end.
 Five P1 + one P2, each cured reproduction-first (born red from the
 auditor's own scenario) in its own commit:
 
-- **C1 — the law that actually invalidates.** Declared decision
-  (second-pass self-audit): the pin digests the WHOLE agent block, so
-  a cage-irrelevant field change (e.g. skills_dir) also invalidates
-  pending requests — conservative over-invalidation, a SAFE false
-  positive by design: it invalidates too much, never too little. The policy pin was
+- **C1 — the law that actually invalidates.** Superseded by R5
+  (third Codex pass): the pin digests the EFFECTIVE cage through the
+  single resolver — same conduct is the same law (an explicit cage
+  value equal to its default pins identically to the absent one), and
+  cage-irrelevant fields are EXCLUDED from the digest by declaration:
+  system_prompt, skills_dir, skills_body_budget, max_iterations. The
+  same resolver feeds BuildApprovalExecutor, so the deferred execution
+  always runs the exact cage the law was pinned over (per-tool attr
+  overrides included). The pin format bumped to 3 with the shape. The policy pin was
   versioned by the config-load instant (every reboot "a different
   law") and the domain validator was wired to nothing — AS-6 was
   acceptance theater, purged and re-mapped above. Stable identity:

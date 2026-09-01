@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
@@ -26,25 +27,94 @@ import (
 
 // policyPinFormat identifies the SHAPE of the digested content, not an
 // instant: two loads of the same effective config are the SAME law.
-const policyPinFormat = 2
+const policyPinFormat = 3
 
-// policyDigestFor computes the canonical law digest over everything
-// that governs one brain's cage. The whole agent block rides in (grant
-// list in declared order — order IS part of the operator's config —
-// governance, attrs, per-tool cages and allowlists, ceiling), plus the
-// brain's sensitivity and the effect-registry snapshot. Deterministic:
-// struct fields marshal in declared order, maps sort by key.
-func policyDigestFor(bc config.BrainConfig, effects map[string]action.EffectDescriptor) string {
-	raw, err := json.Marshal(map[string]any{
-		"agent":       bc.Agent,
-		"sensitivity": bc.Sensitivity,
-		"effects":     effects,
-	})
+// effectiveCage resolves the ONE effective cage of a brain (R5): the
+// same resolver feeds the law digest below AND BuildApprovalExecutor —
+// one function, one verdict, so the deferred execution can never run a
+// different jail than the one the law was pinned over. EFFECTIVE means
+// conduct, not spelling: per-tool attrs come from effectiveToolAttrs
+// (house defaults + operator overrides), cage bounds normalize their
+// declared defaults (max_bytes 0 IS the default bound — same conduct,
+// same law), and allow-lists are set-semantic (sorted). Fields that do
+// not govern the cage — system_prompt, skills_dir, skills_body_budget,
+// max_iterations — stay OUT (exclusion declared in the E5 spec).
+// Governance keeps its declared order: order IS part of the law.
+func effectiveCage(bc config.BrainConfig) (map[string]any, error) {
+	cage := map[string]any{"sensitivity": bc.Sensitivity}
+	a := bc.Agent
+	if a == nil {
+		return cage, nil
+	}
+	attrs, err := effectiveToolAttrs(a)
+	if err != nil {
+		return nil, err
+	}
+	cage["tools"] = a.Tools
+	cage["governance"] = a.Governance
+	cage["attrs"] = attrs
+	cage["effect_ceiling"] = a.EffectCeiling
+	if a.ReadFile != nil {
+		cage["read_file"] = map[string]any{
+			"root":      a.ReadFile.Root,
+			"max_bytes": defaultedInt64(a.ReadFile.MaxBytes, tool.DefaultReadFileMaxBytes),
+		}
+	}
+	if a.HTTPFetch != nil {
+		cage["http_fetch"] = map[string]any{
+			"allow_hosts":   sortedCopy(a.HTTPFetch.AllowHosts),
+			"max_bytes":     defaultedInt64(a.HTTPFetch.MaxBytes, tool.DefaultFetchMaxBytes),
+			"max_redirects": defaultedInt(a.HTTPFetch.MaxRedirects, tool.DefaultFetchMaxRedirects),
+		}
+	}
+	if a.WebhookCall != nil {
+		cage["webhook_call"] = map[string]any{
+			"allow_hosts":     sortedCopy(a.WebhookCall.AllowHosts),
+			"max_bytes":       defaultedInt64(a.WebhookCall.MaxBytes, tool.DefaultWebhookMaxBytes),
+			"timeout_seconds": defaultedInt(a.WebhookCall.TimeoutSeconds, int(tool.DefaultWebhookTimeout/time.Second)),
+		}
+	}
+	if a.Memory != nil {
+		cage["memory"] = a.Memory.Settings()
+	}
+	return cage, nil
+}
+
+func defaultedInt64(v, def int64) int64 {
+	if v == 0 {
+		return def
+	}
+	return v
+}
+
+func defaultedInt(v, def int) int {
+	if v == 0 {
+		return def
+	}
+	return v
+}
+
+func sortedCopy(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Strings(out)
+	return out
+}
+
+// policyDigestFor computes the canonical law digest over the EFFECTIVE
+// cage (R5) plus the effect-registry snapshot. Deterministic: maps
+// sort by key under encoding/json.
+func policyDigestFor(bc config.BrainConfig, effects map[string]action.EffectDescriptor) (string, error) {
+	cage, err := effectiveCage(bc)
+	if err != nil {
+		return "", err
+	}
+	cage["effects"] = effects
+	raw, err := json.Marshal(cage)
 	if err != nil {
 		// Unreachable for these plain types; kept for honesty.
-		return "sha256:unmarshalable"
+		return "", fmt.Errorf("app: policy digest: %w", err)
 	}
-	return action.HashCanonical(string(raw))
+	return action.HashCanonical(string(raw)), nil
 }
 
 // effectSnapshot captures the declared registry for the digest: every
@@ -62,11 +132,12 @@ func effectSnapshot() map[string]action.EffectDescriptor {
 }
 
 // policyPin builds one brain's stable law pin.
-func policyPin(bc config.BrainConfig) actionsqlite.PolicyPin {
-	return actionsqlite.PolicyPin{
-		Version: policyPinFormat,
-		Digest:  policyDigestFor(bc, effectSnapshot()),
+func policyPin(bc config.BrainConfig) (actionsqlite.PolicyPin, error) {
+	digest, err := policyDigestFor(bc, effectSnapshot())
+	if err != nil {
+		return actionsqlite.PolicyPin{}, err
 	}
+	return actionsqlite.PolicyPin{Version: policyPinFormat, Digest: digest}, nil
 }
 
 // PolicyPinFor computes the CURRENT law pin for one brain of a loaded
@@ -75,7 +146,7 @@ func policyPin(bc config.BrainConfig) actionsqlite.PolicyPin {
 func PolicyPinFor(cfg *config.Config, brainName string) (actionsqlite.PolicyPin, error) {
 	for _, bc := range cfg.Brains {
 		if bc.Name == brainName {
-			return policyPin(bc), nil
+			return policyPin(bc)
 		}
 	}
 	return actionsqlite.PolicyPin{}, fmt.Errorf("app: policy pin: brain %q is not in the current config", brainName)

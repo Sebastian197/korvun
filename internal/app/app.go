@@ -1093,7 +1093,10 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		// The law pin (FR-POL-1, C1-stable): the digest of the effective
 		// cage-governing content, stamped by the adapter on every
 		// decision — the SAME law across reboots of the same config.
-		pin := policyPin(bc)
+		pin, err := policyPin(bc)
+		if err != nil {
+			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		}
 		opts = append(opts, brain.WithActionRecorder(newBrainRecorder(b.actions, pin, b.approvalsCfg, b.approvalTTL)))
 		// The effect engine (Etapa 3): the brain classifies every attempt
 		// from the DECLARED registry — the same single safe-toolset

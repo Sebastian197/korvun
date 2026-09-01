@@ -69,11 +69,11 @@ func TestPolicyDigest_coversGovernanceAndTheEffectSnapshot(t *testing.T) {
 	effects := map[string]action.EffectDescriptor{
 		"calc": {Class: action.EffectPure},
 	}
-	first := policyDigestFor(bc, effects)
-	if !strings.HasPrefix(first, "sha256:") {
-		t.Fatalf("the law digest carries the pinned algorithm, got %q", first)
+	first, err := policyDigestFor(bc, effects)
+	if err != nil || !strings.HasPrefix(first, "sha256:") {
+		t.Fatalf("the law digest carries the pinned algorithm, got %q (%v)", first, err)
 	}
-	if policyDigestFor(bc, effects) != first {
+	if again, _ := policyDigestFor(bc, effects); again != first {
 		t.Fatal("the law digest must be deterministic")
 	}
 	tightened := bc
@@ -81,13 +81,13 @@ func TestPolicyDigest_coversGovernanceAndTheEffectSnapshot(t *testing.T) {
 		Tools:      []string{"calc"},
 		Governance: []config.ToolGrantConfig{{Tool: "calc", Mode: "deny"}},
 	}
-	if policyDigestFor(tightened, effects) == first {
+	if d, _ := policyDigestFor(tightened, effects); d == first {
 		t.Fatal("a governance change is a DIFFERENT law")
 	}
 	reclassified := map[string]action.EffectDescriptor{
 		"calc": {Class: action.EffectCritical},
 	}
-	if policyDigestFor(bc, reclassified) == first {
+	if d, _ := policyDigestFor(bc, reclassified); d == first {
 		t.Fatal("an effect-registry change is a DIFFERENT law")
 	}
 }

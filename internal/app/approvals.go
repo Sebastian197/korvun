@@ -23,7 +23,6 @@ import (
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/config"
-	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
 
@@ -255,9 +254,14 @@ func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*e
 		if !granted {
 			return nil, fmt.Errorf("app: approval executor: tool %q is not in brain %q's CURRENT grant list — a revoked tool never executes", toolName, brainName)
 		}
-		attrs := map[string]policy.ToolAttrs{}
-		if a, ok := tool.BuiltinAttrs(toolName); ok {
-			attrs[toolName] = policy.ToolAttrs{Sensitive: a.Sensitive, Network: a.Network}
+		// R5: ONE resolver of the effective cage — the deferred
+		// execution rebuilds with the SAME attrs the boot resolves
+		// (house defaults + operator overrides), so an override like
+		// network=true arms the private shield here exactly as it does
+		// live, and a config the boot refuses never builds an executor.
+		attrs, err := effectiveToolAttrs(bc.Agent)
+		if err != nil {
+			return nil, fmt.Errorf("app: approval executor: %w", err)
 		}
 		sens, err := parseSensitivity(bc.Sensitivity)
 		if err != nil {
