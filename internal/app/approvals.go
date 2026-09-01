@@ -163,8 +163,10 @@ func (a *App) recorderForTest() brain.ActionRecorder {
 // ExecuteApprovedAction runs the EXACT stored envelope of an APPROVED
 // request through the one Executor Registry path (spec FR-EXEC, sealed
 // NC-2: identity, never equivalence): claim the canonical params
-// atomically (exactly one executor wins — racing calls cannot fire the
-// effect twice), re-verify them against the approved digest as the
+// atomically (exactly one caller obtains them, so at most one executor
+// START ever happens; C7 honesty: what a crashed start did to the
+// external world is OUTCOME_UNKNOWN, not a claim this function makes),
+// re-verify them against the approved digest as the
 // belt, execute, and close the parked action with its era's E4 receipt
 // and the on-the-fly result digest. A request that is not APPROVED —
 // pending, rejected, cancelled or expired — never executes.

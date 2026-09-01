@@ -223,8 +223,10 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 // resume act for an APPROVED request whose deferred execution never
 // happened — a crash between the decision and the execution leaves
 // the approval consumed and the params held, and this verb picks it
-// up through the SAME one-executor path (the atomic claim guarantees
-// single effect; a consumed one reports honestly instead of re-running).
+// up through the SAME one-executor path (the atomic claim hands the
+// params to exactly one executor START — whether a crashed start
+// reached its effect is C5's OUTCOME_UNKNOWN territory, named, never
+// guessed; a consumed one reports honestly instead of re-running).
 func (c *cli) approvalsExecute(args []string) int {
 	fs := flag.NewFlagSet("approvals execute", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
