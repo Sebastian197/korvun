@@ -15,7 +15,7 @@
 //	key_window_violated        — sealed outside the key's life
 //	chain_link_broken          — the previous hash does not match the
 //	                             predecessor (or the genesis link)
-//	custody_mismatch           — the receipt and its aduana row disagree
+//	custody_mismatch           — the receipt and its action row disagree
 //
 // Verification is READ-ONLY: it opens the store plainly (no sealer, no
 // key generation) and records nothing.
@@ -191,14 +191,14 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 		notes = append(notes, "action_row_absent: row "+r.ActionID+" is gone (retention prunes action rows; the digest-sealed receipt is the surviving evidence)")
 		return failures, notes
 	case err != nil:
-		fail("custody_mismatch", "aduana row %q is unreadable: %v", r.ActionID, err)
+		fail("custody_mismatch", "action row %q is unreadable: %v", r.ActionID, err)
 		return failures, notes
 	}
 	if last := lastReceiptOutcome(ctx, store, r); last && string(rec.State) != r.Outcome {
-		fail("custody_mismatch", "receipt attests %q but the aduana row says %q", r.Outcome, rec.State)
+		fail("custody_mismatch", "receipt attests %q but the action row says %q", r.Outcome, rec.State)
 	}
 	if rec.Envelope.ParametersDigest != r.ActionDigest {
-		fail("custody_mismatch", "receipt action digest %s but the aduana row carries %s",
+		fail("custody_mismatch", "receipt action digest %s but the action row carries %s",
 			r.ActionDigest, rec.Envelope.ParametersDigest)
 	}
 	return failures, notes

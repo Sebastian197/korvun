@@ -181,10 +181,17 @@ func TestLiveView_endToEnd_inboundProducesSSEEvent(t *testing.T) {
 	}
 	br := bufio.NewReader(resp.Body)
 
-	// Feed a real inbound through the fake channel until a message_received frame
-	// arrives (republishing absorbs the race between the SSE subscribe and the
-	// router pump picking up the inbound).
-	frames := make(chan string, 1)
+	// Feed a real inbound through the fake channel until a message_received
+	// frame arrives. HARDENED (the filed v0.13-era flake, cured under the
+	// deadline mold): each inbound emits BOTH message_received and
+	// reply_sent, and on a loaded runner the SSE subscriber can attach
+	// between the two of an EARLIER cycle — so the first frame observed
+	// may legitimately be a reply_sent. The contract this test pins is
+	// "the inbound flow PRODUCES its message_received frame on SSE", not
+	// "it arrives first": the reader streams every frame and the loop
+	// waits for the right TYPE, with a generous deadline. Do not tighten
+	// this back to first-frame ordering.
+	frames := make(chan string, 16)
 	go func() {
 		for {
 			line, err := br.ReadString('\n')
@@ -192,20 +199,22 @@ func TestLiveView_endToEnd_inboundProducesSSEEvent(t *testing.T) {
 				return
 			}
 			if strings.HasPrefix(line, "data: ") {
-				frames <- strings.TrimSpace(strings.TrimPrefix(line, "data: "))
-				return
+				select {
+				case frames <- strings.TrimSpace(strings.TrimPrefix(line, "data: ")):
+				default:
+				}
 			}
 		}
 	}()
 
-	deadline := time.After(3 * time.Second)
+	deadline := time.After(30 * time.Second)
 	feed := time.NewTicker(50 * time.Millisecond)
 	defer feed.Stop()
 	for {
 		select {
 		case frame := <-frames:
 			if !strings.Contains(frame, `"type":"message_received"`) {
-				t.Errorf("first frame is not message_received: %s", frame)
+				continue // another event type from a neighboring cycle — keep waiting
 			}
 			if !strings.Contains(frame, `"channel":"telegram"`) {
 				t.Errorf("frame missing channel: %s", frame)

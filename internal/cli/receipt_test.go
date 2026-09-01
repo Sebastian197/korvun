@@ -6,7 +6,7 @@
 // receipt OFFLINE against the store file — canonical roundtrip through
 // the fuzzed parser, hash recompute, signature against the REGISTERED
 // public key by its signing_key_id, the key's validity window, the
-// chain link to the predecessor, and coherence with the aduana row.
+// chain link to the predecessor, and coherence with the action row.
 // Every failure NAMED — never a generic "invalid". The operator's own
 // CLI acts leave signed receipts that verify (the judge judges itself).
 // Approved-red contract.
@@ -113,7 +113,7 @@ func TestReceiptVerify_namesEveryFailure(t *testing.T) {
 			corruptReceiptCell(t, dbPath, "previous_receipt_hash", receiptID,
 				"sha256:0000000000000000000000000000000000000000000000000000000000000000")
 		}, "chain_link_broken"},
-		{"aduana row divergence", func(t *testing.T, dbPath, receiptID string) {
+		{"action row divergence", func(t *testing.T, dbPath, receiptID string) {
 			divergeAduanaRow(t, dbPath, receiptID)
 		}, "custody_mismatch"},
 	}
@@ -218,7 +218,7 @@ func retireKeyBefore(t *testing.T, dbPath, receiptID string) {
 	}
 }
 
-// divergeAduanaRow flips the aduana row's terminal state out from under
+// divergeAduanaRow flips the action row's terminal state out from under
 // the receipt — outcome coherence must catch it.
 func divergeAduanaRow(t *testing.T, dbPath, receiptID string) {
 	t.Helper()

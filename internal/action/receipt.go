@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Receipt domain (Trust Layer Etapa 4, lote 1, spec FR-REC, blueprint
-// §10.10 subset v1): the canonicalized Execution Receipt — the aduana's
+// §10.10 subset v1): the canonicalized Execution Receipt — the action ledger's
 // row reified into verifiable evidence. Canonicalization is
 // DETERMINISTIC on the fuzzed E1 canonicalizer (sorted keys,
 // RFC3339Nano UTC times, the contract-digest mold): the same receipt is
@@ -38,7 +38,7 @@ type Receipt struct {
 	// (historical bytes verify FOREVER), 2 = the Etapa-5 era with the
 	// approval reference inside the seal (sealed NC-3α).
 	SchemaVersion int
-	// ActionID ties the receipt to its aduana row.
+	// ActionID ties the receipt to its action row.
 	ActionID string
 	// IntentDigest / AuthorityDigest / DecisionDigest / ActionDigest are
 	// the term digests of what was asked, under which contract, by which
