@@ -110,10 +110,14 @@ func NewApprovalID() string {
 // decided and when. Comment and presentation fields are deliberately
 // outside — words do not change a decision's identity.
 func (a Approval) Digest() string {
+	// Widened by the C2 consolidation: what the human READ
+	// (preview_digest) and the law it was read under (policy pin) are
+	// decision terms too — the v2 receipt seals the whole chain.
 	return HashCanonical(fmt.Sprintf(
-		`{"action_digest":%q,"approval_id":%q,"decided_at":%q,"decider":%q,"decision":%q}`,
+		`{"action_digest":%q,"approval_id":%q,"decided_at":%q,"decider":%q,"decision":%q,"policy_digest":%q,"policy_version":%d,"preview_digest":%q}`,
 		a.ActionDigest, a.ApprovalID, timeTerm(a.DecisionAt),
-		a.DecisionPrincipalID, a.Decision))
+		a.DecisionPrincipalID, a.Decision,
+		a.PolicyDigest, a.PolicyVersion, a.PreviewDigest))
 }
 
 // approvalWire is the canonical JSON shape (field order fixed by the

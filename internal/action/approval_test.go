@@ -61,14 +61,20 @@ func TestApprovalDigest_deterministicAndFieldSensitive(t *testing.T) {
 		t.Fatalf("deterministic pinned-form digest: %q vs %q", d1, d2)
 	}
 	// The decision digest covers the CONSUMED decision terms (spec
-	// FR-RCPT-1): id, action digest, decider, decision, decision_at.
-	// Every one of them must move the digest.
+	// FR-RCPT-1, widened by the C2 consolidation): id, action digest,
+	// decider, decision, decision_at — PLUS what the human READ and the
+	// law it was read under: preview_digest, policy_version,
+	// policy_digest. Every one of them must move the digest, so the v2
+	// receipt seals the whole chain end-to-end.
 	mutations := []func(*Approval){
 		func(x *Approval) { x.ApprovalID = "apr_ffffffffffffffffffffffffffffffff" },
 		func(x *Approval) { x.ActionDigest = "sha256:bbbb" },
 		func(x *Approval) { x.DecisionPrincipalID = "principal_other" },
 		func(x *Approval) { x.Decision = "rejected" },
 		func(x *Approval) { x.DecisionAt = x.DecisionAt.Add(time.Second) },
+		func(x *Approval) { x.PreviewDigest = "sha256:other-preview" },
+		func(x *Approval) { x.PolicyVersion = x.PolicyVersion + 1 },
+		func(x *Approval) { x.PolicyDigest = "sha256:other-law" },
 	}
 	for i, mutate := range mutations {
 		x := a

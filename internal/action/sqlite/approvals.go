@@ -140,6 +140,20 @@ func (s *Store) decideApproval(ctx context.Context, approvalID, decision string,
 	if err != nil {
 		return "", err
 	}
+	// C2: the DECISION touch re-verifies the sealed preview inside the
+	// same transaction — no decision is recorded over a preview that no
+	// longer re-derives what the request pinned.
+	var rawPreview string
+	if err := tx.QueryRowContext(ctx,
+		`SELECT canonical_preview FROM approvals WHERE approval_id = ?`, approvalID).Scan(&rawPreview); err != nil {
+		return "", fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
+	}
+	if p, err := action.ParseCanonicalPreview([]byte(rawPreview)); err != nil {
+		return "", fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
+	} else if got := p.Digest(); got != a.PreviewDigest {
+		return "", fmt.Errorf(
+			"action/sqlite: approval %q: preview_digest_mismatch — the stored preview re-derives %s but the request pinned %s; refusing the decision", approvalID, got, a.PreviewDigest)
+	}
 	if rule := action.ApprovalConsumableAt(a, at); rule != "" {
 		if rule == action.RuleApprovalAlreadyDecided {
 			return rule, nil
@@ -352,6 +366,13 @@ func (s *Store) GetApproval(ctx context.Context, approvalID string) (action.Appr
 	p, err := action.ParseCanonicalPreview([]byte(rawPreview))
 	if err != nil {
 		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
+	}
+	// C2: the sealed preview must still re-derive the pinned digest —
+	// a stored preview that parses fine but tells a different story is
+	// refused at the READ, by name.
+	if got := p.Digest(); got != a.PreviewDigest {
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf(
+			"action/sqlite: approval %q: preview_digest_mismatch — the stored preview re-derives %s but the request pinned %s", approvalID, got, a.PreviewDigest)
 	}
 	return a, p, nil
 }
