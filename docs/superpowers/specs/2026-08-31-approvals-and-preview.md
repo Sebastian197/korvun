@@ -385,6 +385,53 @@ byte-for-byte, pinned; unknown class boot-fatal naming the ladder)
 with the chat-path parking test the stage lacked: the REAL wire, model
 tool-call to PENDING_APPROVAL, end to end.
 
+### E5 CONSOLIDATION — second external audit (2026-09-01, adjudicated)
+
+Five P1 + one P2, each cured reproduction-first (born red from the
+auditor's own scenario) in its own commit:
+
+- **C1 — the law that actually invalidates.** The policy pin was
+  versioned by the config-load instant (every reboot "a different
+  law") and the domain validator was wired to nothing — AS-6 was
+  acceptance theater, purged and re-mapped above. Stable identity:
+  the pin digests the effective cage-governing content (whole agent
+  block + sensitivity + effect registry); `DecideApprovalUnderLaw` is
+  the only exported decision surface; execute re-checks at its own
+  touch; a revoked tool never rebuilds (`BuildApprovalExecutor`
+  membership check).
+- **C2 — the preview sealed for real.** Read AND decision recompute
+  the stored preview against its pinned digest
+  (`preview_digest_mismatch`, named); preview_digest + policy pin
+  are decision terms inside `Approval.Digest()` — the v2 receipt
+  seals what the human read, end to end.
+- **C3 — `korvun approvals execute`.** The resume act for a crash
+  between decision and execution; same one-executor path, at most
+  one executor start.
+- **C4 — the third door.** `OpenOperator`: writing, but no recovery,
+  no prune, never a migration of an existing store — those belong to
+  the server boot. CLI-beside-a-live-server is a permanent test.
+- **C5 — the E6 border, honest.** A crash past the params claim
+  closes `OUTCOME_UNKNOWN` (woken from the E6 reserved set as a
+  terminal) with its named marker — never a FAILED lie.
+  Idempotency/reconciliation stay E6, declared in SECURITY.md.
+- **C6 (P2).** Expiry reaches list/show (`EffectiveStatusAt`, the
+  read-only door still never writes); the prune knows REJECTED and
+  OUTCOME_UNKNOWN with the evidence exemption pinned; params capped
+  at 64 KiB at birth.
+- **C7.** Over-promising comments aligned to real guarantees (the
+  claim hands params to exactly one executor START; effects past a
+  crash are OUTCOME_UNKNOWN).
+- **C8 — the auditor's cross battery, permanent members:** tool
+  revocation (`TestApprovalsApprove_revokedToolNeverExecutes`,
+  `TestBuildApprovalExecutor_revokedToolRefusesByName`), policy
+  change (`TestApprovalsApprove_policyChangeInvalidates`), allowlist
+  change (`TestApprovalsApprove_allowlistChangeInvalidates`, born
+  green over the C1 cure — a regression pin), altered preview
+  (`TestPreviewSwap_readRefusesByName`/`_decisionRefusesByName`),
+  decide→execute crash + resume (`TestApprovalsExecute_*`),
+  CLI beside a live server
+  (`TestOpenOperator_besideALiveServerTouchesNothingItDoesNotOwn`).
+
 Toll, final: the NEW path costs ~1.02 ms per parked request (preview
 assembly + born-whole birth), paid ONLY when an irreversible action
 parks; the normal sealed hot path re-measured at ~1.17 ms/op with the

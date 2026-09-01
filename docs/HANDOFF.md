@@ -156,6 +156,44 @@ explicit decision.
 
 ---
 
+## Current state (as of 2026-09-01) — E5 CONSOLIDATION READY FOR REVIEW
+
+> **SECOND CODEX AUDIT (E5, through 618ce1f): 5 P1 + 1 P2, adjudicated
+> substantially CORRECT. The v0.15 scenario is PAUSED (launcher waits;
+> approvals.enabled stays OFF); the effect_ceiling piece (i) landed
+> first (742e09b — the missing cable + the chat-path parking test).
+> The consolidation shipped reproduction-first, one commit per piece,
+> LOCAL ONLY (nothing pushed):**
+> - **C1** `3d7d2da` — stable policy identity (digest of the effective
+>   cage-governing content, never the load instant); the validator
+>   WIRED: `DecideApprovalUnderLaw` is the only exported decision
+>   surface, execute re-checks at its touch, a revoked tool never
+>   rebuilds. AS-6 re-mapped to the auditor's e2e (theater purged).
+> - **C2** `b36bce6` — the preview sealed end-to-end: read AND decision
+>   recompute (`preview_digest_mismatch`, named); preview digest +
+>   policy pin are decision terms inside `Approval.Digest()` → the v2
+>   receipt seals what the human read.
+> - **C3** `81994b4` — `korvun approvals execute`: the resume act for
+>   a decide→execute crash; at most one executor start, ever.
+> - **C4** `99cc845` — the THIRD door (`OpenOperator`): operator acts
+>   write but never run recovery/prune/migration (server boot owns
+>   those); CLI-beside-a-live-server is a permanent test.
+> - **C5** `50dab65` — crash past the params claim closes
+>   `OUTCOME_UNKNOWN` (woken as terminal, named marker), never a
+>   FAILED lie; SECURITY.md/README promises re-worded; E6 scope
+>   declared.
+> - **C6** `e4830d8` — expiry reaches list/show (RO door still never
+>   writes); prune knows REJECTED/OUTCOME_UNKNOWN with the evidence
+>   exemption pinned; params capped 64 KiB at birth.
+> - **C7** `eafb1d8` — over-promising comments aligned to real
+>   guarantees.
+> - **C8** — the auditor's cross battery permanent (map in the spec's
+>   consolidation section).
+> Gates at close: `make quality` green over the whole suite, `go test
+> ./... -race` 38/38 ok. NEXT: Chano's review → Codex re-audit (the
+> gate, iterating until clean) → ceremony and tag. The v0.15 launcher
+> mandate resumes AFTER.
+
 ## Current state (as of 2026-08-30, session close)
 
 > **CURRENT (2026-08-30): TRUST LAYER ETAPA 4 — COMPLETA y v0.14.0
