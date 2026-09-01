@@ -85,8 +85,11 @@ func (c *cli) approvalsList(args []string) int {
 			if !a.ExpiresAt.IsZero() {
 				expiry = "expires " + a.ExpiresAt.UTC().Format(time.RFC3339)
 			}
+			// C6: the consult shows the CLOCK's truth — a PENDING row
+			// past its window lists as EXPIRED (the row itself closes
+			// at the next mutating touch; this door never writes).
 			_, _ = fmt.Fprintf(c.stdout, "%-38s %-9s %-22s %s\n",
-				a.ApprovalID, a.Status, a.RiskSummary, expiry)
+				a.ApprovalID, a.EffectiveStatusAt(time.Now().UTC()), a.RiskSummary, expiry)
 			total++
 		}
 	}
@@ -124,7 +127,7 @@ func (c *cli) approvalsShow(args []string) int {
 	_, _ = fmt.Fprintf(c.stdout, "APPROVING EXACTLY THIS — digest: %s\n\n", a.ActionDigest)
 	_, _ = fmt.Fprintf(c.stdout,
 		"request:       %s (%s)\npurpose:       %s\nactor:         %s (grant %s, depth %d)\noperation:     %s\nresources:     %v\ndata egress:   %s\ncost:          %s\neffect class:  %s\nreversibility: %s\ntool cage:     %s\npinned law:    v%d %s\nrequired by:   %s\nexpires:       %s\n",
-		a.ApprovalID, a.Status, p.IntentPurpose, p.PrincipalID, p.GrantID, p.GrantDepth,
+		a.ApprovalID, a.EffectiveStatusAt(time.Now().UTC()), p.IntentPurpose, p.PrincipalID, p.GrantID, p.GrantDepth,
 		p.Operation, p.Resources, p.DataEgress, p.CostLine, p.EffectClass,
 		p.Reversibility, p.ToolCage, p.PolicyVersion, p.PolicyDigest, p.RequiredRule,
 		a.ExpiresAt.UTC().Format(time.RFC3339))

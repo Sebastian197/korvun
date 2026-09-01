@@ -556,14 +556,19 @@ func (s *Store) Prune(ctx context.Context) (int, error) {
 	if excess <= 0 {
 		return 0, nil
 	}
+	// C6: the E5/C5 terminals (REJECTED, OUTCOME_UNKNOWN) are prunable
+	// like every other terminal — without them the retention cap leaks.
+	// The evidence exemption is elsewhere by construction: receipts
+	// live in their own chain and are never touched by this pass.
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM actions WHERE action_id IN (
 		    SELECT action_id FROM actions
-		     WHERE state IN (?, ?, ?, ?)
+		     WHERE state IN (?, ?, ?, ?, ?, ?)
 		     ORDER BY requested_at ASC, action_id ASC
 		     LIMIT ?)`,
 		string(action.StateDenied), string(action.StateShadowed),
 		string(action.StateSucceeded), string(action.StateFailed),
+		string(action.StateRejected), string(action.StateOutcomeUnknown),
 		excess,
 	)
 	if err != nil {

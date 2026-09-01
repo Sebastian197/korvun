@@ -33,6 +33,13 @@ import (
 // — the approval IS the authorization).
 func parkedRequest(t *testing.T) (cfgPath, dbPath, approvalID string) {
 	t.Helper()
+	return parkedRequestExpiring(t, time.Now().UTC().Add(time.Hour))
+}
+
+// parkedRequestExpiring is the same park with an injectable expiry —
+// the C6 clock-truth scenarios park already-expired requests.
+func parkedRequestExpiring(t *testing.T, expiresAt time.Time) (cfgPath, dbPath, approvalID string) {
+	t.Helper()
 	cfgPath, dbPath = intentTestConfig(t)
 	// The park records the REAL current law (C1): the pin the approve
 	// will re-derive from the same config and validate against.
@@ -72,7 +79,7 @@ func parkedRequest(t *testing.T) (cfgPath, dbPath, approvalID string) {
 		RequestedFrom: action.OperatorPrincipal().PrincipalID,
 		Reason:        "require_approval", RiskSummary: "pure — no external effect",
 		PolicyVersion: law.Version, PolicyDigest: law.Digest,
-		RequestedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour),
+		RequestedAt: time.Now().UTC().Add(-2 * time.Hour), ExpiresAt: expiresAt,
 		Status: action.ApprovalPending,
 	}
 	if err := store.CreateApprovalRequest(context.Background(), env,

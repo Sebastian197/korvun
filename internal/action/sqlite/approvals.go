@@ -28,12 +28,22 @@ import (
 // ErrUnknownDecision reports a decision verb outside the finite set.
 var ErrUnknownDecision = errors.New("action/sqlite: unknown decision verb")
 
+// maxApprovalParamsBytes caps the raw params a request may park (C6,
+// the resource-bound invariant): 64 KiB holds any reasonable tool call
+// and refuses the unbounded blob.
+const maxApprovalParamsBytes = 64 << 10
+
 // CreateApprovalRequest parks env as PENDING_APPROVAL and persists the
 // approval request, its sealed preview and its canonical parameters in
 // one transaction. The integrity pin runs BEFORE anything lands: the
 // canonical params must re-derive env's exact digest, and the approval
 // must bind that same digest — otherwise the request does not born.
 func (s *Store) CreateApprovalRequest(ctx context.Context, env action.Envelope, d Decision, a action.Approval, p action.ActionPreview, rawParams string) error {
+	// C6: the resource-bound invariant at the door — parked params are
+	// the one user-driven blob this table holds; cap them at birth.
+	if len(rawParams) > maxApprovalParamsBytes {
+		return fmt.Errorf("action/sqlite: approval request %q: params of %d bytes exceed the %d-byte cap — an approval request is a decision record, not a payload store", a.ApprovalID, len(rawParams), maxApprovalParamsBytes)
+	}
 	canonical := string(action.CanonicalParams(rawParams))
 	if got := action.Digest(env.Operation, rawParams); got != env.ParametersDigest {
 		return fmt.Errorf("action/sqlite: approval request %q: params do not derive the envelope digest (%s vs %s)", a.ApprovalID, got, env.ParametersDigest)

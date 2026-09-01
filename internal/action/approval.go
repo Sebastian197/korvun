@@ -235,6 +235,19 @@ func ValidateApprovalBinding(a Approval, actionDigest string, policyVersion int6
 	return "", ""
 }
 
+// EffectiveStatusAt reports the status the CLOCK gives the approval at
+// the injected instant (C6): a PENDING request past its window is
+// EXPIRED for every consult, even though the row itself closes only at
+// the next mutating touch (the E2 mold — read-only doors never write).
+// Same half-open window as ApprovalConsumableAt: the expiry instant is
+// OUT.
+func (a Approval) EffectiveStatusAt(now time.Time) ApprovalStatus {
+	if a.Status == ApprovalPending && !a.ExpiresAt.IsZero() && !now.Before(a.ExpiresAt) {
+		return ApprovalExpired
+	}
+	return a.Status
+}
+
 // ApprovalConsumableAt reports whether the approval can be consumed at
 // the injected instant: "" when it can, the finite rule when it cannot.
 // The E2 clock discipline verbatim: half-open window (the expiry
