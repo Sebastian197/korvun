@@ -450,13 +450,26 @@ func open(path string) (*Store, error) {
 // re-executed (the blueprint's §16.4 honesty applied early: the kernel
 // does not invent idempotency it does not have yet).
 func (s *Store) recoverPreviousLife(ctx context.Context) error {
+	// The Etapa-5 exemptions (found by the cross-check family): a
+	// PARKED action (PENDING_APPROVAL) waits for a human BY DESIGN —
+	// the approval's expiry clock governs it, never this pass. An
+	// APPROVED action whose canonical params are still held awaits its
+	// deferred execution and survives too; APPROVED whose params were
+	// CLAIMED is a true orphan (crash between claim and close) and
+	// closes honestly like every other one.
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
-		  WHERE state NOT IN (?, ?, ?, ?)`,
+		  WHERE state NOT IN (?, ?, ?, ?, ?, ?)
+		    AND NOT (state = ? AND EXISTS (
+		        SELECT 1 FROM approvals
+		         WHERE approvals.action_id = actions.action_id
+		           AND approvals.canonical_params != ''))`,
 		string(action.StateFailed), recoveryMarkerCrash,
 		time.Now().UTC().Format(time.RFC3339Nano),
 		string(action.StateDenied), string(action.StateShadowed),
 		string(action.StateSucceeded), string(action.StateFailed),
+		string(action.StateRejected), string(action.StatePendingApproval),
+		string(action.StateApproved),
 	)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: recovery pass: %w", err)

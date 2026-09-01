@@ -14,6 +14,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
 
@@ -207,4 +209,43 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		return "", fmt.Errorf("app: approved execution of %s failed: %w", approvalID, execErr)
 	}
 	return result, nil
+}
+
+// BuildApprovalExecutor builds the executor for ONE approved action's
+// deferred run (Etapa 5 FR-CLI): the acting brain is recovered from
+// the preview's principal ("principal_brain_<name>" — the E2 identity
+// mold), its config block found, and THE tool rebuilt with its real
+// cage through the same constructor the boot uses. memory_note (the
+// one tool needing the live app's note store) fails loud here — and
+// honestly cannot appear: write_reversible never parks for approval.
+func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*executor.Executor, error) {
+	const brainPrefix = "principal_brain_"
+	if !strings.HasPrefix(preview.PrincipalID, brainPrefix) {
+		return nil, fmt.Errorf("app: approval executor: principal %q is not a brain principal", preview.PrincipalID)
+	}
+	brainName := strings.TrimPrefix(preview.PrincipalID, brainPrefix)
+	toolName := preview.Operation
+	if i := strings.LastIndex(toolName, "/"); i >= 0 {
+		toolName = toolName[i+1:]
+	}
+	for _, bc := range cfg.Brains {
+		if bc.Name != brainName {
+			continue
+		}
+		attrs := map[string]policy.ToolAttrs{}
+		if a, ok := tool.BuiltinAttrs(toolName); ok {
+			attrs[toolName] = policy.ToolAttrs{Sensitive: a.Sensitive, Network: a.Network}
+		}
+		sens, err := parseSensitivity(bc.Sensitivity)
+		if err != nil {
+			return nil, fmt.Errorf("app: approval executor: %w", err)
+		}
+		b := &builder{logger: slog.New(slog.DiscardHandler)}
+		t, err := b.agentTool(bc, toolName, attrs, sens)
+		if err != nil {
+			return nil, fmt.Errorf("app: approval executor for %s/%s: %w", brainName, toolName, err)
+		}
+		return executor.New(tool.Registry{toolName: t}, 0, time.Now), nil
+	}
+	return nil, fmt.Errorf("app: approval executor: brain %q not in the current config", brainName)
 }

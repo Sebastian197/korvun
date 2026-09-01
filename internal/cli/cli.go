@@ -112,6 +112,8 @@ func (c *cli) run(args []string) int {
 		return c.receiptCmd(args[1:])
 	case "ledger":
 		return c.ledgerCmd(args[1:])
+	case "approvals":
+		return c.approvalsCmd(args[1:])
 	}
 
 	// Retrocompat shim: the pre-CLI `korvun -config x.json` invocation (a leading

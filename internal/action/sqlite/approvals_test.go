@@ -665,3 +665,85 @@ func TestApproval_scanCorruptionBranches(t *testing.T) {
 		t.Fatal("a corrupt decision_at must fail the read loud")
 	}
 }
+
+// The cross-check law strikes again (found by the lote-4 CLI tests):
+// the E1 crash recovery closed EVERY non-terminal action on open —
+// killing legitimately PARKED actions that wait for a human by design.
+// The recovery must distinguish: PENDING_APPROVAL always survives (the
+// expiry clock governs it, not the recovery); APPROVED with its params
+// still held survives (awaiting deferred execution); APPROVED whose
+// params were CLAIMED (crash between claim and close) is a true orphan
+// and closes honestly.
+func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
+	t.Parallel()
+	path := t.TempDir() + "/korvun.db"
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	ctx := context.Background()
+	// A parked request and an approved-with-params one.
+	a1, _ := pendingRequest(t, store, "act_park")
+	a2, _ := pendingRequest(t, store, "act_appr")
+	env, ident := operatorDecisionEnv("approve", a2.ApprovalID)
+	if _, err := store.DecideApproval(ctx, a2.ApprovalID, "approved",
+		a2.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	// And an approved one whose params were CLAIMED (the true orphan).
+	a3, _ := pendingRequest(t, store, "act_claimed")
+	env3, ident3 := operatorDecisionEnv("approve", a3.ApprovalID)
+	if _, err := store.DecideApproval(ctx, a3.ApprovalID, "approved",
+		a3.RequestedAt.Add(time.Minute), env3, ident3, ""); err != nil {
+		t.Fatalf("approve 3: %v", err)
+	}
+	if _, err := store.ClaimApprovalParams(ctx, a3.ApprovalID); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	_ = store.Close()
+	// The next life opens with the full door: recovery runs.
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer func() { _ = reopened.Close() }()
+	if rec, _ := reopened.Get(ctx, "act_park"); rec.State != action.StatePendingApproval || rec.RecoveryMarker != "" {
+		t.Fatalf("a PARKED action must survive the reopen: %v %q", rec.State, rec.RecoveryMarker)
+	}
+	if rec, _ := reopened.Get(ctx, "act_appr"); rec.State != action.StateApproved || rec.RecoveryMarker != "" {
+		t.Fatalf("APPROVED-with-params awaits its deferred execution: %v %q", rec.State, rec.RecoveryMarker)
+	}
+	if rec, _ := reopened.Get(ctx, "act_claimed"); rec.State != action.StateFailed || rec.RecoveryMarker != "crash_recovered" {
+		t.Fatalf("APPROVED-claimed is a true crash orphan and closes: %v %q", rec.State, rec.RecoveryMarker)
+	}
+	_ = a1
+}
+
+// REJECTED is a TERMINAL state (E5) and must survive the recovery pass
+// like every other terminal — found when the recovery flattened a
+// rejected action to FAILED on the next open.
+func TestRecovery_rejectedIsTerminalAndSurvives(t *testing.T) {
+	t.Parallel()
+	path := t.TempDir() + "/korvun.db"
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	ctx := context.Background()
+	a, _ := pendingRequest(t, store, "act_rejsur")
+	env, ident := operatorDecisionEnv("reject", a.ApprovalID)
+	if _, err := store.DecideApproval(ctx, a.ApprovalID, "rejected",
+		a.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	_ = store.Close()
+	reopened, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer func() { _ = reopened.Close() }()
+	rec, _ := reopened.Get(ctx, "act_rejsur")
+	if rec.State != action.StateRejected || rec.RecoveryMarker != "" {
+		t.Fatalf("REJECTED is terminal and survives: %v %q", rec.State, rec.RecoveryMarker)
+	}
+}
