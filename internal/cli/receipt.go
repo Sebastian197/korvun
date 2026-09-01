@@ -176,10 +176,16 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 	// timing) breaks the sealed reference BY NAME. Approvals are never
 	// pruned, so an absent row here is itself a failure.
 	if r.SchemaVersion >= 2 && r.ApprovalDigest != "" {
-		if consumed, _, err := store.GetApprovalByAction(ctx, r.ActionID); err != nil {
+		switch consumed, _, err := store.GetApprovalByAction(ctx, r.ActionID); {
+		case errors.Is(err, actionsqlite.ErrNotFound):
 			fail("approval_mismatch", "receipt seals approval digest %s but no approval row exists for %s", r.ApprovalDigest, r.ActionID)
-		} else if got := consumed.Digest(); got != r.ApprovalDigest {
-			fail("approval_mismatch", "receipt seals %s but the approval row re-derives %s", r.ApprovalDigest, got)
+		case err != nil:
+			// F2: the failure NAMES its real cause — a stored preview
+			// that no longer re-derives its pin reports the C2
+			// preview_digest_mismatch, never a fictitious absent row.
+			fail("approval_mismatch", "approval row for %s is unreadable: %v", r.ActionID, err)
+		case consumed.Digest() != r.ApprovalDigest:
+			fail("approval_mismatch", "receipt seals %s but the approval row re-derives %s", r.ApprovalDigest, consumed.Digest())
 		}
 	}
 	// 7. Coherence with the action row — WHEN it still exists. The E1
