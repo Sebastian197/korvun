@@ -326,7 +326,8 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		}
 		// The live ink (FR-LED): every terminal outcome is born signed
 		// with the profile's active key, inside the outcome's own
-		// transaction.
+		// transaction — since R3 the recovery closes included, so the
+		// claim carries no silent exemption.
 		actions.SetReceiptSealer(func(r action.Receipt) action.Receipt {
 			return action.SignReceipt(signingKey, r)
 		})

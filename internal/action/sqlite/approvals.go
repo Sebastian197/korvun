@@ -35,9 +35,11 @@ const maxApprovalParamsBytes = 64 << 10
 
 // CreateApprovalRequest parks env as PENDING_APPROVAL and persists the
 // approval request, its sealed preview and its canonical parameters in
-// one transaction. The integrity pin runs BEFORE anything lands: the
-// canonical params must re-derive env's exact digest, and the approval
-// must bind that same digest — otherwise the request does not born.
+// one transaction. BORN WHOLE means the whole story (R1): the params
+// re-derive env's exact digest, the approval binds that digest, and
+// every cross link holds — preview digest, policy pin, args digest and
+// rule agree across approval, preview and gate decision, each refusing
+// BY NAME — otherwise the request is not born.
 func (s *Store) CreateApprovalRequest(ctx context.Context, env action.Envelope, d Decision, a action.Approval, p action.ActionPreview, rawParams string) error {
 	// C6: the resource-bound invariant at the door — parked params are
 	// the one user-driven blob this table holds; cap them at birth.

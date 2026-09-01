@@ -702,7 +702,7 @@ func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 		t.Fatalf("claim: %v", err)
 	}
 	_ = store.Close()
-	// The next life opens with the full door: recovery runs.
+	// The next life: the boot mold — open, then the explicit pass (R3).
 	reopened, err := Open(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)

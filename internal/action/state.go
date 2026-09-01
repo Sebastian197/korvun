@@ -49,7 +49,10 @@ const (
 	StatePrepared State = "PREPARED"
 	// StateCommitting is reserved for Etapa 6.
 	StateCommitting State = "COMMITTING"
-	// StateOutcomeUnknown is reserved for Etapa 6.
+	// StateOutcomeUnknown WOKE with the C5 consolidation as the honest
+	// terminal for a crash caught past the approval-params claim: the
+	// external effect may or may not have fired. Reconciliation of the
+	// uncertainty stays with Etapa 6.
 	StateOutcomeUnknown State = "OUTCOME_UNKNOWN"
 	// StateCompensating is reserved for Etapa 6.
 	StateCompensating State = "COMPENSATING"
