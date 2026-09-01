@@ -10,7 +10,13 @@
 // mold: ActionRecorder, ActionIdentity, now this).
 package brain
 
-import "github.com/Sebastian197/korvun/internal/action"
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/Sebastian197/korvun/internal/action"
+)
 
 // EffectClassifier classifies one operation by NAME from the declared
 // registry. The signature is the §9.7 law made compile-time: there is
@@ -67,4 +73,31 @@ func effectGateRule(class action.EffectClass, ceiling action.EffectClass, requir
 		return "prepare_unavailable"
 	}
 	return ""
+}
+
+// approvalRequester is the OPTIONAL extension of the recorder seam
+// (Etapa 5, spec FR-GATE, sealed NC-2): a recorder that can turn the
+// gate's honest approval_unavailable into a full request — the action
+// parked PENDING_APPROVAL with its sealed preview and its canonical
+// parameters, born whole in one transaction. The app wires it ONLY
+// when approvals.enabled; without it the E3 denial stands
+// byte-for-byte forever (the sacred pin). Interface-assertion mold.
+type approvalRequester interface {
+	RequestApproval(ctx context.Context, env action.Envelope, rule string, rawParams string) (string, error)
+}
+
+// pendingApprovalObservation is the honest observation the model
+// receives when an action parks for human approval: unmistakably
+// PENDING — not an error, not a denial, not a success — naming the
+// request so the operator's decision can be referenced later. The
+// conversation never blocks waiting for a human (FR-GATE-2).
+func pendingApprovalObservation(name, approvalID string, expiresAt time.Time) string {
+	expiry := ""
+	if !expiresAt.IsZero() {
+		expiry = " The request expires at " + expiresAt.UTC().Format(time.RFC3339) + "."
+	}
+	return fmt.Sprintf("PENDING APPROVAL: the tool %s was NOT executed yet. This action requires "+
+		"human approval and is parked as request %s awaiting the operator's decision.%s "+
+		"Tell the user plainly that the action awaits approval — do NOT retry it, do NOT "+
+		"offer to do it manually, and do NOT treat this as a failure.", name, approvalID, expiry)
 }

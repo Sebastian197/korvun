@@ -1,153 +1,200 @@
 // Copyright 2026 Sebastián Moreno Saavedra
 // SPDX-License-Identifier: Apache-2.0
 
-// The new outcomes, failing closed — Etapa 3, lote 5 (spec FR-REQ, sealed
-// NC-2(b)): under BOUNDED authority (a ceilinged grant — never the root)
-// a write_irreversible or critical action requires human approval, and
-// with no approval workflow until E5 it dies DENIED approval_unavailable
-// with its full receipt (the real refused class inside). require_prepare
-// likewise: no connector supports prepare yet, so any path demanding it
-// dies prepare_unavailable — never a pass for lack of machinery. The
-// root and the derived grants never meet these outcomes (pinned), and
-// the gate's precedence is deterministic: the first applicable denial
-// wins with its stable code. Approved-red contract.
+// The seam wakes — Etapa 5, lote 3, pieza 1 (spec FR-GATE, sealed):
+// when the recorder carries the OPTIONAL RequestApproval extension
+// (wired by the app ONLY when approvals.enabled), the gate's honest
+// approval_unavailable becomes a full request: the action parks with
+// its preview and the model receives an honest pending observation —
+// the conversation never blocks on a human. Without the extension the
+// E3 behavior is byte-for-byte (THE SACRED PIN at this layer).
+// Precedence §13.3 untouched: the ceiling still rules first; SHADOWED
+// never touches this path; a failed request falls CLOSED back to the
+// honest no. Approved-red contract.
 
 package brain
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
+	"github.com/Sebastian197/korvun/internal/policy"
+	"github.com/Sebastian197/korvun/internal/tool"
 )
 
-// TestApproval_irreversibleUnderBoundedAuthorityDiesHonestly (a): the
-// sealed NC-2(b) — bounded authority gets the full §10.6 treatment
-// TODAY, fail-closed.
-func TestApproval_irreversibleUnderBoundedAuthorityDiesHonestly(t *testing.T) {
+// requestingRecorder implements the optional approval-request extension.
+type requestingRecorder struct {
+	fakeRecorder
+	requests []action.Envelope
+	rawArgs  []string
+	reqRules []string
+	fail     error
+}
+
+func (r *requestingRecorder) RequestApproval(ctx context.Context, env action.Envelope, rule string, rawParams string) (string, error) {
+	if r.fail != nil {
+		return "", r.fail
+	}
+	r.requests = append(r.requests, env)
+	r.rawArgs = append(r.rawArgs, rawParams)
+	r.reqRules = append(r.reqRules, rule)
+	return "apr_testrequest0000", nil
+}
+
+// irreversibleTool is a journal tool declared write_irreversible.
+func approvalHarness(t *testing.T, rec ActionRecorder) (*AgentBrain, *[]string) {
+	t.Helper()
+	journal := &[]string{}
+	a := NewAgentBrain(
+		&scriptedModel{},
+		tool.Registry{"journal": &journalTool{journal: journal}},
+		WithAgentName("apr"),
+		WithActionRecorder(rec),
+		WithEffectClassifier(func(name string) (action.EffectDescriptor, bool) {
+			return action.EffectDescriptor{Class: action.EffectWriteIrreversible}, true
+		}),
+		WithActionIdentity(ActionIdentity{
+			Registry: action.ProvenanceRegistry{
+				"console": {Class: "console", Credential: action.CredentialLoopbackInProcess},
+			},
+			IntentID:      action.RootIntentID,
+			GrantID:       "grant_test",
+			EffectCeiling: action.EffectWriteIrreversible, // bounded: approval demanded
+		}),
+	)
+	return a, journal
+}
+
+func TestGate_theArmWakes_requestInsteadOfDenial(t *testing.T) {
 	t.Parallel()
-	for _, class := range []action.EffectClass{action.EffectWriteIrreversible, action.EffectCritical} {
-		// Ceiling critical: the class FITS under the ceiling — approval is
-		// the reason it dies, not the ceiling.
-		a, rec, journal := ceilingHarness(t, class, action.EffectCritical)
-		out := a.runTool(context.Background(), ceilingEnv(), nil, laneText, "journal", `{}`)
-		if out != deniedObservation("journal") {
-			t.Fatalf("%s under bounded authority must be denied, got %q", class, out)
-		}
-		for _, step := range *journal {
-			if step == "execute" {
-				t.Fatalf("%s must NEVER execute without approval", class)
-			}
-		}
-		if rec.identifiedRules[0] != "approval_unavailable" {
-			t.Fatalf("stable rule for %s: got %q, want approval_unavailable", class, rec.identifiedRules[0])
-		}
-		if rec.identifiedEnvs[0].Effect.Class != string(class) {
-			t.Fatalf("the receipt carries the REAL refused class, got %q", rec.identifiedEnvs[0].Effect.Class)
+	journal := &[]string{}
+	rec := &requestingRecorder{fakeRecorder: fakeRecorder{journal: journal}}
+	a, toolJournal := approvalHarness(t, rec)
+	_ = toolJournal
+	out := a.runTool(context.Background(), kernelEnv(), nil, laneText, "journal", `{"note":"irreversible"}`)
+	// The observation is HONEST about the pending human: it names the
+	// request and never pretends execution or failure.
+	if !strings.Contains(out, "apr_testrequest0000") {
+		t.Fatalf("the observation must name the pending request: %q", out)
+	}
+	if strings.Contains(out, "not permitted") || strings.Contains(out, "failed") {
+		t.Fatalf("pending is neither a denial nor a failure: %q", out)
+	}
+	// The request carried the full envelope and the RAW args (the store
+	// needs them for the born-whole birth), under the require_approval rule.
+	if len(rec.requests) != 1 || rec.reqRules[0] != "require_approval" {
+		t.Fatalf("one request under require_approval: %+v %+v", rec.requests, rec.reqRules)
+	}
+	if rec.rawArgs[0] != `{"note":"irreversible"}` {
+		t.Fatalf("the raw args must travel to the birth: %q", rec.rawArgs[0])
+	}
+	// NOTHING executed and NOTHING recorded as denied.
+	for _, entry := range *journal {
+		if entry == "execute" || strings.HasPrefix(entry, "record:") {
+			t.Fatalf("no execution, no denial record — journal: %v", *journal)
 		}
 	}
 }
 
-// (a) continued: classes below write_irreversible under the same bounded
-// authority keep executing — approval is demanded by the §10.6 treatment
-// table, not sprayed over everything.
-func TestApproval_lowerClassesUnderBoundedAuthorityStillExecute(t *testing.T) {
+func TestGate_theSacredPin_withoutTheExtensionE3ByteForByte(t *testing.T) {
 	t.Parallel()
-	for _, class := range []action.EffectClass{
-		action.EffectPure, action.EffectReadExternal,
-		action.EffectWriteReversible, action.EffectWriteCompensatable,
-	} {
-		a, _, journal := ceilingHarness(t, class, action.EffectCritical)
-		out := a.runTool(context.Background(), ceilingEnv(), nil, laneText, "journal", `{}`)
-		if out != "done" {
-			t.Fatalf("%s under bounded authority must execute, got %q", class, out)
-		}
-		executed := false
-		for _, step := range *journal {
-			if step == "execute" {
-				executed = true
-			}
-		}
-		if !executed {
-			t.Fatalf("%s must have executed", class)
-		}
-	}
-}
-
-// TestApproval_rootAndDerivedNeverMeetTheseOutcomes (c): the exterior
-// pinned explicitly — no ceiling wired (the root's standing authority
-// and today's derived grants) means today's behavior byte-for-byte,
-// write_irreversible included.
-func TestApproval_rootAndDerivedNeverMeetTheseOutcomes(t *testing.T) {
-	t.Parallel()
-	for _, class := range []action.EffectClass{action.EffectWriteIrreversible, action.EffectCritical} {
-		a, rec, _ := ceilingHarness(t, class, "")
-		out := a.runTool(context.Background(), ceilingEnv(), nil, laneText, "journal", `{}`)
-		if out != "done" {
-			t.Fatalf("under the root's standing authority %s executes exactly as in v0.12.0, got %q", class, out)
-		}
-		for _, rule := range rec.identifiedRules {
-			if rule == "approval_unavailable" || rule == "prepare_unavailable" {
-				t.Fatalf("today's flows must never meet the new outcomes, got %q", rule)
-			}
-		}
-	}
-}
-
-// TestGatePrecedence_isDeterministic (d, §13.3 subset): the first
-// applicable denial wins with its stable code — effect_ceiling outranks
-// approval (a class over the ceiling is refused as such, even when it
-// would also require approval), and the pure helper pins the whole
-// precedence table.
-func TestGatePrecedence_isDeterministic(t *testing.T) {
-	t.Parallel()
-	// Over the ceiling AND approval-class: the ceiling wins.
-	a, rec, _ := ceilingHarness(t, action.EffectCritical, action.EffectReadExternal)
-	out := a.runTool(context.Background(), ceilingEnv(), nil, laneText, "journal", `{}`)
+	journal := &[]string{}
+	rec := &fakeRecorder{journal: journal}
+	a, _ := approvalHarness(t, rec)
+	out := a.runTool(context.Background(), kernelEnv(), nil, laneText, "journal", `{}`)
 	if out != deniedObservation("journal") {
-		t.Fatalf("denied, got %q", out)
+		t.Fatalf("without the extension the honest no stands byte-for-byte: %q", out)
 	}
-	if rec.identifiedRules[0] != "effect_ceiling" {
-		t.Fatalf("the FIRST applicable denial wins: got %q, want effect_ceiling", rec.identifiedRules[0])
+	if len(rec.rules) != 1 || rec.rules[0] != "approval_unavailable" {
+		t.Fatalf("the E3 rule stands: %+v", rec.rules)
 	}
-	// The pure helper's precedence table, row by row.
-	cases := []struct {
-		class   action.EffectClass
-		ceiling action.EffectClass
-		prepare bool
-		want    string
-	}{
-		{action.EffectPure, "", false, ""},
-		{action.EffectCritical, "", false, ""},                                      // root: no ceiling, no demand
-		{action.EffectCritical, action.EffectReadExternal, false, "effect_ceiling"}, // ceiling first
-		{action.EffectCritical, action.EffectCritical, false, "approval_unavailable"},
-		{action.EffectWriteIrreversible, action.EffectCritical, false, "approval_unavailable"},
-		{action.EffectWriteReversible, action.EffectCritical, false, ""},
-		{action.EffectPure, action.EffectPure, true, "prepare_unavailable"},
-		{action.EffectCritical, action.EffectReadExternal, true, "effect_ceiling"}, // ceiling still first
-		{action.EffectClass("garbage"), action.EffectCritical, false, "effect_ceiling"},
+	if len(rec.states) != 1 || rec.states[0] != action.StateDenied {
+		t.Fatalf("the E3 denial stands: %+v", rec.states)
 	}
-	for _, tc := range cases {
-		got := effectGateRule(tc.class, tc.ceiling, tc.prepare)
-		if got != tc.want {
-			t.Fatalf("effectGateRule(%s, %s, prepare=%v) = %q, want %q",
-				tc.class, tc.ceiling, tc.prepare, got, tc.want)
+}
+
+func TestGate_theCeilingStillRulesFirst(t *testing.T) {
+	t.Parallel()
+	journal := &[]string{}
+	rec := &requestingRecorder{fakeRecorder: fakeRecorder{journal: journal}}
+	a := NewAgentBrain(
+		&scriptedModel{},
+		tool.Registry{"journal": &journalTool{journal: journal}},
+		WithAgentName("apr"),
+		WithActionRecorder(rec),
+		WithEffectClassifier(func(name string) (action.EffectDescriptor, bool) {
+			return action.EffectDescriptor{Class: action.EffectCritical}, true
+		}),
+		WithActionIdentity(ActionIdentity{
+			Registry: action.ProvenanceRegistry{
+				"console": {Class: "console", Credential: action.CredentialLoopbackInProcess},
+			},
+			IntentID:      action.RootIntentID,
+			GrantID:       "grant_test",
+			EffectCeiling: action.EffectReadExternal, // critical EXCEEDS the ceiling
+		}),
+	)
+	out := a.runTool(context.Background(), kernelEnv(), nil, laneText, "journal", `{}`)
+	if out != deniedObservation("journal") {
+		t.Fatalf("§13.3: the ceiling rules FIRST — denial, never a request: %q", out)
+	}
+	if len(rec.requests) != 0 {
+		t.Fatal("a ceiling violation must NEVER become an approval request")
+	}
+	if len(rec.rules) != 1 || rec.rules[0] != "effect_ceiling" {
+		t.Fatalf("the ceiling rule stands: %+v", rec.rules)
+	}
+}
+
+func TestGate_aFailedRequestFallsClosedToTheHonestNo(t *testing.T) {
+	t.Parallel()
+	journal := &[]string{}
+	rec := &requestingRecorder{fakeRecorder: fakeRecorder{journal: journal}, fail: errors.New("store on fire")}
+	a, _ := approvalHarness(t, rec)
+	out := a.runTool(context.Background(), kernelEnv(), nil, laneText, "journal", `{}`)
+	if out != deniedObservation("journal") {
+		t.Fatalf("a failed birth falls CLOSED to the denial: %q", out)
+	}
+	if len(rec.rules) != 1 || rec.rules[0] != "approval_unavailable" {
+		t.Fatalf("the fallback denial carries the honest rule: %+v", rec.rules)
+	}
+}
+
+func TestGate_shadowNeverTouchesTheApprovalPath(t *testing.T) {
+	t.Parallel()
+	journal := &[]string{}
+	rec := &requestingRecorder{fakeRecorder: fakeRecorder{journal: journal}}
+	a, _ := approvalHarness(t, rec)
+	decisions := map[string]policy.ToolDecision{"journal": {Mode: policy.ToolShadow}}
+	out := a.runTool(context.Background(), kernelEnv(), decisions, laneText, "journal", `{}`)
+	if !strings.Contains(out, "REHEARSAL") {
+		t.Fatalf("shadow keeps its rehearsal observation: %q", out)
+	}
+	if len(rec.requests) != 0 {
+		t.Fatal("SHADOWED must never create approval requests")
+	}
+	for _, entry := range *journal {
+		if entry == "execute" {
+			t.Fatal("shadow NEVER executes")
 		}
 	}
 }
 
-// TestPrepare_unavailableFailsClosed (b): the vocabulary and its wall
-// exist NOW; the demand signal stays structurally unreachable until a
-// connector declares prepare support (its descriptor field is RESERVED)
-// — but whatever demands it dies closed, never passes.
-func TestPrepare_unavailableFailsClosed(t *testing.T) {
+// The pending observation must be reproducible for the mold: verify it
+// tells the model the truth (pending, not done, no manual offer).
+func TestGate_pendingObservationSpeaksTheTruth(t *testing.T) {
 	t.Parallel()
-	if got := effectGateRule(action.EffectReadExternal, action.EffectCritical, true); got != "prepare_unavailable" {
-		t.Fatalf("a prepare demand without machinery must die prepare_unavailable, got %q", got)
+	obs := pendingApprovalObservation("journal", "apr_abc123", time.Time{})
+	for _, must := range []string{"journal", "apr_abc123", "approval"} {
+		if !strings.Contains(obs, must) {
+			t.Fatalf("observation must mention %q: %q", must, obs)
+		}
 	}
-	// And under NO bounded authority a prepare demand STILL dies: the rule
-	// guards the mechanism's absence, not the authority's shape.
-	if got := effectGateRule(action.EffectReadExternal, "", true); got != "prepare_unavailable" {
-		t.Fatalf("prepare_unavailable is authority-independent, got %q", got)
+	if strings.Contains(strings.ToLower(obs), "error") {
+		t.Fatalf("pending is not an error: %q", obs)
 	}
 }

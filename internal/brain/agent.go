@@ -740,6 +740,33 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	if a.identity != nil && a.effects != nil {
 		if descriptor, declared := a.effects(name); declared {
 			if rule := effectGateRule(descriptor.Class, a.identity.EffectCeiling, false); rule != "" {
+				// The Etapa-5 arm (spec FR-GATE, sealed): when the app
+				// wired the approval extension, the honest
+				// approval_unavailable becomes a FULL parked request —
+				// precedence untouched (the ceiling arm above this one
+				// never reaches here), shadow never reaches this block
+				// at all (it returns in the capability gate), and a
+				// failed birth falls CLOSED back to the E3 denial.
+				if rule == "approval_unavailable" {
+					if ar, ok := a.actions.(approvalRequester); ok {
+						e := a.buildActionEnvelope(env, lane, name, args)
+						if _, evOK := a.identify(env, &e, "require_approval"); !evOK {
+							// Unresolvable provenance: the identity law
+							// wins — fall through to the honest denial.
+							a.logger.Warn("agent: approval request refused (unresolved provenance)",
+								"envelope_id", env.ID, "channel", env.Channel, "tool", name)
+						} else if approvalID, err := ar.RequestApproval(ctx, e, "require_approval", args); err != nil {
+							a.logger.Warn("agent: approval request failed — falling closed",
+								"envelope_id", env.ID, "channel", env.Channel, "tool", name, "err", err)
+						} else {
+							a.logger.Info("agent: action parked for approval",
+								"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+								"approval_id", approvalID)
+							a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "pending", Rule: "require_approval"})
+							return pendingApprovalObservation(name, approvalID, time.Time{})
+						}
+					}
+				}
 				a.logger.Warn("agent: tool denied",
 					"envelope_id", env.ID, "channel", env.Channel, "tool", name,
 					"rule", rule, "args_prefix", boundedArgs(args))
