@@ -244,7 +244,9 @@ func (c *cli) receiptRotateKey(args []string) int {
 	}
 	storage := app.StoragePath(cfg)
 	profileDir := filepath.Dir(storage)
-	store, err := actionsqlite.Open(storage)
+	// R2: the operator door — a key rotation beside a live server must
+	// never run the boot's recovery/prune/migration under it.
+	store, err := actionsqlite.OpenOperator(storage)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
 		return 1
