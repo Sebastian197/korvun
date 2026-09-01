@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
+	"github.com/Sebastian197/korvun/internal/action/executor"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/config"
@@ -155,4 +156,55 @@ func newBrainRecorder(store *actionsqlite.Store, pin actionsqlite.PolicyPin, app
 func (a *App) recorderForTest() brain.ActionRecorder {
 	pin := actionsqlite.PolicyPin{Version: 1, Digest: "sha256:test-seam"}
 	return newBrainRecorder(a.actions.(*actionsqlite.Store), pin, a.approvalsCfg, a.approvalTTL)
+}
+
+// ExecuteApprovedAction runs the EXACT stored envelope of an APPROVED
+// request through the one Executor Registry path (spec FR-EXEC, sealed
+// NC-2: identity, never equivalence): claim the canonical params
+// atomically (exactly one executor wins — racing calls cannot fire the
+// effect twice), re-verify them against the approved digest as the
+// belt, execute, and close the parked action with its era's E4 receipt
+// and the on-the-fly result digest. A request that is not APPROVED —
+// pending, rejected, cancelled or expired — never executes.
+func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string) (string, error) {
+	approval, _, err := store.GetApproval(ctx, approvalID)
+	if err != nil {
+		return "", err
+	}
+	if approval.Status != action.ApprovalApproved {
+		return "", fmt.Errorf("app: approval %s is %s — only APPROVED requests execute", approvalID, approval.Status)
+	}
+	rec, err := store.Get(ctx, approval.ActionID)
+	if err != nil {
+		return "", fmt.Errorf("app: approved action %s: %w", approval.ActionID, err)
+	}
+	if rec.State != action.StateApproved {
+		return "", fmt.Errorf("app: action %s is %s — already executed or closed", approval.ActionID, rec.State)
+	}
+	// The atomic claim: exactly one executor gets the params.
+	params, err := store.ClaimApprovalParams(ctx, approvalID)
+	if err != nil {
+		return "", fmt.Errorf("app: claim execution of %s: %w", approvalID, err)
+	}
+	// The belt (NC-2): the claimed params must re-derive the EXACT
+	// digest the human approved — identity, never equivalence.
+	if got := action.Digest(rec.Envelope.Operation, string(params)); got != approval.ActionDigest {
+		return "", fmt.Errorf("app: refusing execution of %s: stored params re-derive digest %s but the human approved %s", approvalID, got, approval.ActionDigest)
+	}
+	conv := ""
+	result, _, execErr := exec.Run(ctx, rec.Envelope.Operation.Name,
+		tool.Scope{Brain: "", Conversation: conv}, string(params))
+	outcome := action.StateSucceeded
+	resultDigest := action.HashCanonical(result)
+	if execErr != nil {
+		outcome = action.StateFailed
+		resultDigest = ""
+	}
+	if err := store.FinishWithResult(ctx, approval.ActionID, outcome, time.Now().UTC(), resultDigest); err != nil {
+		return "", fmt.Errorf("app: close executed action %s: %w", approval.ActionID, err)
+	}
+	if execErr != nil {
+		return "", fmt.Errorf("app: approved execution of %s failed: %w", approvalID, execErr)
+	}
+	return result, nil
 }

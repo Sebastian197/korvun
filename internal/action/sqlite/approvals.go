@@ -407,3 +407,41 @@ func nullable(v string) any {
 	}
 	return v
 }
+
+// ClaimApprovalParams atomically reads AND purges the stored canonical
+// params — the execution claim (Etapa 5 FR-EXEC): exactly one caller
+// wins the params; every later caller gets ErrNotFound. The claim
+// happens BEFORE the effect, so racing executors cannot fire twice; a
+// crash between claim and terminal close leaves a non-terminal action
+// the E1 recovery pass closes honestly on the next lifecycle open.
+func (s *Store) ClaimApprovalParams(ctx context.Context, approvalID string) ([]byte, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: begin claim: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var params string
+	err = tx.QueryRowContext(ctx,
+		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&params)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: claim params %q: %w", approvalID, err)
+	}
+	if params == "" {
+		return nil, fmt.Errorf("action/sqlite: approval %q already claimed or closed: %w", approvalID, ErrNotFound)
+	}
+	res, err := tx.ExecContext(ctx,
+		`UPDATE approvals SET canonical_params = '' WHERE approval_id = ? AND canonical_params != ''`, approvalID)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: purge claim %q: %w", approvalID, err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, fmt.Errorf("action/sqlite: approval %q already claimed: %w", approvalID, ErrNotFound)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("action/sqlite: commit claim: %w", err)
+	}
+	return []byte(params), nil
+}
