@@ -1,0 +1,158 @@
+// Copyright 2026 Sebastián Moreno Saavedra
+// SPDX-License-Identifier: Apache-2.0
+
+// The approvals wiring (Trust Layer Etapa 5, lote 3 — spec FR-GATE-1,
+// FR-PRV-1, sealed): when approvals.enabled, the brains' recorder
+// adapter carries the RequestApproval extension — the gate's honest no
+// becomes a request born WHOLE in the store (the lote-2 birth). The
+// adapter owns the §15.2 preview assembly because it holds the store:
+// the intent's purpose, the grant's budget line, the tool's declared
+// egress and reversibility, and the brain's pinned law. Absent or OFF:
+// the plain adapter, and the E3 denial stands byte-for-byte forever.
+package app
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/Sebastian197/korvun/internal/action"
+	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
+	"github.com/Sebastian197/korvun/internal/brain"
+	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/tool"
+)
+
+// defaultApprovalTTL is the request expiry window when the config does
+// not narrow it (spec FR-APR-1).
+const defaultApprovalTTL = time.Hour
+
+// approvalTTL resolves the configured TTL (strict: a malformed value
+// dies at Build, the boot-fatal posture).
+func approvalTTL(cfg *config.ApprovalsConfig) (time.Duration, error) {
+	if cfg == nil || cfg.TTL == "" {
+		return defaultApprovalTTL, nil
+	}
+	d, err := time.ParseDuration(cfg.TTL)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("app: approvals.ttl %q is not a positive duration", cfg.TTL)
+	}
+	return d, nil
+}
+
+// approvalRecorder is the extended adapter: the plain recorder plus
+// the RequestApproval extension the brain's gate asks for.
+type approvalRecorder struct {
+	actionRecorder
+	ttl time.Duration
+}
+
+// RequestApproval implements the brain's optional extension: it
+// assembles the §15.2 preview and asks the store for the born-whole
+// birth of the parked request. Returns the request id for the model's
+// honest pending observation.
+func (r approvalRecorder) RequestApproval(ctx context.Context, env action.Envelope, rule string, rawParams string) (string, error) {
+	now := time.Now().UTC()
+	preview := r.assemblePreview(ctx, env, rule)
+	approval := action.Approval{
+		ApprovalID:    action.NewApprovalID(),
+		SchemaVersion: 1,
+		ActionID:      env.ActionID,
+		ActionDigest:  env.ParametersDigest,
+		PreviewDigest: preview.Digest(),
+		RequestedFrom: action.OperatorPrincipal().PrincipalID,
+		Reason:        rule,
+		RiskSummary:   preview.Reversibility,
+		PolicyVersion: r.pin.Version,
+		PolicyDigest:  r.pin.Digest,
+		RequestedAt:   now,
+		ExpiresAt:     now.Add(r.ttl),
+		Status:        action.ApprovalPending,
+	}
+	if err := r.store.CreateApprovalRequest(ctx, env,
+		actionsqlite.Decision{Outcome: rule, Rule: rule,
+			PolicyVersion: r.pin.Version, PolicyDigest: r.pin.Digest},
+		approval, preview, rawParams); err != nil {
+		return "", err
+	}
+	return approval.ApprovalID, nil
+}
+
+// assemblePreview builds the §15.2 agent diff from what the adapter
+// can honestly resolve: absent facts are stated as absent, never
+// invented.
+func (r approvalRecorder) assemblePreview(ctx context.Context, env action.Envelope, rule string) action.ActionPreview {
+	purpose := "-"
+	if env.IntentID != "" {
+		if intent, err := r.store.GetIntent(ctx, env.IntentID); err == nil {
+			purpose = intent.Purpose
+		}
+	}
+	grantID, cost := "-", "unbudgeted"
+	if len(env.AuthorityRefs) > 0 {
+		grantID = env.AuthorityRefs[0]
+		if grant, err := r.store.GetGrant(ctx, grantID); err == nil {
+			if grant.Budgets.MaxActions > 0 {
+				cost = fmt.Sprintf("budget %d actions under grant %s", grant.Budgets.MaxActions, grantID)
+			}
+		}
+	}
+	class := action.EffectClass(env.Effect.Class)
+	egress := "no declared data egress"
+	reversibility := "unclassified consequence"
+	cage := env.Operation.Name
+	if descriptor, declared := tool.BuiltinEffects(env.Operation.Name); declared {
+		class = descriptor.Class
+		if descriptor.DataEgress {
+			egress = "request/result content LEAVES the kernel boundary"
+		}
+		switch {
+		case descriptor.Reversible:
+			reversibility = string(descriptor.Class) + " — reversible"
+		case descriptor.Compensatable:
+			reversibility = string(descriptor.Class) + " — compensatable, not reversible"
+		default:
+			reversibility = string(descriptor.Class) + " — irreversible, no documented undo"
+		}
+	} else if class != "" {
+		reversibility = string(class)
+	}
+	return action.ActionPreview{
+		ActionID:      env.ActionID,
+		SchemaVersion: 1,
+		IntentPurpose: purpose,
+		PrincipalID:   env.Principal.PrincipalID,
+		GrantID:       grantID,
+		Operation:     env.Operation.Namespace + "/" + env.Operation.Name,
+		Resources:     []string{strings.TrimSpace(env.Source.Channel)},
+		DataEgress:    egress,
+		ArgsDigest:    env.ParametersDigest,
+		CostLine:      cost,
+		EffectClass:   class,
+		Reversibility: reversibility,
+		ToolCage:      cage,
+		PolicyVersion: r.pin.Version,
+		PolicyDigest:  r.pin.Digest,
+		RequiredRule:  rule,
+	}
+}
+
+// newBrainRecorder builds the per-brain recorder adapter the wiring
+// hands to brains: extended with the approval extension ONLY when the
+// knob is on (the sacred pin lives in this fork).
+func newBrainRecorder(store *actionsqlite.Store, pin actionsqlite.PolicyPin, approvals *config.ApprovalsConfig, ttl time.Duration) brain.ActionRecorder {
+	base := actionRecorder{store: store, pin: pin}
+	if approvals != nil && approvals.Enabled {
+		return approvalRecorder{actionRecorder: base, ttl: ttl}
+	}
+	return base
+}
+
+// recorderForTest rebuilds the exact adapter shape wire() hands the
+// brains — the same fork newBrainRecorder takes, driven by the built
+// app's stored knob. Package-internal test seam.
+func (a *App) recorderForTest() brain.ActionRecorder {
+	pin := actionsqlite.PolicyPin{Version: 1, Digest: "sha256:test-seam"}
+	return newBrainRecorder(a.actions.(*actionsqlite.Store), pin, a.approvalsCfg, a.approvalTTL)
+}

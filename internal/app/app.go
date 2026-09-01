@@ -83,6 +83,10 @@ type App struct {
 	// (stateless). Held as io.Closer, set only from a non-nil concrete store, so
 	// it is never a typed-nil interface (ADR-0019 §6).
 	store io.Closer
+	// approvalsCfg / approvalTTL mirror the builder's Etapa-5 knob for
+	// the package-internal test seam (recorderForTest).
+	approvalsCfg *config.ApprovalsConfig
+	approvalTTL  time.Duration
 	// actions is the Action Kernel store's closer (Trust Layer Etapa 1,
 	// lote 3b): opened at boot on the SAME storage file with its OWN
 	// lifecycle (sealed decision 1), nil when stateless. Closed alongside
@@ -158,6 +162,11 @@ type builder struct {
 	// through the recorder adapter. nil when stateless (no storage block —
 	// recording off, zero new config, the sealed decisions).
 	actions *actionsqlite.Store
+	// approvalsCfg and approvalTTL carry the Etapa-5 knob through the
+	// wiring (the sacred pin: nil/off = the plain adapter, E3
+	// byte-for-byte).
+	approvalsCfg *config.ApprovalsConfig
+	approvalTTL  time.Duration
 	// metrics is the observability backend injected into the domain. Defaults to
 	// metrics.Nop; set to the Prometheus impl when observability is enabled.
 	metrics metrics.Metrics
@@ -324,6 +333,16 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		actions.SetReceiptSealer(func(r action.Receipt) action.Receipt {
 			return action.SignReceipt(signingKey, r)
 		})
+		// The Etapa-5 approvals knob rides the builder into the brain
+		// wiring; a malformed TTL is boot-fatal (ADR-0017).
+		ttl, err := approvalTTL(cfg.Approvals)
+		if err != nil {
+			_ = actions.Close()
+			_ = store.Close()
+			return nil, err
+		}
+		b.approvalsCfg = cfg.Approvals
+		b.approvalTTL = ttl
 	}
 
 	// The router gets the app-level error funnel (logs + counts +, when the bus is
@@ -446,6 +465,8 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		channelInfos:   channelInfos,
 		warmupTargets:  b.warmupTargets,
 		modelHealth:    newModelHealthRegistry(),
+		approvalsCfg:   b.approvalsCfg,
+		approvalTTL:    b.approvalTTL,
 	}
 	if store != nil {
 		app.store = store // owned closer, set only from a non-nil concrete store
@@ -1060,7 +1081,7 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		// load — governance + effect-registry snapshot, versioned by the
 		// load instant — and stamped by the adapter on every decision.
 		pin := policyPin(bc, b.policyLoadedAt)
-		opts = append(opts, brain.WithActionRecorder(actionRecorder{store: b.actions, pin: pin}))
+		opts = append(opts, brain.WithActionRecorder(newBrainRecorder(b.actions, pin, b.approvalsCfg, b.approvalTTL)))
 		// The effect engine (Etapa 3): the brain classifies every attempt
 		// from the DECLARED registry — the same single safe-toolset
 		// boundary the preflight above already validated.

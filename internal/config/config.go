@@ -71,6 +71,10 @@ type Config struct {
 	// block means open a durable store at boot. An empty Path defaults to an
 	// OS-appropriate data dir, resolved in internal/app.
 	Storage *StorageConfig `json:"storage,omitempty"`
+	// Approvals configures the human-approval workflow (Trust Layer
+	// Etapa 5). Absent means OFF: the E3 honest denial
+	// (approval_unavailable) stands byte-for-byte.
+	Approvals *ApprovalsConfig `json:"approvals,omitempty"`
 	// Observability is the optional admin HTTP server (ADR-0020). It is a
 	// pointer for parse-time presence detection, but note the DELIBERATE
 	// asymmetry with Storage: an ABSENT block means the server is ON with safe
@@ -135,6 +139,16 @@ type AdminConfig struct {
 // database file; an empty Path resolves to <os.UserConfigDir>/korvun/korvun.db
 // at boot (internal/app). The block is additive over the Stage 11 schema:
 // existing configs without it keep their exact stateless behavior.
+// ApprovalsConfig is the Etapa-5 approval workflow knob.
+type ApprovalsConfig struct {
+	// Enabled turns the workflow on: the gate's approval_unavailable
+	// arm becomes a parked PENDING_APPROVAL request.
+	Enabled bool `json:"enabled"`
+	// TTL is the OPTIONAL request expiry window, a duration string
+	// (default "1h"). Judged at the consume touch, the E2 clock mold.
+	TTL string `json:"ttl,omitempty"`
+}
+
 type StorageConfig struct {
 	Path string `json:"path"`
 }
