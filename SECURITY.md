@@ -117,8 +117,13 @@ fails closed BEFORE any effect. The converse window is documented, not
 hidden: an EXTERNAL effect that completed and whose terminal close then
 failed (disk full, crash between effect and write) leaves a real-world
 effect with its evidence at risk — logged at ERROR with rule
-`record_failed`, and open until stage 6's reconciliation
-(`OUTCOME_UNKNOWN` and status queries) ships.
+`record_failed`. Since the E5 consolidation, a crash caught PAST the
+approval claim (the intermediate state before the external effect — an
+executor may already have fired) closes the action as
+`OUTCOME_UNKNOWN` with a named recovery marker, never as a FAILED that
+would misstate what happened. Idempotency, reconciliation of uncertain
+outcomes and status re-queries against the external system are stage
+6's scope, declared, not implied.
 The signing key lives on the same machine as the store, so an attacker
 with full control of the profile can rewrite history with the resident
 key, and truncation of the chain's tail leaves no hole to detect. What

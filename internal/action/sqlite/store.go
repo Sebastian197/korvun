@@ -372,6 +372,9 @@ const (
 	defaultPruneEvery = 512
 	// recoveryMarkerCrash marks actions closed by the Open recovery pass.
 	recoveryMarkerCrash = "crash_recovered"
+	// recoveryMarkerOutcomeUnknown names the C5 uncertainty: the crash
+	// hit AFTER the params claim — the external effect may have fired.
+	recoveryMarkerOutcomeUnknown = "outcome_unknown"
 )
 
 // openWithCap is the test seam behind Open: same mold, explicit cap.
@@ -508,19 +511,31 @@ func (s *Store) recoverPreviousLife(ctx context.Context) error {
 	// deferred execution and survives too; APPROVED whose params were
 	// CLAIMED is a true orphan (crash between claim and close) and
 	// closes honestly like every other one.
+	// C5: an APPROVED action whose params were CLAIMED was mid-execution
+	// — the external effect may or may not have fired before the crash.
+	// Closing it FAILED would be a lie; it falls to OUTCOME_UNKNOWN with
+	// the uncertainty NAMED (idempotency/reconciliation are E6's stage).
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
-		  WHERE state NOT IN (?, ?, ?, ?, ?, ?)
-		    AND NOT (state = ? AND EXISTS (
+		  WHERE state = ? AND NOT EXISTS (
 		        SELECT 1 FROM approvals
 		         WHERE approvals.action_id = actions.action_id
-		           AND approvals.canonical_params != ''))`,
-		string(action.StateFailed), recoveryMarkerCrash,
-		time.Now().UTC().Format(time.RFC3339Nano),
+		           AND approvals.canonical_params != '')`,
+		string(action.StateOutcomeUnknown), recoveryMarkerOutcomeUnknown, now,
+		string(action.StateApproved),
+	)
+	if err != nil {
+		return fmt.Errorf("action/sqlite: recovery pass (claimed): %w", err)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
+		  WHERE state NOT IN (?, ?, ?, ?, ?, ?, ?, ?)`,
+		string(action.StateFailed), recoveryMarkerCrash, now,
 		string(action.StateDenied), string(action.StateShadowed),
 		string(action.StateSucceeded), string(action.StateFailed),
 		string(action.StateRejected), string(action.StatePendingApproval),
-		string(action.StateApproved),
+		string(action.StateApproved), string(action.StateOutcomeUnknown),
 	)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: recovery pass: %w", err)

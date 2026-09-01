@@ -212,8 +212,9 @@ every terminal action outcome — denied, shadowed, succeeded or failed —
 leaves a canonical receipt signed with Ed25519 on an append-only hash
 chain, born in the SAME transaction as the outcome — atomic INSIDE the
 store: an attempt that cannot be recorded fails closed before any
-effect, and an external effect completed before a FAILED close is the
-documented gap until stage 6's reconciliation. The operator re-judges the book offline with
+effect; a crash past the point where an effect may have fired closes
+`OUTCOME_UNKNOWN` — named uncertainty, never a false FAILED — and
+reconciliation of those outcomes is stage 6's declared scope. The operator re-judges the book offline with
 seven named checks — `korvun receipt verify`, `korvun ledger check`,
 `korvun receipt rotate-key` (each era of the chain verifies with the
 key of its era) — a forged outcome is caught in triplicate, a deleted

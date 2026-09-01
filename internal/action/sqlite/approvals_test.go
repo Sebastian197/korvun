@@ -714,8 +714,10 @@ func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 	if rec, _ := reopened.Get(ctx, "act_appr"); rec.State != action.StateApproved || rec.RecoveryMarker != "" {
 		t.Fatalf("APPROVED-with-params awaits its deferred execution: %v %q", rec.State, rec.RecoveryMarker)
 	}
-	if rec, _ := reopened.Get(ctx, "act_claimed"); rec.State != action.StateFailed || rec.RecoveryMarker != "crash_recovered" {
-		t.Fatalf("APPROVED-claimed is a true crash orphan and closes: %v %q", rec.State, rec.RecoveryMarker)
+	// C5 re-adjudicated this close: a claimed execution was MID-FLIGHT,
+	// so the crash falls to OUTCOME_UNKNOWN (named), never a FAILED lie.
+	if rec, _ := reopened.Get(ctx, "act_claimed"); rec.State != action.StateOutcomeUnknown || rec.RecoveryMarker != "outcome_unknown" {
+		t.Fatalf("APPROVED-claimed crash closes honestly uncertain: %v %q", rec.State, rec.RecoveryMarker)
 	}
 	_ = a1
 }

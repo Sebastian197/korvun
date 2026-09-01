@@ -114,7 +114,13 @@ func (e *invalidTransitionError) Unwrap() error {
 // a receipt like every other terminal outcome.
 func (s State) Terminal() bool {
 	switch s {
-	case StateDenied, StateShadowed, StateSucceeded, StateFailed, StateRejected:
+	case StateDenied, StateShadowed, StateSucceeded, StateFailed, StateRejected,
+		// OUTCOME_UNKNOWN woke with the C5 consolidation as the HONEST
+		// crash close for an execution already past its claim: the
+		// external effect may or may not have happened, and saying
+		// FAILED there would be a lie. Reconciliation is E6's stage —
+		// today the state closes the action and names the uncertainty.
+		StateOutcomeUnknown:
 		return true
 	default:
 		return false

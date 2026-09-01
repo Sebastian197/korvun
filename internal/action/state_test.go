@@ -20,13 +20,16 @@ var etapa1States = []State{
 	StateReceived, StateNormalized, StateDenied, StateShadowed,
 	StateAuthorized, StateSucceeded, StateFailed,
 	StatePendingApproval, StateRejected, StateApproved,
+	StateOutcomeUnknown,
 }
 
 // reservedStates are declared for later stages and unreachable today
-// (the Etapa-5 seal woke the approval trio; the E6 set stays closed).
+// (the Etapa-5 seal woke the approval trio; the C5 consolidation woke
+// OUTCOME_UNKNOWN as the honest crash close past the claim; the rest
+// of the E6 set stays closed).
 var reservedStates = []State{
 	StatePreparing, StatePrepareFailed, StatePrepared,
-	StateCommitting, StateOutcomeUnknown,
+	StateCommitting,
 	StateCompensating, StateCompensated, StateCompensationFailed,
 }
 
