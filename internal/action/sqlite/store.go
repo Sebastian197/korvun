@@ -412,6 +412,49 @@ func Open(path string) (*Store, error) {
 	return store, nil
 }
 
+// OpenOperator is the THIRD door (E5 consolidation C4): a WRITING open
+// for the operator's own acts (decide, execute, intent/grant writes)
+// that touches NOTHING a live server owns — no crash recovery, no
+// retention prune, and never a migration of an existing store (those
+// belong to the SERVER BOOT; a CLI opened beside a running server must
+// not close its in-flight work or lift the schema under it). A fresh
+// profile is a clean bootstrap — there is no previous life to harm —
+// which keeps the intent-create-before-first-boot flow alive.
+func OpenOperator(path string) (*Store, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: resolve path %q: %w", path, err)
+	}
+	if _, err := os.Stat(abs); err == nil {
+		version, err := storedSchemaVersion(abs)
+		if err != nil {
+			return nil, err
+		}
+		if version != schemaVersionCurrent {
+			return nil, fmt.Errorf("action/sqlite: store %q is at schema v%d, this binary writes v%d — an operator act never migrates an existing store; run the server boot to lift the schema", abs, version, schemaVersionCurrent)
+		}
+	}
+	return open(path)
+}
+
+// storedSchemaVersion probes an existing store's version through a
+// sealed read-only connection — the probe itself must not mutate.
+func storedSchemaVersion(abs string) (int, error) {
+	db, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(abs)))
+	if err != nil {
+		return 0, fmt.Errorf("action/sqlite: probe %q: %w", abs, err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`PRAGMA query_only = 1`); err != nil {
+		return 0, fmt.Errorf("action/sqlite: seal probe connection %q: %w", abs, err)
+	}
+	var version int
+	if err := db.QueryRow(`SELECT version FROM action_schema`).Scan(&version); err != nil {
+		return 0, fmt.Errorf("action/sqlite: read schema version of %q (not a korvun store?): %w", abs, err)
+	}
+	return version, nil
+}
+
 // open is the shared mold behind Open and the test seam: pool, bootstrap
 // and ping, with the sealed retention defaults.
 func open(path string) (*Store, error) {
@@ -712,7 +755,7 @@ func OpenReadOnly(path string) (*Store, error) {
 	}
 	if version != schemaVersionCurrent {
 		_ = db.Close()
-		return nil, fmt.Errorf("action/sqlite: store %q is at schema v%d, this binary reads v%d — a read-only consult never migrates; run the server or a mutating operator command to lift the schema", abs, version, schemaVersionCurrent)
+		return nil, fmt.Errorf("action/sqlite: store %q is at schema v%d, this binary reads v%d — a read-only consult never migrates; run the server boot to lift the schema", abs, version, schemaVersionCurrent)
 	}
 	return &Store{db: db, capRows: defaultCapRows, pruneEvery: defaultPruneEvery, readOnly: true}, nil
 }

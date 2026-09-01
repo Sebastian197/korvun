@@ -75,13 +75,16 @@ func openOperatorStore(configPath string) (*actionsqlite.Store, error) {
 // sealed with the same key the server boot uses (generated idempotently
 // if the profile is fresh — the boot's own semantics). Read-only verbs
 // keep the plain opener: verification must never write, not even a key.
+// C4: the acts go through the THIRD door — writing, but no recovery,
+// no prune, and never a migration of an existing store; a CLI beside a
+// live server must not close the server's in-flight work.
 func openOperatorStoreSealed(configPath string) (*actionsqlite.Store, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return nil, err
 	}
 	storage := app.StoragePath(cfg)
-	store, err := actionsqlite.Open(storage)
+	store, err := actionsqlite.OpenOperator(storage)
 	if err != nil {
 		return nil, err
 	}
