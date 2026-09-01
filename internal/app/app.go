@@ -1097,6 +1097,18 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		if grant, ok := derivedConfigGrant(bc); ok {
 			identity.GrantID = grant.GrantID
 		}
+		// The missing cable (Etapa 5, adjudicated 2026-09-01): the
+		// per-brain config ceiling lands in the PRODUCTION identity —
+		// without it the chat path could never park an action, because
+		// config-derived authority is ceilingless by sealed E3 design
+		// and the gate demands approval only under BOUNDED authority.
+		if bc.Agent != nil && bc.Agent.EffectCeiling != "" {
+			ceiling := action.EffectClass(bc.Agent.EffectCeiling)
+			if !ceiling.OnLadder() {
+				return nil, fmt.Errorf("app: brain %q: agent.effect_ceiling %q is not on the ladder (valid: pure, read_external, write_reversible, write_compensatable, write_irreversible, critical)", bc.Name, bc.Agent.EffectCeiling)
+			}
+			identity.EffectCeiling = ceiling
+		}
 		opts = append(opts, brain.WithActionIdentity(identity))
 	}
 	b.logger.Info("agent brain wired", "brain", bc.Name, "tools", bc.Agent.Tools, "max_iterations", bc.Agent.MaxIterations)

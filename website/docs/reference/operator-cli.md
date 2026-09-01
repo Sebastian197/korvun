@@ -152,6 +152,11 @@ human yes no longer dies with the honest `approval_unavailable`: it
 PARKS as a pending request with a sealed preview, and the CLI is where
 you decide.
 
+The parking needs a BOUNDED brain: set `agent.effect_ceiling` on the
+brain (for example `"write_reversible"`) — the missing cable landed
+with this stage: absent means unbounded, exactly as before, and then
+nothing parks.
+
 ```sh
 korvun approvals list --config korvun.json
 ```

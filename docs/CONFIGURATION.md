@@ -254,6 +254,7 @@ governance existed behaves byte-for-byte as it always did.
 | `http_fetch` | object | with the tool | The cage: `allow_hosts` (**required**, exact host, optional `:port`), `max_bytes`, `max_redirects`. |
 | `webhook_call` | object | with the tool | The cage: `allow_hosts` (**required**), `max_bytes`, `timeout_seconds` (`0` ⇒ 10s). |
 | `memory` | object | with the tool | The memory block for `memory_note`: `scope` (`"conversation"` default \| `"brain"`), `max_notes` (`0` ⇒ 10, 1..100), `max_note_runes` (`0` ⇒ 200, 1..2000), `budget_runes` (`0` ⇒ 2000, must be ≥ `max_notes × max_note_runes`). Requires the `storage` block; `memory_note` also requires a `governance` grant covering it; `scope: "brain"` requires the brain's selected model to be **local**. |
+| `effect_ceiling` | string | no | The brain's effect ceiling on the E3 ladder (`pure` \| `read_external` \| `write_reversible` \| `write_compensatable` \| `write_irreversible` \| `critical`). Absent ⇒ unbounded, today byte-for-byte. With `approvals.enabled`, `write_irreversible`/`critical` attempts under a ceilinged brain PARK for the operator's approval (`korvun approvals`). Unknown class ⇒ boot failure naming the ladder. |
 | `skills_dir` | string | no | AgentSkills-compatible skills directory. Missing dir ⇒ boot failure; a malformed skill inside ⇒ skipped with a warning. |
 | `skills_body_budget` | int | no | Total rune budget for injected skill bodies (`0` ⇒ 8192). |
 
@@ -284,6 +285,17 @@ and how to write a skill.
 ```json
 { "channel": "telegram", "brain": "default" }
 ```
+
+## `approvals` (optional, Trust Layer Etapa 5)
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `enabled` | bool | no | Turns the human-approval workflow on. Absent/false ⇒ the E3 honest denial (`approval_unavailable`) stands byte-for-byte. |
+| `ttl` | string | no | Request expiry window as a duration (`"1h"` default). Judged when the decision touches the request — an expired approval never executes. |
+
+Requires the `storage` block. Decisions happen on the operator CLI
+(`korvun approvals list|show|approve|reject`); an approved action
+executes the EXACT stored request and its receipt seals the approval.
 
 ## `storage` (optional, ADR-0019)
 

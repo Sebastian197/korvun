@@ -161,6 +161,11 @@ exige un sí humano ya no muere con el honesto `approval_unavailable`:
 se APARCA como solicitud pendiente con su preview sellado, y la CLI
 es donde decides.
 
+El aparcamiento necesita un cerebro ACOTADO: pon `agent.effect_ceiling`
+en el brain (por ejemplo `"write_reversible"`) — el cable que faltaba
+aterrizó con esta etapa: ausente significa sin techo, exactamente como
+antes, y entonces nada se aparca.
+
 ```sh
 korvun approvals list --config korvun.json
 ```

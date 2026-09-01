@@ -378,6 +378,15 @@ type AgentConfig struct {
 	ReadFile    *ReadFileToolConfig    `json:"read_file,omitempty"`
 	HTTPFetch   *HTTPFetchToolConfig   `json:"http_fetch,omitempty"`
 	WebhookCall *WebhookCallToolConfig `json:"webhook_call,omitempty"`
+	// EffectCeiling is the OPTIONAL per-brain effect ceiling (Trust
+	// Layer Etapa 5, the missing cable adjudicated 2026-09-01): the
+	// highest consequence class this brain's standing authority may
+	// reach on the E3 ladder. Absent = unbounded, today byte-for-byte
+	// (the sealed E3 default for config-derived authority). With the
+	// approvals workflow enabled, write_irreversible and critical
+	// attempts under a ceilinged brain PARK for the operator's yes.
+	// An unknown class is boot-fatal naming the valid ladder.
+	EffectCeiling string `json:"effect_ceiling,omitempty"`
 	// SkillsDir points at the AgentSkills-compatible skills directory
 	// (ADR-0041 §6); empty = no skills. SkillsBodyBudget caps the total
 	// runes of injected skill bodies (0 => the skill package default).

@@ -375,6 +375,16 @@ crash recovery killed legitimately parked actions (PENDING_APPROVAL
 now always survives; APPROVED survives while unclaimed) and flattened
 the new REJECTED terminal to FAILED — both found by the lote-4 RED.
 
+THIRD stage discovery (2026-09-01, caught by the cross-check law
+BEFORE the ceremony): the production brain identity carried NO effect
+ceiling — config-derived authority is ceilingless by sealed E3 design
+— so the chat path could never park an action; the gate's whole flow
+was proven only through hand-mounted identities. The missing cable
+landed as `agent.effect_ceiling` (strict decode; absent = today
+byte-for-byte, pinned; unknown class boot-fatal naming the ladder)
+with the chat-path parking test the stage lacked: the REAL wire, model
+tool-call to PENDING_APPROVAL, end to end.
+
 Toll, final: the NEW path costs ~1.02 ms per parked request (preview
 assembly + born-whole birth), paid ONLY when an irreversible action
 parks; the normal sealed hot path re-measured at ~1.17 ms/op with the

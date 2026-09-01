@@ -50,6 +50,14 @@ const unknownEffectRank = 6
 // Rank places a class on the total order. Unknown classes — anything
 // outside the finite enum, stored-row garbage included — rank above
 // critical.
+// OnLadder reports whether c is one of the six declared classes — the
+// validation seam for config-provided ceilings (an unknown class must
+// die at boot naming the ladder, never rank silently).
+func (c EffectClass) OnLadder() bool {
+	_, ok := effectRanks[c]
+	return ok
+}
+
 func (c EffectClass) Rank() int {
 	if rank, known := effectRanks[c]; known {
 		return rank
