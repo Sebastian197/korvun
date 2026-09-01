@@ -249,6 +249,13 @@ explicit decision.
 >    static site) — LOW real risk, stated honestly. Watch weekly with
 >    the Scorecard sweep; pin the fix the day it publishes; Chano may
 >    dismiss the alerts with reason meanwhile.
+> 7. **FILED 2026-09-01: the timing-observability family sweep** —
+>    three tests of the same disease now cured one by one (Windows
+>    first-run deadlines, the SSE frame order, the supervisor
+>    state-vs-log race): a future batch should sweep the suite for the
+>    watch-one-signal-assert-another pattern and apply the mold
+>    (poll the REAL object of the assert, generous declared deadline)
+>    wholesale instead of waiting for the fourth flake.
 > 7. **FILED from the 2026-08-31 external audit (maintainability, non
 >    blocking)**: app.go size/structure, Console.tsx size, and moving
 >    load-bearing narrative from batch reports into ADRs — each its own

@@ -136,14 +136,26 @@ func TestSupervisor_preflightRejection_logsFailedState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RequestReload: %v", err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for sup.Status(h) != supervisor.StateFailed && time.Now().Before(deadline) {
+	// HARDENED (the third of the timing-observability family, after the
+	// Windows first-run deadlines and the SSE frame order): the old poll
+	// watched Status(h) but the assert read the LOG BUFFER — and the
+	// supervisor publishes the state BEFORE emitting the log line, so a
+	// slow runner could exit the poll inside that window and read only
+	// [pending] (seen once on windows-latest; does not reproduce locally
+	// — 20 -race runs green). The poll now waits for the REAL object of
+	// the assert: the log itself containing the failed state, under a
+	// generous deadline. Do not "simplify" this back to polling Status.
+	want := []string{"pending", "failed"}
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if got := reloadStates(t, buf, h); equalStrings(got, want) {
+			break
+		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	if got := sup.Status(h); got != supervisor.StateFailed {
 		t.Fatalf("reload status = %q, want failed", got)
 	}
-	want := []string{"pending", "failed"}
 	if got := reloadStates(t, buf, h); !equalStrings(got, want) {
 		t.Fatalf("logged reload states = %v, want %v", got, want)
 	}
