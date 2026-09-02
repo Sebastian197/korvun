@@ -13,8 +13,10 @@ package sqlite
 import (
 	"context"
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -65,8 +67,15 @@ func TestRecoveryVsFinish_acrossRealConnections(t *testing.T) {
 	if err := <-recErr; err != nil {
 		t.Fatalf("the recovery must never error on a clean cross-connection race: %v", err)
 	}
-	if err := <-finErr; err != nil && !errorsIsInvalidTransition(err) {
-		t.Fatalf("the finish may only lose by the named invalid transition: %v", err)
+	if err := <-finErr; err != nil && !errorsIsInvalidTransition(err) && !isBusy(err) {
+		// Across REAL connections the finish has three legitimate
+		// outcomes: it wins (nil), it loses the race (named invalid
+		// transition), or the 5s busy policy expires while the other
+		// connection's recovery holds the writer (SQLITE_BUSY — the
+		// real world of two processes; the CI red of 2026-09-02
+		// captured it on both OS families: nothing written, one close,
+		// one receipt — invariants intact).
+		t.Fatalf("the finish may only lose by the named transition or the busy policy: %v", err)
 	}
 	for i := 0; i < 6; i++ {
 		id := fmt.Sprintf("act_s5a_%d", i)
@@ -114,22 +123,9 @@ func TestTwoRecoveries_acrossRealConnections(t *testing.T) {
 }
 
 func errorsIsInvalidTransition(err error) bool {
-	return err != nil && action.Transition("", "") != nil &&
-		(func() bool { type u interface{ Unwrap() error }; _ = u(nil); return true })() &&
-		containsInvalidTransition(err)
+	return errors.Is(err, action.ErrInvalidTransition)
 }
 
-func containsInvalidTransition(err error) bool {
-	for e := err; e != nil; {
-		if e == action.ErrInvalidTransition {
-			return true
-		}
-		type unwrapper interface{ Unwrap() error }
-		if u, ok := e.(unwrapper); ok {
-			e = u.Unwrap()
-		} else {
-			break
-		}
-	}
-	return false
+func isBusy(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "SQLITE_BUSY")
 }
