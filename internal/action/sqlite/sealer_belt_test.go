@@ -30,12 +30,11 @@ func TestSealerBelt_retiredKeyRefusesByName(t *testing.T) {
 		t.Fatalf("probe receipt: %v %d", err, len(probe))
 	}
 	keyID := probe[0].SigningKeyID
-	// Register the key and RETIRE it out of band.
+	// RETIRE the seam-registered key out of band (R5-S4: sealedStore
+	// registers it, so this is an UPDATE now).
 	if _, err := store.db.Exec(
-		`INSERT INTO signing_keys (key_id, public_key, created_at, retired_at)
-		 VALUES (?, 'deadbeef', ?, ?)`,
-		keyID, time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano),
-		time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		`UPDATE signing_keys SET retired_at = ? WHERE key_id = ?`,
+		time.Now().UTC().Format(time.RFC3339Nano), keyID); err != nil {
 		t.Fatalf("retire: %v", err)
 	}
 	err = store.RecordAttempt(ctx, testEnvelope("act_belt"),
@@ -45,5 +44,41 @@ func TestSealerBelt_retiredKeyRefusesByName(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "signing_key_retired") {
 		t.Fatalf("the refusal must carry the stable rule signing_key_retired: %v", err)
+	}
+}
+
+// R5-S4 (fourth Codex pass, P2): the belt fails CLOSED. An absent
+// registry row or a registry read error at seal time is a NAMED
+// refusal — never a silently unverifiable receipt.
+func TestSealerBelt_unregisteredKeyRefusesByName(t *testing.T) {
+	t.Parallel()
+	store, _ := openTemp(t)
+	t.Cleanup(func() { _ = store.Close() })
+	sealer, _ := testSealer(t)
+	store.SetReceiptSealer(sealer) // deliberately NOT registered
+	err := store.RecordAttempt(context.Background(), testEnvelope("act_s4_unreg"),
+		Decision{Outcome: "deny", Rule: "not_granted"}, action.StateDenied)
+	if err == nil {
+		t.Fatal("AUDIT R5-S4: an unregistered key must never seal")
+	}
+	if !strings.Contains(err.Error(), "signing_key_unregistered") {
+		t.Fatalf("the refusal must carry signing_key_unregistered: %v", err)
+	}
+}
+
+func TestSealerBelt_registryErrorRefusesByName(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	// The registry becomes unreadable (renamed out from under the belt).
+	if _, err := store.db.Exec(`ALTER TABLE signing_keys RENAME TO signing_keys_gone`); err != nil {
+		t.Fatalf("sabotage: %v", err)
+	}
+	err := store.RecordAttempt(context.Background(), testEnvelope("act_s4_err"),
+		Decision{Outcome: "deny", Rule: "not_granted"}, action.StateDenied)
+	if err == nil {
+		t.Fatal("AUDIT R5-S4: a registry error must refuse, never limp on")
+	}
+	if !strings.Contains(err.Error(), "key_registry_unavailable") {
+		t.Fatalf("the refusal must carry key_registry_unavailable: %v", err)
 	}
 }

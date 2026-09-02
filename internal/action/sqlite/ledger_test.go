@@ -19,6 +19,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"path/filepath"
 	"sync"
@@ -76,11 +77,24 @@ func testSealer(t *testing.T) (func(action.Receipt) action.Receipt, ed25519.Publ
 	}, pub
 }
 
+// registerSealerKey registers a seam key the way the real boot does
+// (R5-S4: the belt fails closed — unregistered keys never seal).
+func registerSealerKey(t *testing.T, store *Store, pub ed25519.PublicKey) {
+	t.Helper()
+	if _, err := store.db.Exec(
+		`INSERT INTO signing_keys (key_id, public_key, created_at) VALUES (?, ?, ?)`,
+		action.SigningKeyID(pub), hex.EncodeToString(pub),
+		time.Now().UTC().Add(-time.Hour).Format(time.RFC3339Nano)); err != nil {
+		t.Fatalf("register seam key: %v", err)
+	}
+}
+
 func sealedStore(t *testing.T) (*Store, ed25519.PublicKey) {
 	t.Helper()
 	store, _ := openTemp(t)
 	t.Cleanup(func() { _ = store.Close() })
 	sealer, pub := testSealer(t)
+	registerSealerKey(t, store, pub)
 	store.SetReceiptSealer(sealer)
 	return store, pub
 }
@@ -318,6 +332,7 @@ func TestReceipt_evidenceSurvivesThePrune(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 	sealer, pub := testSealer(t)
+	registerSealerKey(t, store, pub)
 	store.SetReceiptSealer(sealer)
 	ctx := context.Background()
 	for _, id := range []string{"act_p1", "act_p2", "act_p3"} {
@@ -509,6 +524,7 @@ func TestCrossCheck_realPruneMeetsTheVerifierReads(t *testing.T) {
 	}
 	defer func() { _ = store.Close() }()
 	sealer, pub := testSealer(t)
+	registerSealerKey(t, store, pub)
 	store.SetReceiptSealer(sealer)
 	ctx := context.Background()
 	ids := []string{"act_x1", "act_x2", "act_x3"}

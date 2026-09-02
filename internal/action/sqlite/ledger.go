@@ -66,16 +66,22 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 	}
 	r.ReceiptHash = action.ComputeReceiptHash(r)
 	r = s.sealer(r)
-	// R4-F1 belt: a key the registry marks RETIRED never seals a new
-	// receipt — the refusal is NAMED inside the receipt's own
-	// transaction, never a silent invalid signature. Keys the registry
-	// does not know stay un-vetoed here (test seams sign unregistered;
-	// the offline verifier's key_unknown check owns that axis).
+	// R4-F1 belt, R5-S4 FAIL-CLOSED: the sealing key must be REGISTERED
+	// and ACTIVE at seal time, judged inside the receipt's own
+	// transaction. A retired key refuses (signing_key_retired), an
+	// unregistered key refuses (signing_key_unregistered), and a
+	// registry read error refuses (key_registry_unavailable) — never a
+	// silently unverifiable receipt.
 	if r.SigningKeyID != "" {
 		var retired sql.NullString
 		err := tx.QueryRowContext(ctx,
 			`SELECT retired_at FROM signing_keys WHERE key_id = ?`, r.SigningKeyID).Scan(&retired)
-		if err == nil && retired.Valid && retired.String != "" {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return fmt.Errorf("action/sqlite: signing_key_unregistered: key %s is not in the registry — an unregistered key never seals", r.SigningKeyID)
+		case err != nil:
+			return fmt.Errorf("action/sqlite: key_registry_unavailable: cannot judge key %s: %w", r.SigningKeyID, err)
+		case retired.Valid && retired.String != "":
 			return fmt.Errorf("action/sqlite: signing_key_retired: key %s was retired %s — a retired key never seals; restart the server to load the active key", r.SigningKeyID, retired.String)
 		}
 	}

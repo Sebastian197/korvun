@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
@@ -55,6 +56,12 @@ func TestSurfaces_noReceiptMaterialLeaks(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate: %v", err)
+	}
+	// R5-S4: the belt fails closed — the seam registers its key the
+	// way the real boot does before sealing.
+	if err := store.PutSigningKey(context.Background(),
+		action.SigningKeyID(pub), hex.EncodeToString(pub), time.Now().UTC()); err != nil {
+		t.Fatalf("register seam key: %v", err)
 	}
 	store.SetReceiptSealer(func(r action.Receipt) action.Receipt {
 		return action.SignReceipt(priv, r)
