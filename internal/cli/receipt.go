@@ -178,7 +178,16 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 	if r.SchemaVersion >= 2 && r.ApprovalDigest != "" {
 		switch consumed, _, err := store.GetApprovalByAction(ctx, r.ActionID); {
 		case errors.Is(err, actionsqlite.ErrNotFound):
-			fail("approval_mismatch", "receipt seals approval digest %s but no approval row exists for %s", r.ApprovalDigest, r.ActionID)
+			// R4-F4 (ADR-0046): retention CASCADES the approval with its
+			// terminal action — both rows gone is the honest note (the
+			// action_row_absent mold: the digest-sealed receipt is the
+			// surviving evidence). The action still PRESENT with the
+			// approval gone is sabotage: a cascade cannot do that.
+			if _, aerr := store.Get(ctx, r.ActionID); errors.Is(aerr, actionsqlite.ErrNotFound) {
+				notes = append(notes, "approval_row_absent: approval of "+r.ActionID+" is gone with its action (retention cascades both; the digest-sealed receipt is the surviving evidence)")
+				break
+			}
+			fail("approval_mismatch", "receipt seals approval digest %s but no approval row exists for %s while its action row remains — a cascade cannot do that", r.ApprovalDigest, r.ActionID)
 		case err != nil:
 			// F2: the failure NAMES its real cause — a stored preview
 			// that no longer re-derives its pin reports the C2

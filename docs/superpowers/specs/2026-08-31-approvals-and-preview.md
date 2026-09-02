@@ -469,6 +469,31 @@ tool-call to PENDING_APPROVAL, end to end.
   reject; sweep vs an approve; context cancellation between rows; 200
   expired → 200 purges + 200 VALID receipts + zero partial rows.
 
+**PHASE 4 — bounded retention with evidence.**
+- FR-R4F4-1: `approvals.action_id` becomes a REAL foreign key with ON
+  DELETE CASCADE — when the retention prune removes a terminal action,
+  its approval row cascades with it. The SIGNED ApprovalDigest inside
+  the v2 receipt IS the surviving evidence. This SUPERSEDES the
+  second-pass retention exemption ("approval rows are never pruned"):
+  the exemption bounded nothing and the receipt already carried the
+  evidence; the stale tone is purged in-phase.
+- FR-R4F4-2: schema v8→v9 by TRANSACTIONAL TABLE RECONSTRUCTION
+  (SQLite cannot add a constraint in place): new table with the FK,
+  data copied, old dropped, renamed, index recreated — one transaction
+  with the version bump (the AS-8 anti-zombie mold), WITH a
+  crash-of-migration rehearsal that lands cleanly back on v8. Orphan
+  approval rows predating v9 (their action pruned under the old
+  exemption) are RETIRED by the copy filter — declared in ADR-0046:
+  their receipt is their evidence, exactly as if the cascade had run.
+- FR-R4F4-3: the verifier distinguishes retention from sabotage:
+  action row PRESENT + approval row absent = approval_mismatch
+  (sabotage); BOTH absent = the honest note approval_row_absent (the
+  action_row_absent mold, verbatim).
+- FR-R4F4-4: the resource-bound invariant DEMONSTRATED: thousands of
+  park→close→prune cycles never exceed the live-approvals bound, while
+  every receipt survives.
+- ADR-0046 records the evidence-retention doctrine.
+
 ### E5 CONSOLIDATION — second external audit (2026-09-01, adjudicated)
 
 Five P1 + one P2, each cured reproduction-first (born red from the

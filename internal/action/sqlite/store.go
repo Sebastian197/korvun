@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 8
+const schemaVersionCurrent = 9
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -281,6 +281,44 @@ CREATE INDEX approvals_by_status ON approvals(status);`,
 	7: `
 ALTER TABLE receipts ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE receipts ADD COLUMN approval_digest TEXT NOT NULL DEFAULT '';`,
+	// v8 -> v9 (R4 Phase 4, ADR-0046): approvals.action_id becomes a
+	// REAL foreign key with ON DELETE CASCADE — bounded retention: when
+	// the prune removes a terminal action its approval cascades, the
+	// SIGNED receipt being the surviving evidence. SQLite cannot add a
+	// constraint in place, so the table is RECONSTRUCTED transactionally
+	// (the runner wraps this whole step + the version bump in one
+	// transaction — the AS-8 anti-zombie mold, crash-rehearsed). Orphan
+	// approvals predating v9 (action pruned under the old exemption)
+	// are RETIRED by the copy filter, declared in the ADR: their
+	// receipt is their evidence, exactly as if the cascade had run.
+	8: `
+CREATE TABLE approvals_v9 (
+    approval_id           TEXT    NOT NULL PRIMARY KEY,
+    schema_version        INTEGER NOT NULL,
+    action_id             TEXT    NOT NULL UNIQUE REFERENCES actions(action_id) ON DELETE CASCADE,
+    action_digest         TEXT    NOT NULL,
+    preview_digest        TEXT    NOT NULL,
+    canonical_preview     TEXT    NOT NULL,
+    canonical_params      TEXT    NOT NULL,
+    requested_from        TEXT    NOT NULL,
+    reason                TEXT    NOT NULL,
+    risk_summary          TEXT    NOT NULL,
+    policy_version        INTEGER NOT NULL,
+    policy_digest         TEXT    NOT NULL,
+    requested_at          TEXT    NOT NULL,
+    expires_at            TEXT,
+    status                TEXT    NOT NULL,
+    decision_principal_id TEXT    NOT NULL DEFAULT '',
+    decision              TEXT    NOT NULL DEFAULT '',
+    decision_at           TEXT,
+    comment               TEXT    NOT NULL DEFAULT '',
+    decision_receipt_id   TEXT    NOT NULL DEFAULT ''
+) WITHOUT ROWID;
+INSERT INTO approvals_v9 SELECT * FROM approvals
+ WHERE EXISTS (SELECT 1 FROM actions WHERE actions.action_id = approvals.action_id);
+DROP TABLE approvals;
+ALTER TABLE approvals_v9 RENAME TO approvals;
+CREATE INDEX approvals_by_status ON approvals(status);`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per

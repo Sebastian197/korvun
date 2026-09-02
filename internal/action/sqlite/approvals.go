@@ -335,15 +335,16 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 // WITH its signed receipt, params purged — the same close the consume
 // touch performs, now server-owned so an untouched expired request
 // cannot outlive its window forever. Runs at boot (after the sealer is
-// wired) and on the existing prune cadence. Returns how many swept.
+// wired) and on the existing prune cadence. Returns how many swept
+// and how many were skipped (decided concurrently — R4-F3).
 //
-// Retention note, DECLARED (R4): approval rows themselves are
-// retention-exempt BY DESIGN — they are the evidence the verifier's
-// 8th check (approval_mismatch) re-derives, so they are never pruned;
-// the approvals table has no FK cascade to actions, and an approval
-// orphaned by its action's prune stays coherent: the sealed receipt
-// survives beside it. Growth is bounded by the same cap as actions
-// (one approval per parked action, UNIQUE action_id).
+// Retention (R4 Phase 4, ADR-0046 — SUPERSEDES the earlier exemption):
+// approval rows CASCADE with their action's retention prune (real FK,
+// ON DELETE CASCADE since v9). The surviving evidence of a consumed
+// approval is its SIGNED receipt — the sealed approval_digest carries
+// the decision terms, the preview digest and the law pin. Growth is
+// therefore bounded by the actions cap itself: at most one approval
+// per surviving action row.
 func (s *Store) SweepExpiredApprovals(ctx context.Context, at time.Time) (swept, skipped int, err error) {
 	ids, err := s.collectIDs(ctx,
 		`SELECT approval_id FROM approvals

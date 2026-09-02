@@ -164,7 +164,25 @@ explicit decision.
 > registered: the internal self-audits were green AND insufficient
 > (doctrine: the self-exam PREPARES the gate, never replaces it).**
 >
-> **PHASE 3 — DONE, local, awaiting review:** atomic ownership.
+> **PHASE 4 — DONE, local, awaiting review:** bounded retention with
+> evidence (ADR-0046, SUPERSEDES the second-pass exemption).
+> approvals.action_id is a REAL FK with ON DELETE CASCADE via v8→v9
+> transactional table reconstruction, crash-rehearsed on the AS-8 mold
+> (aborted migration lands cleanly back on v8, old table intact);
+> pre-v9 orphans RETIRED by the copy filter, declared. The verifier
+> distinguishes retention from sabotage: both rows gone = honest NOTE
+> approval_row_absent (the action_row_absent mold); action present +
+> approval gone = approval_mismatch FAIL (a cascade cannot do that).
+> Resource-bound DEMONSTRATED: 2000 park→close→prune cycles, approvals
+> bounded by the cap, all 2000 receipts surviving. Stale "never
+> pruned" tone purged in-phase. FILED for the phase review: one
+> non-reproduced flake of TestRecovery_twoRecoveriesAndAFinishCompete
+> (1 red in 7 runs under full-suite -race load; the failing line was
+> not captured; 6 subsequent runs green — hypothesis: busy_timeout
+> under load, the timing-observability family; needs adjudication
+> whether to cure before the gate).
+>
+> **PHASE 3 — DONE, reviewed and accepted:** atomic ownership.
 > closeCrashOrphan carries its COMPLETE eligibility predicate inside
 > the UPDATE (per-pass constants; APPROVED-without-params checked in
 > the same transaction) and verifies RowsAffected — zero rows = another
