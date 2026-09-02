@@ -124,6 +124,11 @@ executor may already have fired) closes the action as
 would misstate what happened. Idempotency, reconciliation of uncertain
 outcomes and status re-queries against the external system are stage
 6's scope, declared, not implied.
+Since R5, the receipt of EVERY approval-decided outcome — approved,
+rejected, expired or cancelled — seals the decided approval's digest,
+so the evidence of the NO survives retention exactly like the YES;
+receipts sealed by pre-R5 binaries carry an empty approval reference
+on refused outcomes — a declared historical fact, never rewritten.
 Since the R3 consolidation the boot's recovery closes land in the
 ledger with their era's signed receipt like every other terminal;
 recovery rows closed by BINARIES BEFORE that consolidation carry no

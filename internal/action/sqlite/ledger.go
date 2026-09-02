@@ -120,17 +120,23 @@ func (s *Store) receiptForRecord(ctx context.Context, tx *sql.Tx, env action.Env
 	}
 }
 
-// approvalDigestTx resolves the CONSUMED approval's decision digest for
-// one action ("" when no approved request exists — the honest empty of
-// every unapproved outcome, FR-RCPT-2).
+// approvalDigestTx resolves the DECIDED approval's decision digest for
+// one action. R5-S1 REVOKED the old "honest empty for unapproved
+// outcomes": under the F4 cascade the refused approval's row dies with
+// retention, so the receipt is the ONLY evidence that survives — for
+// the NO exactly as for the YES. Every decided status (APPROVED,
+// REJECTED, EXPIRED, CANCELLED) seals; "" remains honest only when no
+// approval ever existed for the action. Receipts sealed by pre-S1
+// binaries carry "" on refused outcomes — a declared historical fact
+// (SECURITY.md), never rewritten.
 func (s *Store) approvalDigestTx(ctx context.Context, tx *sql.Tx, actionID string) string {
 	// C2: the decision digest also seals what the human READ and the
 	// law it was read under — preview_digest and the policy pin ride in.
 	row := tx.QueryRowContext(ctx,
 		`SELECT approval_id, action_digest, preview_digest, policy_version,
 		        policy_digest, decision_principal_id, decision, decision_at
-		   FROM approvals WHERE action_id = ? AND status = ?`,
-		actionID, string(action.ApprovalApproved))
+		   FROM approvals WHERE action_id = ? AND status != ?`,
+		actionID, string(action.ApprovalPending))
 	var a action.Approval
 	var decisionAt sql.NullString
 	if err := row.Scan(&a.ApprovalID, &a.ActionDigest, &a.PreviewDigest,
