@@ -86,3 +86,22 @@ func TestSweep_runsOnThePruneCadence(t *testing.T) {
 		t.Fatalf("AUDIT R4: the prune cadence must sweep expiry too: %v %v", err, got.Status)
 	}
 }
+
+// F3 of the third-pass self-audit (adjudicated 2026-09-02): the birth
+// of an approval did not pay the prune cadence, so a server whose ONLY
+// traffic is parking requests never swept its expired ones until the
+// next boot — "in practice" turned into a pin: the park itself counts
+// as a write.
+func TestSweep_aServerThatOnlyParksStillSweeps(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	store.pruneEvery = 1
+	ctx := context.Background()
+	stale := expiredParked(t, store, "act_f3_stale")
+	// The ONLY further traffic is another park — it must pay the sweep.
+	expiredParked(t, store, "act_f3_next")
+	got, _, err := store.GetApproval(ctx, stale.ApprovalID)
+	if err != nil || got.Status != action.ApprovalExpired {
+		t.Fatalf("AUDIT F3: the park itself pays the cadence — the stale one sweeps: %v %v", err, got.Status)
+	}
+}

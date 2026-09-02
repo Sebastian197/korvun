@@ -109,7 +109,9 @@ func (s *Store) CreateApprovalRequest(ctx context.Context, env action.Envelope, 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit approval request: %w", err)
 	}
-	return nil
+	// F3: the park itself pays the retention cadence — a server whose
+	// only traffic is parking requests still sweeps its expired ones.
+	return s.noteWrite(ctx)
 }
 
 // DecideApproval consumes the approval ONE-SHOT and, in the SAME
@@ -443,12 +445,12 @@ func (s *Store) GetApproval(ctx context.Context, approvalID string) (action.Appr
 	if err != nil {
 		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
 	}
-	// C2: the sealed preview must still re-derive the pinned digest —
-	// a stored preview that parses fine but tells a different story is
-	// refused at the READ, by name.
-	if got := p.Digest(); got != a.PreviewDigest {
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf(
-			"action/sqlite: approval %q: preview_digest_mismatch — the stored preview re-derives %s but the request pinned %s", approvalID, got, a.PreviewDigest)
+	// C2+F1: the READ runs the WHOLE binding, like the decision — a
+	// stored preview that parses fine but lies about the digest, the
+	// law, the args or the rule is refused by name at the read; the
+	// human never reads a lie.
+	if err := action.ValidatePreviewBinding(a, p); err != nil {
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 	}
 	return a, p, nil
 }
