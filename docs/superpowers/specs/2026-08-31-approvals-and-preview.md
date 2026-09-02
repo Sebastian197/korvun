@@ -450,6 +450,25 @@ tool-call to PENDING_APPROVAL, end to end.
   manipulation (already pinned by R1/F1 — re-verified over the
   bundle).
 
+**PHASE 3 — atomic ownership (recovery AND sweep).**
+- FR-R4F3-1: every close carries its COMPLETE eligibility predicate in
+  the UPDATE itself (WHERE action_id = ? AND still-eligible-state; for
+  APPROVED-without-params the canonical_params = '' check lives inside
+  the same transaction), with RowsAffected verified — zero rows means
+  another process was the legitimate owner: no receipt, no drama,
+  changed=false.
+- FR-R4F3-2: closeApprovalTx reports whether it WON the
+  PENDING→EXPIRED transition; only the winner rejects the action,
+  purges params and emits the receipt. An approval decided
+  concurrently is SKIPPED with a note (the sweep returns a skipped
+  count) — NEVER a boot-fatal for losing a clean race; real errors
+  still abort, and context cancellation between rows aborts cleanly
+  (per-row transactions: no partial rows, ever).
+- Acceptance — the auditor's six scenarios, permanent: recovery vs a
+  concurrent Finish; two recoveries competing; sweep vs an operator
+  reject; sweep vs an approve; context cancellation between rows; 200
+  expired → 200 purges + 200 VALID receipts + zero partial rows.
+
 ### E5 CONSOLIDATION — second external audit (2026-09-01, adjudicated)
 
 Five P1 + one P2, each cured reproduction-first (born red from the

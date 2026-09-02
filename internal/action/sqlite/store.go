@@ -514,10 +514,11 @@ func open(path string) (*Store, error) {
 // with the uncertainty NAMED, never a FAILED lie.
 func (s *Store) RecoverPreviousLife(ctx context.Context) error {
 	passes := []struct {
-		query  string
-		args   []any
-		to     action.State
-		marker string
+		query     string
+		args      []any
+		to        action.State
+		marker    string
+		predicate string
 	}{
 		{
 			query: `SELECT action_id FROM actions
@@ -525,9 +526,10 @@ func (s *Store) RecoverPreviousLife(ctx context.Context) error {
 			               SELECT 1 FROM approvals
 			                WHERE approvals.action_id = actions.action_id
 			                  AND approvals.canonical_params != '')`,
-			args:   []any{string(action.StateApproved)},
-			to:     action.StateOutcomeUnknown,
-			marker: recoveryMarkerOutcomeUnknown,
+			args:      []any{string(action.StateApproved)},
+			to:        action.StateOutcomeUnknown,
+			marker:    recoveryMarkerOutcomeUnknown,
+			predicate: claimedOrphanPredicate,
 		},
 		{
 			query: `SELECT action_id FROM actions
@@ -538,8 +540,9 @@ func (s *Store) RecoverPreviousLife(ctx context.Context) error {
 				string(action.StateRejected), string(action.StatePendingApproval),
 				string(action.StateApproved), string(action.StateOutcomeUnknown),
 			},
-			to:     action.StateFailed,
-			marker: recoveryMarkerCrash,
+			to:        action.StateFailed,
+			marker:    recoveryMarkerCrash,
+			predicate: crashOrphanPredicate,
 		},
 	}
 	now := time.Now().UTC()
@@ -549,13 +552,32 @@ func (s *Store) RecoverPreviousLife(ctx context.Context) error {
 			return fmt.Errorf("action/sqlite: recovery pass: %w", err)
 		}
 		for _, id := range ids {
-			if err := s.closeCrashOrphan(ctx, id, pass.to, pass.marker, now); err != nil {
+			// R4-F3: real errors (a dead context included) abort; a
+			// lost clean race is changed=false and the loop moves on.
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("action/sqlite: recovery pass: %w", err)
+			}
+			if _, err := s.closeCrashOrphan(ctx, id, pass.to, pass.marker, pass.predicate, now); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
 }
+
+// The per-pass eligibility predicates (R4-F3): each crash close carries
+// its COMPLETE condition inside the UPDATE itself, so ownership is
+// decided by the row store atomically — never by an earlier SELECT.
+const (
+	// claimedOrphanPredicate: still APPROVED and params still absent.
+	claimedOrphanPredicate = ` AND state = 'APPROVED' AND NOT EXISTS (
+		SELECT 1 FROM approvals
+		 WHERE approvals.action_id = actions.action_id
+		   AND approvals.canonical_params != '')`
+	// crashOrphanPredicate: still a non-terminal, non-exempt state.
+	crashOrphanPredicate = ` AND state NOT IN ('DENIED','SHADOWED','SUCCEEDED','FAILED',
+		'REJECTED','PENDING_APPROVAL','APPROVED','OUTCOME_UNKNOWN')`
+)
 
 // collectIDs runs a SELECT of action ids.
 func (s *Store) collectIDs(ctx context.Context, query string, args ...any) ([]string, error) {
@@ -577,30 +599,38 @@ func (s *Store) collectIDs(ctx context.Context, query string, args ...any) ([]st
 
 // closeCrashOrphan closes ONE crash orphan in its own transaction:
 // the state close and its terminal receipt land together — no terminal
-// is born without its receipt, recovery's included (R3).
-func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action.State, marker string, at time.Time) error {
+// is born without its receipt, recovery's included (R3). R4-F3: the
+// UPDATE carries the pass's COMPLETE eligibility predicate and
+// RowsAffected decides ownership — zero rows means another process
+// (a concurrent Finish, another recovery) owned the row legitimately:
+// no receipt, no drama, changed=false.
+func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action.State, marker, predicate string, at time.Time) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("action/sqlite: begin crash close %q: %w", actionID, err)
+		return false, fmt.Errorf("action/sqlite: begin crash close %q: %w", actionID, err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx,
+	res, err := tx.ExecContext(ctx,
 		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
-		  WHERE action_id = ?`,
-		string(to), marker, at.Format(time.RFC3339Nano), actionID); err != nil {
-		return fmt.Errorf("action/sqlite: crash close %q: %w", actionID, err)
+		  WHERE action_id = ?`+predicate, // #nosec G202 -- predicate is one of two package constants
+		string(to), marker, at.Format(time.RFC3339Nano), actionID)
+	if err != nil {
+		return false, fmt.Errorf("action/sqlite: crash close %q: %w", actionID, err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return false, nil
 	}
 	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "")
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := s.appendReceiptTx(ctx, tx, r); err != nil {
-		return err
+		return false, err
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("action/sqlite: commit crash close %q: %w", actionID, err)
+		return false, fmt.Errorf("action/sqlite: commit crash close %q: %w", actionID, err)
 	}
-	return nil
+	return true, nil
 }
 
 // Prune enforces the retention cap: when total rows exceed it, the OLDEST
@@ -721,7 +751,7 @@ func (s *Store) noteWrite(ctx context.Context) error {
 		}
 		// R4: the prune cadence also pays the expiry sweep, so a parked
 		// request nobody touches cannot outlive its window forever.
-		if _, err := s.SweepExpiredApprovals(ctx, time.Now().UTC()); err != nil {
+		if _, _, err := s.SweepExpiredApprovals(ctx, time.Now().UTC()); err != nil {
 			return err
 		}
 	}

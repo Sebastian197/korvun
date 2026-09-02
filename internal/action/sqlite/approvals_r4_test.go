@@ -48,7 +48,7 @@ func TestSweepExpiredApprovals_closesWithReceiptAndPurgesParams(t *testing.T) {
 	corruptCell(t, store, "approvals", "expires_at", "approval_id",
 		alive.ApprovalID, time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano))
 
-	swept, err := store.SweepExpiredApprovals(ctx, time.Now().UTC())
+	swept, _, err := store.SweepExpiredApprovals(ctx, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("sweep: %v", err)
 	}

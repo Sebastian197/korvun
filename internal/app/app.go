@@ -369,7 +369,12 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// R4: the boot also sweeps expired PENDING approvals (EXPIRED +
 		// REJECTED action with its receipt) — server-owned expiry, so
 		// an untouched request cannot outlive its window forever.
-		if _, err := actions.SweepExpiredApprovals(context.Background(), time.Now().UTC()); err != nil {
+		swept, skipped, err := actions.SweepExpiredApprovals(context.Background(), time.Now().UTC())
+		if skipped > 0 {
+			// R4-F3: losing a clean race is a NOTE, never boot-fatal.
+			b.logger.Info("expiry sweep: rows decided concurrently were skipped", "skipped", skipped, "swept", swept)
+		}
+		if err != nil {
 			_ = actions.Close()
 			_ = store.Close()
 			return nil, fmt.Errorf("app: sweep expired approvals: %w", err)

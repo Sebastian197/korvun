@@ -164,7 +164,23 @@ explicit decision.
 > registered: the internal self-audits were green AND insufficient
 > (doctrine: the self-exam PREPARES the gate, never replaces it).**
 >
-> **PHASE 2 — DONE, local, awaiting review:** the bundle born whole.
+> **PHASE 3 — DONE, local, awaiting review:** atomic ownership.
+> closeCrashOrphan carries its COMPLETE eligibility predicate inside
+> the UPDATE (per-pass constants; APPROVED-without-params checked in
+> the same transaction) and verifies RowsAffected — zero rows = another
+> process owned the row: no receipt, no drama, changed=false.
+> closeApprovalTx reports whether it WON the PENDING transition; the
+> sweep (per-row sweepExpiredOne) lets only the winner reject, purge
+> and receipt — an operator-decided row SKIPS with a note (skipped
+> count, logged at boot), never a boot-fatal for a clean race; real
+> errors and dead contexts abort between rows, per-row transactions
+> leave no partials. The auditor's six scenarios permanent: recovery
+> vs concurrent Finish (deterministic + racing forms), two recoveries
+> competing, sweep vs reject, sweep vs approve, context cancellation,
+> 200 expired -> 200 purges + 200 receipts that VERIFY. The stale
+> "no sweeper" package tone purged in-phase.
+>
+> **PHASE 2 — DONE, reviewed and accepted:** the bundle born whole.
 > `action.BoundApprovalRequest` + factory (unexported fields — narrated
 > previews impossible by construction; the factory DERIVES digests,
 > operation, principal, effect/reversibility/egress from the declared

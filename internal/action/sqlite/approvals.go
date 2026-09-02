@@ -11,8 +11,11 @@
 // is the consumption point, and the operator's decision act leaves its
 // own E4 signed receipt in the SAME transaction as the state
 // transition — together or nothing. Expiry is judged at the consume
-// touch (the E2 clock mold): no sweeper, no goroutine. There are NO
-// update or delete paths beyond the one transition.
+// touch (the E2 clock mold) AND swept server-side (R4: at boot and on
+// the prune cadence — synchronous passes, no goroutine), each close
+// owning its row atomically: the one-shot PENDING->decided UPDATE is
+// the ownership test, and losing a clean race is a skip, never an
+// error. There are NO other update or delete paths.
 package sqlite
 
 import (
@@ -196,8 +199,13 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 		}
 		// approval_expired: the touch closes it — EXPIRED approval,
 		// REJECTED action with its terminal receipt, params purged.
-		if err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", "clock", at, "", ""); err != nil {
+		// R4-F3: a lost race here means someone else already decided.
+		won, err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", "clock", at, "", "")
+		if err != nil {
 			return "", err
+		}
+		if !won {
+			return action.RuleApprovalAlreadyDecided, nil
 		}
 		if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
 			return "", err
@@ -282,17 +290,25 @@ func (s *Store) approvalTx(ctx context.Context, tx *sql.Tx, approvalID string) (
 // closeApprovalTx closes an approval into a terminal status (the
 // expiry path; the normal decision path closes via the one-shot
 // UPDATE). Params are purged here too: an expired request never runs.
-func (s *Store) closeApprovalTx(ctx context.Context, tx *sql.Tx, a action.Approval, status action.ApprovalStatus, decider, decision string, at time.Time, comment, proofID string) error {
-	if _, err := tx.ExecContext(ctx,
+// R4-F3: the one-shot WHERE status='PENDING' is the ownership test —
+// the return says whether THIS transaction won the transition; a loser
+// mutated nothing and must not receipt anything.
+func (s *Store) closeApprovalTx(ctx context.Context, tx *sql.Tx, a action.Approval, status action.ApprovalStatus, decider, decision string, at time.Time, comment, proofID string) (bool, error) {
+	res, err := tx.ExecContext(ctx,
 		`UPDATE approvals SET status = ?, decision_principal_id = ?, decision = ?,
 		        decision_at = ?, comment = ?, decision_receipt_id = ?,
 		        canonical_params = ''
 		  WHERE approval_id = ? AND status = ?`,
 		string(status), decider, decision, at.UTC().Format(time.RFC3339Nano),
-		comment, proofID, a.ApprovalID, string(action.ApprovalPending)); err != nil {
-		return fmt.Errorf("action/sqlite: close approval %q: %w", a.ApprovalID, err)
+		comment, proofID, a.ApprovalID, string(action.ApprovalPending))
+	if err != nil {
+		return false, fmt.Errorf("action/sqlite: close approval %q: %w", a.ApprovalID, err)
 	}
-	return nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("action/sqlite: close approval %q: %w", a.ApprovalID, err)
+	}
+	return n > 0, nil
 }
 
 // rejectParkedActionTx moves the parked action to its terminal
@@ -328,40 +344,63 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 // orphaned by its action's prune stays coherent: the sealed receipt
 // survives beside it. Growth is bounded by the same cap as actions
 // (one approval per parked action, UNIQUE action_id).
-func (s *Store) SweepExpiredApprovals(ctx context.Context, at time.Time) (int, error) {
+func (s *Store) SweepExpiredApprovals(ctx context.Context, at time.Time) (swept, skipped int, err error) {
 	ids, err := s.collectIDs(ctx,
 		`SELECT approval_id FROM approvals
 		  WHERE status = ? AND expires_at IS NOT NULL AND expires_at != ''
 		    AND expires_at <= ?`,
 		string(action.ApprovalPending), at.UTC().Format(time.RFC3339Nano))
 	if err != nil {
-		return 0, fmt.Errorf("action/sqlite: expiry sweep: %w", err)
+		return 0, 0, fmt.Errorf("action/sqlite: expiry sweep: %w", err)
 	}
-	swept := 0
 	for _, id := range ids {
-		tx, err := s.db.BeginTx(ctx, nil)
+		// R4-F3: real errors (a dead context included) abort; a row an
+		// operator decided between the SELECT and this close is SKIPPED
+		// with a note — never a boot-fatal for losing a clean race.
+		if err := ctx.Err(); err != nil {
+			return swept, skipped, fmt.Errorf("action/sqlite: expiry sweep: %w", err)
+		}
+		won, err := s.sweepExpiredOne(ctx, id, at)
 		if err != nil {
-			return swept, fmt.Errorf("action/sqlite: begin expiry sweep %q: %w", id, err)
+			return swept, skipped, err
 		}
-		a, err := s.approvalTx(ctx, tx, id)
-		if err != nil {
-			_ = tx.Rollback()
-			return swept, err
+		if won {
+			swept++
+		} else {
+			skipped++
 		}
-		if err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", "clock", at, "", ""); err != nil {
-			_ = tx.Rollback()
-			return swept, err
-		}
-		if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
-			_ = tx.Rollback()
-			return swept, err
-		}
-		if err := tx.Commit(); err != nil {
-			return swept, fmt.Errorf("action/sqlite: commit expiry sweep %q: %w", id, err)
-		}
-		swept++
 	}
-	return swept, nil
+	return swept, skipped, nil
+}
+
+// sweepExpiredOne closes ONE expired approval in its own transaction.
+// Ownership is decided by closeApprovalTx's one-shot UPDATE (R4-F3):
+// only the winner rejects the action, purges params and receipts; a
+// loser rolls back untouched and reports won=false.
+func (s *Store) sweepExpiredOne(ctx context.Context, approvalID string, at time.Time) (bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("action/sqlite: begin expiry sweep %q: %w", approvalID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	a, err := s.approvalTx(ctx, tx, approvalID)
+	if err != nil {
+		return false, err
+	}
+	won, err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", "clock", at, "", "")
+	if err != nil {
+		return false, err
+	}
+	if !won {
+		return false, nil
+	}
+	if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("action/sqlite: commit expiry sweep %q: %w", approvalID, err)
+	}
+	return true, nil
 }
 
 // recordDecisionActTx records the operator's decision act — a real
