@@ -57,7 +57,7 @@ func TestCreateApprovalRequest_everyCrossLinkEnforcedAtBirth(t *testing.T) {
 		if wantName != "preview_digest_mismatch" {
 			a.PreviewDigest = p.Digest()
 		}
-		err := store.CreateApprovalRequest(ctx, env,
+		err := store.createApprovalParts(ctx, env,
 			Decision{Outcome: "require_approval", Rule: a.Reason,
 				PolicyVersion: a.PolicyVersion, PolicyDigest: a.PolicyDigest},
 			a, p, `{"a":1}`)
@@ -81,7 +81,7 @@ func TestDecide_everyCrossLinkReverifiedAtTheTouch(t *testing.T) {
 		ctx := context.Background()
 		env := testEnvelope("act_r1_dec")
 		a, p := testApprovalFor(env)
-		if err := store.CreateApprovalRequest(ctx, env,
+		if err := store.createApprovalParts(ctx, env,
 			Decision{Outcome: "require_approval", Rule: a.Reason,
 				PolicyVersion: a.PolicyVersion, PolicyDigest: a.PolicyDigest},
 			a, p, `{"a":1}`); err != nil {

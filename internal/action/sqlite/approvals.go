@@ -33,14 +33,25 @@ var ErrUnknownDecision = errors.New("action/sqlite: unknown decision verb")
 // and refuses the unbounded blob.
 const maxApprovalParamsBytes = 64 << 10
 
-// CreateApprovalRequest parks env as PENDING_APPROVAL and persists the
-// approval request, its sealed preview and its canonical parameters in
-// one transaction. BORN WHOLE means the whole story (R1): the params
-// re-derive env's exact digest, the approval binds that digest, and
-// every cross link holds — preview digest, policy pin, args digest and
-// rule agree across approval, preview and gate decision, each refusing
-// BY NAME — otherwise the request is not born.
-func (s *Store) CreateApprovalRequest(ctx context.Context, env action.Envelope, d Decision, a action.Approval, p action.ActionPreview, rawParams string) error {
+// CreateApprovalRequest is the ONLY exported birth door (R4 Phase 2,
+// FR-R4F2-2): it accepts the born-whole bundle the action-package
+// factory derived — four loose narrated structures can no longer
+// enter. The R1 cross-link belt below stays as in-store defense in
+// depth behind the factory.
+func (s *Store) CreateApprovalRequest(ctx context.Context, b action.BoundApprovalRequest) error {
+	a := b.Approval()
+	return s.createApprovalParts(ctx, b.Envelope(),
+		Decision{Outcome: a.Reason, Rule: a.Reason,
+			PolicyVersion: a.PolicyVersion, PolicyDigest: a.PolicyDigest},
+		a, b.Preview(), b.RawParams())
+}
+
+// createApprovalParts is the birth mechanics behind the bundle door:
+// park the action PENDING_APPROVAL with its decision, approval row,
+// sealed preview and canonical params in one transaction, the whole
+// R1 cross-link belt enforced by name. Unexported on purpose — the
+// factory-validated bundle is the only way in from outside.
+func (s *Store) createApprovalParts(ctx context.Context, env action.Envelope, d Decision, a action.Approval, p action.ActionPreview, rawParams string) error {
 	// C6: the resource-bound invariant at the door — parked params are
 	// the one user-driven blob this table holds; cap them at birth.
 	if len(rawParams) > maxApprovalParamsBytes {
@@ -130,29 +141,26 @@ func (s *Store) CreateApprovalRequest(ctx context.Context, env action.Envelope, 
 // act. reject and cancelled stay safe under ANY law (withdrawing
 // authority never needs one), so the pin is not consulted for them.
 func (s *Store) DecideApprovalUnderLaw(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string, law PolicyPin) (string, error) {
+	// R4-F2 (FR-R4F2-4): the non-atomic pre-read died — the law is
+	// judged inside decideApprovalWithLaw's transaction over the
+	// RE-READ row, after the clock (F1: expiry wins the cross).
 	if decision == "approved" {
-		a, _, err := s.GetApproval(ctx, approvalID)
-		if err != nil {
-			return "", err
-		}
-		// F1: the CLOCK is consulted FIRST — an expired or already-
-		// decided request falls through to the mechanics, whose touch
-		// closes it by the E2 mold (FR-APR-4: no zombie PENDING rows).
-		// Only a still-consumable approve must happen under the law.
-		if rule := action.ApprovalConsumableAt(a, at); rule == "" {
-			if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
-				return "", fmt.Errorf("action/sqlite: %s (%s): the request was parked under law v%d %s but the current law is v%d %s — nothing was decided; re-request under the current law or reject this one", rule, dim, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
-			}
-		}
+		return s.decideApprovalWithLaw(ctx, approvalID, decision, at, operatorEnv, ident, comment, &law)
 	}
-	return s.decideApproval(ctx, approvalID, decision, at, operatorEnv, ident, comment)
+	return s.decideApprovalWithLaw(ctx, approvalID, decision, at, operatorEnv, ident, comment, nil)
 }
 
-// decideApproval is the decision mechanics: the one-shot consume, the
-// operator's proof-of-decision act, the parked action's transition.
-// Unexported on purpose — the law-validating surface above is the only
-// door out of the package.
+// decideApproval keeps the law-less mechanics signature for the
+// package's own tests.
 func (s *Store) decideApproval(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string) (string, error) {
+	return s.decideApprovalWithLaw(ctx, approvalID, decision, at, operatorEnv, ident, comment, nil)
+}
+
+// decideApprovalWithLaw is the decision mechanics: the one-shot
+// consume, the operator's proof-of-decision act, the parked action's
+// transition — and, for an approve, the law judged INSIDE this same
+// transaction over the re-read row (R4-F2). Unexported on purpose.
+func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string, law *PolicyPin) (string, error) {
 	switch decision {
 	case "approved", "rejected", "cancelled":
 	default:
@@ -198,6 +206,14 @@ func (s *Store) decideApproval(ctx context.Context, approvalID, decision string,
 			return "", fmt.Errorf("action/sqlite: commit expiry close: %w", err)
 		}
 		return action.RuleApprovalExpired, nil
+	}
+	// R4-F2: the law, judged over THE ROW THIS TRANSACTION READ — a
+	// law change between any earlier read and this consume is caught
+	// here, atomically.
+	if law != nil {
+		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+			return "", fmt.Errorf("action/sqlite: %s (%s): the request was parked under law v%d %s but the current law is v%d %s — nothing was decided; re-request under the current law or reject this one", rule, dim, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
+		}
 	}
 
 	// The operator's decision act: a real action of its own, terminal
@@ -452,7 +468,58 @@ func (s *Store) GetApproval(ctx context.Context, approvalID string) (action.Appr
 	if err := action.ValidatePreviewBinding(a, p); err != nil {
 		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 	}
+	// R4-F2 (FR-R4F2-3): the read also re-verifies the persisted STORY
+	// against the actions row and the action_decisions row — a preview
+	// whose effect, operation or principal no longer match the action,
+	// or a decision whose outcome/rule or law no longer match the
+	// request, refuses BY NAME.
+	if err := s.verifyApprovalStory(ctx, a, p); err != nil {
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+	}
 	return a, p, nil
+}
+
+// verifyApprovalStory checks the approval+preview pair against the
+// actions and action_decisions rows they claim to describe (R4-F2).
+func (s *Store) verifyApprovalStory(ctx context.Context, a action.Approval, p action.ActionPreview) error {
+	var (
+		effectClass, opNS, opName string
+		principal                 sql.NullString
+	)
+	err := s.db.QueryRowContext(ctx,
+		`SELECT effect_class, op_namespace, op_name, principal_id
+		   FROM actions WHERE action_id = ?`, a.ActionID).
+		Scan(&effectClass, &opNS, &opName, &principal)
+	if err != nil {
+		return fmt.Errorf("action/sqlite: story of %q: %w", a.ActionID, err)
+	}
+	if effectClass != string(p.EffectClass) {
+		return fmt.Errorf("preview_effect_mismatch: the preview shows %s but the action row carries %s", p.EffectClass, effectClass)
+	}
+	if op := opNS + "/" + opName; op != p.Operation {
+		return fmt.Errorf("preview_operation_mismatch: the preview shows %s but the action row carries %s", p.Operation, op)
+	}
+	if principal.String != p.PrincipalID {
+		return fmt.Errorf("preview_principal_mismatch: the preview shows %q but the action row carries %q", p.PrincipalID, principal.String)
+	}
+	var (
+		outcome, rule, polDigest string
+		polVersion               int64
+	)
+	err = s.db.QueryRowContext(ctx,
+		`SELECT outcome, rule, policy_version, policy_digest
+		   FROM action_decisions WHERE action_id = ?`, a.ActionID).
+		Scan(&outcome, &rule, &polVersion, &polDigest)
+	if err != nil {
+		return fmt.Errorf("action/sqlite: decision of %q: %w", a.ActionID, err)
+	}
+	if outcome != a.Reason || rule != a.Reason {
+		return fmt.Errorf("decision_outcome_mismatch: the request was born from %q but the decision row says outcome %q rule %q", a.Reason, outcome, rule)
+	}
+	if polVersion != a.PolicyVersion || polDigest != a.PolicyDigest {
+		return fmt.Errorf("decision_policy_mismatch: the request pinned law v%d %s but the decision row carries v%d %s", a.PolicyVersion, a.PolicyDigest, polVersion, polDigest)
+	}
+	return nil
 }
 
 // ListApprovals returns every approval in one status, newest first.
@@ -537,12 +604,24 @@ func nullable(v string) any {
 // happens BEFORE the effect, so racing executors cannot fire twice; a
 // crash between claim and terminal close leaves a non-terminal action
 // the E1 recovery pass closes honestly on the next lifecycle open.
-func (s *Store) ClaimApprovalParams(ctx context.Context, approvalID string) ([]byte, error) {
+func (s *Store) ClaimApprovalParams(ctx context.Context, approvalID string, law *PolicyPin) ([]byte, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("action/sqlite: begin claim: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	// R4-F2 (FR-R4F2-4): the claim is execute's consume point — the law
+	// is judged HERE, inside the claiming transaction, over the re-read
+	// row. nil law skips (package-internal mechanics and tests).
+	if law != nil {
+		a, err := s.approvalTx(ctx, tx, approvalID)
+		if err != nil {
+			return nil, err
+		}
+		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+			return nil, fmt.Errorf("action/sqlite: %s (%s): approval %q was parked under law v%d %s but the current law is v%d %s — refusing the claim", rule, dim, approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
+		}
+	}
 	var params string
 	err = tx.QueryRowContext(ctx,
 		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&params)

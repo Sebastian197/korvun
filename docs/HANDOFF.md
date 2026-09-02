@@ -164,7 +164,27 @@ explicit decision.
 > registered: the internal self-audits were green AND insufficient
 > (doctrine: the self-exam PREPARES the gate, never replaces it).**
 >
-> **PHASE 1 — DONE, local, awaiting review:** exclusive profile lock
+> **PHASE 2 — DONE, local, awaiting review:** the bundle born whole.
+> `action.BoundApprovalRequest` + factory (unexported fields — narrated
+> previews impossible by construction; the factory DERIVES digests,
+> operation, principal, effect/reversibility/egress from the declared
+> descriptor — a lying descriptor refuses at birth as
+> preview_effect_mismatch — law pin, rule, expiry from the injected
+> clock). `Store.CreateApprovalRequest` accepts ONLY the bundle (the
+> four-part mechanics went private as the in-store belt, R3 mold).
+> `GetApproval` re-verifies the STORY against actions AND
+> action_decisions: preview_effect/operation/principal_mismatch,
+> decision_outcome/policy_mismatch. The law is judged INSIDE the
+> consuming transaction over the re-read row — in decide
+> (decideApprovalWithLaw; the non-atomic pre-read died) AND in the
+> claim (execute's consume point). The auditor's seven saboteurs are
+> permanent: (a) at the factory, (b)-(e) at the read, (f) at
+> decide+claim in-tx, (g) via R1/F1 re-verified over the bundle.
+> Production RequestApproval resolves context facts and lets the
+> factory derive (assemblePreview died); harnesses derive from the
+> envelope now (the narrating-harness class died with the door).
+>
+> **PHASE 1 — DONE, reviewed and accepted:** exclusive profile lock
 > (ADR-0045, golang.org/x/sys promoted to direct; flock/LockFileEx,
 > OS-released on death) held by the server for life; rotate-key beside
 > a live server refuses `signing_key_in_use` with ZERO mutations

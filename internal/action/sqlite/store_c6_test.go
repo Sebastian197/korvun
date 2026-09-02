@@ -87,7 +87,7 @@ func TestCreateApprovalRequest_capsParamsAtBirth(t *testing.T) {
 		action.Operation{Namespace: "tool", Name: "echo", Version: 1},
 		big, time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC))
 	a, p := testApprovalFor(env)
-	err := store.CreateApprovalRequest(context.Background(), env,
+	err := store.createApprovalParts(context.Background(), env,
 		Decision{Outcome: "require_approval", Rule: "require_approval"}, a, p, big)
 	if err == nil {
 		t.Fatal("AUDIT C6: unbounded params must refuse at birth")

@@ -24,10 +24,12 @@ import (
 func expiredParked(t *testing.T, store *Store, id string) action.Approval {
 	t.Helper()
 	env := testEnvelope(id)
+	env.Principal = action.PrincipalRef{PrincipalID: "principal_brain_asistente"}
+	env.Effect = action.Effect{Class: string(action.EffectWriteIrreversible)}
 	a, p := testApprovalFor(env)
 	a.ExpiresAt = env.RequestedAt.Add(time.Minute) // long past by now
 	a.PreviewDigest = p.Digest()
-	if err := store.CreateApprovalRequest(context.Background(), env,
+	if err := store.createApprovalParts(context.Background(), env,
 		Decision{Outcome: "require_approval", Rule: a.Reason,
 			PolicyVersion: a.PolicyVersion, PolicyDigest: a.PolicyDigest},
 		a, p, `{"a":1}`); err != nil {

@@ -37,7 +37,7 @@ func TestPreviewSwap_readRefusesByName(t *testing.T) {
 	ctx := context.Background()
 	env := testEnvelope("act_c2_read")
 	a, p := testApprovalFor(env)
-	if err := store.CreateApprovalRequest(ctx, env,
+	if err := store.createApprovalParts(ctx, env,
 		Decision{Outcome: "require_approval", Rule: "require_approval"}, a, p, `{"a":1}`); err != nil {
 		t.Fatalf("birth: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestPreviewSwap_decisionRefusesByName(t *testing.T) {
 	ctx := context.Background()
 	env := testEnvelope("act_c2_dec")
 	a, p := testApprovalFor(env)
-	if err := store.CreateApprovalRequest(ctx, env,
+	if err := store.createApprovalParts(ctx, env,
 		Decision{Outcome: "require_approval", Rule: "require_approval"}, a, p, `{"a":1}`); err != nil {
 		t.Fatalf("birth: %v", err)
 	}

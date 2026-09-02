@@ -416,6 +416,40 @@ tool-call to PENDING_APPROVAL, end to end.
   TestClassGuard_parenthesizedCallCannotBribeIt,
   TestClassGuard_scansNestedCLIPackages.
 
+**PHASE 2 — the bundle born whole.**
+- FR-R4F2-1: `action.BoundApprovalRequest`, constructible ONLY through
+  the package factory (unexported fields — narrated input impossible
+  by construction). The factory DERIVES everything itself from the
+  envelope, the gate rule, the raw params, the resolved context
+  (intent purpose, grant identity/cost — facts the caller RESOLVES
+  from the store, not narrates about the action) plus the effect
+  descriptor and the law pin: action+args digests, operation,
+  principal, effect and reversibility, egress and resources, law
+  version/digest, rule and the require_approval outcome. A descriptor
+  class that contradicts the envelope's refuses AT BIRTH
+  (preview_effect_mismatch).
+- FR-R4F2-2: `Store.CreateApprovalRequest` accepts ONLY the bundle —
+  the four loose structures die; the R1 cross-link checks remain as an
+  in-store belt behind the factory.
+- FR-R4F2-3: `GetApproval` re-verifies the persisted STORY against the
+  actions row AND the action_decisions row, each dimension refusing BY
+  NAME: preview_effect_mismatch, preview_operation_mismatch,
+  preview_principal_mismatch, decision_policy_mismatch,
+  decision_outcome_mismatch (joining the R1 preview_* family).
+- FR-R4F2-4: the law is validated INSIDE the same transaction that
+  consumes the approval, over the re-read row — the non-atomic
+  pre-read in DecideApprovalUnderLaw dies; the claim
+  (ClaimApprovalParams) validates the law in ITS transaction too
+  (execute's consume point).
+- Acceptance: the auditor's seven saboteurs as permanent tests —
+  (a) write_reversible preview over a critical envelope; (b) false
+  operation with correct args; (c) false principal/grant; (d) an
+  "allow" decision where require_approval had to persist; (e) a
+  decision persisted under a different law; (f) a law change between
+  read and consume; (g) coherent canonical_preview+preview_digest
+  manipulation (already pinned by R1/F1 — re-verified over the
+  bundle).
+
 ### E5 CONSOLIDATION — second external audit (2026-09-01, adjudicated)
 
 Five P1 + one P2, each cured reproduction-first (born red from the

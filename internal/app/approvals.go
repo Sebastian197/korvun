@@ -55,36 +55,24 @@ type approvalRecorder struct {
 // birth of the parked request. Returns the request id for the model's
 // honest pending observation.
 func (r approvalRecorder) RequestApproval(ctx context.Context, env action.Envelope, rule string, rawParams string) (string, error) {
-	now := time.Now().UTC()
-	preview := r.assemblePreview(ctx, env, rule)
-	approval := action.Approval{
-		ApprovalID:    action.NewApprovalID(),
-		SchemaVersion: 1,
-		ActionID:      env.ActionID,
-		ActionDigest:  env.ParametersDigest,
-		PreviewDigest: preview.Digest(),
-		RequestedFrom: action.OperatorPrincipal().PrincipalID,
-		Reason:        rule,
-		RiskSummary:   preview.Reversibility,
-		PolicyVersion: r.pin.Version,
-		PolicyDigest:  r.pin.Digest,
-		RequestedAt:   now,
-		ExpiresAt:     now.Add(r.ttl),
-		Status:        action.ApprovalPending,
-	}
-	if err := r.store.CreateApprovalRequest(ctx, env,
-		actionsqlite.Decision{Outcome: rule, Rule: rule,
-			PolicyVersion: r.pin.Version, PolicyDigest: r.pin.Digest},
-		approval, preview, rawParams); err != nil {
+	// R4-F2: the adapter RESOLVES context facts (store lookups the
+	// domain cannot do) and the action-package factory DERIVES the
+	// whole story — narrated previews died with the bundle door.
+	b, err := action.NewBoundApprovalRequest(env, rawParams, r.resolveApprovalContext(ctx, env, rule))
+	if err != nil {
 		return "", err
 	}
-	return approval.ApprovalID, nil
+	if err := r.store.CreateApprovalRequest(ctx, b); err != nil {
+		return "", err
+	}
+	return b.Approval().ApprovalID, nil
 }
 
-// assemblePreview builds the §15.2 agent diff from what the adapter
-// can honestly resolve: absent facts are stated as absent, never
-// invented.
-func (r approvalRecorder) assemblePreview(ctx context.Context, env action.Envelope, rule string) action.ActionPreview {
+// resolveApprovalContext gathers the facts the factory cannot derive
+// itself: the intent's purpose, the grant identity and its budget line
+// (absent facts are stated as absent, never invented), the declared
+// effect descriptor, the pinned law and the injected clock.
+func (r approvalRecorder) resolveApprovalContext(ctx context.Context, env action.Envelope, rule string) action.ApprovalContext {
 	purpose := "-"
 	if env.IntentID != "" {
 		if intent, err := r.store.GetIntent(ctx, env.IntentID); err == nil {
@@ -100,43 +88,19 @@ func (r approvalRecorder) assemblePreview(ctx context.Context, env action.Envelo
 			}
 		}
 	}
-	class := action.EffectClass(env.Effect.Class)
-	egress := "no declared data egress"
-	reversibility := "unclassified consequence"
-	cage := env.Operation.Name
-	if descriptor, declared := tool.BuiltinEffects(env.Operation.Name); declared {
-		class = descriptor.Class
-		if descriptor.DataEgress {
-			egress = "request/result content LEAVES the kernel boundary"
-		}
-		switch {
-		case descriptor.Reversible:
-			reversibility = string(descriptor.Class) + " — reversible"
-		case descriptor.Compensatable:
-			reversibility = string(descriptor.Class) + " — compensatable, not reversible"
-		default:
-			reversibility = string(descriptor.Class) + " — irreversible, no documented undo"
-		}
-	} else if class != "" {
-		reversibility = string(class)
-	}
-	return action.ActionPreview{
-		ActionID:      env.ActionID,
-		SchemaVersion: 1,
+	descriptor, declared := tool.BuiltinEffects(env.Operation.Name)
+	return action.ApprovalContext{
 		IntentPurpose: purpose,
-		PrincipalID:   env.Principal.PrincipalID,
 		GrantID:       grantID,
-		Operation:     env.Operation.Namespace + "/" + env.Operation.Name,
-		Resources:     []string{strings.TrimSpace(env.Source.Channel)},
-		DataEgress:    egress,
-		ArgsDigest:    env.ParametersDigest,
 		CostLine:      cost,
-		EffectClass:   class,
-		Reversibility: reversibility,
-		ToolCage:      cage,
-		PolicyVersion: r.pin.Version,
-		PolicyDigest:  r.pin.Digest,
-		RequiredRule:  rule,
+		ToolCage:      env.Operation.Name,
+		Descriptor:    descriptor,
+		HasDescriptor: declared,
+		LawVersion:    r.pin.Version,
+		LawDigest:     r.pin.Digest,
+		Rule:          rule,
+		Now:           time.Now().UTC(),
+		TTL:           r.ttl,
 	}
 }
 
@@ -190,8 +154,10 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 	if rec.State != action.StateApproved {
 		return "", fmt.Errorf("app: action %s is %s — already executed or closed", approval.ActionID, rec.State)
 	}
-	// The atomic claim: exactly one executor gets the params.
-	params, err := store.ClaimApprovalParams(ctx, approvalID)
+	// The atomic claim: exactly one caller gets the params — and the
+	// law is judged inside the claiming transaction (R4-F2), over the
+	// re-read row.
+	params, err := store.ClaimApprovalParams(ctx, approvalID, &law)
 	if err != nil {
 		return "", fmt.Errorf("app: claim execution of %s: %w", approvalID, err)
 	}

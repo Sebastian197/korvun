@@ -41,8 +41,8 @@ func parkedRequest(t *testing.T) (cfgPath, dbPath, approvalID string) {
 func parkedRequestExpiring(t *testing.T, expiresAt time.Time) (cfgPath, dbPath, approvalID string) {
 	t.Helper()
 	cfgPath, dbPath = intentTestConfig(t)
-	// The park records the REAL current law (C1): the pin the approve
-	// will re-derive from the same config and validate against.
+	// The park goes through the REAL doors (R4-F2): the current law
+	// pin, the action-package factory, the store's bundle door.
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -63,31 +63,23 @@ func parkedRequestExpiring(t *testing.T, expiresAt time.Time) (cfgPath, dbPath, 
 	env.IntentID = action.RootIntentID
 	env.Principal = action.PrincipalRef{PrincipalID: "principal_brain_a"}
 	env.Effect = action.Effect{Class: string(action.EffectPure)}
-	preview := action.ActionPreview{
-		ActionID: env.ActionID, SchemaVersion: 1,
-		IntentPurpose: "semana de pruebas", PrincipalID: "principal_brain_a",
-		Operation: "tool/calc", Resources: []string{"console"},
-		DataEgress: "no declared data egress", ArgsDigest: env.ParametersDigest,
-		CostLine: "unbudgeted", EffectClass: action.EffectPure,
-		Reversibility: "pure — no external effect", ToolCage: "calc",
-		PolicyVersion: law.Version, PolicyDigest: law.Digest, RequiredRule: "require_approval",
+	now := time.Now().UTC()
+	b, err := action.NewBoundApprovalRequest(env, `7*6`, action.ApprovalContext{
+		IntentPurpose: "semana de pruebas",
+		GrantID:       "-", CostLine: "unbudgeted", ToolCage: "calc",
+		Descriptor:    action.EffectDescriptor{Class: action.EffectPure, Reversible: true},
+		HasDescriptor: true,
+		LawVersion:    law.Version, LawDigest: law.Digest,
+		Rule: "require_approval",
+		Now:  now, TTL: expiresAt.Sub(now),
+	})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
 	}
-	a := action.Approval{
-		ApprovalID: action.NewApprovalID(), SchemaVersion: 1,
-		ActionID: env.ActionID, ActionDigest: env.ParametersDigest,
-		PreviewDigest: preview.Digest(),
-		RequestedFrom: action.OperatorPrincipal().PrincipalID,
-		Reason:        "require_approval", RiskSummary: "pure — no external effect",
-		PolicyVersion: law.Version, PolicyDigest: law.Digest,
-		RequestedAt: time.Now().UTC().Add(-2 * time.Hour), ExpiresAt: expiresAt,
-		Status: action.ApprovalPending,
-	}
-	if err := store.CreateApprovalRequest(context.Background(), env,
-		actionsqlite.Decision{Outcome: "require_approval", Rule: "require_approval", PolicyVersion: law.Version, PolicyDigest: law.Digest},
-		a, preview, `7*6`); err != nil {
+	if err := store.CreateApprovalRequest(context.Background(), b); err != nil {
 		t.Fatalf("park: %v", err)
 	}
-	return cfgPath, dbPath, a.ApprovalID
+	return cfgPath, dbPath, b.Approval().ApprovalID
 }
 
 func TestApprovalsList_readOnlyDoorFromBirth(t *testing.T) {
@@ -129,15 +121,15 @@ func TestApprovalsShow_theFullTruthForTheHuman(t *testing.T) {
 	}
 	// The §15.2 rows, the raw params (loopback right) and THE DIGEST.
 	for _, must := range []string{
-		"semana de pruebas",         // purpose
-		"principal_brain_a",         // actor
-		"tool/calc",                 // operation
-		"no declared data egress",   // egress
-		"unbudgeted",                // cost
-		"pure — no external effect", // reversibility
-		"sha256:",                   // pinned law digest, visible
-		`7*6`,                       // RAW params — the operator's right
-		"digest",                    // the digest label, prominent
+		"semana de pruebas",       // purpose
+		"principal_brain_a",       // actor
+		"tool/calc",               // operation
+		"no declared data egress", // egress
+		"unbudgeted",              // cost
+		"pure — reversible",       // reversibility, DERIVED by the factory
+		"sha256:",                 // pinned law digest, visible
+		`7*6`,                     // RAW params — the operator's right
+		"digest",                  // the digest label, prominent
 	} {
 		if !strings.Contains(stdout, must) {
 			t.Fatalf("show must render %q — got:\n%s", must, stdout)

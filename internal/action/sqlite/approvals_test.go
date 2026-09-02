@@ -70,18 +70,22 @@ func buildV6File(t *testing.T) string {
 	return path
 }
 
+// testApprovalFor derives the preview from the ENVELOPE (R4-F2: the
+// read re-verifies the story against the persisted rows, so a harness
+// can no longer narrate an operation/principal/class the envelope does
+// not carry).
 func testApprovalFor(env action.Envelope) (action.Approval, action.ActionPreview) {
 	preview := action.ActionPreview{
 		ActionID:      env.ActionID,
 		SchemaVersion: 1,
 		IntentPurpose: "semana de pruebas",
-		PrincipalID:   "principal_brain_asistente",
-		Operation:     "tool/webhook_call",
+		PrincipalID:   env.Principal.PrincipalID,
+		Operation:     env.Operation.Namespace + "/" + env.Operation.Name,
 		Resources:     []string{"https://hooks.example"},
 		DataEgress:    "request body leaves to the webhook target",
 		ArgsDigest:    env.ParametersDigest,
 		CostLine:      "1 of 5",
-		EffectClass:   action.EffectWriteIrreversible,
+		EffectClass:   action.EffectClass(env.Effect.Class),
 		Reversibility: "irreversible",
 		ToolCage:      "webhook cage",
 		PolicyVersion: 7,
@@ -123,8 +127,11 @@ func operatorDecisionEnv(name, approvalID string) (action.Envelope, AttemptIdent
 func pendingRequest(t *testing.T, store *Store, id string) (action.Approval, action.ActionPreview) {
 	t.Helper()
 	env := testEnvelope(id)
+	// The rich story lives in the ENVELOPE now — the preview derives.
+	env.Principal = action.PrincipalRef{PrincipalID: "principal_brain_asistente"}
+	env.Effect = action.Effect{Class: string(action.EffectWriteIrreversible)}
 	a, p := testApprovalFor(env)
-	if err := store.CreateApprovalRequest(context.Background(), env,
+	if err := store.createApprovalParts(context.Background(), env,
 		Decision{Outcome: "require_approval", Rule: "require_approval", PolicyVersion: 7, PolicyDigest: "sha256:law"},
 		a, p, `{"a":1}`); err != nil {
 		t.Fatalf("create request: %v", err)
@@ -234,7 +241,7 @@ func TestApproval_theRequestIsBornWholeOrNotAtAll(t *testing.T) {
 	}
 	env2 := testEnvelope("act_apr2")
 	a2, p2 := testApprovalFor(env2)
-	if err := store2.CreateApprovalRequest(ctx, env2,
+	if err := store2.createApprovalParts(ctx, env2,
 		Decision{Outcome: "require_approval", Rule: "require_approval"}, a2, p2, `{"a":1}`); err == nil {
 		t.Fatal("a blocked approval insert must fail the whole birth")
 	}
@@ -427,32 +434,32 @@ func TestApproval_deepErrorBranches(t *testing.T) {
 	env := testEnvelope("act_deep")
 	a, p := testApprovalFor(env)
 	// The birth integrity pins, one by one.
-	if err := store.CreateApprovalRequest(ctx, env, Decision{}, a, p, `{"wrong":true}`); err == nil {
+	if err := store.createApprovalParts(ctx, env, Decision{}, a, p, `{"wrong":true}`); err == nil {
 		t.Fatal("params that do not derive the envelope digest must refuse the birth")
 	}
 	badBind := a
 	badBind.ActionDigest = "sha256:other"
-	if err := store.CreateApprovalRequest(ctx, env, Decision{}, badBind, p, `{"a":1}`); err == nil {
+	if err := store.createApprovalParts(ctx, env, Decision{}, badBind, p, `{"a":1}`); err == nil {
 		t.Fatal("an approval binding a different digest must refuse the birth")
 	}
 	badID := a
 	badID.ActionID = "act_other"
-	if err := store.CreateApprovalRequest(ctx, env, Decision{}, badID, p, `{"a":1}`); err == nil {
+	if err := store.createApprovalParts(ctx, env, Decision{}, badID, p, `{"a":1}`); err == nil {
 		t.Fatal("mismatched ids across request parts must refuse the birth")
 	}
 	// A duplicate request for the same action (UNIQUE action_id).
-	if err := store.CreateApprovalRequest(ctx, env, Decision{Outcome: "require_approval", Rule: "require_approval"}, a, p, `{"a":1}`); err != nil {
+	if err := store.createApprovalParts(ctx, env, Decision{Outcome: "require_approval", Rule: "require_approval"}, a, p, `{"a":1}`); err != nil {
 		t.Fatalf("first birth: %v", err)
 	}
 	dup := a
 	dup.ApprovalID = action.NewApprovalID()
-	if err := store.CreateApprovalRequest(ctx, env, Decision{}, dup, p, `{"a":1}`); err == nil {
+	if err := store.createApprovalParts(ctx, env, Decision{}, dup, p, `{"a":1}`); err == nil {
 		t.Fatal("one request per parked action — the duplicate must refuse")
 	}
 	// Closed store: loud failures on every surface.
 	closed, _ := openTemp(t)
 	_ = closed.Close()
-	if err := closed.CreateApprovalRequest(ctx, env, Decision{}, a, p, `{"a":1}`); err == nil {
+	if err := closed.createApprovalParts(ctx, env, Decision{}, a, p, `{"a":1}`); err == nil {
 		t.Fatal("closed store create must fail loud")
 	}
 	if _, _, err := closed.GetApproval(ctx, a.ApprovalID); err == nil {
@@ -477,7 +484,7 @@ func TestApproval_deepErrorBranches(t *testing.T) {
 	store2, _ := sealedStore(t)
 	env2 := testEnvelope("act_deep2")
 	a2, p2 := testApprovalFor(env2)
-	if err := store2.CreateApprovalRequest(ctx, env2, Decision{Outcome: "require_approval", Rule: "require_approval"}, a2, p2, `{"a":1}`); err != nil {
+	if err := store2.createApprovalParts(ctx, env2, Decision{Outcome: "require_approval", Rule: "require_approval"}, a2, p2, `{"a":1}`); err != nil {
 		t.Fatalf("birth 2: %v", err)
 	}
 	corruptCell(t, store2, "approvals", "canonical_preview", "approval_id", a2.ApprovalID, `{"bogus":1}`)
@@ -487,7 +494,7 @@ func TestApproval_deepErrorBranches(t *testing.T) {
 	// ApprovalParams honest empties after a rejected close.
 	env3 := testEnvelope("act_deep3")
 	a3, p3 := testApprovalFor(env3)
-	if err := store2.CreateApprovalRequest(ctx, env3, Decision{Outcome: "require_approval", Rule: "require_approval"}, a3, p3, `{"a":1}`); err != nil {
+	if err := store2.createApprovalParts(ctx, env3, Decision{Outcome: "require_approval", Rule: "require_approval"}, a3, p3, `{"a":1}`); err != nil {
 		t.Fatalf("birth 3: %v", err)
 	}
 	env3d, ident3 := operatorDecisionEnv("reject", a3.ApprovalID)
@@ -584,8 +591,9 @@ func TestApproval_moreBranches(t *testing.T) {
 	env2 := testEnvelope("act_noexp")
 	a2, p2 := testApprovalFor(env2)
 	a2.ExpiresAt = time.Time{}
-	if err := store2.CreateApprovalRequest(ctx, env2,
-		Decision{Outcome: "require_approval", Rule: "require_approval"}, a2, p2, `{"a":1}`); err != nil {
+	if err := store2.createApprovalParts(ctx, env2,
+		Decision{Outcome: "require_approval", Rule: "require_approval",
+			PolicyVersion: a2.PolicyVersion, PolicyDigest: a2.PolicyDigest}, a2, p2, `{"a":1}`); err != nil {
 		t.Fatalf("no-expiry birth: %v", err)
 	}
 	got, _, err := store2.GetApproval(ctx, a2.ApprovalID)
@@ -698,7 +706,7 @@ func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 		a3.RequestedAt.Add(time.Minute), env3, ident3, ""); err != nil {
 		t.Fatalf("approve 3: %v", err)
 	}
-	if _, err := store.ClaimApprovalParams(ctx, a3.ApprovalID); err != nil {
+	if _, err := store.ClaimApprovalParams(ctx, a3.ApprovalID, nil); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	_ = store.Close()
@@ -1020,19 +1028,19 @@ func TestClaimApprovalParams_branches(t *testing.T) {
 	store, _ := sealedStore(t)
 	ctx := context.Background()
 	a, _ := pendingRequest(t, store, "act_claim2")
-	params, err := store.ClaimApprovalParams(ctx, a.ApprovalID)
+	params, err := store.ClaimApprovalParams(ctx, a.ApprovalID, nil)
 	if err != nil || len(params) == 0 {
 		t.Fatalf("first claim wins: %v %d", err, len(params))
 	}
-	if _, err := store.ClaimApprovalParams(ctx, a.ApprovalID); !errors.Is(err, ErrNotFound) {
+	if _, err := store.ClaimApprovalParams(ctx, a.ApprovalID, nil); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second claim loses by name: %v", err)
 	}
-	if _, err := store.ClaimApprovalParams(ctx, "apr_ghost"); !errors.Is(err, ErrNotFound) {
+	if _, err := store.ClaimApprovalParams(ctx, "apr_ghost", nil); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("ghost claim: %v", err)
 	}
 	closed, _ := openTemp(t)
 	_ = closed.Close()
-	if _, err := closed.ClaimApprovalParams(ctx, a.ApprovalID); err == nil {
+	if _, err := closed.ClaimApprovalParams(ctx, a.ApprovalID, nil); err == nil {
 		t.Fatal("closed store must fail loud")
 	}
 }
