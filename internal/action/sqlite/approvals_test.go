@@ -494,7 +494,8 @@ func TestApproval_deepErrorBranches(t *testing.T) {
 	// ApprovalParams honest empties after a rejected close.
 	env3 := testEnvelope("act_deep3")
 	a3, p3 := testApprovalFor(env3)
-	if err := store2.createApprovalParts(ctx, env3, Decision{Outcome: "require_approval", Rule: "require_approval"}, a3, p3, `{"a":1}`); err != nil {
+	if err := store2.createApprovalParts(ctx, env3, Decision{Outcome: "require_approval", Rule: "require_approval",
+		PolicyVersion: a3.PolicyVersion, PolicyDigest: a3.PolicyDigest}, a3, p3, `{"a":1}`); err != nil {
 		t.Fatalf("birth 3: %v", err)
 	}
 	env3d, ident3 := operatorDecisionEnv("reject", a3.ApprovalID)

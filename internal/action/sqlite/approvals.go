@@ -192,6 +192,11 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 		return "", fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
 	} else if err := action.ValidatePreviewBinding(a, p); err != nil {
 		return "", fmt.Errorf("action/sqlite: approval %q: %w; refusing the decision", approvalID, err)
+	} else if err := s.verifyApprovalStory(ctx, tx, a, p); err != nil {
+		// R5-S2: the WHOLE story judged inside THIS transaction — a
+		// saboteur moving actions/action_decisions between any earlier
+		// read and this consume refuses by name, approval intact.
+		return "", fmt.Errorf("action/sqlite: approval %q: %w; refusing the decision", approvalID, err)
 	}
 	if rule := action.ApprovalConsumableAt(a, at); rule != "" {
 		if rule == action.RuleApprovalAlreadyDecided {
@@ -513,20 +518,29 @@ func (s *Store) GetApproval(ctx context.Context, approvalID string) (action.Appr
 	// whose effect, operation or principal no longer match the action,
 	// or a decision whose outcome/rule or law no longer match the
 	// request, refuses BY NAME.
-	if err := s.verifyApprovalStory(ctx, a, p); err != nil {
+	if err := s.verifyApprovalStory(ctx, s.db, a, p); err != nil {
 		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 	}
 	return a, p, nil
 }
 
+// rowQuerier is the shared seam: *sql.DB and *sql.Tx both satisfy it,
+// so the STORY check runs identically at the read and INSIDE the
+// consuming transactions (R5-S2).
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // verifyApprovalStory checks the approval+preview pair against the
-// actions and action_decisions rows they claim to describe (R4-F2).
-func (s *Store) verifyApprovalStory(ctx context.Context, a action.Approval, p action.ActionPreview) error {
+// actions and action_decisions rows they claim to describe (R4-F2;
+// R5-S2 runs it INSIDE the decide and claim transactions too, over
+// the rows THOSE transactions read).
+func (s *Store) verifyApprovalStory(ctx context.Context, q rowQuerier, a action.Approval, p action.ActionPreview) error {
 	var (
 		effectClass, opNS, opName string
 		principal                 sql.NullString
 	)
-	err := s.db.QueryRowContext(ctx,
+	err := q.QueryRowContext(ctx,
 		`SELECT effect_class, op_namespace, op_name, principal_id
 		   FROM actions WHERE action_id = ?`, a.ActionID).
 		Scan(&effectClass, &opNS, &opName, &principal)
@@ -546,7 +560,7 @@ func (s *Store) verifyApprovalStory(ctx context.Context, a action.Approval, p ac
 		outcome, rule, polDigest string
 		polVersion               int64
 	)
-	err = s.db.QueryRowContext(ctx,
+	err = q.QueryRowContext(ctx,
 		`SELECT outcome, rule, policy_version, policy_digest
 		   FROM action_decisions WHERE action_id = ?`, a.ActionID).
 		Scan(&outcome, &rule, &polVersion, &polDigest)
@@ -660,6 +674,23 @@ func (s *Store) ClaimApprovalParams(ctx context.Context, approvalID string, law 
 		}
 		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
 			return nil, fmt.Errorf("action/sqlite: %s (%s): approval %q was parked under law v%d %s but the current law is v%d %s — refusing the claim", rule, dim, approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
+		}
+		// R5-S2: the claim is execute's consume — the whole story is
+		// judged inside THIS transaction over re-read rows too.
+		var rawPreview string
+		if err := tx.QueryRowContext(ctx,
+			`SELECT canonical_preview FROM approvals WHERE approval_id = ?`, approvalID).Scan(&rawPreview); err != nil {
+			return nil, fmt.Errorf("action/sqlite: claim preview %q: %w", approvalID, err)
+		}
+		p, err := action.ParseCanonicalPreview([]byte(rawPreview))
+		if err != nil {
+			return nil, fmt.Errorf("action/sqlite: claim preview %q: %w", approvalID, err)
+		}
+		if err := action.ValidatePreviewBinding(a, p); err != nil {
+			return nil, fmt.Errorf("action/sqlite: approval %q: %w; refusing the claim", approvalID, err)
+		}
+		if err := s.verifyApprovalStory(ctx, tx, a, p); err != nil {
+			return nil, fmt.Errorf("action/sqlite: approval %q: %w; refusing the claim", approvalID, err)
 		}
 	}
 	var params string
