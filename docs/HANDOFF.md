@@ -164,7 +164,32 @@ explicit decision.
 > registered: the internal self-audits were green AND insufficient
 > (doctrine: the self-exam PREPARES the gate, never replaces it).**
 >
-> **PHASE 4 — DONE, local, awaiting review:** bounded retention with
+> **PHASE 5 — DONE, local, awaiting review:** EffectiveCage, typed.
+> ResolveEffectiveCage returns the one normalized object (effective
+> attrs, bounds with defaults, sorted allow-lists, parsed sensitivity,
+> ceiling, tools, governance, memory settings); agentTool consumes THE
+> OBJECT (raw BrainConfig re-reads are gone — structural truth), the
+> boot's registry loop and BuildApprovalExecutor construct from it,
+> and policyDigestFor serializes its canonical view. HOUSE AMENDMENT
+> honored: the GOLDEN digest (captured pre-refactor) survives the
+> shape change byte-for-byte — pin format stays 3, zero bump. The
+> auditor's five conduct pairs pinned (same conduct = same OBJECT via
+> DeepEqual; overrides land in the resolved attrs both constructions
+> consume; defaults coincide; boot-refused = executor-refused); the
+> E13 shield tests re-mapped to arm from the typed cage.
+>
+> **FLAKE HUNT — CLOSED WITH DIAGNOSIS (budget: 500 focused + 10 full
+> suites, every failing line captured):** REPRODUCED 8/10 focused
+> batches + 3/10 suites; the 18 captured lines all read `finish
+> "act_f3_c0": invalid state transition FAILED -> SUCCEEDED` — the
+> PRODUCT was right (recovery won the row, the late Finish refused by
+> name, one close, one receipt) and the TEST's "never error"
+> expectation was wrong for the finish arm (F3's contract covers the
+> SWEEPERS). Cure: the test accepts the named lost-race refusal for
+> the finish while keeping the hard invariants; 200 consecutive runs
+> green after the cure. Test-shape outcome, no product P1.
+>
+> **PHASE 4 — DONE, reviewed and accepted:** bounded retention with
 > evidence (ADR-0046, SUPERSEDES the second-pass exemption).
 > approvals.action_id is a REAL FK with ON DELETE CASCADE via v8→v9
 > transactional table reconstruction, crash-rehearsed on the AS-8 mold

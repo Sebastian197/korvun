@@ -494,6 +494,27 @@ tool-call to PENDING_APPROVAL, end to end.
   every receipt survives.
 - ADR-0046 records the evidence-retention doctrine.
 
+**PHASE 5 — EffectiveCage, typed.**
+- FR-R4F5-1: the map[string]any dies. `ResolveEffectiveCage(bc)`
+  returns a TYPED EffectiveCage that normalizes ONCE: effective attrs
+  (defaults + overrides), cage bounds with their declared defaults,
+  allow-lists sorted, redirects and timeouts, parsed sensitivity,
+  effect ceiling, tools and governance.
+- FR-R4F5-2: policyDigestFor serializes the canonical VIEW of that
+  object; the boot AND BuildApprovalExecutor construct the tools FROM
+  the same object (agentTool no longer re-reads raw BrainConfig) —
+  "one resolver, one verdict" made STRUCTURAL truth.
+- FR-R4F5-3 (house amendment): digest stability verified byte-for-byte
+  across the shape change against a GOLDEN pin, or policyPinFormat
+  bumps with the reason written (its own godoc's rule).
+- Acceptance — the auditor's five conduct pairs: max_bytes 0 vs the
+  explicit default = same OBJECT (DeepEqual) and same pin;
+  network=false identical live and deferred; network=true arms the
+  same shield in both; timeout/redirect/allow-list defaults coincide;
+  a config the boot refuses is refused when building the deferred
+  executor. The self-audit's live network-axis evidence (shield vs
+  override distinguishable end-to-end) enters as declared preparation.
+
 ### E5 CONSOLIDATION — second external audit (2026-09-01, adjudicated)
 
 Five P1 + one P2, each cured reproduction-first (born red from the

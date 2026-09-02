@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/config"
-	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
 
@@ -40,11 +39,13 @@ func TestAgentTool_privateBrainArmsTheShield(t *testing.T) {
 	t.Parallel()
 	bc := shieldWiringCfg("private")
 	b := testBuilder()
-	attrs, err := effectiveToolAttrs(bc.Agent)
+	// R4-F5 re-map: the shield now arms from the TYPED resolved cage —
+	// the same object the boot, the pin and the deferred executor share.
+	cage, err := ResolveEffectiveCage(bc)
 	if err != nil {
-		t.Fatalf("attrs: %v", err)
+		t.Fatalf("resolve cage: %v", err)
 	}
-	tl, err := b.agentTool(bc, "http_fetch", attrs, mustSensitivity(t, bc.Sensitivity))
+	tl, err := b.agentTool(cage, "http_fetch")
 	if err != nil {
 		t.Fatalf("agentTool: %v", err)
 	}
@@ -60,11 +61,13 @@ func TestAgentTool_publicBrainDoesNotArmTheShield(t *testing.T) {
 	t.Parallel()
 	bc := shieldWiringCfg("public")
 	b := testBuilder()
-	attrs, err := effectiveToolAttrs(bc.Agent)
+	// R4-F5 re-map: the shield now arms from the TYPED resolved cage —
+	// the same object the boot, the pin and the deferred executor share.
+	cage, err := ResolveEffectiveCage(bc)
 	if err != nil {
-		t.Fatalf("attrs: %v", err)
+		t.Fatalf("resolve cage: %v", err)
 	}
-	tl, err := b.agentTool(bc, "http_fetch", attrs, mustSensitivity(t, bc.Sensitivity))
+	tl, err := b.agentTool(cage, "http_fetch")
 	if err != nil {
 		t.Fatalf("agentTool: %v", err)
 	}
@@ -82,11 +85,13 @@ func TestAgentTool_networkFalseOverrideDisarmsTheShield(t *testing.T) {
 	f := false
 	bc.Agent.ToolAttrs = map[string]config.ToolAttrsConfig{"http_fetch": {Network: &f}}
 	b := testBuilder()
-	attrs, err := effectiveToolAttrs(bc.Agent)
+	// R4-F5 re-map: the shield now arms from the TYPED resolved cage —
+	// the same object the boot, the pin and the deferred executor share.
+	cage, err := ResolveEffectiveCage(bc)
 	if err != nil {
-		t.Fatalf("attrs: %v", err)
+		t.Fatalf("resolve cage: %v", err)
 	}
-	tl, err := b.agentTool(bc, "http_fetch", attrs, mustSensitivity(t, bc.Sensitivity))
+	tl, err := b.agentTool(cage, "http_fetch")
 	if err != nil {
 		t.Fatalf("agentTool: %v", err)
 	}
@@ -96,13 +101,4 @@ func TestAgentTool_networkFalseOverrideDisarmsTheShield(t *testing.T) {
 	if errors.Is(execErr, tool.ErrShieldViolation) {
 		t.Fatal("network:false override did not disarm the shield")
 	}
-}
-
-func mustSensitivity(t *testing.T, s string) policy.Sensitivity {
-	t.Helper()
-	sens, err := parseSensitivity(s)
-	if err != nil {
-		t.Fatalf("parseSensitivity(%q): %v", s, err)
-	}
-	return sens
 }

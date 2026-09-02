@@ -220,16 +220,11 @@ func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*e
 		if !granted {
 			return nil, fmt.Errorf("app: approval executor: tool %q is not in brain %q's CURRENT grant list — a revoked tool never executes", toolName, brainName)
 		}
-		// R5: ONE resolver of the effective cage — the deferred
-		// execution rebuilds with the SAME attrs the boot resolves
-		// (house defaults + operator overrides), so an override like
-		// network=true arms the private shield here exactly as it does
-		// live, and a config the boot refuses never builds an executor.
-		attrs, err := effectiveToolAttrs(bc.Agent)
-		if err != nil {
-			return nil, fmt.Errorf("app: approval executor: %w", err)
-		}
-		sens, err := parseSensitivity(bc.Sensitivity)
+		// R4-F5: ONE resolver, structurally — the deferred execution
+		// constructs from the SAME typed cage the boot resolves, so an
+		// override arms the same shield here as live, and a config the
+		// boot refuses never builds an executor.
+		cage, err := ResolveEffectiveCage(bc)
 		if err != nil {
 			return nil, fmt.Errorf("app: approval executor: %w", err)
 		}
@@ -237,7 +232,7 @@ func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*e
 			return nil, fmt.Errorf("app: approval executor: brain %q has no agent block — caged tool %q cannot be rebuilt", brainName, toolName)
 		}
 		b := &builder{logger: slog.New(slog.DiscardHandler)}
-		t, err := b.agentTool(bc, toolName, attrs, sens)
+		t, err := b.agentTool(cage, toolName)
 		if err != nil {
 			return nil, fmt.Errorf("app: approval executor for %s/%s: %w", brainName, toolName, err)
 		}

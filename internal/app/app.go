@@ -959,14 +959,14 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	if len(selected) != 1 {
 		return nil, fmt.Errorf("%w: brain %q: got %d", ErrAgentModelCount, bc.Name, len(selected))
 	}
-	// Effective attrs: house defaults + declared operator overrides (R-2),
-	// with every override and grant checked against the LISTED tools — a
-	// grant over a tool the brain does not carry is a misconfiguration, not
-	// a silent no-op.
-	attrs, err := effectiveToolAttrs(bc.Agent)
+	// R4-F5: the effective cage resolves ONCE — attrs, bounds, sorted
+	// allow-lists — and BOTH the tool constructions below and the law
+	// pin serialize from this same object (one resolver, one verdict).
+	cage, err := ResolveEffectiveCage(bc)
 	if err != nil {
-		return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+		return nil, err
 	}
+	attrs := cage.Attrs
 	listed := make(map[string]bool, len(bc.Agent.Tools))
 	for _, name := range bc.Agent.Tools {
 		listed[name] = true
@@ -1025,7 +1025,7 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	}
 	reg := make(tool.Registry, len(bc.Agent.Tools))
 	for _, name := range bc.Agent.Tools {
-		tl, err := b.agentTool(bc, name, attrs, sens)
+		tl, err := b.agentTool(cage, name)
 		if err != nil {
 			return nil, err
 		}
@@ -1168,30 +1168,33 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	return brain.NewAgentBrain(selected[0], reg, opts...), nil
 }
 
-// agentTool resolves one configured tool name: the pure set through
-// tool.Builtin, the caged set through its typed constructor WITH its config
-// block (ADR-0041 §4) — a caged tool listed without its cage fails loud
-// (ErrMissingToolCage). The network shield is armed here: a network-classed
-// tool on a Private brain dials through the private-address check.
-func (b *builder) agentTool(bc config.BrainConfig, name string, attrs map[string]policy.ToolAttrs, sens policy.Sensitivity) (tool.Tool, error) {
+// agentTool resolves one configured tool name FROM the typed effective
+// cage (R4-F5: one resolver, one verdict — this function cannot re-read
+// raw BrainConfig): the pure set through tool.Builtin, the caged set
+// through its typed constructor WITH the resolved cage (ADR-0041 §4) —
+// a caged tool listed without its cage fails loud (ErrMissingToolCage).
+// The network shield is armed here from the RESOLVED attrs: a
+// network-classed tool on a Private brain dials through the
+// private-address check.
+func (b *builder) agentTool(cage *EffectiveCage, name string) (tool.Tool, error) {
 	if t, ok := tool.Builtin(name); ok {
 		return t, nil
 	}
-	a := bc.Agent
-	shield := attrs[name].Network && sens == policy.Private
+	brainName := cage.BrainName
+	shield := cage.Attrs[name].Network && cage.Sensitivity == policy.Private
 	switch name {
 	case "memory_note":
 		// The governed notes writer (minimal-memory FR-TOOL-1, ADR-0043 §4):
 		// app-constructed over the SINGLE derivation + the shared NoteStore,
 		// so the write path can never drift from the read path (H2).
-		if a.Memory == nil {
-			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.memory block", ErrMissingToolCage, name, bc.Name)
+		if cage.Memory == nil {
+			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.memory block", ErrMissingToolCage, name, brainName)
 		}
 		ns, ok := b.store.(conversation.NoteStore)
 		if !ok {
-			return nil, fmt.Errorf("app: brain %q: memory_note requires the storage block (no note store available)", bc.Name)
+			return nil, fmt.Errorf("app: brain %q: memory_note requires the storage block (no note store available)", brainName)
 		}
-		mem := a.Memory.Settings()
+		mem := *cage.Memory
 		scopeCfg := noteScopeOf(mem)
 		writer := func(ctx context.Context, sc tool.Scope, note string) error {
 			scope, key, err := conversation.EffectiveNoteScope(scopeCfg, conversation.Key(sc.Conversation))
@@ -1208,45 +1211,45 @@ func (b *builder) agentTool(bc config.BrainConfig, name string, attrs map[string
 		}
 		return tool.NewMemoryNote(writer, mem.MaxNoteRunes), nil
 	case "read_file":
-		if a.ReadFile == nil {
-			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.read_file block", ErrMissingToolCage, name, bc.Name)
+		if cage.ReadFile == nil {
+			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.read_file block", ErrMissingToolCage, name, brainName)
 		}
-		t, err := tool.ReadFile(tool.ReadFileConfig{Root: a.ReadFile.Root, MaxBytes: a.ReadFile.MaxBytes})
+		t, err := tool.ReadFile(tool.ReadFileConfig{Root: cage.ReadFile.Root, MaxBytes: cage.ReadFile.MaxBytes})
 		if err != nil {
-			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+			return nil, fmt.Errorf("app: brain %q: %w", brainName, err)
 		}
 		return t, nil
 	case "http_fetch":
-		if a.HTTPFetch == nil {
-			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.http_fetch block", ErrMissingToolCage, name, bc.Name)
+		if cage.HTTPFetch == nil {
+			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.http_fetch block", ErrMissingToolCage, name, brainName)
 		}
 		t, err := tool.HTTPFetch(tool.HTTPFetchConfig{
-			AllowHosts:   a.HTTPFetch.AllowHosts,
-			MaxBytes:     a.HTTPFetch.MaxBytes,
-			MaxRedirects: a.HTTPFetch.MaxRedirects,
+			AllowHosts:   cage.HTTPFetch.AllowHosts,
+			MaxBytes:     cage.HTTPFetch.MaxBytes,
+			MaxRedirects: cage.HTTPFetch.MaxRedirects,
 			PrivateOnly:  shield,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+			return nil, fmt.Errorf("app: brain %q: %w", brainName, err)
 		}
 		return t, nil
 	case "webhook_call":
-		if a.WebhookCall == nil {
-			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.webhook_call block", ErrMissingToolCage, name, bc.Name)
+		if cage.WebhookCall == nil {
+			return nil, fmt.Errorf("%w: %q (brain %q): add the agent.webhook_call block", ErrMissingToolCage, name, brainName)
 		}
 		t, err := tool.WebhookCall(tool.WebhookCallConfig{
-			AllowHosts:  a.WebhookCall.AllowHosts,
-			MaxBytes:    a.WebhookCall.MaxBytes,
-			Timeout:     time.Duration(a.WebhookCall.TimeoutSeconds) * time.Second,
+			AllowHosts:  cage.WebhookCall.AllowHosts,
+			MaxBytes:    cage.WebhookCall.MaxBytes,
+			Timeout:     time.Duration(cage.WebhookCall.TimeoutSeconds) * time.Second,
 			PrivateOnly: shield,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
+			return nil, fmt.Errorf("app: brain %q: %w", brainName, err)
 		}
 		return t, nil
 	default:
 		return nil, fmt.Errorf("%w: %q (brain %q; pure: %v, caged: read_file, http_fetch, webhook_call)",
-			ErrUnknownTool, name, bc.Name, tool.BuiltinNames())
+			ErrUnknownTool, name, brainName, tool.BuiltinNames())
 	}
 }
 
