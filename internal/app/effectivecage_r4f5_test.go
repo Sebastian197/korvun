@@ -11,6 +11,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -109,5 +111,54 @@ func TestResolveEffectiveCage_refusesWhatTheBootRefuses(t *testing.T) {
 	_, err := ResolveEffectiveCage(bc)
 	if err == nil || !strings.Contains(err.Error(), "ghost") {
 		t.Fatalf("one resolver, one verdict: %v", err)
+	}
+}
+
+// R5-S3: the single-object invariant, STRUCTURAL — production code may
+// resolve the cage at exactly its three entry points (buildAgentBrain,
+// PolicyPinFor's digest path, BuildApprovalExecutor). A fourth
+// resolution appearing anywhere in internal/app non-test sources fails
+// this guard and forces adjudication.
+func TestCageResolutionGuard_exactlyThreeEntryPoints(t *testing.T) {
+	t.Parallel()
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	calls := 0
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Clean(name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		for _, line := range strings.Split(string(src), "\n") {
+			if strings.Contains(line, "ResolveEffectiveCage(bc") &&
+				!strings.Contains(line, "func ResolveEffectiveCage") {
+				calls++
+			}
+		}
+	}
+	if calls != 3 {
+		t.Fatalf("R5-S3 GUARD: expected exactly 3 production resolutions (boot, pin, executor), found %d — a new resolution point needs adjudication", calls)
+	}
+}
+
+// R5-S3: defensive copies — mutating the config after resolution must
+// not reach into the resolved object (the aliasing died).
+func TestResolveEffectiveCage_defensiveCopies(t *testing.T) {
+	t.Parallel()
+	bc := goldenCfg().Brains[0]
+	cage, err := ResolveEffectiveCage(bc)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	bc.Agent.Tools[0] = "mutated"
+	bc.Agent.Governance[0].Tool = "mutated"
+	if cage.Tools[0] == "mutated" || cage.Governance[0].Tool == "mutated" {
+		t.Fatal("R5-S3: the resolved object must not alias the config slices")
 	}
 }

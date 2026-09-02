@@ -967,11 +967,11 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		return nil, err
 	}
 	attrs := cage.Attrs
-	listed := make(map[string]bool, len(bc.Agent.Tools))
-	for _, name := range bc.Agent.Tools {
+	listed := make(map[string]bool, len(cage.Tools))
+	for _, name := range cage.Tools {
 		listed[name] = true
 	}
-	for _, g := range bc.Agent.Governance {
+	for _, g := range cage.Governance {
 		if !listed[g.Tool] {
 			return nil, fmt.Errorf("app: brain %q: governance grants tool %q which is not in agent.tools", bc.Name, g.Tool)
 		}
@@ -981,13 +981,13 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	// (estreno E-11): a Sensitive tool feeding a Cloud model is exactly the
 	// egress the attribute declares against, so that combination fails loud
 	// at boot instead.
-	if len(bc.Agent.Governance) == 0 {
+	if len(cage.Governance) == 0 {
 		loc, err := localityOf(catalog, selected[0])
 		if err != nil {
 			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 		}
 		if loc == policy.Cloud {
-			for _, name := range bc.Agent.Tools {
+			for _, name := range cage.Tools {
 				if attrs[name].Sensitive {
 					return nil, fmt.Errorf("%w: brain %q, tool %q (add a governance block, or override the tool's sensitive attr consciously)",
 						ErrSensitiveToolUngoverned, bc.Name, name)
@@ -1000,7 +1000,7 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	// vacuously ungoverned.
 	if listed["memory_note"] {
 		covered := false
-		for _, g := range bc.Agent.Governance {
+		for _, g := range cage.Governance {
 			if g.Tool == "memory_note" {
 				covered = true
 			}
@@ -1013,7 +1013,7 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	// FR-PRIV-1: brain-global scope requires the SELECTED model to be Local
 	// (the localityOf precedent — not the raw catalog): cross-conversation
 	// content must never ride to a cloud provider.
-	if bc.Agent.Memory != nil && bc.Agent.Memory.Settings().BrainGlobal {
+	if cage.Memory != nil && cage.Memory.BrainGlobal {
 		loc, err := localityOf(catalog, selected[0])
 		if err != nil {
 			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
@@ -1023,8 +1023,8 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 				ErrMemoryScopeCloud, bc.Name)
 		}
 	}
-	reg := make(tool.Registry, len(bc.Agent.Tools))
-	for _, name := range bc.Agent.Tools {
+	reg := make(tool.Registry, len(cage.Tools))
+	for _, name := range cage.Tools {
 		tl, err := b.agentTool(cage, name)
 		if err != nil {
 			return nil, err
@@ -1050,9 +1050,9 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		// option's brainName only mounts with a bus).
 		brain.WithAgentName(bc.Name),
 	}
-	if bc.Agent.Memory != nil {
+	if cage.Memory != nil {
 		if ns, ok := b.store.(conversation.NoteStore); ok {
-			mem := bc.Agent.Memory.Settings()
+			mem := *cage.Memory
 			scopeCfg := noteScopeOf(mem)
 			brainName := bc.Name
 			loader := func(ctx context.Context, key conversation.Key) ([]conversation.Note, error) {
@@ -1068,11 +1068,11 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 			opts = append(opts, brain.WithAgentMemory(loader, mem.BudgetRunes))
 		}
 	}
-	if bc.Agent.MaxIterations > 0 {
-		opts = append(opts, brain.WithAgentMaxIterations(bc.Agent.MaxIterations))
+	if cage.MaxIterations > 0 {
+		opts = append(opts, brain.WithAgentMaxIterations(cage.MaxIterations))
 	}
-	if bc.Agent.SystemPrompt != "" {
-		opts = append(opts, brain.WithAgentSystemPrompt(bc.Agent.SystemPrompt))
+	if cage.SystemPrompt != "" {
+		opts = append(opts, brain.WithAgentSystemPrompt(cage.SystemPrompt))
 	}
 	if personaPrompt != "" {
 		// Persona as a PREFIX before the intact ADR-0021 protocol block
@@ -1088,8 +1088,8 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		// (Nop) audit surface and nothing publishes.
 		opts = append(opts, brain.WithAgentToolAudit(b.toolBus, bc.Name))
 	}
-	if len(bc.Agent.Governance) > 0 {
-		grants, err := toolGrants(bc.Agent.Governance)
+	if len(cage.Governance) > 0 {
+		grants, err := toolGrants(cage.Governance)
 		if err != nil {
 			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 		}
@@ -1104,18 +1104,18 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 			Locality:    loc,
 		}))
 	}
-	if bc.Agent.SkillsDir != "" {
-		skills, err := skill.LoadDir(bc.Agent.SkillsDir, b.logger)
+	if cage.SkillsDir != "" {
+		skills, err := skill.LoadDir(cage.SkillsDir, b.logger)
 		if err != nil {
 			// A configured skills dir that cannot be read is a config error
 			// (fail loud at boot); a malformed skill INSIDE it degrades with
 			// warnings inside LoadDir (AS-5).
 			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 		}
-		block, omitted := skill.PromptBlock(skills, bc.Agent.SkillsBodyBudget)
+		block, omitted := skill.PromptBlock(skills, cage.SkillsBodyBudget)
 		if len(omitted) > 0 {
 			b.logger.Warn("agent skills: bodies omitted over the budget",
-				"brain", bc.Name, "omitted", omitted, "budget", bc.Agent.SkillsBodyBudget)
+				"brain", bc.Name, "omitted", omitted, "budget", cage.SkillsBodyBudget)
 		}
 		if block != "" {
 			opts = append(opts, brain.WithAgentSkillsBlock(block))
@@ -1130,7 +1130,7 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		// The law pin (FR-POL-1, C1-stable): the digest of the effective
 		// cage-governing content, stamped by the adapter on every
 		// decision — the SAME law across reboots of the same config.
-		pin, err := policyPin(bc)
+		pin, err := policyPinFromCage(cage)
 		if err != nil {
 			return nil, fmt.Errorf("app: brain %q: %w", bc.Name, err)
 		}
@@ -1155,16 +1155,16 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		// without it the chat path could never park an action, because
 		// config-derived authority is ceilingless by sealed E3 design
 		// and the gate demands approval only under BOUNDED authority.
-		if bc.Agent != nil && bc.Agent.EffectCeiling != "" {
-			ceiling := action.EffectClass(bc.Agent.EffectCeiling)
+		if cage.HasAgent && cage.EffectCeiling != "" {
+			ceiling := action.EffectClass(cage.EffectCeiling)
 			if !ceiling.OnLadder() {
-				return nil, fmt.Errorf("app: brain %q: agent.effect_ceiling %q is not on the ladder (valid: pure, read_external, write_reversible, write_compensatable, write_irreversible, critical)", bc.Name, bc.Agent.EffectCeiling)
+				return nil, fmt.Errorf("app: brain %q: agent.effect_ceiling %q is not on the ladder (valid: pure, read_external, write_reversible, write_compensatable, write_irreversible, critical)", bc.Name, cage.EffectCeiling)
 			}
 			identity.EffectCeiling = ceiling
 		}
 		opts = append(opts, brain.WithActionIdentity(identity))
 	}
-	b.logger.Info("agent brain wired", "brain", bc.Name, "tools", bc.Agent.Tools, "max_iterations", bc.Agent.MaxIterations)
+	b.logger.Info("agent brain wired", "brain", bc.Name, "tools", cage.Tools, "max_iterations", cage.MaxIterations)
 	return brain.NewAgentBrain(selected[0], reg, opts...), nil
 }
 

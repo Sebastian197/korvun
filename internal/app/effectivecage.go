@@ -62,6 +62,13 @@ type EffectiveCage struct {
 	HTTPFetch     *EffectiveHTTPFetchCage
 	WebhookCall   *EffectiveWebhookCage
 	Memory        *config.MemorySettings
+	// The declared NON-cage brain fields (R4-F5 excluded them from the
+	// digest; R5-S3 carries them here anyway so buildAgentBrain consumes
+	// ONLY this object — they never enter canonicalView).
+	MaxIterations    int
+	SystemPrompt     string
+	SkillsDir        string
+	SkillsBodyBudget int
 }
 
 // ResolveEffectiveCage normalizes one brain's cage ONCE. A config the
@@ -87,9 +94,15 @@ func ResolveEffectiveCage(bc config.BrainConfig) (*EffectiveCage, error) {
 	}
 	cage.HasAgent = true
 	cage.EffectCeiling = a.EffectCeiling
-	cage.Tools = a.Tools
-	cage.Governance = a.Governance
+	// R5-S3: defensive copies — the resolved object never aliases the
+	// caller's config slices.
+	cage.Tools = append([]string(nil), a.Tools...)
+	cage.Governance = append([]config.ToolGrantConfig(nil), a.Governance...)
 	cage.Attrs = attrs
+	cage.MaxIterations = a.MaxIterations
+	cage.SystemPrompt = a.SystemPrompt
+	cage.SkillsDir = a.SkillsDir
+	cage.SkillsBodyBudget = a.SkillsBodyBudget
 	if a.ReadFile != nil {
 		cage.ReadFile = &EffectiveReadFileCage{
 			Root:     a.ReadFile.Root,

@@ -37,6 +37,12 @@ func policyDigestFor(bc config.BrainConfig, effects map[string]action.EffectDesc
 	if err != nil {
 		return "", err
 	}
+	return policyDigestFromCage(cage, effects)
+}
+
+// policyDigestFromCage digests an ALREADY-resolved cage (R5-S3: the
+// boot resolves once and this consumes THAT object — no re-resolution).
+func policyDigestFromCage(cage *EffectiveCage, effects map[string]action.EffectDescriptor) (string, error) {
 	view := cage.canonicalView()
 	view["effects"] = effects
 	raw, err := json.Marshal(view)
@@ -61,9 +67,20 @@ func effectSnapshot() map[string]action.EffectDescriptor {
 	return out
 }
 
-// policyPin builds one brain's stable law pin.
+// policyPin builds one brain's stable law pin (its own resolution —
+// the operator-CLI entry). The BOOT uses policyPinFromCage instead,
+// over the single resolution buildAgentBrain already made.
 func policyPin(bc config.BrainConfig) (actionsqlite.PolicyPin, error) {
 	digest, err := policyDigestFor(bc, effectSnapshot())
+	if err != nil {
+		return actionsqlite.PolicyPin{}, err
+	}
+	return actionsqlite.PolicyPin{Version: policyPinFormat, Digest: digest}, nil
+}
+
+// policyPinFromCage pins the law from an already-resolved cage.
+func policyPinFromCage(cage *EffectiveCage) (actionsqlite.PolicyPin, error) {
+	digest, err := policyDigestFromCage(cage, effectSnapshot())
 	if err != nil {
 		return actionsqlite.PolicyPin{}, err
 	}

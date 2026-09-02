@@ -205,30 +205,27 @@ func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*e
 		if bc.Name != brainName {
 			continue
 		}
+		// R5-S3: resolve ONCE, then everything — grant check included —
+		// consumes THE object (the same resolution shape the boot uses;
+		// a config the boot refuses never builds an executor).
+		cage, err := ResolveEffectiveCage(bc)
+		if err != nil {
+			return nil, fmt.Errorf("app: approval executor: %w", err)
+		}
 		// C1 depth check: rebuild ONLY from the CURRENT grant list — a
 		// tool revoked from agent.tools after the park never executes,
 		// even if every other gate were blind to the change.
 		granted := false
-		if bc.Agent != nil {
-			for _, name := range bc.Agent.Tools {
-				if name == toolName {
-					granted = true
-					break
-				}
+		for _, name := range cage.Tools {
+			if name == toolName {
+				granted = true
+				break
 			}
 		}
 		if !granted {
 			return nil, fmt.Errorf("app: approval executor: tool %q is not in brain %q's CURRENT grant list — a revoked tool never executes", toolName, brainName)
 		}
-		// R4-F5: ONE resolver, structurally — the deferred execution
-		// constructs from the SAME typed cage the boot resolves, so an
-		// override arms the same shield here as live, and a config the
-		// boot refuses never builds an executor.
-		cage, err := ResolveEffectiveCage(bc)
-		if err != nil {
-			return nil, fmt.Errorf("app: approval executor: %w", err)
-		}
-		if _, pure := tool.Builtin(toolName); !pure && bc.Agent == nil {
+		if _, pure := tool.Builtin(toolName); !pure && !cage.HasAgent {
 			return nil, fmt.Errorf("app: approval executor: brain %q has no agent block — caged tool %q cannot be rebuilt", brainName, toolName)
 		}
 		b := &builder{logger: slog.New(slog.DiscardHandler)}
