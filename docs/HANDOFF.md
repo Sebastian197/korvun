@@ -67,6 +67,15 @@
 >    externos de otra familia antes del tag cuando el director lo
 >    disponga — puerta institucionalizada, no sugerencia.
 
+## DISCIPLINA DE ESTADOS EN LOS CANTOS (R5-B3, 2026-09-02) — PERMANENTE
+
+Los cantos de trabajo declaran IMPLEMENTED + la evidencia que lo
+sostiene. VERIFIED lo declara únicamente el gate (quality + -race +
+batería sobre el binario real). ACCEPTED lo declara únicamente la
+puerta (la review externa). Ninguna palabra más ancha que su prueba:
+un canto jamás dice "verificado" por sus propios tests ni "aceptado"
+por su propio gate. El auto-examen PREPARA la puerta, no la sustituye.
+
 ## LA PUERTA CODEX (sellada 2026-08-31) — PERMANENTE
 
 > Origen: la auditoría externa del 2026-08-31 que parió la v0.14.1.
@@ -164,7 +173,19 @@ explicit decision.
 > registered: the internal self-audits were green AND insufficient
 > (doctrine: the self-exam PREPARES the gate, never replaces it).**
 >
-> **PHASE 5 — DONE, local, awaiting review:** EffectiveCage, typed.
+> **R5 (fourth pass REJECTED → cures) — S1-S6 IMPLEMENTED locally,
+> gate pending:** S1 the NO's evidence seals (honest-empty revoked);
+> S2 the whole story inside both consumes; S3 one resolution feeds
+> boot+pin+executor (guarded structurally, defensive copies, golden
+> intact); S4 sealer belt fails closed (3 named refusals; FK weighed
+> and declined, declared); S5 wild races across two real connections;
+> S6 tone. B1 book of promises in the spec; B2 matrix runs with the
+> final gate; B3 above, permanent. FILED: one unreproduced full-gate
+> test failure during S5 development (single make-test red, failing
+> package not captured by the tail, 2 subsequent gates + directed
+> suites green — watch at the final gate).
+>
+> **PHASE 5 — DONE, reviewed and accepted:** EffectiveCage, typed.
 > ResolveEffectiveCage returns the one normalized object (effective
 > attrs, bounds with defaults, sorted allow-lists, parsed sensitivity,
 > ceiling, tools, governance, memory settings); agentTool consumes THE

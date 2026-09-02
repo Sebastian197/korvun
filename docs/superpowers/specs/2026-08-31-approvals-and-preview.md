@@ -515,6 +515,51 @@ tool-call to PENDING_APPROVAL, end to end.
   executor. The self-audit's live network-axis evidence (shield vs
   override distinguishable end-to-end) enters as declared preparation.
 
+### R5 — THE BOOK OF PROMISES (B1, fourth pass; maintained with the code)
+
+Every guarantee asserted across E5+R4+R5 surfaces, each with its
+BINARY-level proof (the final-gate battery step that demonstrates it
+end-to-end) or its re-scoping. Suite-only proofs are named as such.
+
+| # | Promise (where) | Proof / re-scoping |
+|---|---|---|
+| 1 | An irreversible action cannot execute until the human approves exactly the version shown (spec Goal) | BINARY: park→approve→executes 42; digest belt in-suite; the mentiroso re-sellado dies at read/decide (gate steps 1-2) |
+| 2 | The approval binds action digest + law; a moved law refuses by name at decide AND execute AND claim (C1/R4F2/S2) | BINARY: law-mutation refusal at approve and execute (gate 1; N9 3rd pass); claim in-tx law = suite (TestClaim_lawValidatedInsideItsTransaction) |
+| 3 | The human never reads a lie — read validates the WHOLE binding and STORY (F1/R4F2/S2) | BINARY: show exit 1 naming preview_policy_mismatch (gate 2); story dims (b)-(e) suite + S2 in-tx |
+| 4 | Born whole: narrated previews impossible; factory derives everything (R4F2) | Structural (unexported fields, compile-level) + factory saboteurs suite; production park via factory exercised by every gate battery |
+| 5 | A rotation beside a live server refuses signing_key_in_use, ZERO mutations (R4F1) | BINARY: lockrun rotate → named refusal; key table unchanged (gate 3) |
+| 6 | approve/reject/execute keep working beside the live server (house amendment) | BINARY: approve executes with the lock held (suite pin) + operator acts beside live store (C4 battery) |
+| 7 | A retired/unregistered/unreadable-registry key never seals — named, in-tx (R4F1/S4) | Suite (three named-refusal tests); registry rename saboteur included. Binary-level: rotation→new-era sealing verified in gate 4 |
+| 8 | No terminal is born unsigned — recovery and sweep closes included (R3/R4) | BINARY: OUTCOME_UNKNOWN and FAILED closes carry the ACTIVE era's signature after restart (gate 4) |
+| 9 | Crash past the claim closes OUTCOME_UNKNOWN, never a FAILED lie (C5) | BINARY: claim→restart→OUTCOME_UNKNOWN/outcome_unknown signed (gate 4) |
+| 10 | Expired PENDING cannot outlive its window: consume touch + boot sweep + prune cadence, the park itself paying (R4/F3) | BINARY: 513 expired → 512 swept by cadence pre-boot, last by restart, 0 params retained (gate 5) |
+| 11 | Losing a clean race is a skip/named refusal, never boot-fatal; every close owns its row via predicate+RowsAffected (R4F3) | Suite (six scenarios, deterministic + wild) + S5 wild forms across TWO real connections |
+| 12 | Approval rows cascade with retention; the SIGNED receipt is the surviving evidence FOR EVERY OUTCOME (F4 + S1) | BINARY: reject→prune→verify OK + approval_row_absent note (S1 repro); cascade + note (gate 6) |
+| 13 | Verifier distinguishes retention (note) from sabotage (fail) (F4) | BINARY: both arms exercised via receipt verify (gate 6 + 3rd-pass battery) |
+| 14 | Same conduct = same law; cage-irrelevant fields never move the pin (R4F5) | BINARY: park under max_bytes absent ↔ explicit default crosses approve (gate 7); golden digest suite-pinned |
+| 15 | One resolver, one verdict — structurally; three production resolution points, guarded (R4F5/S3) | Structural: typed signatures + resolution-count guard + defensive-copy pin (suite); network shield arm identical live/deferred (BINARY: gate 7 shield vs override) |
+| 16 | Operator doors never run recovery/prune/migration; the class guard is unbribable at reference level (C4/R2/F2) | BINARY: v6 store refusals + rotate-beside-live (3rd-pass battery); guard: alias/dot/value/paren fixtures + live briber plants (suite) |
+| 17 | The ledger is tamper-evident, never immutable (SECURITY) | BINARY: ledger check + verify on every gate battery; sabotage arms in-suite; the limit stays confessed in SECURITY.md |
+| 18 | Params capped 64KiB; approvals bounded by the actions cap (C6/F4) | Suite: cap refusal named; 2000-cycle bound demonstration |
+
+### R5 CURES (S1-S6, fourth pass REJECTED verdict, adjudicated)
+
+- S1: the evidence of the NO survives — every approval-decided outcome
+  seals the decision digest ("honest empty" REVOKED; empty only where
+  no approval existed; pre-S1 receipts declared in SECURITY.md).
+- S2: the WHOLE story (effect, operation, principal, outcome/rule,
+  law) judged INSIDE both consuming transactions over re-read rows.
+- S3: one resolution per brain feeds boot+pin+executor; defensive
+  copies; structural resolution-count guard; golden intact.
+- S4: the sealer belt fails CLOSED (retired/unregistered/unavailable,
+  three named refusals); receipts→signing_keys FK weighed and not
+  adopted (would reconstruct the frozen-era ledger for a guarantee the
+  in-tx belt already gives — declared).
+- S5: the wild races over TWO real connections (Open beside
+  OpenOperator), -race.
+- S6: the four formulations made true by S1-S5; receipt.go's
+  "honest empty" godoc rewritten.
+
 ### E5 CONSOLIDATION — second external audit (2026-09-01, adjudicated)
 
 Five P1 + one P2, each cured reproduction-first (born red from the

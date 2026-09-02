@@ -57,7 +57,9 @@ type Receipt struct {
 	Outcome      string
 	ResultDigest string
 	// ApprovalDigest references the CONSUMED approval's decision digest
-	// (v2 seal, §10.10): honest empty for unapproved outcomes.
+	// (v2 seal, §10.10). R5-S1: every approval-DECIDED outcome seals —
+	// approved and refused alike; "" is honest only where no approval
+	// ever existed for the action.
 	ApprovalDigest string
 	// StartedAt / FinishedAt bound the attempt, UTC.
 	StartedAt  time.Time
