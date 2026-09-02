@@ -14,6 +14,9 @@ package cli
 
 import (
 	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,10 +55,62 @@ func TestRotateKey_besideALiveServerTouchesNothing(t *testing.T) {
 	}
 }
 
-// The class guard: no CLI source file may call the full boot door.
-// OpenOperator and OpenReadOnly are the only doors an operator command
-// may walk; the full Open (recovery+prune+migration) belongs to the
-// server boot alone. Kill the class, not the bug.
+// The class guard (R2, made unbribable by F2): no CLI source file may
+// call the full boot door — resolved by AST, so an import ALIAS or a
+// dot-import cannot smuggle the call past a literal grep. OpenOperator
+// and OpenReadOnly are the only doors an operator command may walk;
+// the full Open (prune+migration; the boot adds recovery) belongs to
+// the server boot alone. Kill the class, not the bug.
+
+// fullBootDoorCalls parses one Go source and returns the positions of
+// every call to the action/sqlite package's Open — whatever local name
+// the import wears (default, alias, or dot).
+func fullBootDoorCalls(filename string, src []byte) ([]string, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		return nil, err
+	}
+	const doorPkg = "github.com/Sebastian197/korvun/internal/action/sqlite"
+	names := map[string]bool{}
+	dot := false
+	for _, imp := range f.Imports {
+		if strings.Trim(imp.Path.Value, `"`) != doorPkg {
+			continue
+		}
+		switch {
+		case imp.Name == nil:
+			names["sqlite"] = true // the package's own name
+		case imp.Name.Name == ".":
+			dot = true
+		default:
+			names[imp.Name.Name] = true
+		}
+	}
+	if len(names) == 0 && !dot {
+		return nil, nil
+	}
+	var calls []string
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		switch fn := call.Fun.(type) {
+		case *ast.SelectorExpr:
+			if id, ok := fn.X.(*ast.Ident); ok && names[id.Name] && fn.Sel.Name == "Open" {
+				calls = append(calls, fset.Position(call.Pos()).String())
+			}
+		case *ast.Ident:
+			if dot && fn.Name == "Open" {
+				calls = append(calls, fset.Position(call.Pos()).String())
+			}
+		}
+		return true
+	})
+	return calls, nil
+}
+
 func TestClassGuard_noCLICommandUsesTheFullBootDoor(t *testing.T) {
 	t.Parallel()
 	entries, err := os.ReadDir(".")
@@ -71,8 +126,44 @@ func TestClassGuard_noCLICommandUsesTheFullBootDoor(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
-		if strings.Contains(string(src), "actionsqlite.Open(") {
-			t.Fatalf("CLASS GUARD (R2): %s calls the full boot door actionsqlite.Open — operator commands walk OpenOperator or OpenReadOnly only", name)
+		calls, err := fullBootDoorCalls(name, src)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
 		}
+		if len(calls) > 0 {
+			t.Fatalf("CLASS GUARD (R2/F2): %s calls the full boot door action/sqlite Open at %v — operator commands walk OpenOperator or OpenReadOnly only", name, calls)
+		}
+	}
+}
+
+// The briber's fixtures: an alias and a dot-import must NOT slip past.
+func TestClassGuard_aliasAndDotImportsCannotBribeIt(t *testing.T) {
+	t.Parallel()
+	for name, src := range map[string]string{
+		"alias": `package cli
+import asq "github.com/Sebastian197/korvun/internal/action/sqlite"
+func x() { _, _ = asq.Open("p") }`,
+		"dot": `package cli
+import . "github.com/Sebastian197/korvun/internal/action/sqlite"
+func x() { _, _ = Open("p") }`,
+		"default": `package cli
+import "github.com/Sebastian197/korvun/internal/action/sqlite"
+func x() { _, _ = sqlite.Open("p") }`,
+	} {
+		calls, err := fullBootDoorCalls(name+".go", []byte(src))
+		if err != nil {
+			t.Fatalf("%s: parse: %v", name, err)
+		}
+		if len(calls) != 1 {
+			t.Fatalf("AUDIT F2: the %s import must not bribe the guard: %v", name, calls)
+		}
+	}
+	// And the legitimate doors stay untouched.
+	ok := `package cli
+import asq "github.com/Sebastian197/korvun/internal/action/sqlite"
+func x() { _, _ = asq.OpenOperator("p"); _, _ = asq.OpenReadOnly("p") }`
+	calls, err := fullBootDoorCalls("ok.go", []byte(ok))
+	if err != nil || len(calls) != 0 {
+		t.Fatalf("the operator doors are legitimate: %v %v", calls, err)
 	}
 }
