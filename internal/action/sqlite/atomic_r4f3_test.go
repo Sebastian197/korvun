@@ -15,6 +15,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -64,25 +65,39 @@ func TestRecovery_twoRecoveriesAndAFinishCompete(t *testing.T) {
 		mustRecord(t, store, actionID("act_f3_c", i), action.StateAuthorized)
 	}
 	var wg sync.WaitGroup
-	errs := make(chan error, 3)
+	recErrs := make(chan error, 2)
+	finishErr := make(chan error, 1)
 	for r := 0; r < 2; r++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errs <- store.RecoverPreviousLife(ctx)
+			recErrs <- store.RecoverPreviousLife(ctx)
 		}()
 	}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		errs <- store.FinishWithResult(ctx, "act_f3_c0", action.StateSucceeded,
+		finishErr <- store.FinishWithResult(ctx, "act_f3_c0", action.StateSucceeded,
 			time.Now().UTC(), "sha256:r")
 	}()
 	wg.Wait()
-	close(errs)
-	for err := range errs {
+	close(recErrs)
+	close(finishErr)
+	// The SWEEPERS must never error on a clean race (F3's contract).
+	for err := range recErrs {
 		if err != nil {
-			t.Fatalf("clean races must never error: %v", err)
+			t.Fatalf("a recovery losing a clean race must never error: %v", err)
+		}
+	}
+	// The FINISH is the live executor's close: losing to the recovery
+	// legitimately refuses BY NAME (invalid transition — the action
+	// already closed; fail-closed, no double receipt). Flake-hunt
+	// diagnosis 2026-09-02: 18 captured lines proved the PRODUCT right
+	// and this test's original "never error" expectation wrong for the
+	// finish arm — the cure is the expectation, not the product.
+	for err := range finishErr {
+		if err != nil && !errors.Is(err, action.ErrInvalidTransition) {
+			t.Fatalf("the finish may only lose by the named invalid transition: %v", err)
 		}
 	}
 	for i := 0; i < 8; i++ {
