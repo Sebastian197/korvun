@@ -92,6 +92,11 @@ type App struct {
 	// lifecycle (sealed decision 1), nil when stateless. Closed alongside
 	// the conversation store.
 	actions io.Closer
+	// profileLock is the exclusive profile lock (R4 Phase 1, ADR-0045):
+	// held for the server's whole life so a rotation cannot retire the
+	// signing key under a live sealer; nil when stateless. The OS also
+	// releases it on process death.
+	profileLock *ProfileLock
 	// adminServer is the observability HTTP server (/metrics + /healthz). nil
 	// when observability is disabled. Started FIRST in Run and stopped LAST in
 	// Shutdown so it stays observable across the whole drain (ADR-0020 §4).
@@ -158,6 +163,9 @@ type builder struct {
 	// through the recorder adapter. nil when stateless (no storage block —
 	// recording off, zero new config, the sealed decisions).
 	actions *actionsqlite.Store
+	// profileLock is the R4-F1 exclusive profile lock the boot acquires
+	// before opening the action store; handed to the App on success.
+	profileLock *ProfileLock
 	// approvalsCfg and approvalTTL carry the Etapa-5 knob through the
 	// wiring (the sacred pin: nil/off = the plain adapter, E3
 	// byte-for-byte).
@@ -292,8 +300,27 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	// lockHanded flips when the built App takes ownership of the profile
+	// lock; until then any failed boot path releases it on the way out.
+	lockHanded := false
 	if store != nil {
 		b.store = store // concrete non-nil -> real conversation.Store, never typed-nil
+		// The exclusive profile lock (R4 Phase 1, ADR-0045): held for
+		// the server's whole life, so a key rotation cannot retire the
+		// signing key under this process's live sealer. A held lock
+		// means another server (or a rotation) owns the profile —
+		// boot-fatal, named.
+		lock, err := AcquireProfileLock(filepath.Dir(storagePath(cfg)))
+		if err != nil {
+			_ = store.Close()
+			return nil, fmt.Errorf("app: acquire profile lock: %w", err)
+		}
+		b.profileLock = lock
+		defer func() {
+			if !lockHanded {
+				_ = lock.Release()
+			}
+		}()
 		// The Action Kernel's store opens on the SAME file with its OWN
 		// migrations and lifecycle (R3: the recovery pass runs BELOW,
 		// after the keystore and sealer are wired — its closes are
@@ -487,6 +514,10 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	}
 	if b.actions != nil {
 		app.actions = b.actions
+	}
+	if b.profileLock != nil {
+		app.profileLock = b.profileLock
+		lockHanded = true
 	}
 	// Mount the read-only control API on the EXISTING admin server (ADR-0022 §1):
 	// Handle runs here in Build, before Run starts the server. When observability
@@ -1657,6 +1688,13 @@ func (a *App) Shutdown(ctx context.Context) error {
 			}
 		} else {
 			a.logger.Warn("action store left open: router did not drain within the shutdown deadline")
+		}
+	}
+	// The profile lock releases LAST among storage concerns (R4-F1): a
+	// rotation may proceed only once this process is done with the key.
+	if a.profileLock != nil {
+		if err := a.profileLock.Release(); err != nil {
+			errs = append(errs, fmt.Errorf("app: release profile lock: %w", err))
 		}
 	}
 	// Unblock the live-view BEFORE draining the admin server: SSE connections are

@@ -385,6 +385,37 @@ byte-for-byte, pinned; unknown class boot-fatal naming the ladder)
 with the chat-path parking test the stage lacked: the REAL wire, model
 tool-call to PENDING_APPROVAL, end to end.
 
+### R4 CONSOLIDATION — third Codex pass REJECTED verdict (2026-09-02, adjudicated; 5-phase plan adopted as consultative annex with house amendments)
+
+**PHASE 1 — safe rotation + unbribable guard.**
+- FR-R4F1-1: an EXCLUSIVE profile lock, held by the server for its
+  whole life, released by the OS when the process dies (advisory lock:
+  flock on unix, LockFileEx on Windows via golang.org/x/sys — ADR).
+  `korvun receipt rotate-key` beside a live server refuses with the
+  stable rule `signing_key_in_use`, ZERO mutations. HOUSE AMENDMENT:
+  the lock bounds THE ROTATION only — approve/reject/execute keep
+  operating beside the live server (pinned).
+- FR-R4F1-2: the auditor's P1 named the old test's contract as the
+  bug (a rotation beside a live server left the server signing with
+  the RETIRED key — every later receipt born key_window_violated
+  until restart). Contract inversion AUTHORIZED and cited in the test.
+- FR-R4F1-3 (belt, cheap): sealing with a retired key refuses BY NAME
+  (signing_key_retired) inside the receipt transaction — never a
+  silent invalid signature.
+- FR-R4F1-4: the class guard catches every reference form to the
+  full boot door — call, function value, parenthesized call, alias,
+  dot-import — across internal/cli AND its nested packages AND
+  cmd/korvun, with a permanent briber fixture per form. Implemented
+  over go/parser at SELECTOR level (a reference is caught even
+  outside a call), stdlib-first: the plan suggested go/types, but
+  every named fixture is covered without a new dependency; revisit
+  only if a fixture ever needs type resolution.
+- Acceptance: TestRotateKey_refusesWhileServerProfileLockIsHeld,
+  TestRotateKey_afterServerStopsRotatesAndReceiptsVerify,
+  TestClassGuard_functionValueCannotBribeIt,
+  TestClassGuard_parenthesizedCallCannotBribeIt,
+  TestClassGuard_scansNestedCLIPackages.
+
 ### E5 CONSOLIDATION — second external audit (2026-09-01, adjudicated)
 
 Five P1 + one P2, each cured reproduction-first (born red from the

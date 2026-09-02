@@ -8,6 +8,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/wailsapp/wails/v2 v2.13.0
 	github.com/zalando/go-keyring v0.2.8
+	golang.org/x/sys v0.47.0
 	modernc.org/sqlite v1.53.0
 )
 
@@ -50,7 +51,6 @@ require (
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 	modernc.org/libc v1.73.4 // indirect

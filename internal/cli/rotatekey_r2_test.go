@@ -13,59 +13,123 @@
 package cli
 
 import (
-	"context"
+	"database/sql"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/Sebastian197/korvun/internal/action"
-	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
+	"github.com/Sebastian197/korvun/internal/app"
 )
 
-func TestRotateKey_besideALiveServerTouchesNothing(t *testing.T) {
+// CONTRACT INVERSION (R4 Phase 1, authorized by the mandate): the old
+// TestRotateKey_besideALiveServerTouchesNothing asserted that a
+// rotation BESIDE a live server succeeds and leaves the server's rows
+// alone — measuring survival of the ACTION while missing the auditor's
+// P1: the live server kept SEALING with the retired key, so every
+// receipt after the rotation was born key_window_violated until a
+// restart. That contract WAS the bug. The new contract: a rotation
+// while the server's profile lock is held refuses with the stable rule
+// signing_key_in_use and mutates NOTHING; once the server stops (lock
+// released), the rotation proceeds and every era verifies.
+
+func TestRotateKey_refusesWhileServerProfileLockIsHeld(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath, _ := parkedRequest(t)
-	// The live server's in-flight work: an AUTHORIZED action mid-run.
-	store, err := actionsqlite.Open(dbPath)
+	// The "live server": the profile lock held, as Build holds it.
+	lock, err := app.AcquireProfileLock(filepath.Dir(dbPath))
 	if err != nil {
-		t.Fatalf("open: %v", err)
+		t.Fatalf("acquire: %v", err)
 	}
-	env := action.NewEnvelope("act_r2_live", "env-r2",
-		action.Source{Kind: "agent_brain", Protocol: "text", Channel: "console"},
-		action.Operation{Namespace: "tool", Name: "calc", Version: 1},
-		`1+1`, time.Now().UTC())
-	if err := store.RecordAttempt(context.Background(), env,
-		actionsqlite.Decision{Outcome: "allow", Rule: "allow"}, action.StateAuthorized); err != nil {
-		t.Fatalf("record: %v", err)
+	defer func() { _ = lock.Release() }()
+	before := activeSigningKey(t, dbPath)
+	code, _, stderr := runIntentCLI(t, "receipt", "rotate-key", "--config", cfgPath)
+	if code == 0 {
+		t.Fatal("AUDIT R4-F1: a rotation beside a live server must refuse")
 	}
-	// The server stays OPEN while the operator rotates the key.
-	defer func() { _ = store.Close() }()
-	if code, _, stderr := runIntentCLI(t, "receipt", "rotate-key", "--config", cfgPath); code != 0 {
-		t.Fatalf("rotate-key: %d %q", code, stderr)
+	if !strings.Contains(stderr, "signing_key_in_use") {
+		t.Fatalf("the refusal must carry the stable rule signing_key_in_use: %q", stderr)
 	}
-	rec, err := store.Get(context.Background(), "act_r2_live")
-	if err != nil || rec.State != action.StateAuthorized || rec.RecoveryMarker != "" {
-		t.Fatalf("AUDIT R2: rotate-key must never close the live server's work: %v %v %q",
-			err, rec.State, rec.RecoveryMarker)
+	if after := activeSigningKey(t, dbPath); after != before {
+		t.Fatalf("ZERO mutations on refusal: key %q became %q", before, after)
 	}
 }
 
-// The class guard (R2, made unbribable by F2): no CLI source file may
-// call the full boot door — resolved by AST, so an import ALIAS or a
-// dot-import cannot smuggle the call past a literal grep. OpenOperator
-// and OpenReadOnly are the only doors an operator command may walk;
-// the full Open (prune+migration; the boot adds recovery) belongs to
-// the server boot alone. Kill the class, not the bug.
+func TestRotateKey_afterServerStopsRotatesAndReceiptsVerify(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, approvalID := parkedRequest(t)
+	// An executed outcome BEFORE the rotation: its receipt seals with
+	// the first era's key.
+	if code, _, stderr := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, approvalID); code != 0 {
+		t.Fatalf("approve: %q", stderr)
+	}
+	// The server held the lock and STOPPED (released).
+	lock, err := app.AcquireProfileLock(filepath.Dir(dbPath))
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	if err := lock.Release(); err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if code, _, stderr := runIntentCLI(t, "receipt", "rotate-key", "--config", cfgPath); code != 0 {
+		t.Fatalf("a rotation after the server stops must proceed: %q", stderr)
+	}
+	// Every era verifies: the pre-rotation receipt under its era's key.
+	if code, stdout, _ := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, "act_inbox1"); code != 0 || !strings.Contains(stdout, "OK") {
+		t.Fatalf("the first era's receipt verifies after rotation: %d %q", code, stdout)
+	}
+}
 
-// fullBootDoorCalls parses one Go source and returns the positions of
-// every call to the action/sqlite package's Open — whatever local name
-// the import wears (default, alias, or dot).
-func fullBootDoorCalls(filename string, src []byte) ([]string, error) {
+// activeSigningKey reads the currently active key id raw.
+func activeSigningKey(t *testing.T, dbPath string) string {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatalf("raw: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	var id string
+	err = db.QueryRow(`SELECT key_id FROM signing_keys WHERE retired_at IS NULL OR retired_at = ''`).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "" // a fresh profile has no key yet — a valid state to pin
+	}
+	if err != nil {
+		t.Fatalf("active key: %v", err)
+	}
+	return id
+}
+
+// HOUSE AMENDMENT pin: the lock bounds THE ROTATION only — a decision
+// act keeps working beside the live server.
+func TestApprovalsDecide_worksWhileServerProfileLockIsHeld(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, approvalID := parkedRequest(t)
+	lock, err := app.AcquireProfileLock(filepath.Dir(dbPath))
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	defer func() { _ = lock.Release() }()
+	if code, stdout, stderr := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, approvalID); code != 0 || !strings.Contains(stdout, "42") {
+		t.Fatalf("HOUSE AMENDMENT: approve must work beside the live server: %d %q %q", code, stdout, stderr)
+	}
+}
+
+// The class guard (R2/F2, widened by R4 Phase 1): no CLI or cmd
+// source may REFERENCE the full boot door in any form — direct call,
+// parenthesized call, function value, alias or dot-import — across
+// internal/cli, its nested packages, and cmd/korvun. Detection works
+// at SELECTOR level (a reference is caught even outside a call), so
+// the value-reference briber the self-audit proved possible now dies
+// too. OpenOperator and OpenReadOnly stay legitimate.
+
+// fullDoorRefs parses one Go source and returns the positions of every
+// REFERENCE to the action/sqlite package's Open.
+func fullDoorRefs(filename string, src []byte) ([]string, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, filename, src, 0)
 	if err != nil {
@@ -90,53 +154,69 @@ func fullBootDoorCalls(filename string, src []byte) ([]string, error) {
 	if len(names) == 0 && !dot {
 		return nil, nil
 	}
-	var calls []string
+	var refs []string
 	ast.Inspect(f, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		switch fn := call.Fun.(type) {
+		switch e := n.(type) {
 		case *ast.SelectorExpr:
-			if id, ok := fn.X.(*ast.Ident); ok && names[id.Name] && fn.Sel.Name == "Open" {
-				calls = append(calls, fset.Position(call.Pos()).String())
+			if id, ok := e.X.(*ast.Ident); ok && names[id.Name] && e.Sel.Name == "Open" {
+				refs = append(refs, fset.Position(e.Pos()).String())
 			}
 		case *ast.Ident:
-			if dot && fn.Name == "Open" {
-				calls = append(calls, fset.Position(call.Pos()).String())
+			// Dot-import: ANY use of the bare name is flagged —
+			// conservative on purpose (fail closed).
+			if dot && e.Name == "Open" {
+				refs = append(refs, fset.Position(e.Pos()).String())
 			}
 		}
 		return true
 	})
-	return calls, nil
+	return refs, nil
+}
+
+// fullDoorScan walks every non-test Go file under the given roots and
+// returns all full-door references found.
+func fullDoorScan(roots ...string) (map[string][]string, error) {
+	found := map[string][]string{}
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			src, err := os.ReadFile(filepath.Clean(path))
+			if err != nil {
+				return err
+			}
+			refs, err := fullDoorRefs(path, src)
+			if err != nil {
+				return err
+			}
+			if len(refs) > 0 {
+				found[path] = refs
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return found, nil
 }
 
 func TestClassGuard_noCLICommandUsesTheFullBootDoor(t *testing.T) {
 	t.Parallel()
-	entries, err := os.ReadDir(".")
+	found, err := fullDoorScan(".", filepath.Join("..", "..", "cmd", "korvun"))
 	if err != nil {
-		t.Fatalf("read package dir: %v", err)
+		t.Fatalf("scan: %v", err)
 	}
-	for _, e := range entries {
-		name := e.Name()
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		src, err := os.ReadFile(filepath.Clean(name))
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		calls, err := fullBootDoorCalls(name, src)
-		if err != nil {
-			t.Fatalf("parse %s: %v", name, err)
-		}
-		if len(calls) > 0 {
-			t.Fatalf("CLASS GUARD (R2/F2): %s calls the full boot door action/sqlite Open at %v — operator commands walk OpenOperator or OpenReadOnly only", name, calls)
-		}
+	if len(found) > 0 {
+		t.Fatalf("CLASS GUARD (R4-F1): full-boot-door references in operator surfaces: %v — walk OpenOperator or OpenReadOnly only", found)
 	}
 }
 
-// The briber's fixtures: an alias and a dot-import must NOT slip past.
+// The briber's fixtures, one per reference form — permanent.
 func TestClassGuard_aliasAndDotImportsCannotBribeIt(t *testing.T) {
 	t.Parallel()
 	for name, src := range map[string]string{
@@ -150,20 +230,70 @@ func x() { _, _ = Open("p") }`,
 import "github.com/Sebastian197/korvun/internal/action/sqlite"
 func x() { _, _ = sqlite.Open("p") }`,
 	} {
-		calls, err := fullBootDoorCalls(name+".go", []byte(src))
+		refs, err := fullDoorRefs(name+".go", []byte(src))
 		if err != nil {
 			t.Fatalf("%s: parse: %v", name, err)
 		}
-		if len(calls) != 1 {
-			t.Fatalf("AUDIT F2: the %s import must not bribe the guard: %v", name, calls)
+		if len(refs) != 1 {
+			t.Fatalf("AUDIT F2: the %s import must not bribe the guard: %v", name, refs)
 		}
 	}
-	// And the legitimate doors stay untouched.
 	ok := `package cli
 import asq "github.com/Sebastian197/korvun/internal/action/sqlite"
 func x() { _, _ = asq.OpenOperator("p"); _, _ = asq.OpenReadOnly("p") }`
-	calls, err := fullBootDoorCalls("ok.go", []byte(ok))
-	if err != nil || len(calls) != 0 {
-		t.Fatalf("the operator doors are legitimate: %v %v", calls, err)
+	refs, err := fullDoorRefs("ok.go", []byte(ok))
+	if err != nil || len(refs) != 0 {
+		t.Fatalf("the operator doors are legitimate: %v %v", refs, err)
+	}
+}
+
+func TestClassGuard_functionValueCannotBribeIt(t *testing.T) {
+	t.Parallel()
+	src := `package cli
+import asq "github.com/Sebastian197/korvun/internal/action/sqlite"
+func x(p string) { f := asq.Open; _, _ = f(p) }`
+	refs, err := fullDoorRefs("val.go", []byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("AUDIT R4-F1: the function-value briber (proven live by the self-audit) must die: %v", refs)
+	}
+}
+
+func TestClassGuard_parenthesizedCallCannotBribeIt(t *testing.T) {
+	t.Parallel()
+	src := `package cli
+import asq "github.com/Sebastian197/korvun/internal/action/sqlite"
+func x(p string) { _, _ = (asq.Open)(p) }`
+	refs, err := fullDoorRefs("paren.go", []byte(src))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("AUDIT R4-F1: the parenthesized-call briber must die: %v", refs)
+	}
+}
+
+func TestClassGuard_scansNestedCLIPackages(t *testing.T) {
+	t.Parallel()
+	// A nested package under a scanned root must be reached by the walk.
+	root := t.TempDir()
+	nested := filepath.Join(root, "sub", "deeper")
+	if err := os.MkdirAll(nested, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	briber := `package deeper
+import asq "github.com/Sebastian197/korvun/internal/action/sqlite"
+func x(p string) { _, _ = asq.Open(p) }`
+	if err := os.WriteFile(filepath.Join(nested, "bribe.go"), []byte(briber), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	found, err := fullDoorScan(root)
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("AUDIT R4-F1: the walk must reach nested packages: %v", found)
 	}
 }

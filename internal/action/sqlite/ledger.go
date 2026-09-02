@@ -66,6 +66,19 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 	}
 	r.ReceiptHash = action.ComputeReceiptHash(r)
 	r = s.sealer(r)
+	// R4-F1 belt: a key the registry marks RETIRED never seals a new
+	// receipt — the refusal is NAMED inside the receipt's own
+	// transaction, never a silent invalid signature. Keys the registry
+	// does not know stay un-vetoed here (test seams sign unregistered;
+	// the offline verifier's key_unknown check owns that axis).
+	if r.SigningKeyID != "" {
+		var retired sql.NullString
+		err := tx.QueryRowContext(ctx,
+			`SELECT retired_at FROM signing_keys WHERE key_id = ?`, r.SigningKeyID).Scan(&retired)
+		if err == nil && retired.Valid && retired.String != "" {
+			return fmt.Errorf("action/sqlite: signing_key_retired: key %s was retired %s — a retired key never seals; restart the server to load the active key", r.SigningKeyID, retired.String)
+		}
+	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO receipts (receipt_id, action_id, intent_digest, principal_id,
 		    authority_digest, decision_digest, action_digest, effect_class, attempt,

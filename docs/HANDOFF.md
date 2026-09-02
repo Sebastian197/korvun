@@ -156,6 +156,34 @@ explicit decision.
 
 ---
 
+## Current state (as of 2026-09-02) — R4 IN FLIGHT (phase 1 done, awaiting review)
+
+> **THIRD CODEX PASS on b3985a4: REJECTED (3 P1 + 4 P2 + 3 P3, all
+> adjudicated legitimate). Its 5-phase plan ADOPTED as consultative
+> annex with house amendments — this is R4. Verdict reconciliation
+> registered: the internal self-audits were green AND insufficient
+> (doctrine: the self-exam PREPARES the gate, never replaces it).**
+>
+> **PHASE 1 — DONE, local, awaiting review:** exclusive profile lock
+> (ADR-0045, golang.org/x/sys promoted to direct; flock/LockFileEx,
+> OS-released on death) held by the server for life; rotate-key beside
+> a live server refuses `signing_key_in_use` with ZERO mutations
+> (contract inversion of the old beside-test AUTHORIZED and cited —
+> the old contract WAS the auditor's P1); house amendment pinned:
+> approve/reject/execute keep working beside the live server. Sealer
+> belt: a registry-RETIRED key never seals (`signing_key_retired`,
+> named, in-tx). Class guard widened to SELECTOR-level detection over
+> a directory walk (internal/cli nested + cmd/korvun): call, function
+> value, parenthesized call, alias, dot-import — a briber fixture per
+> form (stdlib parser; go/types deliberately not adopted — every named
+> fixture covered without it, revisit only if type resolution is ever
+> needed). Spec section R4 PHASE 1 in the E5 spec. PHASES 2-5 pending:
+> bundle born whole (factory-derived, single validated input), atomic
+> ownership (recovery/sweep predicated UPDATEs + RowsAffected),
+> retention with FK cascade + v9 migration + evidence ADR, typed
+> EffectiveCage feeding boot AND deferred executor. Review per phase;
+> the Codex gate re-fires only after all five, on the final SHA.
+
 ## Current state (as of 2026-09-01) — E5 CONSOLIDATION READY FOR REVIEW
 
 > **SECOND CODEX AUDIT (E5, through 618ce1f): 5 P1 + 1 P2, adjudicated

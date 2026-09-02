@@ -244,6 +244,20 @@ func (c *cli) receiptRotateKey(args []string) int {
 	}
 	storage := app.StoragePath(cfg)
 	profileDir := filepath.Dir(storage)
+	// R4-F1 (ADR-0045): the rotation takes the exclusive profile lock.
+	// A live server holds it for its whole life — rotating under it
+	// would retire the key beneath the server's sealer, so a held lock
+	// refuses with the stable rule and ZERO mutations.
+	lock, err := app.AcquireProfileLock(profileDir)
+	if err != nil {
+		if errors.Is(err, app.ErrProfileLocked) {
+			_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: signing_key_in_use: a live server holds this profile — stop it before rotating (%v)\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
+		return 1
+	}
+	defer func() { _ = lock.Release() }()
 	// R2: the operator door — a key rotation beside a live server must
 	// never run the boot's recovery/prune/migration under it.
 	store, err := actionsqlite.OpenOperator(storage)
