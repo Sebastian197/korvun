@@ -117,11 +117,46 @@ func TestResolveEffectiveCage_refusesWhatTheBootRefuses(t *testing.T) {
 	}
 }
 
-// R5-S3/R6-X3: the single-object invariant, STRUCTURAL and judged by
-// the AST (the text grep died — alias, parenthesized calls or an
-// argument named like the function cannot bribe a parser). Production
-// code may resolve the cage ONLY inside the allow-listed functions; a
-// resolution appearing anywhere else forces adjudication.
+// R5-S3/R6-X3/R7-Y4: the single-object invariant, STRUCTURAL and
+// judged by the AST at REFERENCE level (the F1 selector mold): every
+// mention of the resolver identifier outside the allow-listed
+// functions fails — a function value, a parenthesized call or an
+// alias assignment cannot bribe it, and neither can a call.
+// cageResolverRefs returns, per enclosing function, the positions of
+// every reference to ResolveEffectiveCage in one source.
+func cageResolverRefs(filename string, src []byte) (map[string][]string, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		return nil, err
+	}
+	found := map[string][]string{}
+	for _, d := range f.Decls {
+		switch decl := d.(type) {
+		case *ast.FuncDecl:
+			if decl.Body == nil || decl.Name.Name == "ResolveEffectiveCage" {
+				continue
+			}
+			ast.Inspect(decl.Body, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok && id.Name == "ResolveEffectiveCage" {
+					found[decl.Name.Name] = append(found[decl.Name.Name], fset.Position(id.Pos()).String())
+				}
+				return true
+			})
+		case *ast.GenDecl:
+			// R7-Y4: a package-level alias (var sneaky = Resolve...)
+			// lives outside any function — swept here.
+			ast.Inspect(decl, func(n ast.Node) bool {
+				if id, ok := n.(*ast.Ident); ok && id.Name == "ResolveEffectiveCage" {
+					found["<package-level>"] = append(found["<package-level>"], fset.Position(id.Pos()).String())
+				}
+				return true
+			})
+		}
+	}
+	return found, nil
+}
+
 func TestCageResolutionGuard_exactlyTheAllowedEntryPoints(t *testing.T) {
 	t.Parallel()
 	allowed := map[string]bool{
@@ -133,7 +168,7 @@ func TestCageResolutionGuard_exactlyTheAllowedEntryPoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read dir: %v", err)
 	}
-	found := map[string][]string{}
+	total := map[string][]string{}
 	for _, e := range entries {
 		name := e.Name()
 		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -143,34 +178,49 @@ func TestCageResolutionGuard_exactlyTheAllowedEntryPoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
-		fset := token.NewFileSet()
-		f, err := parser.ParseFile(fset, name, src, 0)
+		refs, err := cageResolverRefs(name, src)
 		if err != nil {
 			t.Fatalf("parse %s: %v", name, err)
 		}
-		for _, d := range f.Decls {
-			fn, ok := d.(*ast.FuncDecl)
-			if ok && fn.Body != nil {
-				ast.Inspect(fn.Body, func(n ast.Node) bool {
-					call, ok := n.(*ast.CallExpr)
-					if !ok {
-						return true
-					}
-					if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "ResolveEffectiveCage" {
-						found[fn.Name.Name] = append(found[fn.Name.Name], fset.Position(call.Pos()).String())
-					}
-					return true
-				})
-			}
+		for fn, pos := range refs {
+			total[fn] = append(total[fn], pos...)
 		}
 	}
-	for fnName, positions := range found {
+	for fnName, positions := range total {
 		if !allowed[fnName] {
-			t.Fatalf("R6-X3 GUARD: %s resolves the cage at %v — a new resolution point needs adjudication", fnName, positions)
+			t.Fatalf("R7-Y4 GUARD: %s REFERENCES the resolver at %v — a new resolution point (value, alias or call) needs adjudication", fnName, positions)
 		}
 	}
-	if len(found) != len(allowed) {
-		t.Fatalf("R6-X3 GUARD: expected resolutions in exactly %d allowed functions, found %d: %v", len(allowed), len(found), found)
+	if len(total) != len(allowed) {
+		t.Fatalf("R7-Y4 GUARD: expected references in exactly %d allowed functions, found %d: %v", len(allowed), len(total), total)
+	}
+}
+
+// The auditor's three bribers, permanent fixtures of the detector.
+func TestCageGuard_referenceBribersCannotPass(t *testing.T) {
+	t.Parallel()
+	for name, src := range map[string]string{
+		"value": `package app
+func sneak(bc BrainConfig) { f := ResolveEffectiveCage; _, _ = f(bc) }`,
+		"paren": `package app
+func sneak(bc BrainConfig) { _, _ = (ResolveEffectiveCage)(bc) }`,
+		"alias": `package app
+var sneaky = ResolveEffectiveCage
+func sneak(bc BrainConfig) { _, _ = sneaky(bc) }`,
+	} {
+		refs, err := cageResolverRefs(name+".go", []byte(src))
+		if err != nil {
+			t.Fatalf("%s: parse: %v", name, err)
+		}
+		if name == "alias" {
+			if len(refs["<package-level>"]) != 1 {
+				t.Fatalf("AUDIT R7-Y4: the package-level alias must be seen: %v", refs)
+			}
+			continue
+		}
+		if len(refs["sneak"]) != 1 {
+			t.Fatalf("AUDIT R7-Y4: the %s briber must be seen: %v", name, refs)
+		}
 	}
 }
 
