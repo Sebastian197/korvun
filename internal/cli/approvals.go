@@ -187,13 +187,15 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 	// that governs it TODAY. A reject needs no law (withdrawing
 	// authority is safe under any), so a vanished brain still rejects.
 	var law actionsqlite.PolicyPin
+	var cage *app.EffectiveCage
 	if verb == "approve" {
 		_, p0, err := store.GetApproval(ctx, approvalID)
 		if err != nil {
 			_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: %v\n", err)
 			return 1
 		}
-		law, err = app.PolicyPinFor(cfg, strings.TrimPrefix(p0.PrincipalID, "principal_brain_"))
+		// R6-X3: ONE resolution feeds the pin AND the executor below.
+		cage, law, err = app.ResolveApprovalLaw(cfg, strings.TrimPrefix(p0.PrincipalID, "principal_brain_"))
 		if err != nil {
 			_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: %v\n", err)
 			return 1
@@ -216,7 +218,7 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 		return 0
 	}
 	// approve: the lote-3 deferred execution of the EXACT object.
-	return c.runApprovedExecution(ctx, store, cfg, approvalID, law, "approve", "approved — executed the exact approved object")
+	return c.runApprovedExecution(ctx, store, cage, approvalID, law, "approve", "approved — executed the exact approved object")
 }
 
 // approvalsExecute implements `korvun approvals execute` (C3): the
@@ -256,25 +258,25 @@ func (c *cli) approvalsExecute(args []string) int {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
 		return 1
 	}
-	// C1 holds here too: the resume re-derives the CURRENT law.
-	law, err := app.PolicyPinFor(cfg, strings.TrimPrefix(p.PrincipalID, "principal_brain_"))
+	// C1 holds here too; R6-X3: ONE resolution feeds pin and executor.
+	cage, law, err := app.ResolveApprovalLaw(cfg, strings.TrimPrefix(p.PrincipalID, "principal_brain_"))
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
 		return 1
 	}
-	return c.runApprovedExecution(ctx, store, cfg, approvalID, law, "execute", "resumed — executed the exact approved object")
+	return c.runApprovedExecution(ctx, store, cage, approvalID, law, "execute", "resumed — executed the exact approved object")
 }
 
 // runApprovedExecution is the one deferred-execution path shared by
 // approve and execute: rebuild from the CURRENT config, claim, belt,
 // run, report the REAL outcome.
-func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Store, cfg *config.Config, approvalID string, law actionsqlite.PolicyPin, verb, headline string) int {
+func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Store, cage *app.EffectiveCage, approvalID string, law actionsqlite.PolicyPin, verb, headline string) int {
 	a, p, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
 	}
-	exec, err := app.BuildApprovalExecutor(cfg, p)
+	exec, err := app.BuildApprovalExecutorFromCage(cage, p)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1

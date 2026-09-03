@@ -184,6 +184,57 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 	return result, nil
 }
 
+// ResolveApprovalLaw resolves ONE brain's effective cage and its law
+// pin in a SINGLE resolution (R6-X3): the operator CLI feeds BOTH the
+// decision (the pin) and the deferred executor (the cage) from this
+// one object.
+func ResolveApprovalLaw(cfg *config.Config, brainName string) (*EffectiveCage, actionsqlite.PolicyPin, error) {
+	for _, bc := range cfg.Brains {
+		if bc.Name != brainName {
+			continue
+		}
+		cage, err := ResolveEffectiveCage(bc)
+		if err != nil {
+			return nil, actionsqlite.PolicyPin{}, fmt.Errorf("app: %w", err)
+		}
+		pin, err := policyPinFromCage(cage)
+		if err != nil {
+			return nil, actionsqlite.PolicyPin{}, fmt.Errorf("app: brain %q: %w", brainName, err)
+		}
+		return cage, pin, nil
+	}
+	return nil, actionsqlite.PolicyPin{}, fmt.Errorf("app: policy pin: brain %q is not in the current config", brainName)
+}
+
+// BuildApprovalExecutorFromCage rebuilds the approved tool from an
+// ALREADY-resolved cage (R6-X3: no second resolution on the operator
+// path). The C1 depth check and the agent-block guard ride here.
+func BuildApprovalExecutorFromCage(cage *EffectiveCage, preview action.ActionPreview) (*executor.Executor, error) {
+	toolName := preview.Operation
+	if i := strings.LastIndex(toolName, "/"); i >= 0 {
+		toolName = toolName[i+1:]
+	}
+	granted := false
+	for _, name := range cage.Tools {
+		if name == toolName {
+			granted = true
+			break
+		}
+	}
+	if !granted {
+		return nil, fmt.Errorf("app: approval executor: tool %q is not in brain %q's CURRENT grant list — a revoked tool never executes", toolName, cage.BrainName)
+	}
+	if _, pure := tool.Builtin(toolName); !pure && !cage.HasAgent {
+		return nil, fmt.Errorf("app: approval executor: brain %q has no agent block — caged tool %q cannot be rebuilt", cage.BrainName, toolName)
+	}
+	b := &builder{logger: slog.New(slog.DiscardHandler)}
+	t, err := b.agentTool(cage, toolName)
+	if err != nil {
+		return nil, fmt.Errorf("app: approval executor for %s/%s: %w", cage.BrainName, toolName, err)
+	}
+	return executor.New(tool.Registry{toolName: t}, 0, time.Now), nil
+}
+
 // BuildApprovalExecutor builds the executor for ONE approved action's
 // deferred run (Etapa 5 FR-CLI): the acting brain is recovered from
 // the preview's principal ("principal_brain_<name>" — the E2 identity
@@ -197,43 +248,9 @@ func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*e
 		return nil, fmt.Errorf("app: approval executor: principal %q is not a brain principal", preview.PrincipalID)
 	}
 	brainName := strings.TrimPrefix(preview.PrincipalID, brainPrefix)
-	toolName := preview.Operation
-	if i := strings.LastIndex(toolName, "/"); i >= 0 {
-		toolName = toolName[i+1:]
+	cage, _, err := ResolveApprovalLaw(cfg, brainName)
+	if err != nil {
+		return nil, fmt.Errorf("app: approval executor: %w", err)
 	}
-	for _, bc := range cfg.Brains {
-		if bc.Name != brainName {
-			continue
-		}
-		// R5-S3: resolve ONCE, then everything — grant check included —
-		// consumes THE object (the same resolution shape the boot uses;
-		// a config the boot refuses never builds an executor).
-		cage, err := ResolveEffectiveCage(bc)
-		if err != nil {
-			return nil, fmt.Errorf("app: approval executor: %w", err)
-		}
-		// C1 depth check: rebuild ONLY from the CURRENT grant list — a
-		// tool revoked from agent.tools after the park never executes,
-		// even if every other gate were blind to the change.
-		granted := false
-		for _, name := range cage.Tools {
-			if name == toolName {
-				granted = true
-				break
-			}
-		}
-		if !granted {
-			return nil, fmt.Errorf("app: approval executor: tool %q is not in brain %q's CURRENT grant list — a revoked tool never executes", toolName, brainName)
-		}
-		if _, pure := tool.Builtin(toolName); !pure && !cage.HasAgent {
-			return nil, fmt.Errorf("app: approval executor: brain %q has no agent block — caged tool %q cannot be rebuilt", brainName, toolName)
-		}
-		b := &builder{logger: slog.New(slog.DiscardHandler)}
-		t, err := b.agentTool(cage, toolName)
-		if err != nil {
-			return nil, fmt.Errorf("app: approval executor for %s/%s: %w", brainName, toolName, err)
-		}
-		return executor.New(tool.Registry{toolName: t}, 0, time.Now), nil
-	}
-	return nil, fmt.Errorf("app: approval executor: brain %q not in the current config", brainName)
+	return BuildApprovalExecutorFromCage(cage, preview)
 }

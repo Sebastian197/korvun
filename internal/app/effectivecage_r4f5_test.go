@@ -11,6 +11,9 @@
 package app
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -114,18 +117,23 @@ func TestResolveEffectiveCage_refusesWhatTheBootRefuses(t *testing.T) {
 	}
 }
 
-// R5-S3: the single-object invariant, STRUCTURAL — production code may
-// resolve the cage at exactly its three entry points (buildAgentBrain,
-// PolicyPinFor's digest path, BuildApprovalExecutor). A fourth
-// resolution appearing anywhere in internal/app non-test sources fails
-// this guard and forces adjudication.
-func TestCageResolutionGuard_exactlyThreeEntryPoints(t *testing.T) {
+// R5-S3/R6-X3: the single-object invariant, STRUCTURAL and judged by
+// the AST (the text grep died — alias, parenthesized calls or an
+// argument named like the function cannot bribe a parser). Production
+// code may resolve the cage ONLY inside the allow-listed functions; a
+// resolution appearing anywhere else forces adjudication.
+func TestCageResolutionGuard_exactlyTheAllowedEntryPoints(t *testing.T) {
 	t.Parallel()
+	allowed := map[string]bool{
+		"buildAgentBrain":    true, // the boot: one resolution feeds registry+pin+ceiling
+		"policyDigestFor":    true, // PolicyPinFor's own single resolution (operator CLI)
+		"ResolveApprovalLaw": true, // the operator execute/approve path (R6-X3)
+	}
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("read dir: %v", err)
 	}
-	calls := 0
+	found := map[string][]string{}
 	for _, e := range entries {
 		name := e.Name()
 		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -135,15 +143,34 @@ func TestCageResolutionGuard_exactlyThreeEntryPoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", name, err)
 		}
-		for _, line := range strings.Split(string(src), "\n") {
-			if strings.Contains(line, "ResolveEffectiveCage(bc") &&
-				!strings.Contains(line, "func ResolveEffectiveCage") {
-				calls++
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, name, src, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, d := range f.Decls {
+			fn, ok := d.(*ast.FuncDecl)
+			if ok && fn.Body != nil {
+				ast.Inspect(fn.Body, func(n ast.Node) bool {
+					call, ok := n.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "ResolveEffectiveCage" {
+						found[fn.Name.Name] = append(found[fn.Name.Name], fset.Position(call.Pos()).String())
+					}
+					return true
+				})
 			}
 		}
 	}
-	if calls != 3 {
-		t.Fatalf("R5-S3 GUARD: expected exactly 3 production resolutions (boot, pin, executor), found %d — a new resolution point needs adjudication", calls)
+	for fnName, positions := range found {
+		if !allowed[fnName] {
+			t.Fatalf("R6-X3 GUARD: %s resolves the cage at %v — a new resolution point needs adjudication", fnName, positions)
+		}
+	}
+	if len(found) != len(allowed) {
+		t.Fatalf("R6-X3 GUARD: expected resolutions in exactly %d allowed functions, found %d: %v", len(allowed), len(found), found)
 	}
 }
 
@@ -152,6 +179,7 @@ func TestCageResolutionGuard_exactlyThreeEntryPoints(t *testing.T) {
 func TestResolveEffectiveCage_defensiveCopies(t *testing.T) {
 	t.Parallel()
 	bc := goldenCfg().Brains[0]
+	bc.Agent.Governance[0].Channels = []string{"console"}
 	cage, err := ResolveEffectiveCage(bc)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
@@ -160,5 +188,12 @@ func TestResolveEffectiveCage_defensiveCopies(t *testing.T) {
 	bc.Agent.Governance[0].Tool = "mutated"
 	if cage.Tools[0] == "mutated" || cage.Governance[0].Tool == "mutated" {
 		t.Fatal("R5-S3: the resolved object must not alias the config slices")
+	}
+	// R6-X3: the DEEP copy — inner Channels slices included.
+	if len(bc.Agent.Governance[0].Channels) > 0 {
+		bc.Agent.Governance[0].Channels[0] = "mutated"
+		if cage.Governance[0].Channels[0] == "mutated" {
+			t.Fatal("R6-X3: Governance.Channels must be deep-copied")
+		}
 	}
 }

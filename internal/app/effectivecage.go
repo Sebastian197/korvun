@@ -94,10 +94,14 @@ func ResolveEffectiveCage(bc config.BrainConfig) (*EffectiveCage, error) {
 	}
 	cage.HasAgent = true
 	cage.EffectCeiling = a.EffectCeiling
-	// R5-S3: defensive copies — the resolved object never aliases the
-	// caller's config slices.
+	// R5-S3/R6-X3: defensive DEEP copies — the resolved object never
+	// aliases the caller's config slices, inner Channels included.
 	cage.Tools = append([]string(nil), a.Tools...)
-	cage.Governance = append([]config.ToolGrantConfig(nil), a.Governance...)
+	cage.Governance = make([]config.ToolGrantConfig, len(a.Governance))
+	for i, g := range a.Governance {
+		g.Channels = append([]string(nil), g.Channels...)
+		cage.Governance[i] = g
+	}
 	cage.Attrs = attrs
 	cage.MaxIterations = a.MaxIterations
 	cage.SystemPrompt = a.SystemPrompt
