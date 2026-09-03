@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -615,6 +616,9 @@ func (s *Store) RecoverPreviousLife(ctx context.Context) error {
 				return fmt.Errorf("action/sqlite: recovery pass: %w", err)
 			}
 			if _, err := s.closeCrashOrphan(ctx, id, pass.to, pass.marker, pass.predicate, now); err != nil {
+				if isBusyClass(err) {
+					continue // another connection owns the row; the next boot pass will judge it
+				}
 				return err
 			}
 		}
@@ -635,6 +639,16 @@ const (
 	crashOrphanPredicate = ` AND state NOT IN ('DENIED','SHADOWED','SUCCEEDED','FAILED',
 		'REJECTED','PENDING_APPROVAL','APPROVED','OUTCOME_UNKNOWN')`
 )
+
+// isBusyClass reports the SQLITE_BUSY family across its spellings —
+// plain busy (5) and the WAL snapshot variant (517): another live
+// connection legitimately holds the row. For the SWEEPERS that is a
+// clean race (R4-F3 across real connections): skip and move on, never
+// a boot-fatal; the next pass owns whatever remains.
+func isBusyClass(err error) bool {
+	return err != nil && (strings.Contains(err.Error(), "SQLITE_BUSY") ||
+		strings.Contains(err.Error(), "database is locked"))
+}
 
 // collectIDs runs a SELECT of action ids.
 func (s *Store) collectIDs(ctx context.Context, query string, args ...any) ([]string, error) {

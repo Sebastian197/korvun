@@ -127,5 +127,71 @@ func errorsIsInvalidTransition(err error) bool {
 }
 
 func isBusy(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "SQLITE_BUSY")
+	// The busy class across its spellings: plain SQLITE_BUSY (5) and
+	// the WAL snapshot variant "database is locked (517)" — a reader's
+	// transaction losing its write upgrade to the other connection.
+	return err != nil && (strings.Contains(err.Error(), "SQLITE_BUSY") ||
+		strings.Contains(err.Error(), "database is locked"))
+}
+
+// R6-X4: sweep-vs-operator gains its TWO-connection form like the
+// other races — the server's boot sweep against a second connection's
+// operator decisions, under -race. Every expired approval ends
+// decided EXACTLY once (EXPIRED by the sweep or the operator's
+// verdict), receipts stay one-per-action, and clean losses never
+// error beyond the named outcomes.
+func TestSweepVsOperator_acrossRealConnections(t *testing.T) {
+	t.Parallel()
+	s1, s2, _ := twoSealedStores(t)
+	ctx := context.Background()
+	ids := make([]string, 6)
+	aprs := make([]string, 6)
+	for i := 0; i < 6; i++ {
+		ids[i] = fmt.Sprintf("act_s5c_%d", i)
+		a := expiredParked(t, s1, ids[i])
+		aprs[i] = a.ApprovalID
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	sweepErr := make(chan error, 1)
+	go func() {
+		defer wg.Done()
+		_, _, err := s1.SweepExpiredApprovals(ctx, time.Now().UTC())
+		sweepErr <- err
+	}()
+	go func() {
+		defer wg.Done()
+		// The operator races the sweep on half of them from the OTHER
+		// connection; losing to the sweep is the named expiry rule.
+		for i := 0; i < 3; i++ {
+			envD, identD := operatorDecisionEnv("reject", aprs[i])
+			_, err := s2.decideApproval(ctx, aprs[i], "rejected",
+				time.Now().UTC(), envD, identD, "")
+			if err != nil && !isBusy(err) {
+				t.Errorf("operator decide %d: only busy may error: %v", i, err)
+			}
+		}
+	}()
+	wg.Wait()
+	if err := <-sweepErr; err != nil {
+		t.Fatalf("the sweep must never error on clean races: %v", err)
+	}
+	// A row BOTH sides yielded on (mutual busy) is legitimately
+	// POSTPONED — the next cadence owns it. Converge: one more sweep.
+	if _, _, err := s1.SweepExpiredApprovals(ctx, time.Now().UTC()); err != nil {
+		t.Fatalf("the converging sweep: %v", err)
+	}
+	for i, id := range ids {
+		var status string
+		if err := s1.db.QueryRow(`SELECT status FROM approvals WHERE approval_id = ?`, aprs[i]).Scan(&status); err != nil {
+			t.Fatalf("status %s: %v", id, err)
+		}
+		if status != "EXPIRED" && status != "REJECTED" {
+			t.Fatalf("%s must end decided after convergence: %s", id, status)
+		}
+		receipts, _ := s1.ReceiptsByAction(ctx, id)
+		if len(receipts) != 1 {
+			t.Fatalf("%s: one receipt whoever won: %d", id, len(receipts))
+		}
+	}
 }

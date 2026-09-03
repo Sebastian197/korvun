@@ -521,9 +521,14 @@ Every guarantee asserted across E5+R4+R5 surfaces, each with its
 BINARY-level proof (the final-gate battery step that demonstrates it
 end-to-end) or its re-scoping. Suite-only proofs are named as such.
 
+LABELS (R6-X4): **BINARY** rows cite only what a REAL binary process
+executed (the gate batteries over temp profiles); `runIntentCLI`-based
+suite tests exercise the full CLI surface IN-PROCESS and are labeled
+**CLI-suite** — same code path minus process isolation, declared.
+
 | # | Promise (where) | Proof / re-scoping |
 |---|---|---|
-| 1 | An irreversible action cannot execute until the human approves exactly the version shown (spec Goal) | BINARY: park→approve→executes 42; digest belt in-suite; the mentiroso re-sellado dies at read/decide (gate steps 1-2) |
+| 1 | An irreversible action cannot execute until the human approves exactly the version shown (spec Goal) | BINARY (gate battery): park→approve→executes 42; digest belt in-suite; the re-sealed liar dies at read/decide |
 | 2 | The approval binds action digest + law; a moved law refuses by name at decide AND execute AND claim (C1/R4F2/S2) | BINARY: law-mutation refusal at approve and execute (gate 1; N9 3rd pass); claim in-tx law = suite (TestClaim_lawValidatedInsideItsTransaction) |
 | 3 | The human never reads a lie — read validates the WHOLE binding and STORY (F1/R4F2/S2) | BINARY: show exit 1 naming preview_policy_mismatch (gate 2); story dims (b)-(e) suite + S2 in-tx |
 | 4 | Born whole: narrated previews impossible; factory derives everything (R4F2) | Structural (unexported fields, compile-level) + factory saboteurs suite; production park via factory exercised by every gate battery |
@@ -534,7 +539,7 @@ end-to-end) or its re-scoping. Suite-only proofs are named as such.
 | 9 | Crash past the claim closes OUTCOME_UNKNOWN, never a FAILED lie (C5) | BINARY: claim→restart→OUTCOME_UNKNOWN/outcome_unknown signed (gate 4) |
 | 10 | Expired PENDING cannot outlive its window: consume touch + boot sweep + prune cadence, the park itself paying (R4/F3) | BINARY: 513 expired → 512 swept by cadence pre-boot, last by restart, 0 params retained (gate 5) |
 | 11 | Losing a clean race is a skip/named refusal, never boot-fatal; every close owns its row via predicate+RowsAffected (R4F3) | Suite (six scenarios, deterministic + wild) + S5 wild forms across TWO real connections |
-| 12 | Approval rows cascade with retention; the SIGNED receipt is the surviving evidence FOR EVERY OUTCOME (F4 + S1) | BINARY: reject→prune→verify OK + approval_row_absent note (S1 repro); cascade + note (gate 6) |
+| 12 | Approval rows cascade with retention; the SIGNED receipt is the surviving evidence FOR EVERY OUTCOME (F4 + S1) | BINARY (gate battery): reject→prune→verify reconstructs and proves (R6-X2); CLI-suite: the S1 repro (runIntentCLI, in-process) |
 | 13 | Verifier distinguishes retention (note) from sabotage (fail) (F4) | BINARY: both arms exercised via receipt verify (gate 6 + 3rd-pass battery) |
 | 14 | Same conduct = same law; cage-irrelevant fields never move the pin (R4F5) | BINARY: park under max_bytes absent ↔ explicit default crosses approve (gate 7); golden digest suite-pinned |
 | 15 | One resolver, one verdict — structurally; three production resolution points, guarded (R4F5/S3) | Structural: typed signatures + resolution-count guard + defensive-copy pin (suite); network shield arm identical live/deferred (BINARY: gate 7 shield vs override) |

@@ -425,6 +425,13 @@ func (s *Store) SweepExpiredApprovals(ctx context.Context, at time.Time) (swept,
 		}
 		won, err := s.sweepExpiredOne(ctx, id, at)
 		if err != nil {
+			if isBusyClass(err) {
+				// R6-X4 (found by the two-connection wild form): a busy
+				// row is another connection's clean win — skip with the
+				// note, never a boot-fatal; the next cadence owns it.
+				skipped++
+				continue
+			}
 			return swept, skipped, err
 		}
 		if won {
