@@ -18,7 +18,9 @@ package sqlite
 
 import (
 	"context"
+	"crypto/ed25519"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -66,24 +68,36 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 	}
 	r.ReceiptHash = action.ComputeReceiptHash(r)
 	r = s.sealer(r)
-	// R4-F1 belt, R5-S4 FAIL-CLOSED: the sealing key must be REGISTERED
-	// and ACTIVE at seal time, judged inside the receipt's own
-	// transaction. A retired key refuses (signing_key_retired), an
-	// unregistered key refuses (signing_key_unregistered), and a
-	// registry read error refuses (key_registry_unavailable) — never a
-	// silently unverifiable receipt.
-	if r.SigningKeyID != "" {
-		var retired sql.NullString
-		err := tx.QueryRowContext(ctx,
-			`SELECT retired_at FROM signing_keys WHERE key_id = ?`, r.SigningKeyID).Scan(&retired)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			return fmt.Errorf("action/sqlite: signing_key_unregistered: key %s is not in the registry — an unregistered key never seals", r.SigningKeyID)
-		case err != nil:
-			return fmt.Errorf("action/sqlite: key_registry_unavailable: cannot judge key %s: %w", r.SigningKeyID, err)
-		case retired.Valid && retired.String != "":
-			return fmt.Errorf("action/sqlite: signing_key_retired: key %s was retired %s — a retired key never seals; restart the server to load the active key", r.SigningKeyID, retired.String)
-		}
+	// R4-F1/R5-S4/R6-X1 belt, FAIL-CLOSED and SIGNATURE-VERIFIED: with
+	// a sealer wired, every receipt must leave this transaction
+	// provably verifiable. No key id = receipt_unsigned (the old
+	// skip-if-empty guard is dead). The key must be registered
+	// (signing_key_unregistered), readable (key_registry_unavailable)
+	// and active (signing_key_retired). And the SIGNATURE itself must
+	// verify against the REGISTERED public key over the canonical
+	// bytes — signature_invalid_at_birth otherwise. Never a silently
+	// unverifiable receipt.
+	if r.SigningKeyID == "" {
+		return fmt.Errorf("action/sqlite: receipt_unsigned: the sealer stamped no signing key for %q — with a sealer wired every receipt is born signed", r.ActionID)
+	}
+	var pubHex string
+	var retired sql.NullString
+	err = tx.QueryRowContext(ctx,
+		`SELECT public_key, retired_at FROM signing_keys WHERE key_id = ?`, r.SigningKeyID).Scan(&pubHex, &retired)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return fmt.Errorf("action/sqlite: signing_key_unregistered: key %s is not in the registry — an unregistered key never seals", r.SigningKeyID)
+	case err != nil:
+		return fmt.Errorf("action/sqlite: key_registry_unavailable: cannot judge key %s: %w", r.SigningKeyID, err)
+	case retired.Valid && retired.String != "":
+		return fmt.Errorf("action/sqlite: signing_key_retired: key %s was retired %s — a retired key never seals; restart the server to load the active key", r.SigningKeyID, retired.String)
+	}
+	pub, decodeErr := hex.DecodeString(pubHex)
+	if decodeErr != nil || len(pub) != ed25519.PublicKeySize {
+		return fmt.Errorf("action/sqlite: key_registry_unavailable: registered public key for %s is unreadable", r.SigningKeyID)
+	}
+	if r.Signature == "" || action.VerifyReceiptSignature(ed25519.PublicKey(pub), r) != nil {
+		return fmt.Errorf("action/sqlite: signature_invalid_at_birth: the seal for %q does not verify against registered key %s — refusing the receipt", r.ActionID, r.SigningKeyID)
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO receipts (receipt_id, action_id, intent_digest, principal_id,
