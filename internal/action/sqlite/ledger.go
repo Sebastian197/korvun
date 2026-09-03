@@ -67,7 +67,23 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 		r.PreviousReceiptHash = lastHash.String
 	}
 	r.ReceiptHash = action.ComputeReceiptHash(r)
+	// R7-Y1: the sealer may only ADD the sealing trio. Everything else
+	// is compared field by field pre/post (receipt_mutated_at_birth),
+	// and the stored hash must re-derive from the canonical bytes
+	// (receipt_hash_invalid_at_birth) — the belt is COMPLETE: a sealer
+	// that signs a different story than the one this transaction built
+	// never reaches the ledger.
+	pre := r
 	r = s.sealer(r)
+	compare := r
+	compare.SigningKeyID = pre.SigningKeyID
+	compare.Signature = pre.Signature
+	if compare != pre {
+		return fmt.Errorf("action/sqlite: receipt_mutated_at_birth: the sealer altered receipt fields beyond the sealing trio for %q — refusing the receipt", r.ActionID)
+	}
+	if action.ComputeReceiptHash(r) != r.ReceiptHash {
+		return fmt.Errorf("action/sqlite: receipt_hash_invalid_at_birth: the stored hash does not re-derive from the canonical bytes for %q — refusing the receipt", r.ActionID)
+	}
 	// R4-F1/R5-S4/R6-X1 belt, FAIL-CLOSED and SIGNATURE-VERIFIED: with
 	// a sealer wired, every receipt must leave this transaction
 	// provably verifiable. No key id = receipt_unsigned (the old
