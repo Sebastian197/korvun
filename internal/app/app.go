@@ -361,7 +361,12 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// R3: the recovery pass runs AFTER the sealer is wired, so its
 		// terminal closes land in the ledger signed like every other —
 		// no terminal is born without its receipt. Boot-fatal on refusal.
-		if err := actions.RecoverPreviousLife(context.Background()); err != nil {
+		recSkipped, err := actions.RecoverPreviousLife(context.Background())
+		if recSkipped > 0 {
+			// R7-Y5: a postponed orphan is NEVER silent — named note.
+			b.logger.Info("recovery: rows held by another connection were postponed", "skipped", recSkipped)
+		}
+		if err != nil {
 			_ = actions.Close()
 			_ = store.Close()
 			return nil, fmt.Errorf("app: recover previous life: %w", err)

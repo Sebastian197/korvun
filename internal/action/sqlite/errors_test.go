@@ -180,7 +180,7 @@ func TestOpen_recoveryFailureIsBootFatal(t *testing.T) {
 		t.Fatalf("Open no longer recovers and must succeed: %v", err)
 	}
 	defer func() { _ = reopened.Close() }()
-	if err := reopened.RecoverPreviousLife(context.Background()); err == nil {
+	if _, err := reopened.RecoverPreviousLife(context.Background()); err == nil {
 		t.Fatal("a failing recovery pass must fail loud (boot-fatal), not limp on")
 	}
 }

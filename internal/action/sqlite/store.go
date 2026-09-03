@@ -595,7 +595,7 @@ func open(path string) (*Store, error) {
 // APPROVED action whose params were CLAIMED was mid-execution — the
 // external effect may or may not have fired; it closes OUTCOME_UNKNOWN
 // with the uncertainty NAMED, never a FAILED lie.
-func (s *Store) RecoverPreviousLife(ctx context.Context) error {
+func (s *Store) RecoverPreviousLife(ctx context.Context) (skipped int, err error) {
 	passes := []struct {
 		query     string
 		args      []any
@@ -632,23 +632,27 @@ func (s *Store) RecoverPreviousLife(ctx context.Context) error {
 	for _, pass := range passes {
 		ids, err := s.collectIDs(ctx, pass.query, pass.args...)
 		if err != nil {
-			return fmt.Errorf("action/sqlite: recovery pass: %w", err)
+			return skipped, fmt.Errorf("action/sqlite: recovery pass: %w", err)
 		}
 		for _, id := range ids {
 			// R4-F3: real errors (a dead context included) abort; a
 			// lost clean race is changed=false and the loop moves on.
 			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("action/sqlite: recovery pass: %w", err)
+				return skipped, fmt.Errorf("action/sqlite: recovery pass: %w", err)
 			}
 			if _, err := s.closeCrashOrphan(ctx, id, pass.to, pass.marker, pass.predicate, now); err != nil {
 				if isBusyClass(err) {
-					continue // another connection owns the row; the next boot pass will judge it
+					// R7-Y5: NEVER silent — the postponement is counted
+					// and the boot logs the named note; the next pass
+					// owns whatever another connection held.
+					skipped++
+					continue
 				}
-				return err
+				return skipped, err
 			}
 		}
 	}
-	return nil
+	return skipped, nil
 }
 
 // The per-pass eligibility predicates (R4-F3): each crash close carries

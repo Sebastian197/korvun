@@ -57,7 +57,7 @@ func TestRecoveryVsFinish_acrossRealConnections(t *testing.T) {
 	recErr := make(chan error, 1)
 	finErr := make(chan error, 1)
 	wg.Add(2)
-	go func() { defer wg.Done(); recErr <- s1.RecoverPreviousLife(ctx) }()
+	go func() { defer wg.Done(); _, rerr := s1.RecoverPreviousLife(ctx); recErr <- rerr }()
 	go func() {
 		defer wg.Done()
 		finErr <- s2.FinishWithResult(ctx, "act_s5a_0", action.StateSucceeded,
@@ -100,8 +100,8 @@ func TestTwoRecoveries_acrossRealConnections(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
 	wg.Add(2)
-	go func() { defer wg.Done(); errs <- s1.RecoverPreviousLife(ctx) }()
-	go func() { defer wg.Done(); errs <- s2.RecoverPreviousLife(ctx) }()
+	go func() { defer wg.Done(); _, rerr := s1.RecoverPreviousLife(ctx); errs <- rerr }()
+	go func() { defer wg.Done(); _, rerr := s2.RecoverPreviousLife(ctx); errs <- rerr }()
 	wg.Wait()
 	close(errs)
 	for err := range errs {

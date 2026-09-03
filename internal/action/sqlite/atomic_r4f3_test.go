@@ -71,7 +71,8 @@ func TestRecovery_twoRecoveriesAndAFinishCompete(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			recErrs <- store.RecoverPreviousLife(ctx)
+			_, rerr := store.RecoverPreviousLife(ctx)
+			recErrs <- rerr
 		}()
 	}
 	wg.Add(1)

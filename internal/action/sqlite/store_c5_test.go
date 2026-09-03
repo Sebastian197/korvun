@@ -44,7 +44,7 @@ func TestRecovery_crashAfterClaimIsOutcomeUnknownNotFailed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
-	if err := reopened.RecoverPreviousLife(context.Background()); err != nil {
+	if _, err := reopened.RecoverPreviousLife(context.Background()); err != nil {
 		t.Fatalf("recovery pass: %v", err)
 	}
 	defer func() { _ = reopened.Close() }()
