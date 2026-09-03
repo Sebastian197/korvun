@@ -257,6 +257,10 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	if n, _ := res.RowsAffected(); n == 0 {
 		return action.RuleApprovalAlreadyDecided, nil
 	}
+	// R6-X2: the decided preimage rides in the SAME transaction.
+	if err := s.tombstoneTx(ctx, tx, a, ident.PrincipalID, decision, at); err != nil {
+		return "", err
+	}
 	if decision == "approved" {
 		if err := transitionTx(ctx, tx, a.ActionID, action.StatePendingApproval, action.StateApproved); err != nil {
 			return "", err
@@ -313,6 +317,12 @@ func (s *Store) closeApprovalTx(ctx context.Context, tx *sql.Tx, a action.Approv
 	if err != nil {
 		return false, fmt.Errorf("action/sqlite: close approval %q: %w", a.ApprovalID, err)
 	}
+	if n > 0 {
+		// R6-X2: the winner writes the decided preimage in its tx.
+		if err := s.tombstoneTx(ctx, tx, a, decider, decision, at); err != nil {
+			return false, err
+		}
+	}
 	return n > 0, nil
 }
 
@@ -333,6 +343,53 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 		return err
 	}
 	return s.appendReceiptTx(ctx, tx, r)
+}
+
+// tombstoneTx writes the decided approval's digest PREIMAGE (R6-X2)
+// inside the closing transaction: the bounded scalar facts — who
+// decided what, when, under which law, over which preview — that
+// reconstruct and prove the sealed ApprovalDigest after retention
+// takes the rows. Idempotent per action (INSERT OR REPLACE: the
+// preimage of a one-shot decision never changes).
+func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, decider, decision string, at time.Time) error {
+	_, err := tx.ExecContext(ctx,
+		`INSERT OR REPLACE INTO approval_tombstones
+		    (action_id, approval_id, action_digest, preview_digest,
+		     policy_version, policy_digest, decision_principal_id, decision, decision_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ActionID, a.ApprovalID, a.ActionDigest, a.PreviewDigest,
+		a.PolicyVersion, a.PolicyDigest, decider, decision,
+		at.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return fmt.Errorf("action/sqlite: tombstone for %q: %w", a.ActionID, err)
+	}
+	return nil
+}
+
+// ApprovalTombstone reconstructs the decided approval's digest
+// preimage for one action (R6-X2). ErrNotFound when no decided close
+// ever wrote one (pending approvals, or pre-v10 history — declared).
+func (s *Store) ApprovalTombstone(ctx context.Context, actionID string) (action.Approval, error) {
+	var a action.Approval
+	var decisionAt sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		`SELECT approval_id, action_digest, preview_digest, policy_version,
+		        policy_digest, decision_principal_id, decision, decision_at
+		   FROM approval_tombstones WHERE action_id = ?`, actionID).
+		Scan(&a.ApprovalID, &a.ActionDigest, &a.PreviewDigest,
+			&a.PolicyVersion, &a.PolicyDigest, &a.DecisionPrincipalID,
+			&a.Decision, &decisionAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return action.Approval{}, fmt.Errorf("action/sqlite: tombstone of %q: %w", actionID, ErrNotFound)
+	}
+	if err != nil {
+		return action.Approval{}, fmt.Errorf("action/sqlite: tombstone of %q: %w", actionID, err)
+	}
+	a.ActionID = actionID
+	if t, err := parseNullTime(decisionAt); err == nil {
+		a.DecisionAt = t
+	}
+	return a, nil
 }
 
 // SweepExpiredApprovals closes every PENDING approval whose window is

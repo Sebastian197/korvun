@@ -47,7 +47,22 @@ func TestReceiptVerify_theNoSurvivesThePrune(t *testing.T) {
 	_ = db.Close()
 	code, stdout, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receipts[0].ReceiptID)
 	out := stdout + stderr
-	if code != 0 || !strings.Contains(out, "OK") || !strings.Contains(out, "approval_row_absent") {
-		t.Fatalf("the NO's evidence survives retention as the sealed receipt + honest note: %d %q", code, out)
+	if code != 0 || !strings.Contains(out, "OK") {
+		t.Fatalf("the NO's evidence survives retention: %d %q", code, out)
+	}
+	// R6-X2: the verifier RECONSTRUCTS and PROVES the history — who
+	// decided what, when, under which law — from the tombstone
+	// preimage, re-deriving the sealed digest. A bare note is no
+	// longer enough.
+	for _, must := range []string{
+		"approval_evidence_reconstructed",
+		"decision=rejected",
+		"by=principal_operator",
+		"law=v",
+		"digest re-derived",
+	} {
+		if !strings.Contains(out, must) {
+			t.Fatalf("AUDIT R6-X2: the verify must PROVE the history (missing %q): %q", must, out)
+		}
 	}
 }

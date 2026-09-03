@@ -56,8 +56,24 @@ func TestReceiptVerify_retentionIsANoteSabotageIsAFail(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "OK") {
 		t.Fatalf("AUDIT R4-F4: retention is NOT a failure — the sealed receipt is the evidence: %d %q", code, out)
 	}
-	if !strings.Contains(out, "approval_row_absent") {
-		t.Fatalf("the note must say so BY NAME (the action_row_absent mold): %q", out)
+	// R6-X2 raised the bar: with the tombstone present the verifier
+	// RECONSTRUCTS and proves; the bare note remains only for pre-v10
+	// history (no tombstone) — exercised by deleting it.
+	if !strings.Contains(out, "approval_evidence_reconstructed") {
+		t.Fatalf("the reconstruction must prove the history: %q", out)
+	}
+	db3, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatalf("raw: %v", err)
+	}
+	if _, err := db3.Exec(`DELETE FROM approval_tombstones WHERE action_id = 'act_inbox1'`); err != nil {
+		t.Fatalf("erase tombstone: %v", err)
+	}
+	_ = db3.Close()
+	code, stdout, stderr = runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
+	out = stdout + stderr
+	if code != 0 || !strings.Contains(out, "approval_row_absent") {
+		t.Fatalf("without a tombstone (pre-v10 history) the honest degraded note remains: %d %q", code, out)
 	}
 
 	// SABOTAGE: the action remains, the approval alone vanishes — FAIL.

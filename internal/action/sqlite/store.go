@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 9
+const schemaVersionCurrent = 10
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -319,6 +319,25 @@ INSERT INTO approvals_v9 SELECT * FROM approvals
 DROP TABLE approvals;
 ALTER TABLE approvals_v9 RENAME TO approvals;
 CREATE INDEX approvals_by_status ON approvals(status);`,
+	// v9 -> v10 (R6-X2): the approval TOMBSTONE — the bounded SCALAR
+	// preimage of Approval.Digest() (who, what decision, when, under
+	// which law, which preview), written in the same transaction as
+	// every decided close. NO foreign key ON PURPOSE: like receipts, a
+	// tombstone is EVIDENCE and survives the retention cascade
+	// (exemption declared; fixed width, no bodies — growth is one
+	// bounded row per decided approval).
+	9: `
+CREATE TABLE approval_tombstones (
+    action_id             TEXT    NOT NULL PRIMARY KEY,
+    approval_id           TEXT    NOT NULL,
+    action_digest         TEXT    NOT NULL,
+    preview_digest        TEXT    NOT NULL,
+    policy_version        INTEGER NOT NULL,
+    policy_digest         TEXT    NOT NULL,
+    decision_principal_id TEXT    NOT NULL,
+    decision              TEXT    NOT NULL,
+    decision_at           TEXT
+) WITHOUT ROWID;`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per

@@ -542,6 +542,32 @@ end-to-end) or its re-scoping. Suite-only proofs are named as such.
 | 17 | The ledger is tamper-evident, never immutable (SECURITY) | BINARY: ledger check + verify on every gate battery; sabotage arms in-suite; the limit stays confessed in SECURITY.md |
 | 18 | Params capped 64KiB; approvals bounded by the actions cap (C6/F4) | Suite: cap refusal named; 2000-cycle bound demonstration |
 
+### R6 EXPRESS (fifth pass REJECTED verdict, adjudicated — surgical)
+
+- X1: the belt verifies THE SIGNATURE at birth — receipt_unsigned and
+  signature_invalid_at_birth join the named refusals; the auditor's
+  degenerate sealers (identity; active-key-empty-signature; plus the
+  wrong-key liar) are permanent adversarial suite members. Corollary
+  honored: suite-declared guarantees now carry adversarial suite form.
+- X2: the NO's history RECONSTRUCTS. Design decision with trade-offs:
+  (a) bounded tombstone table — CHOSEN: additive migration (v10), the
+  SCALAR preimage of Approval.Digest() only (who, decision, when, law
+  version+digest, preview digest), fixed width, no bodies, no FK (it
+  is EVIDENCE like receipts, cascade-exempt by construction, growth
+  one bounded row per decided approval); vs (b) sealing the decided
+  facts inside a receipt v3 — REJECTED: it would bump the frozen wire
+  era and duplicate the facts into every receipt, touching the
+  system's most sacred table for the same provable outcome. After the
+  prune the verifier reconstructs the preimage and PROVES it against
+  the sealed digest (approval_evidence_reconstructed with who/what/
+  when/law); a tampered tombstone is approval_mismatch; a missing one
+  (pre-v10 history, declared) degrades to the bare honest note.
+- X3: the single object reaches the operator execute path (one
+  resolution feeds the pin AND the executor); Governance channel
+  slices deep-copied; the resolution guard re-made over the AST.
+- X4: BINARY labels only what the real binary process executes (book
+  rows re-labeled); sweep-vs-operator gains its two-connection form.
+
 ### R5 CURES (S1-S6, fourth pass REJECTED verdict, adjudicated)
 
 - S1: the evidence of the NO survives — every approval-decided outcome

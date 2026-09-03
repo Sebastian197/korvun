@@ -184,7 +184,24 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 			// surviving evidence). The action still PRESENT with the
 			// approval gone is sabotage: a cascade cannot do that.
 			if _, aerr := store.Get(ctx, r.ActionID); errors.Is(aerr, actionsqlite.ErrNotFound) {
-				notes = append(notes, "approval_row_absent: approval of "+r.ActionID+" is gone with its action (retention cascades both; the digest-sealed receipt is the surviving evidence)")
+				// R6-X2: reconstruct and PROVE the history from the
+				// tombstone preimage — who decided what, when, under
+				// which law — re-deriving the sealed digest. A
+				// sabotaged tombstone is a FAIL; a missing one (pre-v10
+				// history, declared) degrades to the bare note.
+				tomb, terr := store.ApprovalTombstone(ctx, r.ActionID)
+				switch {
+				case terr == nil && tomb.Digest() == r.ApprovalDigest:
+					notes = append(notes, fmt.Sprintf(
+						"approval_evidence_reconstructed: decision=%s by=%s at=%s law=v%d %s preview=%s (digest re-derived from the tombstone and matches the seal)",
+						tomb.Decision, tomb.DecisionPrincipalID,
+						tomb.DecisionAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
+						tomb.PolicyVersion, tomb.PolicyDigest, tomb.PreviewDigest))
+				case terr == nil:
+					fail("approval_mismatch", "the tombstone of %s re-derives %s but the receipt seals %s — the preimage was tampered", r.ActionID, tomb.Digest(), r.ApprovalDigest)
+				default:
+					notes = append(notes, "approval_row_absent: approval of "+r.ActionID+" is gone with its action and no tombstone exists (pre-v10 history, declared; the digest-sealed receipt is the surviving evidence)")
+				}
 				break
 			}
 			fail("approval_mismatch", "receipt seals approval digest %s but no approval row exists for %s while its action row remains — a cascade cannot do that", r.ApprovalDigest, r.ActionID)
