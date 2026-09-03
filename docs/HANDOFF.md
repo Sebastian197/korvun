@@ -173,6 +173,26 @@ explicit decision.
 > registered: the internal self-audits were green AND insufficient
 > (doctrine: the self-exam PREPARES the gate, never replaces it).**
 >
+> **CODEX GATE PASSED (2026-09-03, the director's sealed bar): the
+> EIGHTH pass on ec9aded returned 0 P1 / 0 P2 / 0 P3.** The full
+> history: pass 1 (E5, 5P1+1P2 → C1-C8), pass 2 (618ce1f→d2954b9,
+> 3P1+4P2 → R1-R7 of that train + F1-F3 self-audit borders), pass 3
+> (b3985a4 REJECTED, 3P1+2P2+F3-evidence → R4's five phases), pass 4
+> (84b1096... adjudications folded into R5 S1-S6 + B1 book of
+> promises + B2 interaction matrix + B3 state discipline), pass 5
+> (f54052c REJECTED 2P1+2P2 → R6 X1-X4, the two-connection sweep race
+> finding a REAL product busy-fatality), pass 6 (6a67edc REJECTED
+> 3P1+2P2 → R7 Y1-Y6), pass 7 (b9cbfbf 1P1+3P2 → R8 Z1-Z4 under the
+> NEW adversarial-review law, first native application), pass 8
+> (ec9aded: CLEAN). Along the way the method became law: the
+> mandatory adversarial review (CLAUDE.md), the book of promises and
+> the interaction matrix (spec), the state discipline (here). The
+> Z1-weird observation (unparseable decision_at bytes kept verbatim,
+> preimage digest normalized STABLY to zero time) is annotated
+> behavior with its cosmetic line in the copy's comment. The v0.15
+> scenario UNPAUSES on ec9aded — agent.effect_ceiling is live, so
+> step A is pure production path.
+>
 > **R5 (fourth pass REJECTED → cures) — S1-S6 IMPLEMENTED locally,
 > gate pending:** S1 the NO's evidence seals (honest-empty revoked);
 > S2 the whole story inside both consumes; S3 one resolution feeds

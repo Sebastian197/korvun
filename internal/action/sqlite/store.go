@@ -413,7 +413,11 @@ var migrationCopies = map[int]func(*sql.Tx) error{
 // copyTombstonesV10toV11 reads every v10 tombstone (still present in
 // the transaction: the copy runs between the v11 CREATE and the v10
 // DROP encoded in the DDL split below) and inserts it into v11 with
-// its Approval.Digest() computed in Go — ZERO rows lost.
+// its Approval.Digest() computed in Go — ZERO rows lost. A row whose
+// decision_at bytes do not parse keeps them verbatim in the column
+// while the preimage digest normalizes them to the zero time — a
+// STABLE normalization: reconstruction re-derives identically
+// (eighth-pass observed behavior, annotated).
 func copyTombstonesV10toV11(tx *sql.Tx) error {
 	rows, err := tx.Query(`SELECT action_id, approval_id, action_digest, preview_digest,
 	        policy_version, policy_digest, decision_principal_id, decision, decision_at
