@@ -344,10 +344,11 @@ CREATE TABLE approval_tombstones (
 	// approval_digest is UNIQUE, and action_id becomes an indexed
 	// column: an action_id REUSED after the prune never overwrites the
 	// old approval's history. Transactional reconstruction (the v9
-	// mold). v10 rows are RETIRED, declared: their digest column cannot
-	// be computed in SQL and the v10 schema never shipped in a release
-	// (an hours-wide unreleased window); their receipts degrade to the
-	// honest pre-tombstone note, exactly like pre-v10 history.
+	// mold). R8-Z1 REVOKED the retire adjudication: a migration NEVER
+	// destroys tombstones — the rows are COPIED by in-transaction Go
+	// (copyTombstonesV10toV11 computes each Approval.Digest() from the
+	// scalar preimage), and the old table drops only after every row
+	// has landed (migrationsPost). Zero rows lost, crash-rehearsed.
 	10: `
 CREATE TABLE approval_tombstones_v11 (
     approval_id           TEXT    NOT NULL PRIMARY KEY,
@@ -360,7 +361,14 @@ CREATE TABLE approval_tombstones_v11 (
     decision_principal_id TEXT    NOT NULL,
     decision              TEXT    NOT NULL,
     decision_at           TEXT
-) WITHOUT ROWID;
+) WITHOUT ROWID;`,
+}
+
+// migrationsPost holds the destructive tail of a hybrid step (R8-Z1):
+// it runs AFTER the in-transaction Go copy, same transaction — the
+// old table is dropped only once every row has landed in the new one.
+var migrationsPost = map[int]string{
+	10: `
 DROP TABLE approval_tombstones;
 ALTER TABLE approval_tombstones_v11 RENAME TO approval_tombstones;
 CREATE INDEX tombstones_by_action ON approval_tombstones(action_id);`,
@@ -387,14 +395,77 @@ func migrate(db *sql.DB) error {
 		if !ok {
 			return fmt.Errorf("action/sqlite: no migration from schema version %d", v)
 		}
-		if err := migrateStep(db, step, v); err != nil {
+		if err := migrateStep(db, step, migrationCopies[v], v); err != nil {
 			return err
 		}
 	}
 }
 
-// migrateStep runs ONE migration and its version bump in one transaction.
-func migrateStep(db *sql.DB, step string, from int) error {
+// migrationCopies holds the R8-Z1 in-transaction Go copies: a step
+// whose data transform cannot be expressed in SQL (computing a
+// canonical digest) runs its copy INSIDE the same transaction as its
+// DDL and version bump — the AS-8 anti-zombie discipline unchanged.
+// A migration NEVER destroys evidence: it copies or it fails closed.
+var migrationCopies = map[int]func(*sql.Tx) error{
+	10: copyTombstonesV10toV11,
+}
+
+// copyTombstonesV10toV11 reads every v10 tombstone (still present in
+// the transaction: the copy runs between the v11 CREATE and the v10
+// DROP encoded in the DDL split below) and inserts it into v11 with
+// its Approval.Digest() computed in Go — ZERO rows lost.
+func copyTombstonesV10toV11(tx *sql.Tx) error {
+	rows, err := tx.Query(`SELECT action_id, approval_id, action_digest, preview_digest,
+	        policy_version, policy_digest, decision_principal_id, decision, decision_at
+	   FROM approval_tombstones`)
+	if err != nil {
+		return fmt.Errorf("action/sqlite: v11 copy read: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	type v10row struct {
+		a          action.Approval
+		decisionAt sql.NullString
+	}
+	var all []v10row
+	for rows.Next() {
+		var r v10row
+		if err := rows.Scan(&r.a.ActionID, &r.a.ApprovalID, &r.a.ActionDigest,
+			&r.a.PreviewDigest, &r.a.PolicyVersion, &r.a.PolicyDigest,
+			&r.a.DecisionPrincipalID, &r.a.Decision, &r.decisionAt); err != nil {
+			return fmt.Errorf("action/sqlite: v11 copy scan: %w", err)
+		}
+		all = append(all, r)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("action/sqlite: v11 copy rows: %w", err)
+	}
+	for _, r := range all {
+		if t, err := parseNullTime(r.decisionAt); err == nil {
+			r.a.DecisionAt = t
+		}
+		if _, err := tx.Exec(`INSERT INTO approval_tombstones_v11
+		    (approval_id, approval_digest, action_id, action_digest, preview_digest,
+		     policy_version, policy_digest, decision_principal_id, decision, decision_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			r.a.ApprovalID, r.a.Digest(), r.a.ActionID, r.a.ActionDigest, r.a.PreviewDigest,
+			r.a.PolicyVersion, r.a.PolicyDigest, r.a.DecisionPrincipalID, r.a.Decision,
+			nullOrString(r.decisionAt)); err != nil {
+			return fmt.Errorf("action/sqlite: v11 copy insert %q: %w", r.a.ApprovalID, err)
+		}
+	}
+	return nil
+}
+
+func nullOrString(v sql.NullString) any {
+	if v.Valid {
+		return v.String
+	}
+	return nil
+}
+
+// migrateStep runs ONE migration — DDL, optional in-tx Go copy, and
+// the version bump — in one transaction.
+func migrateStep(db *sql.DB, step string, copy func(*sql.Tx) error, from int) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin migration from v%d: %w", from, err)
@@ -402,6 +473,16 @@ func migrateStep(db *sql.DB, step string, from int) error {
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.Exec(step); err != nil {
 		return fmt.Errorf("action/sqlite: migration from v%d: %w", from, err)
+	}
+	if copy != nil {
+		if err := copy(tx); err != nil {
+			return err
+		}
+	}
+	if post, ok := migrationsPost[from]; ok {
+		if _, err := tx.Exec(post); err != nil {
+			return fmt.Errorf("action/sqlite: migration tail from v%d: %w", from, err)
+		}
 	}
 	if _, err := tx.Exec(`UPDATE action_schema SET version = ?`, from+1); err != nil {
 		return fmt.Errorf("action/sqlite: bump schema version to v%d: %w", from+1, err)
