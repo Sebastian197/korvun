@@ -115,6 +115,58 @@ starting work, confirm no other session is live; a second session shares
 the working tree, the branches and the copilot report paths, and will
 step on them.
 
+## Mandatory adversarial review before tests or implementation
+Before writing or modifying ANY test or production code, perform an adversarial design review of the requested guarantee.
+1. State the guarantee literally. Do not weaken, reinterpret, or replace it with an easier property.
+2. Trace the complete production path through actual source, transactions, schema, migrations, lifecycle, retention, concurrency and error handling.
+3. Try to disprove the proposed design before defending it. Construct concrete attacks involving:
+   - empty, malformed, lying or state-mutating dependencies;
+   - stale reads, TOCTOU windows and multiple real connections;
+   - identifier reuse, duplicate history and retention;
+   - partial writes, rollback, crash and restart;
+   - missing rows versus unreadable or corrupt storage;
+   - aliases, value references, parentheses and indirect calls against structural guards;
+   - valid signatures over invalid or stale surrounding data;
+   - transient errors that may be mistaken for legitimate race loss.
+4. For every persisted invariant, verify the database constraints and ask whether legitimate future operations can overwrite, orphan or ambiguously address historical evidence.
+5. For every fail-closed claim, enumerate all error classes. Only an explicitly proven benign condition may degrade to a note or skip. Unknown, corrupt or unavailable state must fail closed.
+6. For every concurrency claim, distinguish:
+   - predicate/RowsAffected ownership;
+   - lock contention;
+   - SQLITE_BUSY or equivalent;
+   - a genuine lost race.
+   Never treat these as equivalent without proof.
+7. Define the required evidence level accurately:
+   - unit test;
+   - in-process CLI test;
+   - multiple real database connections;
+   - compiled binary in a separate OS process;
+   - crash/restart or migration rehearsal.
+   Never label an in-process call as binary or end-to-end evidence.
+8. Reject tautological or non-adversarial tests. A test must force the dangerous branch and prove:
+   - the expected named error;
+   - zero forbidden mutations;
+   - transaction rollback;
+   - preserved historical evidence;
+   - eventual convergence where applicable.
+   A race test that merely allows an outcome without forcing or observing it is insufficient.
+9. Produce a short "Pre-test adversarial review" containing:
+   - the literal guarantees;
+   - attack matrix;
+   - expected failure taxonomy;
+   - transaction and persistence boundaries;
+   - planned reproductions;
+   - unresolved risks.
+10. STOP and obtain explicit approval of this review before writing the first red test.
+After implementation, repeat the same analysis against the resulting code as an independent hostile reviewer. Passing the authored tests does not prove the guarantees. Search specifically for new failure modes introduced by the cure.
+If a guarantee cannot be proved end-to-end, report it as unverified or reject the design. Never write stronger documentation than the code and observed evidence support.
+
+### Scope
+This review is MANDATORY for any surface carrying guarantees — internal/action, internal/action/sqlite, seals/belts, operator CLI acts, migrations, recovery/sweep, concurrency, retention, and any code whose comments or docs promise an invariant. The "explicit approval" of step 10 is granted by the copilot's review of the Pre-test adversarial review; the director adjudicates product and risk decisions as always.
+
+### Cosmetic surfaces
+Cosmetic changes (docs, comments, UI copy, version strings, public content) are EXEMPT from the attack matrix but NEVER from verification. They carry their own standing laws: (1) Letreros — every claim in ceremonies, posts, or notes derives from captured output, never from memory; (2) Verified landing — every edit is re-read on disk after applying; (3) Public surfaces — version numbers, dates, and release facts run the per-release checklist and the releaseFacts guard; (4) Tone — no comment, godoc, spec line, or doc may state a guarantee stronger than the code and its observed evidence, ANYWHERE in the tree, at ALL times. A cosmetic lie in this project is a public-truth violation, not a style issue.
+
 ## La ley de la verificación cruzada (2026-08-31) — CRITICAL
 
 Born from the 2026-08-31 external audit (three reproducible failures
