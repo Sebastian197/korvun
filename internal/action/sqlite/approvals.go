@@ -369,10 +369,12 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 		return nil
 	}
 	if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-		// R7-Y2: history is immutable. An IDENTICAL row is harmless
-		// idempotence; anything else is a named conflict.
+		// R7-Y2/R8-Z2: history is immutable, and idempotence is
+		// WHOLE-ROW — the digest excludes ActionID, so only total
+		// identity across every stored column is a harmless no-op;
+		// any difference is the named conflict.
 		existing, gerr := s.approvalTombstoneRowTx(ctx, tx, a.ApprovalID)
-		if gerr == nil && existing.Digest() == sealed.Digest() {
+		if gerr == nil && existing == sealed {
 			return nil
 		}
 		return fmt.Errorf("action/sqlite: tombstone_conflict: approval %q already has an immutable tombstone with a different story — history is never rewritten", a.ApprovalID)

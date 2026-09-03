@@ -11,9 +11,11 @@
 package app
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -117,13 +119,16 @@ func TestResolveEffectiveCage_refusesWhatTheBootRefuses(t *testing.T) {
 	}
 }
 
-// R5-S3/R6-X3/R7-Y4: the single-object invariant, STRUCTURAL and
-// judged by the AST at REFERENCE level (the F1 selector mold): every
-// mention of the resolver identifier outside the allow-listed
-// functions fails — a function value, a parenthesized call or an
-// alias assignment cannot bribe it, and neither can a call.
-// cageResolverRefs returns, per enclosing function, the positions of
-// every reference to ResolveEffectiveCage in one source.
+// R5-S3/R6-X3/R7-Y4/R8-Z4: the single-object invariant, judged by
+// the AST over the WHOLE tree (internal/..., cmd/..., web/... — the
+// adjudicated line) with the allow-list keyed by SITE — exact package
+// directory + top-level function — never by textual name: a briber
+// method named policyDigestFor in another package, or a cross-package
+// reference (pkg.ResolveEffectiveCage as Ident OR SelectorExpr),
+// fails the guard.
+// cageResolverRefs returns, per enclosing declaration, every
+// reference to the resolver identifier in one source (Ident and
+// selector Sel alike; package-level GenDecls swept as <package-level>).
 func cageResolverRefs(filename string, src []byte) (map[string][]string, error) {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, filename, src, 0)
@@ -131,72 +136,123 @@ func cageResolverRefs(filename string, src []byte) (map[string][]string, error) 
 		return nil, err
 	}
 	found := map[string][]string{}
+	note := func(scope string, pos token.Pos) {
+		found[scope] = append(found[scope], fset.Position(pos).String())
+	}
+	scan := func(scope string, root ast.Node) {
+		ast.Inspect(root, func(n ast.Node) bool {
+			switch e := n.(type) {
+			case *ast.SelectorExpr:
+				if e.Sel.Name == "ResolveEffectiveCage" {
+					note(scope, e.Sel.Pos())
+					return false // do not double-count the Sel ident
+				}
+			case *ast.Ident:
+				if e.Name == "ResolveEffectiveCage" {
+					note(scope, e.Pos())
+				}
+			}
+			return true
+		})
+	}
 	for _, d := range f.Decls {
 		switch decl := d.(type) {
 		case *ast.FuncDecl:
 			if decl.Body == nil || decl.Name.Name == "ResolveEffectiveCage" {
 				continue
 			}
-			ast.Inspect(decl.Body, func(n ast.Node) bool {
-				if id, ok := n.(*ast.Ident); ok && id.Name == "ResolveEffectiveCage" {
-					found[decl.Name.Name] = append(found[decl.Name.Name], fset.Position(id.Pos()).String())
-				}
-				return true
-			})
+			scan(decl.Name.Name, decl.Body)
 		case *ast.GenDecl:
-			// R7-Y4: a package-level alias (var sneaky = Resolve...)
-			// lives outside any function — swept here.
-			ast.Inspect(decl, func(n ast.Node) bool {
-				if id, ok := n.(*ast.Ident); ok && id.Name == "ResolveEffectiveCage" {
-					found["<package-level>"] = append(found["<package-level>"], fset.Position(id.Pos()).String())
-				}
-				return true
-			})
+			scan("<package-level>", decl)
 		}
 	}
 	return found, nil
 }
 
-func TestCageResolutionGuard_exactlyTheAllowedEntryPoints(t *testing.T) {
+func TestCageResolutionGuard_wholeTreeBySite(t *testing.T) {
 	t.Parallel()
-	allowed := map[string]bool{
-		"buildAgentBrain":    true, // the boot: one resolution feeds registry+pin+ceiling
-		"policyDigestFor":    true, // PolicyPinFor's own single resolution (operator CLI)
-		"ResolveApprovalLaw": true, // the operator execute/approve path (R6-X3)
+	type site struct{ pkg, fn string }
+	allowed := map[site]bool{
+		{"internal/app", "buildAgentBrain"}:    true,
+		{"internal/app", "policyDigestFor"}:    true,
+		{"internal/app", "ResolveApprovalLaw"}: true,
 	}
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("read dir: %v", err)
-	}
-	total := map[string][]string{}
-	for _, e := range entries {
-		name := e.Name()
-		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		src, err := os.ReadFile(filepath.Clean(name))
+	root := filepath.Join("..", "..")
+	var offenders []string
+	seen := map[site]bool{}
+	for _, top := range []string{"internal", "cmd", "web"} {
+		err := filepath.WalkDir(filepath.Join(root, top), func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				if d.Name() == "node_modules" {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			src, err := os.ReadFile(filepath.Clean(path))
+			if err != nil {
+				return err
+			}
+			refs, err := cageResolverRefs(path, src)
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(root, filepath.Dir(path))
+			for fn, positions := range refs {
+				st := site{filepath.ToSlash(rel), fn}
+				if allowed[st] {
+					seen[st] = true
+					continue
+				}
+				offenders = append(offenders, fmt.Sprintf("%s.%s at %v", st.pkg, fn, positions))
+			}
+			return nil
+		})
 		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
-		}
-		refs, err := cageResolverRefs(name, src)
-		if err != nil {
-			t.Fatalf("parse %s: %v", name, err)
-		}
-		for fn, pos := range refs {
-			total[fn] = append(total[fn], pos...)
+			t.Fatalf("walk %s: %v", top, err)
 		}
 	}
-	for fnName, positions := range total {
-		if !allowed[fnName] {
-			t.Fatalf("R7-Y4 GUARD: %s REFERENCES the resolver at %v — a new resolution point (value, alias or call) needs adjudication", fnName, positions)
-		}
+	if len(offenders) > 0 {
+		t.Fatalf("R8-Z4 GUARD: resolver references outside the allowed SITES: %v", offenders)
 	}
-	if len(total) != len(allowed) {
-		t.Fatalf("R7-Y4 GUARD: expected references in exactly %d allowed functions, found %d: %v", len(allowed), len(total), total)
+	if len(seen) != len(allowed) {
+		t.Fatalf("R8-Z4 GUARD: expected all %d allowed sites present, saw %d: %v", len(allowed), len(seen), seen)
 	}
 }
 
-// The auditor's three bribers, permanent fixtures of the detector.
+// The auditor's bribers, permanent fixtures of the detector.
+func TestCageGuard_siteBribersCannotPass(t *testing.T) {
+	t.Parallel()
+	// A method NAMED like an allowed function, in another package —
+	// the detector reports the reference; the SITE key rejects it.
+	byName := `package cli
+func policyDigestFor(bc BrainConfig) { _, _ = ResolveEffectiveCage(bc) }`
+	refs, err := cageResolverRefs("cli.go", []byte(byName))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(refs["policyDigestFor"]) != 1 {
+		t.Fatalf("the name-briber's reference must be seen (the SITE decides): %v", refs)
+	}
+	// The cross-package reference: app.ResolveEffectiveCage as a value.
+	cross := `package cli
+import "github.com/Sebastian197/korvun/internal/app"
+func sneak() { f := app.ResolveEffectiveCage; _ = f }`
+	refs, err = cageResolverRefs("cross.go", []byte(cross))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(refs["sneak"]) != 1 {
+		t.Fatalf("AUDIT R8-Z4: the cross-package selector reference must be seen: %v", refs)
+	}
+}
+
+// The earlier reference bribers stay pinned on the detector.
 func TestCageGuard_referenceBribersCannotPass(t *testing.T) {
 	t.Parallel()
 	for name, src := range map[string]string{
@@ -204,23 +260,24 @@ func TestCageGuard_referenceBribersCannotPass(t *testing.T) {
 func sneak(bc BrainConfig) { f := ResolveEffectiveCage; _, _ = f(bc) }`,
 		"paren": `package app
 func sneak(bc BrainConfig) { _, _ = (ResolveEffectiveCage)(bc) }`,
-		"alias": `package app
-var sneaky = ResolveEffectiveCage
-func sneak(bc BrainConfig) { _, _ = sneaky(bc) }`,
 	} {
 		refs, err := cageResolverRefs(name+".go", []byte(src))
 		if err != nil {
 			t.Fatalf("%s: parse: %v", name, err)
 		}
-		if name == "alias" {
-			if len(refs["<package-level>"]) != 1 {
-				t.Fatalf("AUDIT R7-Y4: the package-level alias must be seen: %v", refs)
-			}
-			continue
-		}
 		if len(refs["sneak"]) != 1 {
-			t.Fatalf("AUDIT R7-Y4: the %s briber must be seen: %v", name, refs)
+			t.Fatalf("the %s briber must be seen: %v", name, refs)
 		}
+	}
+	alias := `package app
+var sneaky = ResolveEffectiveCage
+func sneak(bc BrainConfig) { _, _ = sneaky(bc) }`
+	refs, err := cageResolverRefs("alias.go", []byte(alias))
+	if err != nil {
+		t.Fatalf("alias: parse: %v", err)
+	}
+	if len(refs["<package-level>"]) != 1 {
+		t.Fatalf("the package-level alias must be seen: %v", refs)
 	}
 }
 

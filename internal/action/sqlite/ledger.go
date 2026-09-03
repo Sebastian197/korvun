@@ -75,9 +75,14 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 	// never reaches the ledger.
 	pre := r
 	r = s.sealer(r)
+	// R8-Z3: exact taxonomy — one condition per name. The HASH belongs
+	// to the seal set in this comparison, so a sealer that mutates it
+	// flows to ITS check (the re-derivation below) and earns ITS name;
+	// receipt_mutated_at_birth fires only for non-seal fields.
 	compare := r
 	compare.SigningKeyID = pre.SigningKeyID
 	compare.Signature = pre.Signature
+	compare.ReceiptHash = pre.ReceiptHash
 	if compare != pre {
 		return fmt.Errorf("action/sqlite: receipt_mutated_at_birth: the sealer altered receipt fields beyond the sealing trio for %q — refusing the receipt", r.ActionID)
 	}

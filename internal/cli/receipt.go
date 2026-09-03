@@ -196,6 +196,10 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 				// note; any other read error FAILS by name.
 				tomb, terr := store.ApprovalTombstoneByDigest(ctx, r.ApprovalDigest)
 				switch {
+				case terr == nil && tomb.Digest() == r.ApprovalDigest && tomb.ActionID != r.ActionID:
+					// R8-Z2 binding: the preimage proves the digest but
+					// points at ANOTHER action — a mutated tombstone.
+					fail("tombstone_action_mismatch", "the tombstone for the sealed digest points at %s but the receipt belongs to %s — the evidence was re-pointed", tomb.ActionID, r.ActionID)
 				case terr == nil && tomb.Digest() == r.ApprovalDigest:
 					notes = append(notes, fmt.Sprintf(
 						"approval_evidence_reconstructed: decision=%s by=%s at=%s law=v%d %s preview=%s (digest re-derived from the tombstone and matches the seal)",

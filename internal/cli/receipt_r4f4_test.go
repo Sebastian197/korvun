@@ -118,3 +118,27 @@ func TestReceiptVerify_tombstoneReadErrorFailsNamed(t *testing.T) {
 		t.Fatalf("AUDIT R7-Y3: a tombstone read error must FAIL by name, never masquerade as history: %d %q", code, out)
 	}
 }
+
+// R8-Z2 (binding): a tombstone whose action_id was mutated no longer
+// slips by — the verifier binds tombstone.action_id to the receipt's.
+func TestReceiptVerify_tombstoneActionBindingFailsNamed(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, approvalID := parkedRequest(t)
+	receiptID := approvedReceiptID(t, cfgPath, dbPath, approvalID)
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)")
+	if err != nil {
+		t.Fatalf("raw: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM actions WHERE action_id = 'act_inbox1'`); err != nil {
+		t.Fatalf("prune-style delete: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE approval_tombstones SET action_id = 'act_repointed' WHERE action_id = 'act_inbox1'`); err != nil {
+		t.Fatalf("sabotage: %v", err)
+	}
+	_ = db.Close()
+	code, stdout, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
+	out := stdout + stderr
+	if code != 1 || !strings.Contains(out, "tombstone_action_mismatch") {
+		t.Fatalf("AUDIT R8-Z2: a re-pointed tombstone must FAIL by name: %d %q", code, out)
+	}
+}

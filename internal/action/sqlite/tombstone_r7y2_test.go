@@ -103,3 +103,41 @@ func mustConsumedDigest(t *testing.T, store *Store, approvalID string) string {
 	}
 	return a.Digest()
 }
+
+// R8-Z2 (seventh Codex pass, P2): whole-row idempotence. The digest
+// excludes ActionID, so a lying row with the same digest and a
+// FOREIGN action_id passed as idempotent. The collision now compares
+// EVERY stored column: total identity = no-op, ANY difference =
+// tombstone_conflict — the auditor's lying row, permanent.
+func TestTombstone_lyingRowSameDigestForeignActionConflicts(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	a := expiredParked(t, store, "act_z2_lie")
+	env, ident := operatorDecisionEnv("reject", a.ApprovalID)
+	if _, err := store.decideApproval(ctx, a.ApprovalID, "rejected",
+		a.RequestedAt.Add(time.Second), env, ident, ""); err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	tomb, err := store.ApprovalTombstone(ctx, "act_z2_lie")
+	if err != nil {
+		t.Fatalf("tombstone: %v", err)
+	}
+	tx, err := store.db.Begin()
+	if err != nil {
+		t.Fatalf("tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	// The auditor's lying row: SAME digest terms, FOREIGN action_id
+	// (ActionID is not a digest term — only the whole-row comparison
+	// can catch it).
+	lying := tomb
+	lying.ActionID = "act_somebody_else"
+	err = store.tombstoneTx(ctx, tx, lying, lying.DecisionPrincipalID, lying.Decision, lying.DecisionAt)
+	if err == nil {
+		t.Fatal("AUDIT R8-Z2: a same-digest foreign-action row must refuse")
+	}
+	if !strings.Contains(err.Error(), "tombstone_conflict") {
+		t.Fatalf("the refusal must name tombstone_conflict: %v", err)
+	}
+}

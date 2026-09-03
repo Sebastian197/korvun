@@ -36,9 +36,10 @@ func TestBelt_sealerMutatingTheHashRefuses(t *testing.T) {
 	if err == nil {
 		t.Fatal("AUDIT R7-Y1: a sealer rewriting the hash must refuse")
 	}
-	if !strings.Contains(err.Error(), "receipt_hash_invalid_at_birth") &&
-		!strings.Contains(err.Error(), "receipt_mutated_at_birth") {
-		t.Fatalf("the refusal must name the birth check: %v", err)
+	// R8-Z3: EXACT name per attack — the either/or that hid the gap
+	// is dead. A mutated hash reaches ITS check.
+	if !strings.Contains(err.Error(), "receipt_hash_invalid_at_birth") {
+		t.Fatalf("the refusal must name receipt_hash_invalid_at_birth exactly: %v", err)
 	}
 }
 
