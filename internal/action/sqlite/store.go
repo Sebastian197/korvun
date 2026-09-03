@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 10
+const schemaVersionCurrent = 11
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -339,6 +339,31 @@ CREATE TABLE approval_tombstones (
     decision              TEXT    NOT NULL,
     decision_at           TEXT
 ) WITHOUT ROWID;`,
+	// v10 -> v11 (R7-Y2): the tombstone gains its OWN identity — PK is
+	// the APPROVAL id (one tombstone per decided approval, immutable),
+	// approval_digest is UNIQUE, and action_id becomes an indexed
+	// column: an action_id REUSED after the prune never overwrites the
+	// old approval's history. Transactional reconstruction (the v9
+	// mold). v10 rows are RETIRED, declared: their digest column cannot
+	// be computed in SQL and the v10 schema never shipped in a release
+	// (an hours-wide unreleased window); their receipts degrade to the
+	// honest pre-tombstone note, exactly like pre-v10 history.
+	10: `
+CREATE TABLE approval_tombstones_v11 (
+    approval_id           TEXT    NOT NULL PRIMARY KEY,
+    approval_digest       TEXT    NOT NULL UNIQUE,
+    action_id             TEXT    NOT NULL,
+    action_digest         TEXT    NOT NULL,
+    preview_digest        TEXT    NOT NULL,
+    policy_version        INTEGER NOT NULL,
+    policy_digest         TEXT    NOT NULL,
+    decision_principal_id TEXT    NOT NULL,
+    decision              TEXT    NOT NULL,
+    decision_at           TEXT
+) WITHOUT ROWID;
+DROP TABLE approval_tombstones;
+ALTER TABLE approval_tombstones_v11 RENAME TO approval_tombstones;
+CREATE INDEX tombstones_by_action ON approval_tombstones(action_id);`,
 }
 
 // migrate lifts the store to schemaVersionCurrent, one version per

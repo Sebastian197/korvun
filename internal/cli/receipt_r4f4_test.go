@@ -93,3 +93,28 @@ func TestReceiptVerify_retentionIsANoteSabotageIsAFail(t *testing.T) {
 		t.Fatalf("an approval gone while its action remains is SABOTAGE: %d %q", code, out)
 	}
 }
+
+// R7-Y3 (sixth Codex pass, P1): ONLY ErrNotFound degrades to the
+// pre-tombstone note; any other tombstone read error is a NAMED FAIL
+// (tombstone_read_failed) — never disguised as old history.
+func TestReceiptVerify_tombstoneReadErrorFailsNamed(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, approvalID := parkedRequest(t)
+	receiptID := approvedReceiptID(t, cfgPath, dbPath, approvalID)
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)")
+	if err != nil {
+		t.Fatalf("raw: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM actions WHERE action_id = 'act_inbox1'`); err != nil {
+		t.Fatalf("prune-style delete: %v", err)
+	}
+	if _, err := db.Exec(`ALTER TABLE approval_tombstones RENAME TO tombstones_gone`); err != nil {
+		t.Fatalf("sabotage: %v", err)
+	}
+	_ = db.Close()
+	code, stdout, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
+	out := stdout + stderr
+	if code != 1 || !strings.Contains(out, "tombstone_read_failed") {
+		t.Fatalf("AUDIT R7-Y3: a tombstone read error must FAIL by name, never masquerade as history: %d %q", code, out)
+	}
+}

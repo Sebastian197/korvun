@@ -189,7 +189,12 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 				// which law — re-deriving the sealed digest. A
 				// sabotaged tombstone is a FAIL; a missing one (pre-v10
 				// history, declared) degrades to the bare note.
-				tomb, terr := store.ApprovalTombstone(ctx, r.ActionID)
+				// R7-Y2: the natural lookup is the APPROVAL's own
+				// sealed identity — each receipt reconstructs ITS story
+				// even when an action_id was reused after the prune.
+				// R7-Y3: only ErrNotFound degrades to the pre-tombstone
+				// note; any other read error FAILS by name.
+				tomb, terr := store.ApprovalTombstoneByDigest(ctx, r.ApprovalDigest)
 				switch {
 				case terr == nil && tomb.Digest() == r.ApprovalDigest:
 					notes = append(notes, fmt.Sprintf(
@@ -198,9 +203,11 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 						tomb.DecisionAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 						tomb.PolicyVersion, tomb.PolicyDigest, tomb.PreviewDigest))
 				case terr == nil:
-					fail("approval_mismatch", "the tombstone of %s re-derives %s but the receipt seals %s — the preimage was tampered", r.ActionID, tomb.Digest(), r.ApprovalDigest)
+					fail("approval_mismatch", "the tombstone found for %s re-derives %s but the receipt seals %s — the preimage was tampered", r.ActionID, tomb.Digest(), r.ApprovalDigest)
+				case errors.Is(terr, actionsqlite.ErrNotFound):
+					notes = append(notes, "approval_row_absent: approval of "+r.ActionID+" is gone with its action and no tombstone exists (pre-tombstone history, declared; the digest-sealed receipt is the surviving evidence)")
 				default:
-					notes = append(notes, "approval_row_absent: approval of "+r.ActionID+" is gone with its action and no tombstone exists (pre-v10 history, declared; the digest-sealed receipt is the surviving evidence)")
+					fail("tombstone_read_failed", "cannot read the tombstone evidence for %s: %v — never disguised as old history", r.ActionID, terr)
 				}
 				break
 			}
