@@ -39,9 +39,12 @@ func TestMigrationV11_emptyDecisionAtIsEmptyEvidenceNotAbsence(t *testing.T) {
 	if err == nil {
 		t.Fatal("AUDIT R10-V1: empty bytes are empty EVIDENCE — the migration must fail closed, '' is not NULL")
 	}
+	// The EXACT class name: empty is not unreadable — a '' that fell
+	// through to the parse would fail as "unreadable", hiding the
+	// taxonomy (the probing mutation of the '' branch exposed this).
 	if !strings.Contains(err.Error(), "apr_v10seed0000000000000000000000001") ||
-		!strings.Contains(err.Error(), "decision_at") {
-		t.Fatalf("the failure must name row and field: %v", err)
+		!strings.Contains(err.Error(), "empty decision_at") {
+		t.Fatalf("the failure must name row and the EXACT class (empty, not unreadable): %v", err)
 	}
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 10 {
 		t.Fatalf("clean rollback to v10, got %d", v)
