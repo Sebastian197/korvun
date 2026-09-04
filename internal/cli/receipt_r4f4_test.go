@@ -57,8 +57,8 @@ func TestReceiptVerify_retentionIsANoteSabotageIsAFail(t *testing.T) {
 		t.Fatalf("AUDIT R4-F4: retention is NOT a failure — the sealed receipt is the evidence: %d %q", code, out)
 	}
 	// R6-X2 raised the bar: with the tombstone present the verifier
-	// RECONSTRUCTS and proves; the bare note remains only for pre-v10
-	// history (no tombstone) — exercised by deleting it.
+	// RECONSTRUCTS and proves; without one, the honest AMBIGUOUS note
+	// remains (R11) — exercised by deleting it.
 	if !strings.Contains(out, "approval_evidence_reconstructed") {
 		t.Fatalf("the reconstruction must prove the history: %q", out)
 	}
@@ -73,7 +73,7 @@ func TestReceiptVerify_retentionIsANoteSabotageIsAFail(t *testing.T) {
 	code, stdout, stderr = runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
 	out = stdout + stderr
 	if code != 0 || !strings.Contains(out, "approval_row_absent") {
-		t.Fatalf("without a tombstone (pre-v10 history) the honest degraded note remains: %d %q", code, out)
+		t.Fatalf("without a tombstone the honest ambiguous note remains: %d %q", code, out)
 	}
 
 	// SABOTAGE: the action remains, the approval alone vanishes — FAIL.

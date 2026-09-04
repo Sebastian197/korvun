@@ -187,43 +187,32 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 				// R6-X2: reconstruct and PROVE the history from the
 				// tombstone preimage — who decided what, when, under
 				// which law — re-deriving the sealed digest. A
-				// sabotaged tombstone is a FAIL; a missing one (pre-v10
-				// history, declared) degrades to the bare note.
+				// sabotaged tombstone is a FAIL; a missing one degrades
+				// to the ambiguous note below (R11: absence proves
+				// nothing — legacy history, deletion, or a coherent
+				// rewrite are indistinguishable to this verifier).
 				// R7-Y2: the natural lookup is the APPROVAL's own
 				// sealed identity — each receipt reconstructs ITS story
 				// even when an action_id was reused after the prune.
-				// R7-Y3: only ErrNotFound degrades to the pre-tombstone
+				// R7-Y3: only ErrNotFound degrades to the ambiguous
 				// note; any other read error FAILS by name.
-				tomb, terr := store.ApprovalTombstoneByDigest(ctx, r.ApprovalDigest)
+				tomb, tombAtPresent, terr := store.ApprovalTombstoneByDigest(ctx, r.ApprovalDigest)
 				switch {
 				case terr == nil && tomb.Digest() == r.ApprovalDigest && tomb.ActionID != r.ActionID:
 					// R8-Z2 binding: the preimage proves the digest but
 					// points at ANOTHER action — a mutated tombstone.
 					fail("tombstone_action_mismatch", "the tombstone for the sealed digest points at %s but the receipt belongs to %s — the evidence was re-pointed", tomb.ActionID, r.ActionID)
 				case terr == nil && tomb.Digest() == r.ApprovalDigest:
-					notes = append(notes, fmt.Sprintf(
-						"approval_evidence_reconstructed: decision=%s by=%s at=%s law=v%d %s preview=%s (digest re-derived from the tombstone and matches the seal)",
-						tomb.Decision, tomb.DecisionPrincipalID,
-						tomb.DecisionAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
-						tomb.PolicyVersion, tomb.PolicyDigest, tomb.PreviewDigest))
+					notes = append(notes, reconstructionNote(tomb, tombAtPresent))
 				case terr == nil:
 					fail("approval_mismatch", "the tombstone found for %s re-derives %s but the receipt seals %s — the preimage was tampered", r.ActionID, tomb.Digest(), r.ApprovalDigest)
 				case errors.Is(terr, actionsqlite.ErrNotFound):
-					// R10-V2: before degrading to the pre-v10 note, ask
-					// whether a tombstone of this action carries a STORED
-					// digest that does not re-derive from its own preimage
-					// — corruption never masquerades as absence. Honest
-					// absence (no rows, or coherent rows of another life)
-					// keeps the note.
-					corrupt, ierr := store.TombstoneIntegrityByAction(ctx, r.ActionID)
-					switch {
-					case ierr != nil:
-						fail("tombstone_read_failed", "cannot judge the tombstone integrity for %s: %v — never disguised as old history", r.ActionID, ierr)
-					case corrupt:
-						fail("tombstone_corrupt", "a tombstone of %s carries a stored digest that does not re-derive from its own preimage — the stored evidence was tampered, never pre-tombstone history", r.ActionID)
-					default:
-						notes = append(notes, "approval_row_absent: approval of "+r.ActionID+" is gone with its action and no tombstone exists (pre-tombstone history, declared; the digest-sealed receipt is the surviving evidence)")
-					}
+					// R11: the by-action integrity arm DIED with its false
+					// positive and its false negative (direction decision;
+					// SECURITY.md documents the v2-era limits until sealed
+					// provenance). Absence gets the epistemological truth,
+					// verbatim — never a certainty this verifier cannot have.
+					notes = append(notes, "approval_row_absent: no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable (the digest-sealed receipt is the surviving evidence)")
 				default:
 					fail("tombstone_read_failed", "cannot read the tombstone evidence for %s: %v — never disguised as old history", r.ActionID, terr)
 				}
@@ -259,6 +248,21 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 			r.ActionDigest, rec.Envelope.ParametersDigest)
 	}
 	return failures, notes
+}
+
+// reconstructionNote narrates the tombstone's proven story. An absent
+// decision instant is said BY NAME — never printed as the year-0001
+// zero value, and never asserted as certainty: a NULL is compatible
+// with legacy history, and a coherent rewrite is indistinguishable.
+func reconstructionNote(tomb action.Approval, decisionAtPresent bool) string {
+	at := tomb.DecisionAt.UTC().Format("2006-01-02T15:04:05Z07:00")
+	if !decisionAtPresent {
+		at = "decision_at_absent (compatible with legacy history; a coherent rewrite is indistinguishable)"
+	}
+	return fmt.Sprintf(
+		"approval_evidence_reconstructed: decision=%s by=%s at=%s law=v%d %s preview=%s (digest re-derived from the tombstone and matches the seal)",
+		tomb.Decision, tomb.DecisionPrincipalID, at,
+		tomb.PolicyVersion, tomb.PolicyDigest, tomb.PreviewDigest)
 }
 
 // lastReceiptOutcome reports whether r is the LAST receipt of its

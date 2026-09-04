@@ -1,11 +1,15 @@
 // Copyright 2026 Sebastián Moreno Saavedra
 // SPDX-License-Identifier: Apache-2.0
 
-// R10-V2(ii) (ninth Codex pass, P1): a tombstone whose STORED digest
-// was mutated must be a NAMED verify failure (tombstone_corrupt) —
-// never the approval_row_absent note, which is reserved for honest
-// pre-v10 history. Corruption never masquerades as absence, on the
-// verifier's arm too. Reproduction-first contract.
+// R10-V2(ii) HISTORY, R11 SUBSTITUTION (direction decision, recorded):
+// the by-action integrity arm died in R11 — three design vetoes proved
+// it unrepairable without sealed provenance (its false positive
+// condemned healthy receipts across reused action_ids; its false
+// negative missed digests mutated into unattributability). A mutated
+// stored digest is now INDISTINGUISHABLE from absence, and the
+// verifier says exactly that — the ambiguous note, verbatim. The
+// v2-era limit lives in SECURITY.md until the v3 sealed-provenance
+// era. This pin holds the substituted truth.
 
 package cli
 
@@ -15,7 +19,7 @@ import (
 	"testing"
 )
 
-func TestReceiptVerify_mutatedStoredTombstoneDigestFailsNamed(t *testing.T) {
+func TestReceiptVerify_mutatedStoredTombstoneDigestIsAmbiguousAbsence(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath, approvalID := parkedRequest(t)
 	receiptID := approvedReceiptID(t, cfgPath, dbPath, approvalID)
@@ -33,10 +37,8 @@ func TestReceiptVerify_mutatedStoredTombstoneDigestFailsNamed(t *testing.T) {
 	_ = db.Close()
 	code, stdout, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
 	out := stdout + stderr
-	if code != 1 || !strings.Contains(out, "tombstone_corrupt") {
-		t.Fatalf("AUDIT R10-V2: a mutated stored digest must FAIL by name: %d %q", code, out)
-	}
-	if strings.Contains(out, "approval_row_absent") {
-		t.Fatalf("corruption must never masquerade as pre-v10 absence: %q", out)
+	if code != 0 || !strings.Contains(out,
+		"no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable") {
+		t.Fatalf("R11 SUBSTITUTED PIN: unattributable corruption is honestly ambiguous absence (SECURITY.md v2-era limit): %d %q", code, out)
 	}
 }
