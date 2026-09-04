@@ -41,7 +41,7 @@ func TestDecidedCloses_writeTheTombstonePreimage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
-		got, err := store.ApprovalTombstone(ctx, tc.actionID)
+		got, _, err := store.ApprovalTombstone(ctx, tc.actionID)
 		if err != nil {
 			t.Fatalf("AUDIT R6-X2: %s must have its tombstone: %v", tc.actionID, err)
 		}
@@ -59,7 +59,7 @@ func TestDecidedCloses_writeTheTombstonePreimage(t *testing.T) {
 	expiredParked(t, store, "act_x2_pen_probe")
 	corruptCell(t, store, "approvals", "expires_at", "approval_id",
 		mustApprovalID(t, store, "act_x2_pen_probe"), time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano))
-	if _, err := store.ApprovalTombstone(ctx, "act_x2_pen_probe"); err == nil {
+	if _, _, err := store.ApprovalTombstone(ctx, "act_x2_pen_probe"); err == nil {
 		t.Fatal("a pending approval has no tombstone")
 	}
 }

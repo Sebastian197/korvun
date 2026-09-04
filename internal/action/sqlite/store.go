@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 11
+const schemaVersionCurrent = 12
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -362,6 +362,12 @@ CREATE TABLE approval_tombstones_v11 (
     decision              TEXT    NOT NULL,
     decision_at           TEXT
 ) WITHOUT ROWID;`,
+	// v11→v12 (R11): a RE-VALIDATION migration — no DDL, no writes.
+	// The legacy-v11 window (rows that entered before the R9/R10
+	// walls) is re-judged by the one typed contract in
+	// revalidateTombstonesV11toV12; the step below is a no-op so the
+	// hybrid runner keeps its one-transaction shape.
+	11: `SELECT 1;`,
 }
 
 // migrationsPost holds the destructive tail of a hybrid step (R8-Z1):
@@ -408,6 +414,98 @@ func migrate(db *sql.DB) error {
 // A migration NEVER destroys evidence: it copies or it fails closed.
 var migrationCopies = map[int]func(*sql.Tx) error{
 	10: copyTombstonesV10toV11,
+	11: revalidateTombstonesV11toV12,
+}
+
+// TombstoneFault names one unreadable or incoherent tombstone row —
+// the typed shape the operational contract fails with, carrying the
+// row and field a human needs to adjudicate.
+type TombstoneFault struct {
+	ApprovalID string
+	Field      string
+	Cause      error
+}
+
+// Error names the fault class and its coordinates.
+func (f *TombstoneFault) Error() string {
+	msg := fmt.Sprintf("tombstone_corrupt: tombstone %q: %s", f.ApprovalID, f.Field)
+	if f.Cause != nil {
+		msg += ": " + f.Cause.Error()
+	}
+	return msg + " — corrupt evidence demands human adjudication; see docs/operations/tombstone-manual-repair.md"
+}
+
+// Unwrap exposes the cause.
+func (f *TombstoneFault) Unwrap() error { return f.Cause }
+
+// validateStoredTombstone is the ONE operational contract over a
+// stored tombstone row (R11): the seven mandatory columns non-empty;
+// decision_at NULL allowed, ” and unreadable bytes rejected; the
+// stored digest re-derived from its own preimage. Migration and
+// readers all delegate here — nobody re-implements the judgment.
+func validateStoredTombstone(storedDigest string, a action.Approval, storedAt sql.NullString) *TombstoneFault {
+	for _, f := range []struct{ field, value string }{
+		{"approval_id", a.ApprovalID},
+		{"action_id", a.ActionID},
+		{"action_digest", a.ActionDigest},
+		{"preview_digest", a.PreviewDigest},
+		{"policy_digest", a.PolicyDigest},
+		{"decision_principal_id", a.DecisionPrincipalID},
+		{"decision", a.Decision},
+	} {
+		if f.value == "" {
+			return &TombstoneFault{ApprovalID: a.ApprovalID, Field: "empty " + f.field}
+		}
+	}
+	if storedAt.Valid {
+		if storedAt.String == "" {
+			return &TombstoneFault{ApprovalID: a.ApprovalID, Field: "empty decision_at (present-but-empty bytes are empty evidence, not absence)"}
+		}
+		t, err := time.Parse(time.RFC3339Nano, storedAt.String)
+		if err != nil {
+			return &TombstoneFault{ApprovalID: a.ApprovalID, Field: fmt.Sprintf("unreadable decision_at %q", storedAt.String), Cause: err}
+		}
+		a.DecisionAt = t
+	}
+	if a.Digest() != storedDigest {
+		return &TombstoneFault{ApprovalID: a.ApprovalID, Field: fmt.Sprintf("approval_digest %q does not re-derive from the stored preimage (%s)", storedDigest, a.Digest())}
+	}
+	return nil
+}
+
+// revalidateTombstonesV11toV12 is the R11 re-validation migration:
+// the legacy-v11 window may hold rows that entered before the walls,
+// so EVERY row is re-judged by the contract — streaming, deterministic
+// order, all rows before the bump, one transaction, ZERO writes, no
+// normalization ever. Its guarantee is per-snapshot: the migration
+// established the invariant in ITS snapshot; any later audit must
+// re-establish it in its own.
+func revalidateTombstonesV11toV12(tx *sql.Tx) error {
+	rows, err := tx.Query(`SELECT approval_digest, approval_id, action_id, action_digest,
+	        preview_digest, policy_version, policy_digest, decision_principal_id,
+	        decision, decision_at
+	   FROM approval_tombstones ORDER BY approval_id`)
+	if err != nil {
+		return fmt.Errorf("action/sqlite: v12 revalidation read: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var a action.Approval
+		var storedDigest string
+		var storedAt sql.NullString
+		if err := rows.Scan(&storedDigest, &a.ApprovalID, &a.ActionID, &a.ActionDigest,
+			&a.PreviewDigest, &a.PolicyVersion, &a.PolicyDigest,
+			&a.DecisionPrincipalID, &a.Decision, &storedAt); err != nil {
+			return fmt.Errorf("action/sqlite: v12 revalidation scan: %w", err)
+		}
+		if fault := validateStoredTombstone(storedDigest, a, storedAt); fault != nil {
+			return fmt.Errorf("action/sqlite: v12 revalidation: %w", fault)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("action/sqlite: v12 revalidation rows: %w", err)
+	}
+	return nil
 }
 
 // copyTombstonesV10toV11 reads every v10 tombstone (still present in
@@ -475,36 +573,20 @@ func copyTombstonesV10toV11(tx *sql.Tx) error {
 	return nil
 }
 
-// validateV10Tombstone is the R9-W1 wall: a v10 row must be READABLE
-// before it migrates. An empty evidence column or a decision_at whose
-// bytes do not parse fail CLOSED naming row and field — the whole
-// migration aborts, v10 stays intact, and a human adjudicates.
-// NULL/empty decision_at is honest absence and passes (corrupt ≠
-// absent, the Y3 line).
+// validateV10Tombstone is the R9-W1 wall for the v10→v11 copy — it
+// delegates to the ONE contract, minus the digest contrast (v10
+// stores no digest column; the copy computes it). NULL decision_at is
+// honest absence and passes (corrupt != absent, the Y3 line).
 func validateV10Tombstone(a action.Approval, decisionAt sql.NullString) error {
-	for _, f := range []struct{ field, value string }{
-		{"approval_id", a.ApprovalID},
-		{"action_id", a.ActionID},
-		{"action_digest", a.ActionDigest},
-		{"preview_digest", a.PreviewDigest},
-		{"policy_digest", a.PolicyDigest},
-		{"decision_principal_id", a.DecisionPrincipalID},
-		{"decision", a.Decision},
-	} {
-		if f.value == "" {
-			return fmt.Errorf("action/sqlite: v11 copy: tombstone %q: empty %s — corrupt evidence demands human adjudication, the migration will not guess", a.ApprovalID, f.field)
+	probe := a
+	probe.DecisionAt = time.Time{}
+	if decisionAt.Valid && decisionAt.String != "" {
+		if t, err := time.Parse(time.RFC3339Nano, decisionAt.String); err == nil {
+			probe.DecisionAt = t
 		}
 	}
-	if decisionAt.Valid {
-		// R10-V1: '' is present-but-EMPTY bytes — empty evidence, the
-		// same wall as the empty columns above. Only NULL (the writer
-		// declared absence) is honest absence.
-		if decisionAt.String == "" {
-			return fmt.Errorf("action/sqlite: v11 copy: tombstone %q: empty decision_at — present-but-empty bytes are empty evidence, not absence; corrupt evidence demands human adjudication", a.ApprovalID)
-		}
-		if _, err := time.Parse(time.RFC3339Nano, decisionAt.String); err != nil {
-			return fmt.Errorf("action/sqlite: v11 copy: tombstone %q: unreadable decision_at %q — corrupt evidence demands human adjudication, never a silent zero-time: %w", a.ApprovalID, decisionAt.String, err)
-		}
+	if fault := validateStoredTombstone(probe.Digest(), probe, decisionAt); fault != nil {
+		return fmt.Errorf("action/sqlite: v11 copy: %w", fault)
 	}
 	return nil
 }

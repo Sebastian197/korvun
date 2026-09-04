@@ -50,7 +50,7 @@ func TestTombstone_reusedActionIDNeverOverwritesHistory(t *testing.T) {
 	}
 	// And each reconstructs by ITS digest.
 	for _, digest := range []string{firstDigest, secondDigest} {
-		tomb, err := store.ApprovalTombstoneByDigest(ctx, digest)
+		tomb, _, err := store.ApprovalTombstoneByDigest(ctx, digest)
 		if err != nil {
 			t.Fatalf("reconstruct %s: %v", digest, err)
 		}
@@ -70,7 +70,7 @@ func TestTombstone_conflictRefusesIdenticalIsIdempotent(t *testing.T) {
 		a.RequestedAt.Add(time.Second), env, ident, ""); err != nil {
 		t.Fatalf("reject: %v", err)
 	}
-	tomb, err := store.ApprovalTombstone(ctx, "act_y2_conf")
+	tomb, _, err := store.ApprovalTombstone(ctx, "act_y2_conf")
 	if err != nil {
 		t.Fatalf("tombstone: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestTombstone_lyingRowSameDigestForeignActionConflicts(t *testing.T) {
 		a.RequestedAt.Add(time.Second), env, ident, ""); err != nil {
 		t.Fatalf("reject: %v", err)
 	}
-	tomb, err := store.ApprovalTombstone(ctx, "act_z2_lie")
+	tomb, _, err := store.ApprovalTombstone(ctx, "act_z2_lie")
 	if err != nil {
 		t.Fatalf("tombstone: %v", err)
 	}

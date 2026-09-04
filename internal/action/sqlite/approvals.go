@@ -452,96 +452,61 @@ func (s *Store) tombstoneStoredRowTx(ctx context.Context, tx *sql.Tx, approvalID
 	return storedDigest, a, storedAt, nil
 }
 
-// TombstoneIntegrityByAction reports whether any tombstone of the
-// action carries a STORED approval_digest that does not re-derive
-// from its own preimage (R10-V2): the verifier's line between honest
-// pre-v10 absence and a corrupted stored column. ErrNotFound never
-// escapes here — no rows simply reports no corruption.
-func (s *Store) TombstoneIntegrityByAction(ctx context.Context, actionID string) (bool, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
-		        policy_version, policy_digest, decision_principal_id, decision, decision_at
-		   FROM approval_tombstones WHERE action_id = ?`, actionID)
-	if err != nil {
-		return false, fmt.Errorf("action/sqlite: tombstone integrity for %q: %w", actionID, err)
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var a action.Approval
-		var storedDigest string
-		var storedAt sql.NullString
-		if err := rows.Scan(&storedDigest, &a.ApprovalID, &a.ActionID, &a.ActionDigest,
-			&a.PreviewDigest, &a.PolicyVersion, &a.PolicyDigest,
-			&a.DecisionPrincipalID, &a.Decision, &storedAt); err != nil {
-			return false, fmt.Errorf("action/sqlite: tombstone integrity scan for %q: %w", actionID, err)
-		}
-		if storedAt.Valid {
-			t, perr := parseNullTime(storedAt)
-			if perr != nil {
-				// Unreadable stored bytes ARE corruption here.
-				return true, nil
-			}
-			a.DecisionAt = t
-		}
-		if a.Digest() != storedDigest {
-			return true, nil
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return false, fmt.Errorf("action/sqlite: tombstone integrity rows for %q: %w", actionID, err)
-	}
-	return false, nil
-}
-
 // scanTombstone scans one tombstone row into its preimage.
-func scanTombstone(row *sql.Row) (action.Approval, error) {
+func scanTombstone(row *sql.Row) (action.Approval, bool, error) {
 	var a action.Approval
 	var decisionAt sql.NullString
 	err := row.Scan(&a.ApprovalID, &a.ActionID, &a.ActionDigest, &a.PreviewDigest,
 		&a.PolicyVersion, &a.PolicyDigest, &a.DecisionPrincipalID,
 		&a.Decision, &decisionAt)
 	if err != nil {
-		return action.Approval{}, err
+		return action.Approval{}, false, err
 	}
-	if t, err := parseNullTime(decisionAt); err == nil {
-		a.DecisionAt = t
+	present := decisionAt.Valid && decisionAt.String != ""
+	t, err := parseNullTime(decisionAt)
+	if err != nil {
+		// R11-R5: unreadable stored bytes read back are CORRUPTION —
+		// the reader never swallows them into a silent zero time.
+		return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID,
+			Field: fmt.Sprintf("unreadable decision_at %q", decisionAt.String), Cause: err}
 	}
-	return a, nil
+	a.DecisionAt = t
+	return a, present, nil
 }
 
 // ApprovalTombstone reconstructs the decided approval's digest
 // preimage for one action (R6-X2; with reuse, the LATEST decision).
 // ErrNotFound when no decided close ever wrote one.
-func (s *Store) ApprovalTombstone(ctx context.Context, actionID string) (action.Approval, error) {
-	a, err := scanTombstone(s.db.QueryRowContext(ctx,
+func (s *Store) ApprovalTombstone(ctx context.Context, actionID string) (action.Approval, bool, error) {
+	a, present, err := scanTombstone(s.db.QueryRowContext(ctx,
 		`SELECT approval_id, action_id, action_digest, preview_digest, policy_version,
 		        policy_digest, decision_principal_id, decision, decision_at
 		   FROM approval_tombstones WHERE action_id = ?
 		   ORDER BY decision_at DESC LIMIT 1`, actionID))
 	if errors.Is(err, sql.ErrNoRows) {
-		return action.Approval{}, fmt.Errorf("action/sqlite: tombstone of %q: %w", actionID, ErrNotFound)
+		return action.Approval{}, false, fmt.Errorf("action/sqlite: tombstone of %q: %w", actionID, ErrNotFound)
 	}
 	if err != nil {
-		return action.Approval{}, fmt.Errorf("action/sqlite: tombstone of %q: %w", actionID, err)
+		return action.Approval{}, false, fmt.Errorf("action/sqlite: tombstone of %q: %w", actionID, err)
 	}
-	return a, nil
+	return a, present, nil
 }
 
 // ApprovalTombstoneByDigest reconstructs by the APPROVAL's own sealed
 // identity (R7-Y2) — the verifier's natural lookup: each receipt
 // reconstructs ITS story even when an action_id was reused.
-func (s *Store) ApprovalTombstoneByDigest(ctx context.Context, digest string) (action.Approval, error) {
-	a, err := scanTombstone(s.db.QueryRowContext(ctx,
+func (s *Store) ApprovalTombstoneByDigest(ctx context.Context, digest string) (action.Approval, bool, error) {
+	a, present, err := scanTombstone(s.db.QueryRowContext(ctx,
 		`SELECT approval_id, action_id, action_digest, preview_digest, policy_version,
 		        policy_digest, decision_principal_id, decision, decision_at
 		   FROM approval_tombstones WHERE approval_digest = ?`, digest))
 	if errors.Is(err, sql.ErrNoRows) {
-		return action.Approval{}, fmt.Errorf("action/sqlite: tombstone with digest %q: %w", digest, ErrNotFound)
+		return action.Approval{}, false, fmt.Errorf("action/sqlite: tombstone with digest %q: %w", digest, ErrNotFound)
 	}
 	if err != nil {
-		return action.Approval{}, fmt.Errorf("action/sqlite: tombstone with digest %q: %w", digest, err)
+		return action.Approval{}, false, fmt.Errorf("action/sqlite: tombstone with digest %q: %w", digest, err)
 	}
-	return a, nil
+	return a, present, nil
 }
 
 // SweepExpiredApprovals closes every PENDING approval whose window is

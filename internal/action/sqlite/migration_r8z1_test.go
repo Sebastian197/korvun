@@ -108,7 +108,7 @@ func TestMigrationV11_copiesEveryTombstoneComputingTheDigest(t *testing.T) {
 	ctx := context.Background()
 	// ZERO rows lost: the seeded evidence reconstructs BY ITS DIGEST.
 	want := seed.Digest()
-	tomb, err := store.ApprovalTombstoneByDigest(ctx, want)
+	tomb, _, err := store.ApprovalTombstoneByDigest(ctx, want)
 	if err != nil {
 		t.Fatalf("AUDIT R8-Z1: the migration must COPY, never destroy: %v", err)
 	}

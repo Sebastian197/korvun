@@ -129,7 +129,7 @@ func TestMigrationV11_nullDecisionAtIsHonestAbsenceAndMigrates(t *testing.T) {
 		t.Fatalf("absence is not corruption — the migration must pass: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	tomb, err := store.ApprovalTombstone(context.Background(), "act_zz_null")
+	tomb, _, err := store.ApprovalTombstone(context.Background(), "act_zz_null")
 	if err != nil {
 		t.Fatalf("the absent-date tombstone must land in v11: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestMigrationV11_repairThenRetryConverges(t *testing.T) {
 	if n := inspect(t, path, `SELECT COUNT(*) FROM approval_tombstones`); n != 2 {
 		t.Fatalf("both rows land on retry: %d", n)
 	}
-	if _, err := store.ApprovalTombstoneByDigest(context.Background(), seed.Digest()); err != nil {
+	if _, _, err := store.ApprovalTombstoneByDigest(context.Background(), seed.Digest()); err != nil {
 		t.Fatalf("the good seed reconstructs by its digest after convergence: %v", err)
 	}
 }
