@@ -159,8 +159,11 @@ func TestMigrationV12_contractFailsClosedNamingRowAndField(t *testing.T) {
 			row[f.idx] = ""
 			path := buildV11LegacyFile(t, row)
 			_, err := Open(path)
-			if err == nil || !strings.Contains(err.Error(), f.name) {
-				t.Fatalf("AUDIT R11-R2: empty %s must fail v12 naming the field: %v", f.name, err)
+			// The EXACT class: "empty <field>" — a substring of the
+			// approval_id or a fall-through to another class must not
+			// satisfy this assert (the m1 mutations exposed both).
+			if err == nil || !strings.Contains(err.Error(), "empty "+f.name) {
+				t.Fatalf("AUDIT R11-R2: empty %s must fail v12 naming the EXACT class: %v", f.name, err)
 			}
 			if v := inspect(t, path, `SELECT version FROM action_schema`); v != 11 {
 				t.Fatalf("v11 stands: %d", v)
@@ -185,8 +188,9 @@ func TestMigrationV12_contractFailsClosedNamingRowAndField(t *testing.T) {
 		path := buildV11LegacyFile(t,
 			legacyGoodRow("apr_r11_aaok00000000000000000001", "act_r11_aaok"), bad)
 		_, err := Open(path)
-		if err == nil || !strings.Contains(err.Error(), "apr_r11_zzbad0000000000000000001") {
-			t.Fatalf("the bad row fails the WHOLE migration by name: %v", err)
+		if err == nil || !strings.Contains(err.Error(), "apr_r11_zzbad0000000000000000001") ||
+			!strings.Contains(err.Error(), "empty decision_at") {
+			t.Fatalf("the bad row fails the WHOLE migration naming row and EXACT class: %v", err)
 		}
 		if v := inspect(t, path, `SELECT version FROM action_schema`); v != 11 {
 			t.Fatalf("v11 stands whole: %d", v)
@@ -221,9 +225,9 @@ func TestMigrationV12_emptyDecisionAtInLegacyV11IsBootFatal(t *testing.T) {
 	row[9] = ""
 	path := buildV11LegacyFile(t, row)
 	_, err := Open(path)
-	if err == nil || !strings.Contains(err.Error(), "decision_at") ||
+	if err == nil || !strings.Contains(err.Error(), "empty decision_at") ||
 		!strings.Contains(err.Error(), "apr_r11_empty0000000000000000001") {
-		t.Fatalf("REGLA 1: decision_at='' in legacy v11 must be the v12 boot-fatal: %v", err)
+		t.Fatalf("REGLA 1: decision_at='' in legacy v11 must be the v12 boot-fatal with the EXACT class: %v", err)
 	}
 }
 
