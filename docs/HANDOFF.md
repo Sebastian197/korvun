@@ -173,6 +173,30 @@ explicit decision.
 > registered: the internal self-audits were green AND insufficient
 > (doctrine: the self-exam PREPARES the gate, never replaces it).**
 >
+> **R9 (ninth-pass mandate on ec9aded: 1 P1 + 3 P2) — W1-W4 under the
+> law (pre-review approved, step 10). W1: the v10→v11 copy validates
+> every row BEFORE migrating — unreadable bytes (garbage decision_at,
+> empty evidence column) fail the migration CLOSED naming row and
+> field; NULL stays honest absence (corrupt ≠ absent, the Y3 line in
+> the migration too). The 921d4df comment that blessed the silent
+> zero-time normalization is REWRITTEN — it was a public-truth
+> violation once adjudicated. W2: tombstone idempotence compares the
+> stored PROJECTION (the ten persisted columns, both sides) — the
+> whole-struct equality was structurally false and drew a FALSE
+> conflict on identical legitimate re-inserts. W3: guard sites are
+> receiver-exact ("(T).fn" vs "fn") and NO declaration named
+> ResolveEffectiveCage is exempt from body scanning; the sharpened
+> detector revealed the true site (*builder).buildAgentBrain and the
+> allow-list now names it exactly. W4: the mid-copy crash mold is
+> REAL — the bad row fails after a good row already landed, v10 keeps
+> every byte, repair converges (production path via W1, no seams).
+> HONEST mold arithmetic (the eighth sang "22 crash-molds" from the
+> Migration|Crash filter): that run holds 10 interruption tests — 8
+> migration-interruption molds (V3, V4, V5, V6, V7, V9, generic, V11)
+> plus budget-crash plus recovery-crash; the other 12 are
+> non-interruption migration tests. The cited "22" was the filter's
+> total, never 22 interruption molds.**
+>
 > **CODEX GATE PASSED (2026-09-03, the director's sealed bar): the
 > EIGHTH pass on ec9aded returned 0 P1 / 0 P2 / 0 P3.** The full
 > history: pass 1 (E5, 5P1+1P2 → C1-C8), pass 2 (618ce1f→d2954b9,
@@ -187,9 +211,10 @@ explicit decision.
 > (ec9aded: CLEAN). Along the way the method became law: the
 > mandatory adversarial review (CLAUDE.md), the book of promises and
 > the interaction matrix (spec), the state discipline (here). The
-> Z1-weird observation (unparseable decision_at bytes kept verbatim,
-> preimage digest normalized STABLY to zero time) is annotated
-> behavior with its cosmetic line in the copy's comment. The v0.15
+> Z1-weird observation (unparseable decision_at bytes normalized to
+> zero time) was recorded here as annotated behavior — the NINTH pass
+> adjudicated it a P1 (corruption masquerading as absence) and R9-W1
+> above replaced it with the fail-closed wall. The v0.15
 > scenario UNPAUSES on ec9aded — agent.effect_ceiling is live, so
 > step A is pure production path.
 >
