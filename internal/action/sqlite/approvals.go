@@ -378,8 +378,8 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 		// structurally false for every real approval. Identity across
 		// every STORED column is a harmless no-op; any stored
 		// difference is the named conflict.
-		existing, gerr := s.approvalTombstoneRowTx(ctx, tx, a.ApprovalID)
-		if gerr == nil && tombstoneProjection(existing) == tombstoneProjection(sealed) {
+		storedDigest, existing, storedAt, gerr := s.tombstoneStoredRowTx(ctx, tx, a.ApprovalID)
+		if gerr == nil && projectStoredTombstone(storedDigest, existing, storedAt) == projectSealedTombstone(sealed, sealed.DecisionAt) {
 			return nil
 		}
 		return fmt.Errorf("action/sqlite: tombstone_conflict: approval %q already has an immutable tombstone with a different story — history is never rewritten", a.ApprovalID)
@@ -387,16 +387,25 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 	return fmt.Errorf("action/sqlite: tombstone for %q: %w", a.ActionID, err)
 }
 
-// tombstoneProjection is the R9-W2 comparison key: exactly what the
-// tombstone row STORES — the ten persisted columns — with the digest
-// re-derived from the preimage and the decision instant in one
-// canonical form on both sides. Fields the tombstone never persists
-// (Status, the request window, Reason...) do not exist here: comparing
-// them was comparing against zeroes, not against history.
-func tombstoneProjection(a action.Approval) [10]string {
+// The R9-W2/R10-V2 comparison keys: exactly what the tombstone row
+// STORES — the ten persisted columns. The existing side is read AS
+// STORED (the raw approval_digest column, the raw decision_at bytes
+// or NULL) and the sealed side is what the INSERT would store; a
+// recomputed digest on the existing side would let a mutated stored
+// column wave an identical re-insert through as a nil no-op, and
+// formatting a scanned time would make stored-NULL equal a zero-time
+// string. Fields the tombstone never persists (Status, the request
+// window, Reason...) do not exist here.
+const tombstoneNullToken = "<NULL>"
+
+func projectStoredTombstone(storedDigest string, a action.Approval, storedAt sql.NullString) [10]string {
+	at := tombstoneNullToken
+	if storedAt.Valid {
+		at = storedAt.String
+	}
 	return [10]string{
 		a.ApprovalID,
-		a.Digest(),
+		storedDigest,
 		a.ActionID,
 		a.ActionDigest,
 		a.PreviewDigest,
@@ -404,16 +413,84 @@ func tombstoneProjection(a action.Approval) [10]string {
 		a.PolicyDigest,
 		a.DecisionPrincipalID,
 		a.Decision,
-		a.DecisionAt.UTC().Format(time.RFC3339Nano),
+		at,
 	}
 }
 
-// approvalTombstoneRowTx reads one tombstone by approval id in-tx.
-func (s *Store) approvalTombstoneRowTx(ctx context.Context, tx *sql.Tx, approvalID string) (action.Approval, error) {
-	return scanTombstone(tx.QueryRowContext(ctx,
-		`SELECT approval_id, action_id, action_digest, preview_digest, policy_version,
-		        policy_digest, decision_principal_id, decision, decision_at
-		   FROM approval_tombstones WHERE approval_id = ?`, approvalID))
+func projectSealedTombstone(sealed action.Approval, at time.Time) [10]string {
+	return [10]string{
+		sealed.ApprovalID,
+		sealed.Digest(),
+		sealed.ActionID,
+		sealed.ActionDigest,
+		sealed.PreviewDigest,
+		strconv.FormatInt(sealed.PolicyVersion, 10),
+		sealed.PolicyDigest,
+		sealed.DecisionPrincipalID,
+		sealed.Decision,
+		at.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+// tombstoneStoredRowTx reads one tombstone by approval id in-tx AS
+// STORED (R10-V2): the raw approval_digest column and the raw
+// decision_at bytes ride out untouched, so the idempotence comparison
+// judges the stored story — never a recomputation of it.
+func (s *Store) tombstoneStoredRowTx(ctx context.Context, tx *sql.Tx, approvalID string) (string, action.Approval, sql.NullString, error) {
+	var a action.Approval
+	var storedDigest string
+	var storedAt sql.NullString
+	err := tx.QueryRowContext(ctx,
+		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
+		        policy_version, policy_digest, decision_principal_id, decision, decision_at
+		   FROM approval_tombstones WHERE approval_id = ?`, approvalID).
+		Scan(&storedDigest, &a.ApprovalID, &a.ActionID, &a.ActionDigest, &a.PreviewDigest,
+			&a.PolicyVersion, &a.PolicyDigest, &a.DecisionPrincipalID, &a.Decision, &storedAt)
+	if err != nil {
+		return "", action.Approval{}, sql.NullString{}, err
+	}
+	return storedDigest, a, storedAt, nil
+}
+
+// TombstoneIntegrityByAction reports whether any tombstone of the
+// action carries a STORED approval_digest that does not re-derive
+// from its own preimage (R10-V2): the verifier's line between honest
+// pre-v10 absence and a corrupted stored column. ErrNotFound never
+// escapes here — no rows simply reports no corruption.
+func (s *Store) TombstoneIntegrityByAction(ctx context.Context, actionID string) (bool, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
+		        policy_version, policy_digest, decision_principal_id, decision, decision_at
+		   FROM approval_tombstones WHERE action_id = ?`, actionID)
+	if err != nil {
+		return false, fmt.Errorf("action/sqlite: tombstone integrity for %q: %w", actionID, err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var a action.Approval
+		var storedDigest string
+		var storedAt sql.NullString
+		if err := rows.Scan(&storedDigest, &a.ApprovalID, &a.ActionID, &a.ActionDigest,
+			&a.PreviewDigest, &a.PolicyVersion, &a.PolicyDigest,
+			&a.DecisionPrincipalID, &a.Decision, &storedAt); err != nil {
+			return false, fmt.Errorf("action/sqlite: tombstone integrity scan for %q: %w", actionID, err)
+		}
+		if storedAt.Valid {
+			t, perr := parseNullTime(storedAt)
+			if perr != nil {
+				// Unreadable stored bytes ARE corruption here.
+				return true, nil
+			}
+			a.DecisionAt = t
+		}
+		if a.Digest() != storedDigest {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("action/sqlite: tombstone integrity rows for %q: %w", actionID, err)
+	}
+	return false, nil
 }
 
 // scanTombstone scans one tombstone row into its preimage.

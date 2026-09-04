@@ -209,7 +209,21 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 				case terr == nil:
 					fail("approval_mismatch", "the tombstone found for %s re-derives %s but the receipt seals %s — the preimage was tampered", r.ActionID, tomb.Digest(), r.ApprovalDigest)
 				case errors.Is(terr, actionsqlite.ErrNotFound):
-					notes = append(notes, "approval_row_absent: approval of "+r.ActionID+" is gone with its action and no tombstone exists (pre-tombstone history, declared; the digest-sealed receipt is the surviving evidence)")
+					// R10-V2: before degrading to the pre-v10 note, ask
+					// whether a tombstone of this action carries a STORED
+					// digest that does not re-derive from its own preimage
+					// — corruption never masquerades as absence. Honest
+					// absence (no rows, or coherent rows of another life)
+					// keeps the note.
+					corrupt, ierr := store.TombstoneIntegrityByAction(ctx, r.ActionID)
+					switch {
+					case ierr != nil:
+						fail("tombstone_read_failed", "cannot judge the tombstone integrity for %s: %v — never disguised as old history", r.ActionID, ierr)
+					case corrupt:
+						fail("tombstone_corrupt", "a tombstone of %s carries a stored digest that does not re-derive from its own preimage — the stored evidence was tampered, never pre-tombstone history", r.ActionID)
+					default:
+						notes = append(notes, "approval_row_absent: approval of "+r.ActionID+" is gone with its action and no tombstone exists (pre-tombstone history, declared; the digest-sealed receipt is the surviving evidence)")
+					}
 				default:
 					fail("tombstone_read_failed", "cannot read the tombstone evidence for %s: %v — never disguised as old history", r.ActionID, terr)
 				}
