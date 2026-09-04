@@ -413,11 +413,15 @@ var migrationCopies = map[int]func(*sql.Tx) error{
 // copyTombstonesV10toV11 reads every v10 tombstone (still present in
 // the transaction: the copy runs between the v11 CREATE and the v10
 // DROP encoded in the DDL split below) and inserts it into v11 with
-// its Approval.Digest() computed in Go — ZERO rows lost. A row whose
-// decision_at bytes do not parse keeps them verbatim in the column
-// while the preimage digest normalizes them to the zero time — a
-// STABLE normalization: reconstruction re-derives identically
-// (eighth-pass observed behavior, annotated).
+// its Approval.Digest() computed in Go — ZERO rows lost. Every row is
+// validated BEFORE it migrates (R9-W1): unreadable bytes — a
+// decision_at that does not parse, an empty evidence column — fail
+// the whole migration CLOSED naming row and field, because corrupt
+// evidence demands human adjudication, never a silent normalization.
+// A NULL decision_at is honest ABSENCE, not corruption, and migrates
+// with the zero-time preimage (the Y3 line: corrupt ≠ absent).
+// Semantic plausibility (e.g. policy_version 0) is NOT validated —
+// the wall guards readability, not meaning.
 func copyTombstonesV10toV11(tx *sql.Tx) error {
 	rows, err := tx.Query(`SELECT action_id, approval_id, action_digest, preview_digest,
 	        policy_version, policy_digest, decision_principal_id, decision, decision_at
@@ -444,7 +448,15 @@ func copyTombstonesV10toV11(tx *sql.Tx) error {
 		return fmt.Errorf("action/sqlite: v11 copy rows: %w", err)
 	}
 	for _, r := range all {
-		if t, err := parseNullTime(r.decisionAt); err == nil {
+		if err := validateV10Tombstone(r.a, r.decisionAt); err != nil {
+			return err
+		}
+		if r.decisionAt.Valid {
+			t, perr := parseNullTime(r.decisionAt)
+			if perr != nil {
+				// Unreachable after validateV10Tombstone; kept closed.
+				return perr
+			}
 			r.a.DecisionAt = t
 		}
 		if _, err := tx.Exec(`INSERT INTO approval_tombstones_v11
@@ -455,6 +467,34 @@ func copyTombstonesV10toV11(tx *sql.Tx) error {
 			r.a.PolicyVersion, r.a.PolicyDigest, r.a.DecisionPrincipalID, r.a.Decision,
 			nullOrString(r.decisionAt)); err != nil {
 			return fmt.Errorf("action/sqlite: v11 copy insert %q: %w", r.a.ApprovalID, err)
+		}
+	}
+	return nil
+}
+
+// validateV10Tombstone is the R9-W1 wall: a v10 row must be READABLE
+// before it migrates. An empty evidence column or a decision_at whose
+// bytes do not parse fail CLOSED naming row and field — the whole
+// migration aborts, v10 stays intact, and a human adjudicates.
+// NULL/empty decision_at is honest absence and passes (corrupt ≠
+// absent, the Y3 line).
+func validateV10Tombstone(a action.Approval, decisionAt sql.NullString) error {
+	for _, f := range []struct{ field, value string }{
+		{"approval_id", a.ApprovalID},
+		{"action_id", a.ActionID},
+		{"action_digest", a.ActionDigest},
+		{"preview_digest", a.PreviewDigest},
+		{"policy_digest", a.PolicyDigest},
+		{"decision_principal_id", a.DecisionPrincipalID},
+		{"decision", a.Decision},
+	} {
+		if f.value == "" {
+			return fmt.Errorf("action/sqlite: v11 copy: tombstone %q: empty %s — corrupt evidence demands human adjudication, the migration will not guess", a.ApprovalID, f.field)
+		}
+	}
+	if decisionAt.Valid && decisionAt.String != "" {
+		if _, err := time.Parse(time.RFC3339Nano, decisionAt.String); err != nil {
+			return fmt.Errorf("action/sqlite: v11 copy: tombstone %q: unreadable decision_at %q — corrupt evidence demands human adjudication, never a silent zero-time: %w", a.ApprovalID, decisionAt.String, err)
 		}
 	}
 	return nil
