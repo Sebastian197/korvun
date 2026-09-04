@@ -23,6 +23,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -369,17 +370,42 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 		return nil
 	}
 	if strings.Contains(err.Error(), "UNIQUE constraint failed") {
-		// R7-Y2/R8-Z2: history is immutable, and idempotence is
-		// WHOLE-ROW — the digest excludes ActionID, so only total
-		// identity across every stored column is a harmless no-op;
-		// any difference is the named conflict.
+		// R7-Y2/R8-Z2/R9-W2: history is immutable, and idempotence is
+		// judged over the stored PROJECTION — the ten persisted
+		// columns the tombstone IS, on BOTH sides. The full Approval
+		// carries fields the tombstone never persists (Status, the
+		// request window, Reason...), so whole-struct equality was
+		// structurally false for every real approval. Identity across
+		// every STORED column is a harmless no-op; any stored
+		// difference is the named conflict.
 		existing, gerr := s.approvalTombstoneRowTx(ctx, tx, a.ApprovalID)
-		if gerr == nil && existing == sealed {
+		if gerr == nil && tombstoneProjection(existing) == tombstoneProjection(sealed) {
 			return nil
 		}
 		return fmt.Errorf("action/sqlite: tombstone_conflict: approval %q already has an immutable tombstone with a different story — history is never rewritten", a.ApprovalID)
 	}
 	return fmt.Errorf("action/sqlite: tombstone for %q: %w", a.ActionID, err)
+}
+
+// tombstoneProjection is the R9-W2 comparison key: exactly what the
+// tombstone row STORES — the ten persisted columns — with the digest
+// re-derived from the preimage and the decision instant in one
+// canonical form on both sides. Fields the tombstone never persists
+// (Status, the request window, Reason...) do not exist here: comparing
+// them was comparing against zeroes, not against history.
+func tombstoneProjection(a action.Approval) [10]string {
+	return [10]string{
+		a.ApprovalID,
+		a.Digest(),
+		a.ActionID,
+		a.ActionDigest,
+		a.PreviewDigest,
+		strconv.FormatInt(a.PolicyVersion, 10),
+		a.PolicyDigest,
+		a.DecisionPrincipalID,
+		a.Decision,
+		a.DecisionAt.UTC().Format(time.RFC3339Nano),
+	}
 }
 
 // approvalTombstoneRowTx reads one tombstone by approval id in-tx.
