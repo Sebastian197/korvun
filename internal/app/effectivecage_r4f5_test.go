@@ -15,6 +15,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -158,10 +159,20 @@ func cageResolverRefs(filename string, src []byte) (map[string][]string, error) 
 	for _, d := range f.Decls {
 		switch decl := d.(type) {
 		case *ast.FuncDecl:
-			if decl.Body == nil || decl.Name.Name == "ResolveEffectiveCage" {
+			if decl.Body == nil {
 				continue
 			}
-			scan(decl.Name.Name, decl.Body)
+			// R9-W3: the site is EXACT — a method carries its receiver
+			// in the site name ("(T).fn"), so a briber method can never
+			// occupy a top-level function's authorization; and NO
+			// declaration is exempt by name: a homonymous wrapper's
+			// body is scanned like any other site (the real resolver's
+			// own body holds no self-reference, so it needs no pardon).
+			name := decl.Name.Name
+			if decl.Recv != nil && len(decl.Recv.List) > 0 {
+				name = "(" + types.ExprString(decl.Recv.List[0].Type) + ")." + name
+			}
+			scan(name, decl.Body)
 		case *ast.GenDecl:
 			scan("<package-level>", decl)
 		}
@@ -172,10 +183,13 @@ func cageResolverRefs(filename string, src []byte) (map[string][]string, error) 
 func TestCageResolutionGuard_wholeTreeBySite(t *testing.T) {
 	t.Parallel()
 	type site struct{ pkg, fn string }
+	// R9-W3: sites are receiver-exact — buildAgentBrain is truly the
+	// METHOD (*builder).buildAgentBrain, and the old name-only entry
+	// would have authorized any briber function of that name too.
 	allowed := map[site]bool{
-		{"internal/app", "buildAgentBrain"}:    true,
-		{"internal/app", "policyDigestFor"}:    true,
-		{"internal/app", "ResolveApprovalLaw"}: true,
+		{"internal/app", "(*builder).buildAgentBrain"}: true,
+		{"internal/app", "policyDigestFor"}:            true,
+		{"internal/app", "ResolveApprovalLaw"}:         true,
 	}
 	root := filepath.Join("..", "..")
 	var offenders []string
