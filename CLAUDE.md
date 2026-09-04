@@ -167,6 +167,30 @@ This review is MANDATORY for any surface carrying guarantees — internal/action
 ### Cosmetic surfaces
 Cosmetic changes (docs, comments, UI copy, version strings, public content) are EXEMPT from the attack matrix but NEVER from verification. They carry their own standing laws: (1) Letreros — every claim in ceremonies, posts, or notes derives from captured output, never from memory; (2) Verified landing — every edit is re-read on disk after applying; (3) Public surfaces — version numbers, dates, and release facts run the per-release checklist and the releaseFacts guard; (4) Tone — no comment, godoc, spec line, or doc may state a guarantee stronger than the code and its observed evidence, ANYWHERE in the tree, at ALL times. A cosmetic lie in this project is a public-truth violation, not a style issue.
 
+## Reinforced discipline — the three permanent rules (2026-09-04) — CRITICAL
+
+Born from the ninth external pass: the CLASSES of failure repeat, so the
+method gains three permanent rules that run with the adversarial-review law.
+
+RULE 1 — ACCEPTANCE CRITERION = THE AUDITOR'S REPRODUCTIONS, VERBATIM:
+a cure is accepted ONLY if the EXACT scenario from the report (its
+numbered steps, its UPDATEs, its mutations) ends in the outcome the
+mandate demands. Zero paraphrase.
+
+RULE 2 — KNOWN-CLASSES CHECKLIST (run against the diff BEFORE any canto,
+results declared): (a) any empty value treated as absent, or vice versa?
+(b) any comparison judging a RECOMPUTED value where a STORED one exists?
+(c) any swallowed error with silent degradation? (d) any test that would
+pass identically if the dangerous branch did not exist (probing
+mutation)? (e) any comment/doc promise wider than its wire? (f) any
+struct comparison against never-persisted fields? (g) any guard by
+name/text where it must be by site/type? (h) any documentary arithmetic
+not verified by execution? (i) any either/or in asserts hiding taxonomy?
+
+RULE 3 — THE TEST OF THE TEST: every new mold undergoes the probing
+mutation (invert/neutralize the branch it claims to watch) and MUST go
+red; the mutation and its red are declared in the canto.
+
 ## La ley de la verificación cruzada (2026-08-31) — CRITICAL
 
 Born from the 2026-08-31 external audit (three reproducible failures
