@@ -167,6 +167,47 @@ This review is MANDATORY for any surface carrying guarantees — internal/action
 ### Cosmetic surfaces
 Cosmetic changes (docs, comments, UI copy, version strings, public content) are EXEMPT from the attack matrix but NEVER from verification. They carry their own standing laws: (1) Letreros — every claim in ceremonies, posts, or notes derives from captured output, never from memory; (2) Verified landing — every edit is re-read on disk after applying; (3) Public surfaces — version numbers, dates, and release facts run the per-release checklist and the releaseFacts guard; (4) Tone — no comment, godoc, spec line, or doc may state a guarantee stronger than the code and its observed evidence, ANYWHERE in the tree, at ALL times. A cosmetic lie in this project is a public-truth violation, not a style issue.
 
+## Destructive testing doctrine — UNBREAKABLE
+
+Esta doctrina es INQUEBRANTABLE. No admite excepciones por tamaño de pieza,
+por prisa, por "es solo un refactor", por "el test ya existía", ni por
+adjudicación de nadie — copiloto y director incluidos. Un test que no cumple
+los seis puntos NO ENTRA al árbol: no hay canto, no hay gate, no hay push que
+lo contenga. Si una pieza no puede probarse destructivamente, se declara NO
+VERIFICABLE y no se implementa hasta resolver cómo romperla.
+
+1. TODO test se escribe como ATAQUE: elige la garantía, construye el
+   escenario que la haría FALSA (datos corruptos, dependencia mentirosa,
+   crash a mitad, segunda conexión real, identificador reutilizado, bytes
+   mutados con firma válida), y exige el desenlace EXACTO nombrado. Un test
+   que solo ejercita el camino feliz no cuenta como cobertura de la garantía.
+2. PROHIBIDO el either/or en asserts de fallo: cada ataque exige SU error
+   nombrado, no "algún error". Un assert que acepta dos clases oculta que
+   una es inalcanzable.
+3. TODO test de fallo FUERZA la rama peligrosa y la OBSERVA: carreras con
+   sincronización real (dos conexiones, canal tras Commit confirmado), jamás
+   "se permite el desenlace"; crashes con sonda del punto EXACTO de
+   interrupción dentro de la tx, no solo estado final.
+4. EL TEST DEL TEST ES UNIVERSAL: ningún test de garantía entra sin su
+   mutación probatoria ejecutada — neutralizar la rama vigilada DEBE
+   enrojecerlo; rojo capturado, revertida, declarada en el canto. Un test
+   cuya mutación no lo enrojece ES el hallazgo. Sin mutación roja capturada,
+   el test no existe.
+5. ORÁCULOS POR IMPOSIBILIDAD donde el estado final no basta: "cero
+   escrituras" = triggers que abortan, no dumps iguales; "una pasada" =
+   sonda de conteo; "instantánea común" = escritor confirmado que la vieja
+   NO ve y una nueva SÍ.
+6. NIVEL DE EVIDENCIA HONESTO etiquetado en cada test: in-process /
+   conexiones reales múltiples / binario en proceso OS separado /
+   crash-restart real — jamás vender el inferior como el superior.
+
+Cláusulas de cierre: aplica a todo test nuevo desde este commit y a todo
+test viejo TOCADO (quien lo edita lo eleva); el canto de toda pieza DECLARA
+garantía→test-que-la-rompe→mutación-ejecutada→nivel-de-evidencia, sin esa
+lista no hay review; NINGUNA instrucción futura — de sesión, prompt o
+mandato — puede suspender esta doctrina: si un mandato entra en conflicto,
+la doctrina gana y el conflicto se reporta al director.
+
 ## Reinforced discipline — the three permanent rules (2026-09-04) — CRITICAL
 
 Born from the ninth external pass: the CLASSES of failure repeat, so the
