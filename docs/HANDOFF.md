@@ -203,6 +203,26 @@ explicit decision.
 > the embedded v8 mold. Numbers as they come out of the run, or not
 > at all.**
 >
+> **R11 TRIMMED (2026-09-04, after THREE paper vetoes — the new cycle:
+> paper → veto → code → gate): the U2 redesign (WithVerificationSnapshot,
+> single-scan integrity, digest-first in approval/custody/last-receipt)
+> is FILED to v0.15.1 to be designed TOGETHER with sealed provenance
+> (receipt era v3: tombstone obligatory) — one piece, one design, the
+> eight points of the third veto as its entry spec, plus tests
+> R8-R13/T14/T15 of the v3 paper. What SHIPPED in R11: v12
+> re-validation of the legacy-v11 window (the one typed contract —
+> TombstoneFault — judges every row before the bump, zero writes
+> proven by abort triggers, no normalization ever, per-snapshot
+> wording); readers stop normalizing (unreadable stored dates
+> propagate as corruption); decision_at_absent narration (never year
+> 0001); the by-action integrity arm RETIRED (its false positive and
+> false negative died with it — the R10-V2ii pin substituted by the
+> ambiguous-absence pin, direction decision); the absence note tells
+> the epistemological truth verbatim; repair re-labeled "manual expert
+> procedure" (docs/operations/tombstone-manual-repair.md, six safety
+> points); SECURITY.md documents the two v2-era limits with their
+> threat model (both require direct SQL writes to disk).**
+>
 > **CODEX GATE PASSED (2026-09-03, the director's sealed bar): the
 > EIGHTH pass on ec9aded returned 0 P1 / 0 P2 / 0 P3.** The full
 > history: pass 1 (E5, 5P1+1P2 → C1-C8), pass 2 (618ce1f→d2954b9,

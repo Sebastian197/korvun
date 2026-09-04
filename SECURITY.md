@@ -143,6 +143,30 @@ detected and NAMED by the verifier. We deliberately avoid the words
 public materials; reports of public copy overstating these properties
 are welcome exactly like any other invariant violation.
 
+## Known limits of the receipt v2 era (until sealed provenance)
+
+Two verification limits are inherent to the v2 receipt era and are
+documented here deliberately — the verifier confesses them instead of
+overclaiming. Both require direct SQL writes to the store file on
+disk (an attacker with that access already owns the host's data);
+neither is reachable through Korvun's own surfaces.
+
+- **Reused action ids can shadow pruned lives.** A receipt whose
+  action row was legitimately pruned may report a mismatch against
+  the CURRENT life of a reused `action_id` (a conservative false
+  positive: the verifier refuses to guess which life a by-action row
+  belongs to).
+- **Unattributable corruption is indistinguishable from absence.** A
+  tombstone whose stored digest was mutated can no longer be matched
+  to the receipt that sealed the original digest; the verifier
+  reports the honest ambiguous note — "no tombstone with the sealed
+  digest exists; legacy history, deletion, or a coherent rewrite are
+  indistinguishable" — rather than claiming certainty it cannot have.
+
+The planned v3 receipt era (sealed provenance: each receipt declares
+its tombstone obligatory) removes the ambiguity for v3-sealed
+history; v2 receipts remain honestly ambiguous, by design.
+
 ## Supply chain
 
 Dependencies are minimized and each one is justified by an ADR.
