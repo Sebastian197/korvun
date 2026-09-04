@@ -190,12 +190,18 @@ explicit decision.
 > allow-list now names it exactly. W4: the mid-copy crash mold is
 > REAL — the bad row fails after a good row already landed, v10 keeps
 > every byte, repair converges (production path via W1, no seams).
-> HONEST mold arithmetic (the eighth sang "22 crash-molds" from the
-> Migration|Crash filter): that run holds 10 interruption tests — 8
-> migration-interruption molds (V3, V4, V5, V6, V7, V9, generic, V11)
-> plus budget-crash plus recovery-crash; the other 12 are
-> non-interruption migration tests. The cited "22" was the filter's
-> total, never 22 interruption molds.**
+> HONEST mold arithmetic, BY EXECUTION (R10-V4 corrected the R9
+> count, which was tallied from test NAMES of a narrow filter and
+> missed the v8 crash mold embedded inside
+> TestMigrationV8_receiptsGainTheApprovalSeal — no "crash" in the
+> test name): the wide filter run
+> (Migration|Crash|Interrupt|Zombie|Abort, 28 tests, all PASS)
+> plus source reading gives NINE migration-interruption molds —
+> generic v1→2, V3, V4, V5, V6, V7, V8 (embedded), V9, V11 — plus
+> budget-crash and recovery-crash. The eighth pass's "22" was a
+> filter total, never an interruption count; the ninth's "8" missed
+> the embedded v8 mold. Numbers as they come out of the run, or not
+> at all.**
 >
 > **CODEX GATE PASSED (2026-09-03, the director's sealed bar): the
 > EIGHTH pass on ec9aded returned 0 P1 / 0 P2 / 0 P3.** The full
