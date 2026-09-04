@@ -423,9 +423,12 @@ var migrationCopies = map[int]func(*sql.Tx) error{
 // Semantic plausibility (e.g. policy_version 0) is NOT validated —
 // the wall guards readability, not meaning.
 func copyTombstonesV10toV11(tx *sql.Tx) error {
+	// R10-V3: the read order is CONTRACTUAL — the mid-copy crash mold
+	// probes "first row in, second row fails", so the order it relies
+	// on is written here, never borrowed from a B-tree accident.
 	rows, err := tx.Query(`SELECT action_id, approval_id, action_digest, preview_digest,
 	        policy_version, policy_digest, decision_principal_id, decision, decision_at
-	   FROM approval_tombstones`)
+	   FROM approval_tombstones ORDER BY action_id`)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: v11 copy read: %w", err)
 	}
@@ -492,7 +495,13 @@ func validateV10Tombstone(a action.Approval, decisionAt sql.NullString) error {
 			return fmt.Errorf("action/sqlite: v11 copy: tombstone %q: empty %s — corrupt evidence demands human adjudication, the migration will not guess", a.ApprovalID, f.field)
 		}
 	}
-	if decisionAt.Valid && decisionAt.String != "" {
+	if decisionAt.Valid {
+		// R10-V1: '' is present-but-EMPTY bytes — empty evidence, the
+		// same wall as the empty columns above. Only NULL (the writer
+		// declared absence) is honest absence.
+		if decisionAt.String == "" {
+			return fmt.Errorf("action/sqlite: v11 copy: tombstone %q: empty decision_at — present-but-empty bytes are empty evidence, not absence; corrupt evidence demands human adjudication", a.ApprovalID)
+		}
 		if _, err := time.Parse(time.RFC3339Nano, decisionAt.String); err != nil {
 			return fmt.Errorf("action/sqlite: v11 copy: tombstone %q: unreadable decision_at %q — corrupt evidence demands human adjudication, never a silent zero-time: %w", a.ApprovalID, decisionAt.String, err)
 		}
