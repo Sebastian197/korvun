@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -423,12 +424,16 @@ var migrationCopies = map[int]func(*sql.Tx) error{
 type TombstoneFault struct {
 	ApprovalID string
 	Field      string
+	Detail     string
 	Cause      error
 }
 
 // Error names the fault class and its coordinates.
 func (f *TombstoneFault) Error() string {
 	msg := fmt.Sprintf("tombstone_corrupt: tombstone %q: %s", f.ApprovalID, f.Field)
+	if f.Detail != "" {
+		msg += " (" + f.Detail + ")"
+	}
 	if f.Cause != nil {
 		msg += ": " + f.Cause.Error()
 	}
@@ -438,67 +443,116 @@ func (f *TombstoneFault) Error() string {
 // Unwrap exposes the cause.
 func (f *TombstoneFault) Unwrap() error { return f.Cause }
 
-// validateStoredTombstone is the ONE operational contract over a
-// stored tombstone row (R11): the seven mandatory columns non-empty;
-// decision_at NULL allowed, ” and unreadable bytes rejected; the
-// stored digest re-derived from its own preimage. Migration and
-// readers all delegate here — nobody re-implements the judgment.
-func validateStoredTombstone(storedDigest string, a action.Approval, storedAt sql.NullString) *TombstoneFault {
+// rawTombstone is one approval_tombstones row read AS STORED — every
+// column as raw text, so THE contract (judgeStoredTombstone) is the
+// only judge of emptiness, types, dates and digest coherence. The
+// migration and the readers share this one path (R12: X2+X6 unified).
+type rawTombstone struct {
+	approvalID    sql.NullString
+	digest        sql.NullString
+	actionID      sql.NullString
+	actionDigest  sql.NullString
+	previewDigest sql.NullString
+	policyVersion sql.NullString
+	policyDigest  sql.NullString
+	principal     sql.NullString
+	decision      sql.NullString
+	decisionAt    sql.NullString
+}
+
+// judgeStoredTombstone is THE one operational contract over a stored
+// tombstone row (R11, hardened by R12 with the DOMAIN's truth): the
+// evidence columns non-empty; decision_at NULL allowed (” and
+// unreadable bytes rejected); policy_version an integer; the stored
+// digest re-derived from the preimage; and the origin rule — a
+// system decision (decision "clock", written only by the expiry
+// touch and the sweep, approvals.go:210/:577) legitimately carries an
+// EMPTY principal, while a human verb demands one and a "clock" row
+// carrying a principal is an anomaly, both ways. It returns the
+// parsed preimage, whether decision_at is present, or the typed
+// fault naming row and STABLE column.
+func judgeStoredTombstone(r rawTombstone) (action.Approval, bool, *TombstoneFault) {
+	text := func(v sql.NullString) string {
+		if v.Valid {
+			return v.String
+		}
+		return ""
+	}
+	var a action.Approval
+	a.ApprovalID = text(r.approvalID)
+	a.ActionID = text(r.actionID)
+	a.ActionDigest = text(r.actionDigest)
+	a.PreviewDigest = text(r.previewDigest)
+	a.PolicyDigest = text(r.policyDigest)
+	a.DecisionPrincipalID = text(r.principal)
+	a.Decision = text(r.decision)
 	for _, f := range []struct{ field, value string }{
 		{"approval_id", a.ApprovalID},
 		{"action_id", a.ActionID},
 		{"action_digest", a.ActionDigest},
 		{"preview_digest", a.PreviewDigest},
 		{"policy_digest", a.PolicyDigest},
-		{"decision_principal_id", a.DecisionPrincipalID},
 		{"decision", a.Decision},
 	} {
 		if f.value == "" {
-			return &TombstoneFault{ApprovalID: a.ApprovalID, Field: "empty " + f.field}
+			return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: f.field, Detail: "empty " + f.field}
 		}
 	}
-	if storedAt.Valid {
-		if storedAt.String == "" {
-			return &TombstoneFault{ApprovalID: a.ApprovalID, Field: "empty decision_at (present-but-empty bytes are empty evidence, not absence)"}
+	// The origin rule (R12-X1): the domain's system decisions are
+	// decision="clock" with an empty principal — exactly that pair.
+	if a.Decision == "clock" {
+		if a.DecisionPrincipalID != "" {
+			return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "decision_principal_id", Detail: "a clock decision carrying a principal — a human hand signing as the clock"}
 		}
-		t, err := time.Parse(time.RFC3339Nano, storedAt.String)
-		if err != nil {
-			return &TombstoneFault{ApprovalID: a.ApprovalID, Field: fmt.Sprintf("unreadable decision_at %q", storedAt.String), Cause: err}
+	} else if a.DecisionPrincipalID == "" {
+		return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "decision_principal_id", Detail: "empty decision_principal_id on a human verb"}
+	}
+	pv, perr := strconv.ParseInt(text(r.policyVersion), 10, 64)
+	if perr != nil {
+		return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "policy_version", Detail: fmt.Sprintf("non-integer bytes %q", text(r.policyVersion)), Cause: perr}
+	}
+	a.PolicyVersion = pv
+	present := false
+	if r.decisionAt.Valid {
+		if r.decisionAt.String == "" {
+			return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "decision_at", Detail: "present-but-empty bytes are empty evidence, not absence"}
+		}
+		t, terr := time.Parse(time.RFC3339Nano, r.decisionAt.String)
+		if terr != nil {
+			return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "decision_at", Detail: fmt.Sprintf("unreadable bytes %q", r.decisionAt.String), Cause: terr}
 		}
 		a.DecisionAt = t
+		present = true
 	}
-	if a.Digest() != storedDigest {
-		return &TombstoneFault{ApprovalID: a.ApprovalID, Field: fmt.Sprintf("approval_digest %q does not re-derive from the stored preimage (%s)", storedDigest, a.Digest())}
+	if got := a.Digest(); got != text(r.digest) {
+		return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "approval_digest", Detail: fmt.Sprintf("stored %q does not re-derive from the preimage (%s)", text(r.digest), got)}
 	}
-	return nil
+	return a, present, nil
 }
 
-// revalidateTombstonesV11toV12 is the R11 re-validation migration:
-// the legacy-v11 window may hold rows that entered before the walls,
-// so EVERY row is re-judged by the contract — streaming, deterministic
-// order, all rows before the bump, one transaction, ZERO writes, no
-// normalization ever. Its guarantee is per-snapshot: the migration
-// established the invariant in ITS snapshot; any later audit must
-// re-establish it in its own.
+// revalidateTombstonesV11toV12 is the R11 re-validation migration,
+// R12-hardened: every row is read AS RAW TEXT and judged by THE one
+// contract — streaming, deterministic order, all rows before the
+// bump, one transaction, ZERO writes, no normalization ever. Its
+// guarantee is per-snapshot: the migration established the invariant
+// in ITS snapshot; any later audit re-establishes it in its own.
 func revalidateTombstonesV11toV12(tx *sql.Tx) error {
 	rows, err := tx.Query(`SELECT approval_digest, approval_id, action_id, action_digest,
-	        preview_digest, policy_version, policy_digest, decision_principal_id,
-	        decision, decision_at
+	        preview_digest, CAST(policy_version AS TEXT), policy_digest,
+	        decision_principal_id, decision, decision_at
 	   FROM approval_tombstones ORDER BY approval_id`)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: v12 revalidation read: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
-		var a action.Approval
-		var storedDigest string
-		var storedAt sql.NullString
-		if err := rows.Scan(&storedDigest, &a.ApprovalID, &a.ActionID, &a.ActionDigest,
-			&a.PreviewDigest, &a.PolicyVersion, &a.PolicyDigest,
-			&a.DecisionPrincipalID, &a.Decision, &storedAt); err != nil {
+		var r rawTombstone
+		if err := rows.Scan(&r.digest, &r.approvalID, &r.actionID, &r.actionDigest,
+			&r.previewDigest, &r.policyVersion, &r.policyDigest,
+			&r.principal, &r.decision, &r.decisionAt); err != nil {
 			return fmt.Errorf("action/sqlite: v12 revalidation scan: %w", err)
 		}
-		if fault := validateStoredTombstone(storedDigest, a, storedAt); fault != nil {
+		if _, _, fault := judgeStoredTombstone(r); fault != nil {
 			return fmt.Errorf("action/sqlite: v12 revalidation: %w", fault)
 		}
 	}
@@ -574,9 +628,9 @@ func copyTombstonesV10toV11(tx *sql.Tx) error {
 }
 
 // validateV10Tombstone is the R9-W1 wall for the v10→v11 copy — it
-// delegates to the ONE contract, minus the digest contrast (v10
-// stores no digest column; the copy computes it). NULL decision_at is
-// honest absence and passes (corrupt != absent, the Y3 line).
+// delegates to THE one contract, minus the digest contrast (v10
+// stores no digest column; the copy computes it). The domain rule
+// rides here too: v10 sweeps wrote ("", "clock") legitimately.
 func validateV10Tombstone(a action.Approval, decisionAt sql.NullString) error {
 	probe := a
 	probe.DecisionAt = time.Time{}
@@ -585,7 +639,20 @@ func validateV10Tombstone(a action.Approval, decisionAt sql.NullString) error {
 			probe.DecisionAt = t
 		}
 	}
-	if fault := validateStoredTombstone(probe.Digest(), probe, decisionAt); fault != nil {
+	str := func(v string) sql.NullString { return sql.NullString{Valid: true, String: v} }
+	raw := rawTombstone{
+		approvalID:    str(probe.ApprovalID),
+		digest:        str(probe.Digest()),
+		actionID:      str(probe.ActionID),
+		actionDigest:  str(probe.ActionDigest),
+		previewDigest: str(probe.PreviewDigest),
+		policyVersion: str(strconv.FormatInt(probe.PolicyVersion, 10)),
+		policyDigest:  str(probe.PolicyDigest),
+		principal:     str(probe.DecisionPrincipalID),
+		decision:      str(probe.Decision),
+		decisionAt:    decisionAt,
+	}
+	if _, _, fault := judgeStoredTombstone(raw); fault != nil {
 		return fmt.Errorf("action/sqlite: v11 copy: %w", fault)
 	}
 	return nil

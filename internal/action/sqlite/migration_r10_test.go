@@ -18,6 +18,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,11 +40,11 @@ func TestMigrationV11_emptyDecisionAtIsEmptyEvidenceNotAbsence(t *testing.T) {
 	if err == nil {
 		t.Fatal("AUDIT R10-V1: empty bytes are empty EVIDENCE — the migration must fail closed, '' is not NULL")
 	}
-	// The EXACT class name: empty is not unreadable — a '' that fell
-	// through to the parse would fail as "unreadable", hiding the
-	// taxonomy (the probing mutation of the '' branch exposed this).
-	if !strings.Contains(err.Error(), "apr_v10seed0000000000000000000000001") ||
-		!strings.Contains(err.Error(), "empty decision_at") {
+	// The EXACT class, typed (R12 elevation): empty is not unreadable —
+	// the stable Field plus the empty-class Detail on the fault itself.
+	var fault *TombstoneFault
+	if !errors.As(err, &fault) || fault.ApprovalID != "apr_v10seed0000000000000000000000001" ||
+		fault.Field != "decision_at" || !strings.Contains(fault.Detail, "present-but-empty") {
 		t.Fatalf("the failure must name row and the EXACT class (empty, not unreadable): %v", err)
 	}
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 10 {

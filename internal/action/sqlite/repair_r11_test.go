@@ -12,6 +12,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,10 +41,28 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 	}
 	defer func() { _ = db.Close() }()
 
-	// Step 2 — consistent backup (the .backup equivalent).
+	// Step 2 — the REAL documented commands (R12-X5/A9: the procedure
+	// is proven with the operator's actual tools, or skipped BY NAME;
+	// VACUUM INTO died here — it was not what the document orders).
+	sqlite3bin, lookErr := exec.LookPath("sqlite3")
+	if lookErr != nil {
+		t.Skip("SKIP NAMED (R12-A9): no sqlite3 binary on this runner — the documented commands cannot be exercised; the in-driver convergence coverage remains in the rest of the suite")
+	}
 	backupPath := filepath.Join(t.TempDir(), "pre-repair.db")
-	if _, err := db.Exec(`VACUUM INTO ?`, backupPath); err != nil {
-		t.Fatalf("consistent backup: %v", err)
+	if out, err := exec.Command(sqlite3bin, path, ".backup "+backupPath).CombinedOutput(); err != nil { //nolint:gosec // G204: the DOCUMENTED operator command; inputs are LookPath + TempDir paths
+		t.Fatalf("documented .backup command: %v %s", err, out)
+	}
+	// The documented bind-parameter inspection and the dump quarantine,
+	// with the operator's real shell.
+	if out, err := exec.Command(sqlite3bin, path, //nolint:gosec // G204: the DOCUMENTED operator command
+		".param set @apr 'apr_r11_repair000000000000000001'",
+		"SELECT decision FROM approval_tombstones WHERE approval_id = @apr;").CombinedOutput(); err != nil ||
+		!strings.Contains(string(out), "rejected") {
+		t.Fatalf("documented .param bind inspection: %v %q", err, out)
+	}
+	if out, err := exec.Command(sqlite3bin, path, ".dump approval_tombstones").CombinedOutput(); err != nil || //nolint:gosec // G204: the DOCUMENTED operator command
+		!strings.Contains(string(out), "INSERT INTO approval_tombstones") {
+		t.Fatalf("documented .dump quarantine: %v %q", err, out)
 	}
 	if n := inspectAt(t, backupPath, `SELECT COUNT(*) FROM approval_tombstones`); n != 1 {
 		t.Fatalf("the backup holds the evidence: %d", n)

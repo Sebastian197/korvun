@@ -452,25 +452,23 @@ func (s *Store) tombstoneStoredRowTx(ctx context.Context, tx *sql.Tx, approvalID
 	return storedDigest, a, storedAt, nil
 }
 
-// scanTombstone scans one tombstone row into its preimage.
+// scanTombstone scans one tombstone row AS RAW TEXT and judges it
+// with THE one contract (R12-X2): present-but-empty or type-corrupt
+// bytes read back are the typed corruption through errors.As —
+// never a silent zero time, never a naked driver error; present is
+// false only for a real stored NULL.
 func scanTombstone(row *sql.Row) (action.Approval, bool, error) {
-	var a action.Approval
-	var decisionAt sql.NullString
-	err := row.Scan(&a.ApprovalID, &a.ActionID, &a.ActionDigest, &a.PreviewDigest,
-		&a.PolicyVersion, &a.PolicyDigest, &a.DecisionPrincipalID,
-		&a.Decision, &decisionAt)
+	var r rawTombstone
+	err := row.Scan(&r.digest, &r.approvalID, &r.actionID, &r.actionDigest,
+		&r.previewDigest, &r.policyVersion, &r.policyDigest,
+		&r.principal, &r.decision, &r.decisionAt)
 	if err != nil {
 		return action.Approval{}, false, err
 	}
-	present := decisionAt.Valid && decisionAt.String != ""
-	t, err := parseNullTime(decisionAt)
-	if err != nil {
-		// R11-R5: unreadable stored bytes read back are CORRUPTION —
-		// the reader never swallows them into a silent zero time.
-		return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID,
-			Field: fmt.Sprintf("unreadable decision_at %q", decisionAt.String), Cause: err}
+	a, present, fault := judgeStoredTombstone(r)
+	if fault != nil {
+		return action.Approval{}, false, fault
 	}
-	a.DecisionAt = t
 	return a, present, nil
 }
 
@@ -479,8 +477,9 @@ func scanTombstone(row *sql.Row) (action.Approval, bool, error) {
 // ErrNotFound when no decided close ever wrote one.
 func (s *Store) ApprovalTombstone(ctx context.Context, actionID string) (action.Approval, bool, error) {
 	a, present, err := scanTombstone(s.db.QueryRowContext(ctx,
-		`SELECT approval_id, action_id, action_digest, preview_digest, policy_version,
-		        policy_digest, decision_principal_id, decision, decision_at
+		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
+		        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
+		        decision, decision_at
 		   FROM approval_tombstones WHERE action_id = ?
 		   ORDER BY decision_at DESC LIMIT 1`, actionID))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -497,8 +496,9 @@ func (s *Store) ApprovalTombstone(ctx context.Context, actionID string) (action.
 // reconstructs ITS story even when an action_id was reused.
 func (s *Store) ApprovalTombstoneByDigest(ctx context.Context, digest string) (action.Approval, bool, error) {
 	a, present, err := scanTombstone(s.db.QueryRowContext(ctx,
-		`SELECT approval_id, action_id, action_digest, preview_digest, policy_version,
-		        policy_digest, decision_principal_id, decision, decision_at
+		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
+		        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
+		        decision, decision_at
 		   FROM approval_tombstones WHERE approval_digest = ?`, digest))
 	if errors.Is(err, sql.ErrNoRows) {
 		return action.Approval{}, false, fmt.Errorf("action/sqlite: tombstone with digest %q: %w", digest, ErrNotFound)
