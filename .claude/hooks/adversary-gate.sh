@@ -57,7 +57,11 @@ for tool in cat jq grep tr; do
     exit 2
   fi
 done
-INPUT=$(cat)
+if ! INPUT=$(cat) || [ -z "$INPUT" ]; then
+  # A failed or EMPTY read is not "no push": the shape is unknown.
+  echo "BLOCKED by adversary gate: the hook input could not be read or is empty — the command shape is unknown, so it fails closed." >&2
+  exit 2
+fi
 if ! RAW=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null); then
   echo "BLOCKED by adversary gate: the hook input is not parseable JSON — the command shape cannot be read, so it fails closed." >&2
   exit 2
@@ -78,7 +82,19 @@ HATCH_RE='--no-ver[a-z]*|core\.hookspath'
 # turn a MATCH into "no match" for any command longer than the pipe
 # buffer — the fail-open the repo already documented in quality.yml
 # (adversary fourth pass, P3-1).
-matches() { grep -qE -- "$1" <<<"$N1" || grep -qE -- "$1" <<<"$N2"; }
+# grep's three outcomes are kept apart: 0 match, 1 no match, anything
+# else (a broken grep, a failed here-string) is a tooling failure and
+# BLOCKS — never read as "no match" (adversary fifth pass, P3-A).
+match_one() {
+  grep -qE -- "$1" <<<"$2"
+  local s=$?
+  if [ "$s" -gt 1 ]; then
+    echo "BLOCKED by adversary gate: grep failed with status $s — the command shape cannot be judged, so it fails closed." >&2
+    exit 2
+  fi
+  return "$s"
+}
+matches() { match_one "$1" "$N1" || match_one "$1" "$N2"; }
 if matches "$GIT_RE" && matches "$HATCH_RE"; then
   echo "BLOCKED by adversary gate: --no-verify / core.hooksPath (the hatch words, any case, any quoting) skip git's pre-push hook. Not allowed in any git command; write commit messages that mention them from a file." >&2
   exit 2

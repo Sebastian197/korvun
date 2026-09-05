@@ -223,10 +223,31 @@ else echo "ok    exit 2  hook without tr fails closed by its reason"; fi
 # input first and hide the class.
 BIG="git push origin master
 $(yes x | head -c 300000)"
-out=$(jq -cn --arg c "$BIG" '{tool_input:{command:$c}}' | CLAUDE_PROJECT_DIR="$NOVERDICT" "$HOOK" 2>&1); code=$?
+# The command travels to jq on STDIN (-Rs: raw, slurped), never as an
+# argv string: Linux caps a single argument at 128 KiB (MAX_ARG_STRLEN)
+# and `jq --arg` would die with "Argument list too long" on the ubuntu
+# runner, leaving the hook an empty input (adversary fifth pass, P2-1).
+# printf is a bash builtin, so no execve carries the 300 KB.
+out=$(printf '%s' "$BIG" | jq -Rs '{tool_input:{command:.}}' | CLAUDE_PROJECT_DIR="$NOVERDICT" "$HOOK" 2>&1); code=$?
 if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "no internal-adversary verdict recorded"; then
   printf 'FAIL  big-command: expected 2 + no-verdict reason, got %s\n      %s\n' "$code" "$(echo "$out" | head -c 300)"; fails=$((fails + 1))
 else echo "ok    exit 2  a push at the head of a 300 KB command is still gated"; fi
+# A grep that is PRESENT but broken (exit 2 on every call): a tooling
+# failure, never "no match".
+BADGREP="$TMP/badgrep"; mkdir -p "$BADGREP"
+for tool in bash cat jq tr printf; do
+  p=$(command -v "$tool" 2>/dev/null) && [ -n "$p" ] && ln -sf "$p" "$BADGREP/$tool"
+done
+printf '#!/bin/bash\nexit 2\n' > "$BADGREP/grep"; chmod +x "$BADGREP/grep"
+out=$(printf '{"tool_input":{"command":"git push origin master"}}' | PATH="$BADGREP" CLAUDE_PROJECT_DIR="$NOVERDICT" bash "$HOOK" 2>&1); code=$?
+if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "grep failed with status 2"; then
+  printf 'FAIL  broken-grep: expected 2 + "grep failed with status 2", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
+else echo "ok    exit 2  hook with a broken grep fails closed by its reason"; fi
+# An EMPTY input: the shape is unknown, never "no push".
+out=$(printf '' | CLAUDE_PROJECT_DIR="$NOVERDICT" bash "$HOOK" 2>&1); code=$?
+if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "could not be read or is empty"; then
+  printf 'FAIL  empty-input: expected 2 + "could not be read or is empty", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
+else echo "ok    exit 2  hook on empty input fails closed by its reason"; fi
 out=$(printf 'not json' | CLAUDE_PROJECT_DIR="$FRESH" bash "$HOOK" 2>&1); code=$?
 if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "not parseable JSON"; then
   printf 'FAIL  bad-json: expected 2 + "not parseable JSON", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))

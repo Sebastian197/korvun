@@ -773,6 +773,7 @@ func TestTombstoneTx_blobKeyIsNamedAsStoredKeyCorruption(t *testing.T) {
 // (ErrUnknownDecision) and by type (Field decision, not Stored), and
 // mutates nothing, for both principal shapes. (Mutation m-clockdoor:
 // drop the IsHumanDecision check at the door — both shapes go red.)
+// Evidence level: in-process unit (one store, one connection).
 func TestDecideApprovalUnderLaw_refusesTheClockVerb(t *testing.T) {
 	t.Parallel()
 	store, _ := sealedStore(t)

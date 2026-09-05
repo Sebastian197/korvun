@@ -398,12 +398,13 @@ func TestApproval_finiteDecisionsFailClosed(t *testing.T) {
 	a, _ := pendingRequest(t, store, "act_fin")
 	env, ident := operatorDecisionEnv("burn", a.ApprovalID)
 	// Elevated in the R12 train (adversary P2-6: `err != nil` was an
-	// either/or): the unknown verb is refused AT THE DOOR by the one
-	// origin rule — ErrUnknownDecision identity kept, the typed fault
-	// beside it at Field "decision", NOT stored (a refusal, not
-	// corruption), and the request untouched. Its red lives in
-	// mutation m-p26: neutralize the door's rule call and the write
-	// door still refuses, but only after the row was consumed.
+	// either/or): the unknown verb is refused AT THE DOOR by the
+	// human-vocabulary check — ErrUnknownDecision identity kept, the
+	// typed fault beside it at Field "decision", NOT stored (a refusal,
+	// not corruption), and the request untouched. Its red lives in
+	// mutation m-clockdoor (the human-verb check at the door dropped);
+	// neutralizing only the origin-rule call (m-p26) no longer reaches
+	// this test: the rule cannot fault a verb the door already refused.
 	// Evidence level: in-process unit (one store, one connection).
 	_, err := store.decideApproval(context.Background(), a.ApprovalID, "burn",
 		a.RequestedAt.Add(time.Minute), env, ident, "")
