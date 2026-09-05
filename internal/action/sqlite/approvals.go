@@ -158,13 +158,6 @@ func (s *Store) DecideApprovalUnderLaw(ctx context.Context, approvalID, decision
 // decideApproval keeps the law-less mechanics signature for the
 // package's own tests.
 func (s *Store) decideApproval(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string) (string, error) {
-	// R12-P3-1 (the symmetric wall to the empty-law-pin door): a human
-	// decision without a principal would persist exactly the tombstone
-	// the contract condemns. Production always resolves a principal;
-	// the wall makes the prose load-bearing no more.
-	if ident.PrincipalID == "" {
-		return "", fmt.Errorf("action/sqlite: decide approval %q: an empty deciding principal cannot consume authority — a human verb demands a named hand", approvalID)
-	}
 	return s.decideApprovalWithLaw(ctx, approvalID, decision, at, operatorEnv, ident, comment, nil)
 }
 
@@ -173,6 +166,15 @@ func (s *Store) decideApproval(ctx context.Context, approvalID, decision string,
 // transition — and, for an approve, the law judged INSIDE this same
 // transaction over the re-read row (R4-F2). Unexported on purpose.
 func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string, law *PolicyPin) (string, error) {
+	// R12-S2-1 (the wall at the WHOLE door, not the room): a human
+	// decision without a principal would persist exactly the tombstone
+	// the contract condemns. This mechanics function is the one place
+	// BOTH doors (the exported DecideApprovalUnderLaw and the
+	// package-test path) must pass through — the first cut guarded the
+	// test-only door and the adversary named it.
+	if ident.PrincipalID == "" {
+		return "", fmt.Errorf("action/sqlite: decide approval %q: an empty deciding principal cannot consume authority — a human verb demands a named hand", approvalID)
+	}
 	switch decision {
 	case "approved", "rejected", "cancelled":
 	default:

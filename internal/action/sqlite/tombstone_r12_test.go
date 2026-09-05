@@ -24,6 +24,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,6 +69,8 @@ func TestMigrationV12_sweepClosedApprovalMigratesClean(t *testing.T) {
 
 // A1-v10 (R12-P3-4): the SAME domain truth observed at the v10 door —
 // a sweep tombstone in a v10 profile rides the copy up to v12 clean.
+// (Its red lives in mutation m-p21: re-enable the digest contrast on
+// the absent v10 column and every v10 row fails the judge.)
 func TestMigrationV10Copy_sweepTombstoneMigratesCleanToV12(t *testing.T) {
 	t.Parallel()
 	path, _ := buildV10File(t)
@@ -272,5 +275,26 @@ func TestMigrationV12_faultTypeSurvivesWrapping(t *testing.T) {
 	}
 	if fault.ApprovalID != "apr_r12_as000000000000000000001" || fault.Field != "decision_at" {
 		t.Fatalf("stable coordinates on the type itself: %+v", fault)
+	}
+}
+
+// S2-1 — the wall at the EXPORTED door: DecideApprovalUnderLaw with
+// an empty deciding principal is refused by name, before any write.
+// (Its red lives in mutation m-s21: neutralize the wall in
+// decideApprovalWithLaw and this test must go red.)
+func TestDecideApprovalUnderLaw_refusesAnEmptyPrincipal(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	a := expiredParked(t, store, "act_s21_wall")
+	env, _ := operatorDecisionEnv("reject", a.ApprovalID)
+	_, err := store.DecideApprovalUnderLaw(t.Context(), a.ApprovalID, "rejected",
+		a.RequestedAt.Add(time.Second), env, AttemptIdentity{PrincipalID: ""}, "", PolicyPin{})
+	if err == nil || !strings.Contains(err.Error(), "empty deciding principal") {
+		t.Fatalf("AUDIT R12-S2-1: the EXPORTED decide door must refuse an empty principal by name: %v", err)
+	}
+	// And nothing was written: the request is still PENDING.
+	full, _, gerr := store.GetApproval(t.Context(), a.ApprovalID)
+	if gerr != nil || string(full.Status) != "PENDING" {
+		t.Fatalf("the refused decide must mutate nothing: %v %s", gerr, full.Status)
 	}
 }

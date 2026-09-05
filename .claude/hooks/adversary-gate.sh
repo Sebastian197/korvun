@@ -6,12 +6,15 @@
 # and freshness — the adversary itself never writes files.
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
-# R12-P2-3: gate by SITE, not by text. The command must BEGIN with an
-# actual git-push invocation (allowing cd/&& prefixes ending in git),
-# not merely contain the substring anywhere — a heredoc QUOTING the
-# words must not trip the gate, and a bare `git push` with an
-# upstream set is gated like an explicit refspec.
-if ! echo "$COMMAND" | grep -qE '(^|&&|;)[[:space:]]*git[[:space:]]+push([[:space:]]|$)'; then
+# R12-P2-3 + S2-2: gate by the REAL shape of a git-push invocation.
+# The regex accepts git's actual grammar — an optional absolute path
+# to the binary, any run of global options between git and the verb
+# (-C <dir>, -c <kv>, --exec-path=..., bare flags), and any shell
+# separator before the invocation (start, ;, &&, ||, |, & ) — while a
+# quoted mention inside a heredoc still passes (no separator+git+push
+# shape). FAIL-CLOSED bias: over-matching costs a fresh verdict;
+# under-matching costs an ungated push.
+if ! echo "$COMMAND" | grep -qE '(^|[;&|][[:space:]]*|\|\|[[:space:]]*|&&[[:space:]]*)([^[:space:]"'"'"']*/)?git([[:space:]]+(-[^[:space:]]+|--[^[:space:]]+)([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$)'; then
   exit 0
 fi
 VERDICT="$CLAUDE_PROJECT_DIR/.claude/adversary/last-verdict.md"
