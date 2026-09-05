@@ -763,3 +763,35 @@ func TestTombstoneTx_blobKeyIsNamedAsStoredKeyCorruption(t *testing.T) {
 		t.Fatalf("nothing written: n=%d err=%v", n, err)
 	}
 }
+
+// P2-A (adversary fourth pass) — the HUMAN door refuses the clock verb.
+// The train's H2/H3 cure replaced the vocabulary switch by the origin
+// rule, and the rule calls clock+empty principal a legitimate SYSTEM
+// origin — so DecideApprovalUnderLaw with decision "clock" and no
+// principal passed the wall: a system close forged through the human
+// door. The door now demands a human verb first, by identity
+// (ErrUnknownDecision) and by type (Field decision, not Stored), and
+// mutates nothing, for both principal shapes. (Mutation m-clockdoor:
+// drop the IsHumanDecision check at the door — both shapes go red.)
+func TestDecideApprovalUnderLaw_refusesTheClockVerb(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	for _, principal := range []string{"", "principal_operator"} {
+		a := expiredParked(t, store, "act_p2a_clock_"+principal)
+		env, _ := operatorDecisionEnv("reject", a.ApprovalID)
+		rule, err := store.DecideApprovalUnderLaw(t.Context(), a.ApprovalID, action.DecisionClock,
+			a.RequestedAt.Add(time.Second), env, AttemptIdentity{PrincipalID: principal}, "", PolicyPin{})
+		var fault *TombstoneFault
+		if err == nil || rule != "" || !errors.Is(err, ErrUnknownDecision) || !errors.As(err, &fault) ||
+			fault.Field != "decision" || fault.Stored {
+			t.Fatalf("AUDIT P2-A (principal %q): the human door must refuse the clock verb by identity and type: rule=%q err=%v", principal, rule, err)
+		}
+		full, _, gerr := store.GetApproval(t.Context(), a.ApprovalID)
+		if gerr != nil || full.Status != action.ApprovalPending {
+			t.Fatalf("AUDIT P2-A (principal %q): the refused clock verb must mutate nothing: %v %s", principal, gerr, full.Status)
+		}
+		if _, _, terr := store.ApprovalTombstone(t.Context(), a.ActionID); !errors.Is(terr, ErrNotFound) {
+			t.Fatalf("AUDIT P2-A (principal %q): no tombstone may be sealed by the refused door: %v", principal, terr)
+		}
+	}
+}

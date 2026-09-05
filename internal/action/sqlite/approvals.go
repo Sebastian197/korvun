@@ -174,16 +174,27 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	// test-only door and the adversary named it.
 	// R12-H2/H3: the wall delegates to THE one origin-and-vocabulary
 	// rule (judgeTombstoneOrigin) — the same function the write door
-	// (tombstoneTx) and the read door (judgeStoredTombstone) apply. It
-	// judges the verb before the principal, so an unknown verb faults
-	// at "decision" whatever the principal (superseding the R12
-	// third-pass ordering that named the principal first); the
-	// unknown-verb class keeps its ErrUnknownDecision identity for
-	// callers that test by errors.Is, with the typed fault beside it.
+	// (tombstoneTx) and the read door (judgeStoredTombstone) apply —
+	// AFTER the human-vocabulary check below: the verb is judged before
+	// the principal (an unknown verb faults at "decision" whatever the
+	// principal, superseding the R12 third-pass ordering that named the
+	// principal first), and the unknown-verb class keeps its
+	// ErrUnknownDecision identity for errors.Is callers, with the typed
+	// fault beside it.
+	// The HUMAN door accepts only the human vocabulary (adversary
+	// fourth pass, P2-A): the origin rule alone would let the clock
+	// verb through with an empty principal — a system close forged by
+	// a hand that never signed. The clock closes only by the expiry
+	// touch below and by the sweep; here every non-human verb is the
+	// unknown-verb class, by identity and by type.
+	if !action.IsHumanDecision(decision) {
+		return "", fmt.Errorf("action/sqlite: decide approval %q: %w: %w", approvalID, ErrUnknownDecision, &TombstoneFault{
+			ApprovalID: approvalID, Field: "decision",
+			Detail: fmt.Sprintf("verb %q is not a human verb — this door signs approved, rejected or cancelled; the clock closes by the expiry touch and the sweep, never here", decision)})
+	}
+	// With a human verb in hand, the origin rule can only fault on the
+	// principal: the wall S2-1 at the whole door.
 	if fault := judgeTombstoneOrigin(approvalID, decision, ident.PrincipalID); fault != nil {
-		if fault.Field == "decision" {
-			return "", fmt.Errorf("action/sqlite: decide approval %q: %w: %w", approvalID, ErrUnknownDecision, fault)
-		}
 		return "", fmt.Errorf("action/sqlite: decide approval %q: %w", approvalID, fault)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)

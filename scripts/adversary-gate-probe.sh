@@ -188,13 +188,45 @@ else echo "ok    exit 2  hook without jq fails closed"; fi
 # Only bash, jq and printf on PATH: without grep/tr the shape cannot be
 # read and the hook must block, never fall through to exit 0.
 ONLYJQ="$TMP/onlyjq"; mkdir -p "$ONLYJQ"
-for tool in bash jq printf; do
+for tool in bash cat jq printf; do
   p=$(command -v "$tool" 2>/dev/null) && [ -n "$p" ] && ln -sf "$p" "$ONLYJQ/$tool"
 done
+# No cat at all: the hook must block BEFORE reading its input — an
+# empty INPUT would otherwise read as "no push" and pass.
+NOCAT="$TMP/nocat"; mkdir -p "$NOCAT"
+for tool in bash jq grep tr printf; do
+  p=$(command -v "$tool" 2>/dev/null) && [ -n "$p" ] && ln -sf "$p" "$NOCAT/$tool"
+done
+out=$(printf '{"tool_input":{"command":"git push --no-verify origin master"}}' | PATH="$NOCAT" CLAUDE_PROJECT_DIR="$STALE" bash "$HOOK" 2>&1); code=$?
+if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "cat is missing"; then
+  printf 'FAIL  no-cat: expected 2 + "cat is missing", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
+else echo "ok    exit 2  hook without cat fails closed by its reason"; fi
 out=$(printf '{"tool_input":{"command":"git push --no-verify origin master"}}' | PATH="$ONLYJQ" CLAUDE_PROJECT_DIR="$STALE" bash "$HOOK" 2>&1); code=$?
-if [ "$code" -ne 2 ] || ! echo "$out" | grep -qE "(grep|tr) is missing"; then
-  printf 'FAIL  no-grep-tr: expected 2 + "grep/tr is missing", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
-else echo "ok    exit 2  hook without grep/tr fails closed"; fi
+if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "grep is missing"; then
+  printf 'FAIL  no-grep: expected 2 + "grep is missing", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
+else echo "ok    exit 2  hook without grep fails closed by its reason"; fi
+# The same with grep present and only tr missing: the reason names tr.
+NOTR="$TMP/notr"; mkdir -p "$NOTR"
+for tool in bash cat jq printf grep; do
+  p=$(command -v "$tool" 2>/dev/null) && [ -n "$p" ] && ln -sf "$p" "$NOTR/$tool"
+done
+out=$(printf '{"tool_input":{"command":"git push --no-verify origin master"}}' | PATH="$NOTR" CLAUDE_PROJECT_DIR="$STALE" bash "$HOOK" 2>&1); code=$?
+if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "tr is missing"; then
+  printf 'FAIL  no-tr: expected 2 + "tr is missing", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
+else echo "ok    exit 2  hook without tr fails closed by its reason"; fi
+# A push early in a command far longer than a pipe buffer: a producer
+# killed by SIGPIPE under pipefail would turn the match into "no match"
+# and authorize — the shape must stay blocked.
+# The filler is MANY lines: grep -q exits at the first matching line
+# while the producer still has hundreds of KB to write — exactly when
+# SIGPIPE strikes it. One giant line would let grep drain the whole
+# input first and hide the class.
+BIG="git push origin master
+$(yes x | head -c 300000)"
+out=$(jq -cn --arg c "$BIG" '{tool_input:{command:$c}}' | CLAUDE_PROJECT_DIR="$NOVERDICT" "$HOOK" 2>&1); code=$?
+if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "no internal-adversary verdict recorded"; then
+  printf 'FAIL  big-command: expected 2 + no-verdict reason, got %s\n      %s\n' "$code" "$(echo "$out" | head -c 300)"; fails=$((fails + 1))
+else echo "ok    exit 2  a push at the head of a 300 KB command is still gated"; fi
 out=$(printf 'not json' | CLAUDE_PROJECT_DIR="$FRESH" bash "$HOOK" 2>&1); code=$?
 if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "not parseable JSON"; then
   printf 'FAIL  bad-json: expected 2 + "not parseable JSON", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))

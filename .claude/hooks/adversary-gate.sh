@@ -27,7 +27,7 @@
 #   the words, or `git add .githooks/pre-push` are gated too (a block
 #   too many costs a fresh verdict; a block too few costs an ungated
 #   push).
-#   FAILS CLOSED — if jq, grep or tr is missing, or jq cannot parse the
+#   FAILS CLOSED — if cat, jq, grep or tr is missing, or jq cannot parse the
 #   hook input, or the normalization pipeline fails, EVERY Bash command
 #   is blocked (the shape cannot be read); if the check script is
 #   missing or not executable, a push-shaped command is blocked.
@@ -48,13 +48,16 @@
 # through this hook AND through the pre-push door on every `make
 # quality` and, in CI, on the Linux and macOS runners.
 set -o pipefail
-INPUT=$(cat)
-for tool in jq grep tr; do
+# The tools come BEFORE the read: a missing `cat` would leave INPUT
+# empty and an empty command reads as "no push" (adversary fifth-pass
+# mutation m-notr exposed it).
+for tool in cat jq grep tr; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "BLOCKED by adversary gate: $tool is missing — the hook cannot read the command, so it fails closed." >&2
     exit 2
   fi
 done
+INPUT=$(cat)
 if ! RAW=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null); then
   echo "BLOCKED by adversary gate: the hook input is not parseable JSON — the command shape cannot be read, so it fails closed." >&2
   exit 2
@@ -70,7 +73,12 @@ fi
 PUSH_RE='(^|[^[:alnum:]_])git([^[:alnum:]_].*)?[^[:alnum:]_](push|send-pack)([^[:alnum:]_]|$)'
 GIT_RE='(^|[^[:alnum:]_])git[^[:alnum:]_]'
 HATCH_RE='--no-ver[a-z]*|core\.hookspath'
-matches() { printf '%s\n' "$N1" | grep -qE -- "$1" || printf '%s\n' "$N2" | grep -qE -- "$1"; }
+# Here-strings, never a pipe into `grep -q`: with pipefail on, a
+# producer killed by SIGPIPE when grep exits early on a match would
+# turn a MATCH into "no match" for any command longer than the pipe
+# buffer — the fail-open the repo already documented in quality.yml
+# (adversary fourth pass, P3-1).
+matches() { grep -qE -- "$1" <<<"$N1" || grep -qE -- "$1" <<<"$N2"; }
 if matches "$GIT_RE" && matches "$HATCH_RE"; then
   echo "BLOCKED by adversary gate: --no-verify / core.hooksPath (the hatch words, any case, any quoting) skip git's pre-push hook. Not allowed in any git command; write commit messages that mention them from a file." >&2
   exit 2
