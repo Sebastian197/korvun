@@ -206,7 +206,22 @@ fuzz-smoke:
 	go test ./internal/action/ -run '^$$' -fuzz FuzzApprovalCanonical -fuzztime 25000x
 	go test ./internal/action/ -run '^$$' -fuzz FuzzPreviewCanonical -fuzztime 25000x
 
-quality: guard-gopkgs lint test cover fuzz-smoke
+# The push gate has two doors and ONE decision (R12-H8): the decision is
+# scripts/adversary-gate-check.sh; git's pre-push hook (.githooks/pre-push)
+# is the definitive local door and the Claude Code hook the first line.
+# `install-hooks` symlinks the pre-push under .git/hooks — no core.hooksPath,
+# so graphify's own post-commit keeps working. `hook-probe` runs the probe
+# table through the real Claude Code hook (well under a second).
+install-hooks:
+	@mkdir -p .git/hooks
+	@chmod +x .githooks/pre-push scripts/adversary-gate-check.sh scripts/adversary-gate-probe.sh
+	@ln -sf ../../.githooks/pre-push .git/hooks/pre-push
+	@echo "pre-push hook installed: .git/hooks/pre-push -> .githooks/pre-push"
+
+hook-probe:
+	@bash scripts/adversary-gate-probe.sh
+
+quality: guard-gopkgs lint test cover fuzz-smoke hook-probe
 	@echo "Quality gate passed."
 
 # --- Web track SP1: the site check harness (spec AS-1 + AS-9, ADR-0040) ----------

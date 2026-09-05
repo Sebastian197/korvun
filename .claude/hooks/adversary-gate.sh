@@ -1,42 +1,43 @@
 #!/bin/bash
-# Adversary gate (PreToolUse, Bash matcher): a push to ensayo or
-# master must carry a FRESH internal-adversary verdict. The main
-# session records the verdict marker after running the adversary
-# subagent over the complete diff; this hook only enforces presence
-# and freshness — the adversary itself never writes files.
+# Adversary gate (PreToolUse, Bash matcher) — the FIRST line, not the
+# definitive one (R12-H8, B3). A push must carry a FRESH internal-
+# adversary verdict; the decision lives in ONE place,
+# scripts/adversary-gate-check.sh, shared with git's pre-push hook
+# (.githooks/pre-push, installed by `make install-hooks`), which is the
+# definitive local gate: git fires it whatever shell form invoked the
+# push, so the shapes below that fool a regex cannot fool it.
+#
+# THE REAL PERIMETER, declared:
+#   COVERS — any command text where the word `git` is followed anywhere
+#   on the same line by the word `push` (keywords, wrappers, `time`,
+#   `nohup`, `\git`, absolute paths, global options: all of them), and
+#   EXPLICITLY BLOCKS, whatever the verdict says, any git command
+#   carrying `--no-verify` or `core.hooksPath` — the two ways git itself
+#   lets a push skip the pre-push hook. False positives are ACCEPTED:
+#   `echo "git push"` or a heredoc quoting the words is gated too (a
+#   block too many costs a fresh verdict; a block too few costs an
+#   ungated push).
+#   DOES NOT COVER — a push whose text never shows `git ... push` on
+#   one line: `sh -c` strings assembled from variables, aliases, a
+#   script file that pushes, `eval`, GUI clients. For those the
+#   pre-push hook is the gate; this hook is a convenience wall only.
+#   Multi-line commands are scanned line by line.
+# The probe script scripts/adversary-gate-probe.sh runs the fourteen
+# shapes (plus negatives) through this hook on every `make quality`.
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
-# R12-P2-3 + S2-2: gate by the REAL shape of a git-push invocation.
-# The regex accepts git's actual grammar — an optional absolute path
-# to the binary, any run of global options between git and the verb
-# (-C <dir>, -c <kv>, --exec-path=..., bare flags), and any shell
-# separator before the invocation (start, ;, &&, ||, |, & ) — while a
-# quoted mention inside a heredoc still passes (no separator+git+push
-# shape). FAIL-CLOSED bias: over-matching costs a fresh verdict;
-# under-matching costs an ungated push.
-# (Third pass fixed a regression: the old rule tolerated leading
-# whitespace after ^ — an indented continuation line — and the first
-# rewrite lost it. Every separator, including start-of-line, now
-# swallows whitespace. Known perimeter, recorded: env-var prefixes
-# (X=y git push), command/env/exec wrappers, subshells and sh -c
-# strings are beyond any regex — a regex is not a shell parser; the
-# residual risk is accepted and documented here.)
-if ! echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|][[:space:]]*|\|\|[[:space:]]*|&&[[:space:]]*)([^[:space:]"'"'"']*/)?git([[:space:]]+(-[^[:space:]]+|--[^[:space:]]+)([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$)'; then
+if ! echo "$COMMAND" | grep -qE '(^|[^[:alnum:]_])git([^[:alnum:]_].*)?[^[:alnum:]_]push([^[:alnum:]_]|$)'; then
+  # No push shape — but a git command reaching for the hook escape
+  # hatches is blocked on its own.
+  if echo "$COMMAND" | grep -qE '(^|[^[:alnum:]_])git[^[:alnum:]_]' && echo "$COMMAND" | grep -qE -- '--no-verify|core\.hooksPath'; then
+    echo "BLOCKED by adversary gate: --no-verify / core.hooksPath skip git's pre-push hook — the definitive gate. Not allowed in any git command." >&2
+    exit 2
+  fi
   exit 0
 fi
-VERDICT="$CLAUDE_PROJECT_DIR/.claude/adversary/last-verdict.md"
-if [ ! -f "$VERDICT" ]; then
-  echo "BLOCKED by adversary gate: no internal-adversary verdict recorded (.claude/adversary/last-verdict.md). Run the adversary subagent over the complete diff, record its verdict, then push." >&2
+if echo "$COMMAND" | grep -qE -- '--no-verify|core\.hooksPath'; then
+  echo "BLOCKED by adversary gate: --no-verify / core.hooksPath skip git's pre-push hook — the definitive gate. Not allowed in any git command." >&2
   exit 2
 fi
-if ! head -1 "$VERDICT" | grep -q "VETO LEVANTADO"; then
-  echo "BLOCKED by adversary gate: the recorded verdict is not VETO LEVANTADO. Cure or adjudicate the findings first." >&2
-  exit 2
-fi
-HEAD_TIME=$(git -C "$CLAUDE_PROJECT_DIR" log -1 --format=%ct 2>/dev/null || echo 0)
-VERDICT_TIME=$(stat -f %m "$VERDICT" 2>/dev/null || stat -c %Y "$VERDICT" 2>/dev/null || echo 0)
-if [ "$VERDICT_TIME" -lt "$HEAD_TIME" ]; then
-  echo "BLOCKED by adversary gate: the verdict predates HEAD — the audited diff is not the one being pushed. Re-run the adversary over the current diff." >&2
-  exit 2
-fi
-exit 0
+ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+exec "$ROOT/scripts/adversary-gate-check.sh" "$ROOT"

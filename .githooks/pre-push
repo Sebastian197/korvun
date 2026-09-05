@@ -1,0 +1,14 @@
+#!/bin/bash
+# .githooks/pre-push — the DEFINITIVE local push gate (R12-H8, B2).
+#
+# Git runs this hook for every `git push`, whatever shell form invoked
+# it (keywords, wrappers, backslashes, absolute paths: none of the
+# shapes that fool a command regex exist here). The only ways around
+# it are git's own: `--no-verify` and a moved `core.hooksPath` — and
+# the Claude Code hook blocks those spellings before the command runs.
+# Install with `make install-hooks` (a symlink under .git/hooks; the
+# repo sets no core.hooksPath so graphify's post-commit keeps working).
+#
+# The decision itself lives in ONE place: scripts/adversary-gate-check.sh.
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+exec "$ROOT/scripts/adversary-gate-check.sh" "$ROOT"
