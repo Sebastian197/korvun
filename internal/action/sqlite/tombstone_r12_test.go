@@ -11,8 +11,11 @@
 // unified): present-but-empty or type-corrupt bytes read back are
 // FaultCorrupt through errors.As, never a silent zero or a naked
 // driver error; present=false only for a real stored NULL.
-// Evidence level: in-process suite; the X1 acceptance also runs by
-// OS-process binary in the gate. Reproduction-first contract.
+// Evidence level of THIS file: in-process suite. (The X1 acceptance
+// was ALSO exercised by OS-process binary in the R12 gate — that
+// evidence lives in the round's canto with its captured output, not
+// in this tree; the label here claims only what this file runs.)
+// Reproduction-first contract.
 
 package sqlite
 
@@ -60,6 +63,30 @@ func TestMigrationV12_sweepClosedApprovalMigratesClean(t *testing.T) {
 	defer func() { _ = store.Close() }()
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 12 {
 		t.Fatalf("v12 lands: %d", v)
+	}
+}
+
+// A1-v10 (R12-P3-4): the SAME domain truth observed at the v10 door —
+// a sweep tombstone in a v10 profile rides the copy up to v12 clean.
+func TestMigrationV10Copy_sweepTombstoneMigratesCleanToV12(t *testing.T) {
+	t.Parallel()
+	path, _ := buildV10File(t)
+	a := actionpkgApproval("apr_r12_v10sweep00000000000000001", "act_r12_v10sweep")
+	a.DecisionPrincipalID = ""
+	a.Decision = "clock"
+	a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	seedV10RawRow(t, path, [9]any{a.ActionID, a.ApprovalID, a.ActionDigest, a.PreviewDigest,
+		a.PolicyVersion, a.PolicyDigest, "", "clock", a.DecisionAt.Format(time.RFC3339Nano)})
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("AUDIT R12-P3-4: the v10 sweep tombstone is the domain's truth at that door too: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 12 {
+		t.Fatalf("v12 lands from v10: %d", v)
+	}
+	if _, _, err := store.ApprovalTombstoneByDigest(context.Background(), a.Digest()); err != nil {
+		t.Fatalf("the sweep story reconstructs by its digest after the two-door ride: %v", err)
 	}
 }
 
@@ -159,19 +186,21 @@ func TestTombstoneReader_typeCorruptPolicyVersionIsFaultTyped(t *testing.T) {
 	store, _ := sealedStore(t)
 	a := actionpkgApproval("apr_r12_rtype000000000000000001", "act_r12_rtype")
 	a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	// R12-P2-4 (the adversary caught the scrambled seed): the row is
+	// coherent EXCEPT policy_version, which carries the type garbage.
 	if _, err := store.db.Exec(`INSERT INTO approval_tombstones
 	    (approval_id, approval_digest, action_id, action_digest, preview_digest,
 	     policy_version, policy_digest, decision_principal_id, decision, decision_at)
-	 VALUES (?, ?, ?, ?, 'abc', ?, ?, ?, ?, ?)`,
-		a.ApprovalID, a.Digest(), a.ActionID, a.ActionDigest,
+	 VALUES (?, ?, ?, ?, ?, 'abc', ?, ?, ?, ?)`,
+		a.ApprovalID, a.Digest(), a.ActionID, a.ActionDigest, a.PreviewDigest,
 		a.PolicyDigest, a.DecisionPrincipalID, a.Decision,
-		a.DecisionAt.Format(time.RFC3339Nano), a.PreviewDigest); err != nil {
+		a.DecisionAt.Format(time.RFC3339Nano)); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	_, _, err := store.ApprovalTombstone(context.Background(), "act_r12_rtype")
 	var fault *TombstoneFault
-	if err == nil || !errors.As(err, &fault) {
-		t.Fatalf("AUDIT R12-A13: the reader judges types through the ONE contract, typed: %v", err)
+	if err == nil || !errors.As(err, &fault) || fault.Field != "policy_version" {
+		t.Fatalf("AUDIT R12-A13: the reader judges the policy_version TYPE through the ONE contract, Field fixed: %v", err)
 	}
 }
 

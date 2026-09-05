@@ -6,10 +6,14 @@
 # and freshness — the adversary itself never writes files.
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
-case "$COMMAND" in
-  *"git push"*ensayo*|*"git push"*master*) ;;
-  *) exit 0 ;;
-esac
+# R12-P2-3: gate by SITE, not by text. The command must BEGIN with an
+# actual git-push invocation (allowing cd/&& prefixes ending in git),
+# not merely contain the substring anywhere — a heredoc QUOTING the
+# words must not trip the gate, and a bare `git push` with an
+# upstream set is gated like an explicit refspec.
+if ! echo "$COMMAND" | grep -qE '(^|&&|;)[[:space:]]*git[[:space:]]+push([[:space:]]|$)'; then
+  exit 0
+fi
 VERDICT="$CLAUDE_PROJECT_DIR/.claude/adversary/last-verdict.md"
 if [ ! -f "$VERDICT" ]; then
   echo "BLOCKED by adversary gate: no internal-adversary verdict recorded (.claude/adversary/last-verdict.md). Run the adversary subagent over the complete diff, record its verdict, then push." >&2

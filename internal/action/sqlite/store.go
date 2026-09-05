@@ -524,8 +524,14 @@ func judgeStoredTombstone(r rawTombstone) (action.Approval, bool, *TombstoneFaul
 		a.DecisionAt = t
 		present = true
 	}
-	if got := a.Digest(); got != text(r.digest) {
-		return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "approval_digest", Detail: fmt.Sprintf("stored %q does not re-derive from the preimage (%s)", text(r.digest), got)}
+	// The digest contrast runs only where a digest COLUMN exists —
+	// v11+ stores it (readers and v12 pass it Valid); the v10 copy
+	// has no column to contrast and passes it invalid (R12-P2-1: the
+	// skip is by ABSENCE of the column, never by choice of caller).
+	if r.digest.Valid {
+		if got := a.Digest(); got != r.digest.String {
+			return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "approval_digest", Detail: fmt.Sprintf("stored %q does not re-derive from the preimage (%s)", r.digest.String, got)}
+		}
 	}
 	return a, present, nil
 }
@@ -578,82 +584,54 @@ func copyTombstonesV10toV11(tx *sql.Tx) error {
 	// R10-V3: the read order is CONTRACTUAL — the mid-copy crash mold
 	// probes "first row in, second row fails", so the order it relies
 	// on is written here, never borrowed from a B-tree accident.
+	// R12-P2-1: the columns are read AS RAW TEXT and judged by THE one
+	// contract (type-corrupt bytes are the typed fault here too); the
+	// digest contrast is skipped by column ABSENCE (v10 stores none).
 	rows, err := tx.Query(`SELECT action_id, approval_id, action_digest, preview_digest,
-	        policy_version, policy_digest, decision_principal_id, decision, decision_at
+	        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
+	        decision, decision_at
 	   FROM approval_tombstones ORDER BY action_id`)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: v11 copy read: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	type v10row struct {
-		a          action.Approval
-		decisionAt sql.NullString
+		raw   rawTombstone
+		a     action.Approval
+		rawAt sql.NullString
 	}
 	var all []v10row
 	for rows.Next() {
-		var r v10row
-		if err := rows.Scan(&r.a.ActionID, &r.a.ApprovalID, &r.a.ActionDigest,
-			&r.a.PreviewDigest, &r.a.PolicyVersion, &r.a.PolicyDigest,
-			&r.a.DecisionPrincipalID, &r.a.Decision, &r.decisionAt); err != nil {
+		var r rawTombstone
+		if err := rows.Scan(&r.actionID, &r.approvalID, &r.actionDigest,
+			&r.previewDigest, &r.policyVersion, &r.policyDigest,
+			&r.principal, &r.decision, &r.decisionAt); err != nil {
 			return fmt.Errorf("action/sqlite: v11 copy scan: %w", err)
 		}
-		all = append(all, r)
+		all = append(all, v10row{raw: r})
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("action/sqlite: v11 copy rows: %w", err)
 	}
-	for _, r := range all {
-		if err := validateV10Tombstone(r.a, r.decisionAt); err != nil {
-			return err
+	for _, row := range all {
+		// Judge-then-insert PER ROW (the R10-V3 probe is contractual:
+		// a bad row N aborts with rows 1..N-1 already inside v11 —
+		// validate-all-then-insert is the mutation that mold kills,
+		// and it killed exactly that shape of this cure's first draft).
+		a, _, fault := judgeStoredTombstone(row.raw)
+		if fault != nil {
+			return fmt.Errorf("action/sqlite: v11 copy: %w", fault)
 		}
-		if r.decisionAt.Valid {
-			t, perr := parseNullTime(r.decisionAt)
-			if perr != nil {
-				// Unreachable after validateV10Tombstone; kept closed.
-				return perr
-			}
-			r.a.DecisionAt = t
-		}
+		r := v10row{a: a, rawAt: row.raw.decisionAt}
 		if _, err := tx.Exec(`INSERT INTO approval_tombstones_v11
 		    (approval_id, approval_digest, action_id, action_digest, preview_digest,
 		     policy_version, policy_digest, decision_principal_id, decision, decision_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			r.a.ApprovalID, r.a.Digest(), r.a.ActionID, r.a.ActionDigest, r.a.PreviewDigest,
 			r.a.PolicyVersion, r.a.PolicyDigest, r.a.DecisionPrincipalID, r.a.Decision,
-			nullOrString(r.decisionAt)); err != nil {
+			nullOrString(r.rawAt)); err != nil {
 			return fmt.Errorf("action/sqlite: v11 copy insert %q: %w", r.a.ApprovalID, err)
 		}
-	}
-	return nil
-}
-
-// validateV10Tombstone is the R9-W1 wall for the v10→v11 copy — it
-// delegates to THE one contract, minus the digest contrast (v10
-// stores no digest column; the copy computes it). The domain rule
-// rides here too: v10 sweeps wrote ("", "clock") legitimately.
-func validateV10Tombstone(a action.Approval, decisionAt sql.NullString) error {
-	probe := a
-	probe.DecisionAt = time.Time{}
-	if decisionAt.Valid && decisionAt.String != "" {
-		if t, err := time.Parse(time.RFC3339Nano, decisionAt.String); err == nil {
-			probe.DecisionAt = t
-		}
-	}
-	str := func(v string) sql.NullString { return sql.NullString{Valid: true, String: v} }
-	raw := rawTombstone{
-		approvalID:    str(probe.ApprovalID),
-		digest:        str(probe.Digest()),
-		actionID:      str(probe.ActionID),
-		actionDigest:  str(probe.ActionDigest),
-		previewDigest: str(probe.PreviewDigest),
-		policyVersion: str(strconv.FormatInt(probe.PolicyVersion, 10)),
-		policyDigest:  str(probe.PolicyDigest),
-		principal:     str(probe.DecisionPrincipalID),
-		decision:      str(probe.Decision),
-		decisionAt:    decisionAt,
-	}
-	if _, _, fault := judgeStoredTombstone(raw); fault != nil {
-		return fmt.Errorf("action/sqlite: v11 copy: %w", fault)
 	}
 	return nil
 }

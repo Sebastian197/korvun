@@ -64,6 +64,13 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 		!strings.Contains(string(out), "INSERT INTO approval_tombstones") {
 		t.Fatalf("documented .dump quarantine: %v %q", err, out)
 	}
+	// R12-P3-3: the documented hex recipe, exercised for real — the
+	// corrupted bytes come back as their exact hex.
+	if out, err := exec.Command(sqlite3bin, path, //nolint:gosec // G204: the DOCUMENTED operator command
+		"SELECT hex(decision_at) FROM approval_tombstones WHERE approval_id = 'apr_r11_repair000000000000000001';").CombinedOutput(); err != nil ||
+		!strings.Contains(string(out), "636F727275707465642D6279746573") { // hex("corrupted-bytes")
+		t.Fatalf("documented hex recipe: %v %q", err, out)
+	}
 	if n := inspectAt(t, backupPath, `SELECT COUNT(*) FROM approval_tombstones`); n != 1 {
 		t.Fatalf("the backup holds the evidence: %d", n)
 	}

@@ -22,8 +22,11 @@ whatever you change, you own.
    writer: an in-flight `approvals approve`, a `receipt rotate-key`).
    DECLARED WINDOW: nothing prevents another process from starting
    while your sqlite3 session is open — YOU guarantee exclusivity for
-   the whole session; the document cannot. (A sustained lock command
-   is filed to v0.15.1.)
+   the whole session; the document cannot. Run the pgrep check BEFORE
+   opening your sqlite3 session: once it is open, `pgrep -f korvun`
+   will match your own session too (the database path contains
+   "korvun"), so a re-check during the session only yields false
+   positives. (A sustained lock command is filed to v0.15.1.)
 
 2. **Take a CONSISTENT backup first** (never `cp` on a live WAL set):
 

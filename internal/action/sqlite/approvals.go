@@ -158,6 +158,13 @@ func (s *Store) DecideApprovalUnderLaw(ctx context.Context, approvalID, decision
 // decideApproval keeps the law-less mechanics signature for the
 // package's own tests.
 func (s *Store) decideApproval(ctx context.Context, approvalID, decision string, at time.Time, operatorEnv action.Envelope, ident AttemptIdentity, comment string) (string, error) {
+	// R12-P3-1 (the symmetric wall to the empty-law-pin door): a human
+	// decision without a principal would persist exactly the tombstone
+	// the contract condemns. Production always resolves a principal;
+	// the wall makes the prose load-bearing no more.
+	if ident.PrincipalID == "" {
+		return "", fmt.Errorf("action/sqlite: decide approval %q: an empty deciding principal cannot consume authority — a human verb demands a named hand", approvalID)
+	}
 	return s.decideApprovalWithLaw(ctx, approvalID, decision, at, operatorEnv, ident, comment, nil)
 }
 
@@ -379,7 +386,13 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 		// every STORED column is a harmless no-op; any stored
 		// difference is the named conflict.
 		storedDigest, existing, storedAt, gerr := s.tombstoneStoredRowTx(ctx, tx, a.ApprovalID)
-		if gerr == nil && projectStoredTombstone(storedDigest, existing, storedAt) == projectSealedTombstone(sealed, sealed.DecisionAt) {
+		if gerr != nil {
+			// R12-P3-2: an unreadable existing row is NOT a conflict —
+			// disguising a read failure as "history rewritten" would
+			// swallow the real cause.
+			return fmt.Errorf("action/sqlite: tombstone for %q: cannot read the existing row to judge idempotence: %w", a.ApprovalID, gerr)
+		}
+		if projectStoredTombstone(storedDigest, existing, storedAt) == projectSealedTombstone(sealed, sealed.DecisionAt) {
 			return nil
 		}
 		return fmt.Errorf("action/sqlite: tombstone_conflict: approval %q already has an immutable tombstone with a different story — history is never rewritten", a.ApprovalID)
