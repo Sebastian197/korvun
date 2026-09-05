@@ -3,8 +3,9 @@
 
 // R12 (surgical, the first round under the internal adversary): the
 // contract learns the DOMAIN's truth — system-origin decisions
-// (decision='clock', written by the expiry touch and the sweep,
-// approvals.go:210/:577) legitimately carry an empty
+// (decision='clock', written by the expiry touch in
+// decideApprovalWithLaw and by sweepExpiredOne — the two
+// closeApprovalTx callers in approvals.go) legitimately carry an empty
 // decision_principal_id; human verbs demand a principal, and a
 // human hand signing as the clock is an anomaly, both ways
 // (X1). Readers apply THE one contract over the RAW row (X2+X6
@@ -620,5 +621,96 @@ func TestTombstoneTx_productionDoorsStillWrite(t *testing.T) {
 	tomb, _, err = store.ApprovalTombstone(ctx, "act_r12_h3b_human")
 	if err != nil || tomb.Decision != action.DecisionRejected || tomb.DecisionPrincipalID == "" {
 		t.Fatalf("the human door still writes: %+v %v", tomb, err)
+	}
+}
+
+// ---- Adversary train pass (P2-5, P2-7): the fault's class follows
+// where the bytes came from, and a foreign row carrying this story's
+// digest is named by ITS approval id.
+
+// P2-5 — the two entry doors refuse WITHOUT claiming corruption: no
+// row was read, nothing was written, so the class is tombstone_refused
+// and the repair procedure is not invoked; the read door over stored
+// bytes stays tombstone_corrupt. (Mutation m-p25: stamp Stored=true at
+// the doors too — both door asserts go red.)
+func TestTombstoneFault_classFollowsTheDoor(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	// Write door.
+	a := actionpkgApproval("apr_r12_p25_door0000000000000001", "act_r12_p25_door")
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	err = store.tombstoneTx(ctx, tx, a, "", action.DecisionRejected, time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC))
+	_ = tx.Rollback()
+	var fault *TombstoneFault
+	if err == nil || !errors.As(err, &fault) || fault.Stored || !strings.Contains(err.Error(), "tombstone_refused") ||
+		strings.Contains(err.Error(), "tombstone_corrupt") || strings.Contains(err.Error(), "manual-repair") {
+		t.Fatalf("AUDIT P2-5 write door: a refusal at birth must not narrate corruption: %v", err)
+	}
+	// Decision door (the S2-1 wall through the exported surface).
+	parked := expiredParked(t, store, "act_r12_p25_decide")
+	env, _ := operatorDecisionEnv("reject", parked.ApprovalID)
+	_, err = store.DecideApprovalUnderLaw(ctx, parked.ApprovalID, action.DecisionRejected,
+		parked.RequestedAt.Add(time.Second), env, AttemptIdentity{PrincipalID: ""}, "", PolicyPin{})
+	fault = nil
+	if err == nil || !errors.As(err, &fault) || fault.Stored || !strings.Contains(err.Error(), "tombstone_refused") ||
+		strings.Contains(err.Error(), "tombstone_corrupt") {
+		t.Fatalf("AUDIT P2-5 decision door: a refusal at the wall must not narrate corruption: %v", err)
+	}
+	// Read door: stored bytes ARE corruption, and say so.
+	bad := actionpkgApproval("apr_r12_p25_read0000000000000001", "act_r12_p25_read")
+	bad.DecisionPrincipalID = ""
+	bad.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	seedTombstoneRow(t, store, [10]any{bad.ApprovalID, bad.Digest(), bad.ActionID, bad.ActionDigest, bad.PreviewDigest,
+		bad.PolicyVersion, bad.PolicyDigest, "", bad.Decision, bad.DecisionAt.Format(time.RFC3339Nano)})
+	_, _, err = store.ApprovalTombstone(ctx, bad.ActionID)
+	fault = nil
+	if err == nil || !errors.As(err, &fault) || !fault.Stored || !strings.Contains(err.Error(), "tombstone_corrupt") ||
+		!strings.Contains(err.Error(), "tombstone-manual-repair.md") {
+		t.Fatalf("AUDIT P2-5 read door: stored bytes that fail the contract ARE corruption, named with the procedure: %v", err)
+	}
+}
+
+// P2-7 — the adversary's reproduction verbatim: a well-formed row B
+// whose approval_digest column was overwritten with story A's digest.
+// Inserting A collides on the UNIQUE digest with NO row by A's id; the
+// foreign row is read by the digest and judged — the typed fault names
+// B (the row carrying a digest that is not its own) at
+// approval_digest, Stored, never a bare sql.ErrNoRows about a row
+// that "cannot be judged". (Mutation m-p27: drop the by-digest arm —
+// the assert on the fault's ApprovalID goes red.)
+func TestTombstoneTx_digestCollisionNamesTheForeignRow(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	b := actionpkgApproval("apr_r12_p27_b0000000000000000001", "act_r12_p27_b")
+	b.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	seedTombstoneRow(t, store, [10]any{b.ApprovalID, b.Digest(), b.ActionID, b.ActionDigest, b.PreviewDigest,
+		b.PolicyVersion, b.PolicyDigest, b.DecisionPrincipalID, b.Decision, b.DecisionAt.Format(time.RFC3339Nano)})
+	a := actionpkgApproval("apr_r12_p27_a0000000000000000001", "act_r12_p27_a")
+	a.DecisionAt = b.DecisionAt
+	if _, err := store.db.Exec(`UPDATE approval_tombstones SET approval_digest = ? WHERE approval_id = ?`,
+		a.Digest(), b.ApprovalID); err != nil {
+		t.Fatalf("auditor's UPDATE: %v", err)
+	}
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	err = store.tombstoneTx(ctx, tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
+	var fault *TombstoneFault
+	if err == nil || !errors.As(err, &fault) || fault.ApprovalID != b.ApprovalID || fault.Field != "approval_digest" || !fault.Stored {
+		t.Fatalf("AUDIT P2-7: the foreign row must be named by ITS id at approval_digest, stored: %v", err)
+	}
+	if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "cannot be judged") {
+		t.Fatalf("a foreign digest is not an unreadable row: %v", err)
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM approval_tombstones`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("nothing written over the foreign story: n=%d err=%v", n, err)
 	}
 }

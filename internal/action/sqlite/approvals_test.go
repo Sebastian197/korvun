@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -396,9 +397,24 @@ func TestApproval_finiteDecisionsFailClosed(t *testing.T) {
 	store, _ := sealedStore(t)
 	a, _ := pendingRequest(t, store, "act_fin")
 	env, ident := operatorDecisionEnv("burn", a.ApprovalID)
-	if _, err := store.decideApproval(context.Background(), a.ApprovalID, "burn",
-		a.RequestedAt.Add(time.Minute), env, ident, ""); err == nil {
-		t.Fatal("an unknown decision verb must fail closed")
+	// Elevated in the R12 train (adversary P2-6: `err != nil` was an
+	// either/or): the unknown verb is refused AT THE DOOR by the one
+	// origin rule — ErrUnknownDecision identity kept, the typed fault
+	// beside it at Field "decision", NOT stored (a refusal, not
+	// corruption), and the request untouched. Its red lives in
+	// mutation m-p26: neutralize the door's rule call and the write
+	// door still refuses, but only after the row was consumed.
+	_, err := store.decideApproval(context.Background(), a.ApprovalID, "burn",
+		a.RequestedAt.Add(time.Minute), env, ident, "")
+	var fault *TombstoneFault
+	if !errors.Is(err, ErrUnknownDecision) || !errors.As(err, &fault) || fault.Field != "decision" || fault.Stored {
+		t.Fatalf("an unknown decision verb must fail closed AT THE DOOR, by identity and by type: %v", err)
+	}
+	if strings.Contains(err.Error(), "tombstone_corrupt") {
+		t.Fatalf("a refusal at the door is not corruption: %v", err)
+	}
+	if full, _, gerr := store.GetApproval(context.Background(), a.ApprovalID); gerr != nil || full.Status != action.ApprovalPending {
+		t.Fatalf("the refused verb must consume nothing: %v %s", gerr, full.Status)
 	}
 	if _, err := store.decideApproval(context.Background(), "apr_ghost", "approved",
 		a.RequestedAt.Add(time.Minute), env, ident, ""); !errors.Is(err, ErrNotFound) {

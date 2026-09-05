@@ -57,7 +57,9 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 		t.Skip("SKIP NAMED (R12-A9): no sqlite3 binary on this runner — the documented commands cannot be exercised; the in-driver convergence coverage remains in the rest of the suite")
 	}
 	backupPath := filepath.Join(t.TempDir(), "pre-repair.db")
-	if out, err := exec.Command(sqlite3bin, path, ".backup "+backupPath).CombinedOutput(); err != nil { //nolint:gosec // G204: the DOCUMENTED operator command; inputs are LookPath + TempDir paths
+	// The path is single-quoted exactly as the document shows it — the
+	// only form verified on Windows paths is the documented one.
+	if out, err := exec.Command(sqlite3bin, path, ".backup '"+backupPath+"'").CombinedOutput(); err != nil { //nolint:gosec // G204: the DOCUMENTED operator command; inputs are LookPath + TempDir paths
 		t.Fatalf("documented .backup command: %v %s", err, out)
 	}
 	// The documented bind-parameter inspection and the dump quarantine,

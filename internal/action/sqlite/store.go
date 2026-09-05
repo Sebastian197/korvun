@@ -426,16 +426,33 @@ type TombstoneFault struct {
 	Field      string
 	Detail     string
 	Cause      error
+	// Stored is true when the judged bytes were READ from
+	// approval_tombstones (the read door: migrations, readers, the in-tx
+	// idempotence read) — the class is then tombstone_corrupt and the
+	// manual-repair procedure applies. It is false at the two entry
+	// doors (tombstoneTx before its INSERT, the S2-1 wall of
+	// decideApprovalWithLaw): nothing was read, nothing is corrupt, a
+	// story was REFUSED at birth — the class is tombstone_refused and
+	// no repair is owed (adversary train pass, P2-5).
+	Stored bool
 }
 
-// Error names the fault class and its coordinates.
+// Error names the fault class and its coordinates. The class follows
+// Stored: corruption is claimed only over bytes actually read back.
 func (f *TombstoneFault) Error() string {
-	msg := fmt.Sprintf("tombstone_corrupt: tombstone %q: %s", f.ApprovalID, f.Field)
+	class := "tombstone_refused"
+	if f.Stored {
+		class = "tombstone_corrupt"
+	}
+	msg := fmt.Sprintf("%s: tombstone %q: %s", class, f.ApprovalID, f.Field)
 	if f.Detail != "" {
 		msg += " (" + f.Detail + ")"
 	}
 	if f.Cause != nil {
 		msg += ": " + f.Cause.Error()
+	}
+	if !f.Stored {
+		return msg + " — refused at the door, nothing was written"
 	}
 	return msg + " — corrupt evidence demands human adjudication; see docs/operations/tombstone-manual-repair.md"
 }
@@ -468,12 +485,25 @@ type rawTombstone struct {
 // unreadable bytes rejected); policy_version an integer; the stored
 // digest re-derived from the preimage; and the origin rule — a
 // system decision (decision DecisionClock, written only by the expiry
-// touch and the sweep, approvals.go:210/:577) legitimately carries an
+// touch in decideApprovalWithLaw and by sweepExpiredOne, the two
+// closeApprovalTx callers in approvals.go) legitimately carries an
 // EMPTY principal, while a human verb demands one and a clock row
 // carrying a principal is an anomaly, both ways. It returns the
 // parsed preimage, whether decision_at is present, or the typed
 // fault naming row and STABLE column.
 func judgeStoredTombstone(r rawTombstone) (action.Approval, bool, *TombstoneFault) {
+	a, present, fault := judgeRawTombstone(r)
+	if fault != nil {
+		// The read door: these bytes came out of the table, so the
+		// class is corruption and the repair procedure applies.
+		fault.Stored = true
+	}
+	return a, present, fault
+}
+
+// judgeRawTombstone is the contract's body; judgeStoredTombstone is
+// its only caller and stamps Stored on every fault.
+func judgeRawTombstone(r rawTombstone) (action.Approval, bool, *TombstoneFault) {
 	text := func(v sql.NullString) string {
 		if v.Valid {
 			return v.String

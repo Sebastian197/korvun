@@ -2,20 +2,25 @@
 # scripts/adversary-gate-check.sh — THE push-authorization check (R12-H8, B1).
 #
 # One script, no command detection: it answers "is a push authorized
-# RIGHT NOW?" and nothing else. Both doors call it — the Claude Code
+# RIGHT NOW?" and nothing else. Both doors call it — the session
 # PreToolUse hook (.claude/hooks/adversary-gate.sh, the first line) and
-# git's own pre-push hook (.githooks/pre-push, the definitive local
-# gate: git fires it whatever shell form invoked the push).
+# git's own pre-push hook (.githooks/pre-push, the local gate git fires
+# whatever shell form invoked the push).
 #
-# What it checks, exactly (unchanged from the R12 hook it was extracted
-# from — the semantics were NOT widened here):
+# What it checks, exactly:
 #   1. <repo root>/.claude/adversary/last-verdict.md exists;
-#   2. its FIRST line is "VETO LEVANTADO";
-#   3. its modification time is not older than HEAD's commit time
-#      (a verdict recorded before the commit being pushed is stale).
-# What it does NOT check (recorded, B5): the verdict names the audited
-# HEAD only in prose ("HEAD=<sha> at verdict time"); this check does
-# not parse or compare that SHA. Freshness is by mtime alone.
+#   2. its FIRST line is exactly "VETO LEVANTADO" (whole line — a
+#      "VETO MANTENIDO (... VETO LEVANTADO ...)" first line does not pass);
+#   3. HEAD's commit time can be read (no repo, no HEAD → BLOCKED,
+#      never "fresh by default");
+#   4. the verdict file's modification time is not older than HEAD's
+#      commit time.
+# What it does NOT check (recorded; B5 filed to the next train): the
+# audited HEAD SHA. The verdict names it in prose only and this script
+# does not compare it. Consequence, declared: the file is TRACKED, so a
+# fresh clone or `git worktree add` writes it with mtime = now and the
+# freshness check passes there for ANY verdict text. Until B5 lands,
+# freshness holds only in the checkout where the verdict was recorded.
 #
 # Exit 0 = authorized. Exit 2 = blocked, reason on stderr.
 set -u
@@ -28,12 +33,20 @@ if [ ! -f "$VERDICT" ]; then
   echo "BLOCKED by adversary gate: no internal-adversary verdict recorded (.claude/adversary/last-verdict.md). Run the adversary subagent over the complete diff, record its verdict, then push." >&2
   exit 2
 fi
-if ! head -1 "$VERDICT" | grep -q "VETO LEVANTADO"; then
-  echo "BLOCKED by adversary gate: the recorded verdict is not VETO LEVANTADO. Cure or adjudicate the findings first." >&2
+if [ "$(head -1 "$VERDICT")" != "VETO LEVANTADO" ]; then
+  echo "BLOCKED by adversary gate: the recorded verdict's first line is not exactly VETO LEVANTADO. Cure or adjudicate the findings first." >&2
   exit 2
 fi
-HEAD_TIME=$(git -C "$ROOT" log -1 --format=%ct 2>/dev/null || echo 0)
-VERDICT_TIME=$(stat -f %m "$VERDICT" 2>/dev/null || stat -c %Y "$VERDICT" 2>/dev/null || echo 0)
+HEAD_TIME=$(git -C "$ROOT" log -1 --format=%ct 2>/dev/null)
+if [ -z "$HEAD_TIME" ]; then
+  echo "BLOCKED by adversary gate: cannot read HEAD's commit time in $ROOT — freshness cannot be judged, so nothing is authorized." >&2
+  exit 2
+fi
+VERDICT_TIME=$(stat -f %m "$VERDICT" 2>/dev/null || stat -c %Y "$VERDICT" 2>/dev/null)
+if [ -z "$VERDICT_TIME" ]; then
+  echo "BLOCKED by adversary gate: cannot read the verdict's modification time." >&2
+  exit 2
+fi
 if [ "$VERDICT_TIME" -lt "$HEAD_TIME" ]; then
   echo "BLOCKED by adversary gate: the verdict predates HEAD — the audited diff is not the one being pushed. Re-run the adversary over the current diff." >&2
   exit 2

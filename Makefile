@@ -208,10 +208,13 @@ fuzz-smoke:
 
 # The push gate has two doors and ONE decision (R12-H8): the decision is
 # scripts/adversary-gate-check.sh; git's pre-push hook (.githooks/pre-push)
-# is the definitive local door and the Claude Code hook the first line.
-# `install-hooks` symlinks the pre-push under .git/hooks — no core.hooksPath,
-# so graphify's own post-commit keeps working. `hook-probe` runs the probe
-# table through the real Claude Code hook (well under a second).
+# is the door git fires from THIS checkout whatever the shell form, and the
+# session hook the first line. Neither is a security boundary: the hatches
+# and gaps are declared in each file's header (B5, the SHA binding, is
+# filed to the next train). `install-hooks` symlinks the pre-push under
+# .git/hooks — no core.hooksPath, so graphify's own post-commit keeps
+# working. `hook-probe` runs the probe table through BOTH doors against
+# real git fixtures (a few seconds).
 install-hooks:
 	@mkdir -p .git/hooks
 	@chmod +x .githooks/pre-push scripts/adversary-gate-check.sh scripts/adversary-gate-probe.sh

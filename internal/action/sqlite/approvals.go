@@ -366,8 +366,11 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 // inside the closing transaction: the bounded scalar facts — who
 // decided what, when, under which law, over which preview — that
 // reconstruct and prove the sealed ApprovalDigest after retention
-// takes the rows. Idempotent per action (INSERT OR REPLACE: the
-// preimage of a one-shot decision never changes).
+// takes the rows. The wire is a plain INSERT with conflict
+// adjudication (since v11): a byte-identical re-insert of the same
+// story is a harmless no-op, any other collision is refused by name —
+// the preimage of a one-shot decision never changes and history is
+// never rewritten.
 func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, decider, decision string, at time.Time) error {
 	// R12-H3: the WRITE door of THE one origin-and-vocabulary rule —
 	// judged BEFORE the INSERT, so a story the read door would later
@@ -406,6 +409,28 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 		// present-but-empty bytes) is the typed tombstone_corrupt,
 		// never a conflict disguising corruption as a rewrite.
 		storedDigest, existing, storedAt, gerr := s.tombstoneStoredRowTx(ctx, tx, a.ApprovalID)
+		if errors.Is(gerr, sql.ErrNoRows) {
+			// No row by THIS approval id, yet the INSERT collided: the
+			// UNIQUE that fired is approval_digest — a FOREIGN row
+			// carries this story's digest. Two honest stories never
+			// collide there (the digest seals the approval id), so
+			// that row's stored digest cannot re-derive from its own
+			// preimage: read it by the digest and let the one contract
+			// name it — the fault carries THAT row's approval id and
+			// Field approval_digest (adversary train pass, P2-7).
+			_, _, ferr := scanTombstone(tx.QueryRowContext(ctx,
+				`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
+				        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
+				        decision, decision_at
+				   FROM approval_tombstones WHERE approval_digest = ?`, sealed.Digest()))
+			if ferr != nil {
+				return fmt.Errorf("action/sqlite: tombstone for %q: its sealed digest %s already belongs to another row: %w", a.ApprovalID, sealed.Digest(), ferr)
+			}
+			// Unreachable by construction (a row selected by this digest
+			// carries another approval id, so it cannot re-derive it);
+			// kept closed rather than trusted.
+			return fmt.Errorf("action/sqlite: tombstone_digest_collision: approval %q: its sealed digest %s belongs to another tombstone row — refusing to write over a foreign story", a.ApprovalID, sealed.Digest())
+		}
 		if gerr != nil {
 			// R12-P3-2: an unreadable existing row is NOT a conflict —
 			// disguising a read failure as "history rewritten" would
