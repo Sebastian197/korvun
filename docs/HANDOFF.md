@@ -203,6 +203,10 @@ explicit decision.
 > the embedded v8 mold. Numbers as they come out of the run, or not
 > at all.**
 >
+> **R12 filing (2026-09-05): a SUSTAINED profile-lock command (so the
+> manual repair procedure can guarantee exclusivity instead of asking
+> the operator to) joins the v0.15.1 design round.**
+>
 > **R11 TRIMMED (2026-09-04, after THREE paper vetoes — the new cycle:
 > paper → veto → code → gate): the U2 redesign (WithVerificationSnapshot,
 > single-scan integrity, digest-first in approval/custody/last-receipt)

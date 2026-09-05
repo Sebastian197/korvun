@@ -136,9 +136,13 @@ receipt — a declared historical fact, never rewritten.
 The signing key lives on the same machine as the store, so an attacker
 with full control of the profile can rewrite history with the resident
 key, and truncation of the chain's tail leaves no hole to detect. What
-the design guarantees is that any out-of-band edit, deletion or
-reordering made without the active key — or with a retired one — is
-detected and NAMED by the verifier. We deliberately avoid the words
+the design guarantees — for the SEALED RECEIPT CHAIN (signature +
+hash chain) specifically — is that any out-of-band edit, deletion or
+reordering of receipts made without the active key, or with a retired
+one, is detected and NAMED by the verifier. Auxiliary v2-era evidence
+(tombstones, live rows) carries no signature and is governed by the
+"Known limits of the receipt v2 era" section below, not by this
+guarantee. We deliberately avoid the words
 "immutable", "unforgeable" or "blockchain-grade" anywhere in Korvun's
 public materials; reports of public copy overstating these properties
 are welcome exactly like any other invariant violation.

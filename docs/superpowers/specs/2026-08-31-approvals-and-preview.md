@@ -565,8 +565,11 @@ suite tests exercise the full CLI surface IN-PROCESS and are labeled
   system's most sacred table for the same provable outcome. After the
   prune the verifier reconstructs the preimage and PROVES it against
   the sealed digest (approval_evidence_reconstructed with who/what/
-  when/law); a tampered tombstone is approval_mismatch; a missing one
-  (pre-v10 history, declared) degrades to the bare honest note.
+  when/law); a tombstone whose preimage no longer satisfies the
+  stored contract is tombstone_corrupt (R12); a missing one degrades
+  to the honest AMBIGUOUS note — legacy history, deletion, or a
+  coherent rewrite are indistinguishable (R11 superseded the old
+  "pre-v10, declared" certainty and the approval_mismatch arm).
 - X3: the single object reaches the operator execute path (one
   resolution feeds the pin AND the executor); Governance channel
   slices deep-copied; the resolution guard re-made over the AST.

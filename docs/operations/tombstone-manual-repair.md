@@ -16,9 +16,14 @@ whatever you change, you own.
 
 ## Procedure
 
-1. **Stop the server and take the profile lock.** No korvun process
-   may be running against the profile. Do not proceed while anything
-   holds the database.
+1. **Stop every korvun process and verify it.** There is no external
+   lock command — the truth is a process check: `pgrep -f korvun`
+   must print NOTHING (this covers the server AND any live CLI
+   writer: an in-flight `approvals approve`, a `receipt rotate-key`).
+   DECLARED WINDOW: nothing prevents another process from starting
+   while your sqlite3 session is open — YOU guarantee exclusivity for
+   the whole session; the document cannot. (A sustained lock command
+   is filed to v0.15.1.)
 
 2. **Take a CONSISTENT backup first** (never `cp` on a live WAL set):
 
@@ -36,18 +41,23 @@ whatever you change, you own.
    sqlite> SELECT * FROM approval_tombstones WHERE approval_id = @apr;
    ```
 
-4. **Quarantine the row preserving bytes, types and NULLs** — use the
-   dump form (a literal INSERT), never an ambiguous textual export:
+4. **Quarantine.** The FAITHFUL quarantine is the consistent
+   `.backup` you already took in step 2 — it preserves every byte,
+   type and NULL by construction. For a readable row-level record you
+   may ADD a dump, declaring its limit: `.dump` renders TEXT values
+   and TRUNCATES a TEXT field after an embedded NUL byte — if you
+   suspect binary garbage, capture the exact bytes as hex instead:
 
    ```
    sqlite3 "<profile>/korvun.db" ".dump approval_tombstones" > quarantine-tombstones.sql
+   sqlite3 "<profile>/korvun.db" "SELECT hex(decision_at) FROM approval_tombstones WHERE approval_id = '<apr>';"
    ```
-
-   (Keep only the INSERT line of the named row alongside the full dump.)
 
 5. **Adjudicate.** A digest does not let you recover an original
    value. A correction is acceptable ONLY with the exact preimage
-   obtained from independent evidence (receipts, era logs). "Fixing
+   obtained from independent evidence — era logs, previous backups,
+   prior exports. (A v2 receipt is NOT such a source: it seals only
+   the approval digest, not the fields themselves.) "Fixing
    the field so the digest matches" is forbidden — that is
    fabrication. If no independent evidence exists, the alternatives
    are: keep the profile on its current version (do not upgrade), or
