@@ -49,8 +49,10 @@
 # quality` and, in CI, on the Linux and macOS runners.
 set -o pipefail
 # The tools come BEFORE the read: a missing `cat` would leave INPUT
-# empty and an empty command reads as "no push" (adversary fifth-pass
-# mutation m-notr exposed it).
+# empty and an empty command reads as "no push" (adversary fourth-pass
+# mutation m-notr exposed it). Accepted reading, declared (sixth pass,
+# P3-2): a NON-empty input that carries no command — whitespace only,
+# `null`, `{}` — yields an empty command and is not a push.
 for tool in cat jq grep tr; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "BLOCKED by adversary gate: $tool is missing — the hook cannot read the command, so it fails closed." >&2
@@ -82,9 +84,12 @@ HATCH_RE='--no-ver[a-z]*|core\.hookspath'
 # turn a MATCH into "no match" for any command longer than the pipe
 # buffer — the fail-open the repo already documented in quality.yml
 # (adversary fourth pass, P3-1).
-# grep's three outcomes are kept apart: 0 match, 1 no match, anything
-# else (a broken grep, a failed here-string) is a tooling failure and
-# BLOCKS — never read as "no match" (adversary fifth pass, P3-A).
+# grep's three outcomes are kept apart: 0 match, 1 no match, a grep
+# status above 1 (a broken grep) is a tooling failure and BLOCKS —
+# never read as "no match" (adversary fifth pass, P3-A). NOT covered,
+# declared (sixth pass, P3-1): a here-string that bash cannot
+# materialize (unwritable temp dir) fails the command with status 1
+# before grep runs, and 1 reads as "no match".
 match_one() {
   grep -qE -- "$1" <<<"$2"
   local s=$?
