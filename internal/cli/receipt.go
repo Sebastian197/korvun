@@ -173,8 +173,11 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 	// 7b. Approval coherence (Etapa 5, FR-RCP): a v2 receipt that
 	// references its approval must match the approval row's CONSUMED
 	// decision digest — a rewritten approval row (decider, decision,
-	// timing) breaks the sealed reference BY NAME. Approvals are never
-	// pruned, so an absent row here is itself a failure.
+	// timing) breaks the sealed reference BY NAME. Approvals ARE
+	// pruned — the retention cascade removes them WITH their terminal
+	// action (ADR-0046) — so an absent approval row forks below: both
+	// rows gone is retention (the tombstone carries the story); the
+	// action alone remaining makes the absence a failure.
 	if r.SchemaVersion >= 2 && r.ApprovalDigest != "" {
 		switch consumed, _, err := store.GetApprovalByAction(ctx, r.ActionID); {
 		case errors.Is(err, actionsqlite.ErrNotFound):
@@ -204,8 +207,12 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 					fail("tombstone_action_mismatch", "the tombstone for the sealed digest points at %s but the receipt belongs to %s — the evidence was re-pointed", tomb.ActionID, r.ActionID)
 				case terr == nil && tomb.Digest() == r.ApprovalDigest:
 					notes = append(notes, reconstructionNote(tomb, tombAtPresent))
-				case terr == nil:
-					fail("approval_mismatch", "the tombstone found for %s re-derives %s but the receipt seals %s — the preimage was tampered", r.ActionID, tomb.Digest(), r.ApprovalDigest)
+				// R12: the old "re-derives another digest" arm died as
+				// UNREACHABLE by construction — a row selected by the
+				// sealed digest either passes the one contract (and then
+				// re-derives exactly that digest) or comes back as the
+				// typed corruption below. Keeping it would be an
+				// either/or hiding an impossible class.
 				case errors.Is(terr, actionsqlite.ErrNotFound):
 					// R11: the by-action integrity arm DIED with its false
 					// positive and its false negative (direction decision;
@@ -214,7 +221,14 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 					// verbatim — never a certainty this verifier cannot have.
 					notes = append(notes, "approval_row_absent: no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable (the digest-sealed receipt is the surviving evidence)")
 				default:
-					fail("tombstone_read_failed", "cannot read the tombstone evidence for %s: %v — never disguised as old history", r.ActionID, terr)
+					// R12-A11: a typed fault means the bytes WERE read and
+					// are corrupt — saying "cannot read" would be a lie.
+					var fault *actionsqlite.TombstoneFault
+					if errors.As(terr, &fault) {
+						fail("tombstone_corrupt", "the tombstone selected by the sealed digest is corrupt at %s: %v", fault.Field, terr)
+					} else {
+						fail("tombstone_read_failed", "cannot read the tombstone evidence for %s: %v — never disguised as old history", r.ActionID, terr)
+					}
 				}
 				break
 			}
