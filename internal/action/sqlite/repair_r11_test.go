@@ -79,7 +79,8 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 	// (This whole procedure test's skip path is probed by mutation
 	// m-skip: an emptied PATH must produce the NAMED skip above.)
 	if out, err := exec.Command(sqlite3bin, path, //nolint:gosec // G204: the DOCUMENTED operator command
-		"SELECT hex(decision_at) FROM approval_tombstones WHERE approval_id = 'apr_r11_repair000000000000000001';").CombinedOutput(); err != nil ||
+		".param set @apr 'apr_r11_repair000000000000000001'",
+		"SELECT hex(decision_at) FROM approval_tombstones WHERE approval_id = @apr;").CombinedOutput(); err != nil ||
 		!strings.Contains(string(out), "636F727275707465642D6279746573") { // hex("corrupted-bytes")
 		t.Fatalf("documented hex recipe: %v %q", err, out)
 	}

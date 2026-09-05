@@ -46,14 +46,27 @@ whatever you change, you own.
 
 4. **Quarantine.** The FAITHFUL quarantine is the consistent
    `.backup` you already took in step 2 — it preserves every byte,
-   type and NULL by construction. For a readable row-level record you
-   may ADD a dump, declaring its limit: `.dump` renders TEXT values
-   and TRUNCATES a TEXT field after an embedded NUL byte — if you
-   suspect binary garbage, capture the exact bytes as hex instead:
+   type and NULL by construction. The UNIVERSAL way to record the
+   exact bytes of the named field, whatever your sqlite3 version, is
+   the hex recipe (bind the id as in step 3; the column is the one
+   the boot error names):
+
+   ```
+   sqlite3 "<profile>/korvun.db"
+   sqlite> .param set @apr 'apr_...'
+   sqlite> SELECT hex(decision_at) FROM approval_tombstones WHERE approval_id = @apr;
+   ```
+
+   A `.dump` is a readable CONVENIENCE, not the faithful record, and
+   its rendering of TEXT is version-dependent. Observed with sqlite3
+   3.39.5 (macOS): `.dump` TRUNCATES a TEXT value after an embedded
+   NUL byte. From sqlite3 3.50.0 the shell encodes special characters
+   through `unistr()` (its changelog, 2025-05-29); what it does with an
+   embedded NUL there is NOT verified by this project. Do not rely on
+   a dump for exact bytes on any version:
 
    ```
    sqlite3 "<profile>/korvun.db" ".dump approval_tombstones" > quarantine-tombstones.sql
-   sqlite3 "<profile>/korvun.db" "SELECT hex(decision_at) FROM approval_tombstones WHERE approval_id = '<apr>';"
    ```
 
 5. **Adjudicate.** A digest does not let you recover an original
