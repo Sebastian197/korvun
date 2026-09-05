@@ -4,9 +4,12 @@
 # Git runs this hook for every `git push` from THIS checkout, whatever
 # shell form invoked it (keywords, wrappers, backslashes, absolute
 # paths: none of the shapes that fool a command regex exist here).
-# What it does NOT stop, declared: `--no-verify` and a moved
+# What it does NOT stop, declared: `git send-pack` (the plumbing
+# pushes without running pre-push at all — the session hook gates
+# that word, nothing else does); `--no-verify` and a moved
 # `core.hooksPath` (git's own escape hatches — the session hook blocks
-# their spellings, nothing blocks them from another terminal);
+# their spellings, nothing blocks them from another terminal or from a
+# config file written elsewhere);
 # removing or un-executing this hook (git silently skips a hook that
 # is not executable); and the freshness gap of a fresh clone or
 # worktree, where the tracked verdict's mtime is reset (see the check

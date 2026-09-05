@@ -87,6 +87,9 @@ git -c a=b --no-pager push
 Git push origin master
 git pu''sh origin master
 git pus\h origin master
+git pu$'s'h origin master
+git pu$"s"h origin master
+git send-pack origin master
 C:\tools\git\bin\git.exe push origin master
 EOF
 probe "$NOVERDICT" 2 'git push --no-verify origin master' 'skip git'"'"'s pre-push hook'
@@ -105,6 +108,8 @@ probe "$FRESH" 2 'git -c CORE.HOOKSPATH=/dev/null commit -m x' "$HATCH"
 probe "$FRESH" 2 'git commit --no-verify -m x' "$HATCH"
 probe "$FRESH" 2 'Git push --no-verify origin ensayo' "$HATCH"
 probe "$FRESH" 2 'git pu'"''"'sh --no-"verify" origin ensayo' "$HATCH"
+probe "$FRESH" 2 'git push --no-$'"'"'v'"'"'erify origin master' "$HATCH"
+probe "$FRESH" 2 'git push --no-$"v"erify origin master' "$HATCH"
 
 echo "--- door 1, the decision itself: stale (2), vetoed (2), check script gone (2), each by its reason"
 probe "$STALE" 2 'git push origin master' 'predates HEAD'
@@ -126,7 +131,10 @@ cat > "$FAKEBIN/stat" <<EOF
 # multi-line block to stdout and fail on the '%m' operand; -c %Y works.
 case "\$1" in
   -f) printf '  File: "%s"\n    ID: 1000 Namelen: 255 Type: apfs\n' "\$3"; echo "stat: cannot read file system information for '%m'" >&2; exit 1 ;;
-  -c) exec "$REALSTAT" -f %m "\$3" ;;
+  # The -c arm must answer on ANY host: GNU stat has -c, BSD stat has
+  # -f %m — try the host's real dialects in turn (the emulation is not
+  # tied to the BSD host it was written on; adversary third pass P2-1).
+  -c) "$REALSTAT" -c %Y "\$3" 2>/dev/null || exec "$REALSTAT" -f %m "\$3" ;;
   *)  exec "$REALSTAT" "\$@" ;;
 esac
 EOF
@@ -150,6 +158,24 @@ if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "as an integer"; then
   printf 'FAIL  garbage-stat: expected 2 + "as an integer", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
 else echo "ok    exit 2  check under a garbage-printing stat blocks by the integer rule"; fi
 
+# A git that prints non-digits with exit 0 before the epoch (the
+# log.showSignature shape): HEAD's time must be refused as unreadable,
+# never compared as an integer expression that errors into "fresh".
+FAKEGIT="$TMP/fakegit"; mkdir -p "$FAKEGIT"
+REALGIT=$(command -v git)
+cat > "$FAKEGIT/git" <<EOF
+#!/bin/bash
+for a in "\$@"; do
+  if [ "\$a" = "log" ]; then printf 'gpg: Good signature from "probe"\n%s\n' "\$("$REALGIT" "\$@")"; exit 0; fi
+done
+exec "$REALGIT" "\$@"
+EOF
+chmod +x "$FAKEGIT/git"
+out=$(PATH="$FAKEGIT:$PATH" bash "$ROOT/scripts/adversary-gate-check.sh" "$FRESH" 2>&1); code=$?
+if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "cannot read HEAD's commit time"; then
+  printf 'FAIL  garbage-git: expected 2 + "cannot read HEAD'"'"'s commit time", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
+else echo "ok    exit 2  check under a git that prints signature lines blocks by the HEAD-time rule"; fi
+
 echo "--- tooling: the hook with jq absent from PATH blocks every command (2)"
 NOJQ="$TMP/nojq"; mkdir -p "$NOJQ"
 for tool in bash grep tr printf echo cat git head stat; do
@@ -159,6 +185,16 @@ out=$(printf '{"tool_input":{"command":"echo hello"}}' | PATH="$NOJQ" CLAUDE_PRO
 if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "jq is missing"; then
   printf 'FAIL  no-jq: expected 2 + "jq is missing", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
 else echo "ok    exit 2  hook without jq fails closed"; fi
+# Only bash, jq and printf on PATH: without grep/tr the shape cannot be
+# read and the hook must block, never fall through to exit 0.
+ONLYJQ="$TMP/onlyjq"; mkdir -p "$ONLYJQ"
+for tool in bash jq printf; do
+  p=$(command -v "$tool" 2>/dev/null) && [ -n "$p" ] && ln -sf "$p" "$ONLYJQ/$tool"
+done
+out=$(printf '{"tool_input":{"command":"git push --no-verify origin master"}}' | PATH="$ONLYJQ" CLAUDE_PROJECT_DIR="$STALE" bash "$HOOK" 2>&1); code=$?
+if [ "$code" -ne 2 ] || ! echo "$out" | grep -qE "(grep|tr) is missing"; then
+  printf 'FAIL  no-grep-tr: expected 2 + "grep/tr is missing", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))
+else echo "ok    exit 2  hook without grep/tr fails closed"; fi
 out=$(printf 'not json' | CLAUDE_PROJECT_DIR="$FRESH" bash "$HOOK" 2>&1); code=$?
 if [ "$code" -ne 2 ] || ! echo "$out" | grep -qF "not parseable JSON"; then
   printf 'FAIL  bad-json: expected 2 + "not parseable JSON", got %s\n      %s\n' "$code" "$out"; fails=$((fails + 1))

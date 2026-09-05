@@ -85,6 +85,17 @@ jobs:
           command -v sqlite3
           sqlite3 --version
 
+      # R12-H8: the push gate's probe table runs on the Linux and macOS
+      # runners — the GNU `stat` path of scripts/adversary-gate-check.sh
+      # is EXECUTED here on a real GNU host (the local probe can only
+      # emulate it on macOS). Windows (git-bash) is not covered by this
+      # step, declared: the gate is a discipline aid for the author's
+      # macOS session, not a CI product gate.
+      - name: Push-gate probe table (Linux, macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/adversary-gate-probe.sh
+
       - name: Test
         shell: bash
         run: |

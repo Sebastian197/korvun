@@ -14,6 +14,24 @@ The boot error names the row (`approval_id`) and the field. Deleting
 or altering evidence is an adjudication decision, not maintenance —
 whatever you change, you own.
 
+**Not only the boot points here.** A decided close can also refuse
+with the same `tombstone_corrupt` fault when its tombstone's
+re-insert collides with a stored row that fails the contract. One
+such fault names the field `approval_id` itself: "a stored row
+carries this story's digest and re-derives it, but is not addressable
+by its approval id". That row will NOT answer `WHERE approval_id =
+@apr` in steps 3 and 4 — its key column no longer holds TEXT. Find it
+by the value's bytes instead, and read its storage class:
+
+```
+sqlite> SELECT typeof(approval_id), hex(approval_id) FROM approval_tombstones
+   ...>  WHERE CAST(approval_id AS TEXT) = @apr;
+```
+
+The read paths (`receipt verify`, the boot re-validation) do not judge
+storage classes and report such a row as clean; only the collision at
+write time surfaces it. Declared limit of this era.
+
 ## Procedure
 
 1. **Stop every korvun process and verify it.** There is no external
