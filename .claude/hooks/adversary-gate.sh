@@ -14,7 +14,14 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 # quoted mention inside a heredoc still passes (no separator+git+push
 # shape). FAIL-CLOSED bias: over-matching costs a fresh verdict;
 # under-matching costs an ungated push.
-if ! echo "$COMMAND" | grep -qE '(^|[;&|][[:space:]]*|\|\|[[:space:]]*|&&[[:space:]]*)([^[:space:]"'"'"']*/)?git([[:space:]]+(-[^[:space:]]+|--[^[:space:]]+)([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$)'; then
+# (Third pass fixed a regression: the old rule tolerated leading
+# whitespace after ^ — an indented continuation line — and the first
+# rewrite lost it. Every separator, including start-of-line, now
+# swallows whitespace. Known perimeter, recorded: env-var prefixes
+# (X=y git push), command/env/exec wrappers, subshells and sh -c
+# strings are beyond any regex — a regex is not a shell parser; the
+# residual risk is accepted and documented here.)
+if ! echo "$COMMAND" | grep -qE '(^[[:space:]]*|[;&|][[:space:]]*|\|\|[[:space:]]*|&&[[:space:]]*)([^[:space:]"'"'"']*/)?git([[:space:]]+(-[^[:space:]]+|--[^[:space:]]+)([[:space:]]+[^-][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|$)'; then
   exit 0
 fi
 VERDICT="$CLAUDE_PROJECT_DIR/.claude/adversary/last-verdict.md"

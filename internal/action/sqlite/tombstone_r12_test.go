@@ -53,7 +53,8 @@ func sweepTombstoneRow(aprID, actID string) [10]any {
 
 // A1 — the auditor's NORMAL-USE profile: an approval closed by the
 // expiry sweep migrates to v12 CLEAN. Today the contract wrongly
-// rejects the domain's own truth and blocks real profiles.
+// rejects the domain's own truth and blocks real profiles. (Its red
+// lives in mutation m-x1: neutralize the clock-accepts branch.)
 func TestMigrationV12_sweepClosedApprovalMigratesClean(t *testing.T) {
 	t.Parallel()
 	path := buildV11LegacyFile(t, sweepTombstoneRow("apr_r12_sweep0000000000000000001", "act_r12_sweep"))
@@ -111,7 +112,9 @@ func TestMigrationV12_humanVerbWithEmptyPrincipalIsCorrupt(t *testing.T) {
 	}
 }
 
-// A3 — the other direction: a human hand signing as the clock.
+// A3 — the other direction: a human hand signing as the clock. (Its
+// red lives in mutation m-x1c: neutralize the clock-with-principal
+// branch.)
 func TestMigrationV12_clockWithPrincipalIsCorrupt(t *testing.T) {
 	t.Parallel()
 	a := actionpkgApproval("apr_r12_fakeclock000000000000001", "act_r12_fakeclock")
@@ -183,7 +186,9 @@ func TestMigrationV12_typeCorruptPolicyVersionIsFaultTyped(t *testing.T) {
 	}
 }
 
-// A13 — the READER judges types through the same one contract.
+// A13 — the READER judges types through the same one contract. (Its
+// red lives in mutation m-x2 too: the dropped fault silences both
+// reader molds.)
 func TestTombstoneReader_typeCorruptPolicyVersionIsFaultTyped(t *testing.T) {
 	t.Parallel()
 	store, _ := sealedStore(t)
