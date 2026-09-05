@@ -65,7 +65,11 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 		t.Fatalf("documented .dump quarantine: %v %q", err, out)
 	}
 	// R12-P3-3: the documented hex recipe, exercised for real — the
-	// corrupted bytes come back as their exact hex.
+	// corrupted bytes come back as their exact hex. Its red lives in
+	// mutation m-hex: seed different bytes and the expected hex stops
+	// matching — the assert bites on content, not on command success.
+	// (This whole procedure test's skip path is probed by mutation
+	// m-skip: an emptied PATH must produce the NAMED skip above.)
 	if out, err := exec.Command(sqlite3bin, path, //nolint:gosec // G204: the DOCUMENTED operator command
 		"SELECT hex(decision_at) FROM approval_tombstones WHERE approval_id = 'apr_r11_repair000000000000000001';").CombinedOutput(); err != nil ||
 		!strings.Contains(string(out), "636F727275707465642D6279746573") { // hex("corrupted-bytes")
