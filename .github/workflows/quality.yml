@@ -58,6 +58,33 @@ jobs:
           GO_LINT_DIRS=$(echo "$GO_PKGS" | sed "s|github.com/Sebastian197/korvun|.|")
           $(go env GOPATH)/bin/golangci-lint run $GO_LINT_DIRS
 
+      # R12-H10: the tombstone manual-repair test (internal/action/sqlite,
+      # repair_r11_test.go) runs the operator's REAL sqlite3 commands
+      # (.backup/.param/.dump/hex). Under CI it FAILS by name when the
+      # shell is missing (never a skip), so the runner must carry it and
+      # say which version it ran. Linux: the OS package (already on the
+      # image, apt is a no-op then). macOS: the OS ships /usr/bin/sqlite3
+      # and the procedure is documented against THAT shell, so brew is
+      # only the fallback (its formula is keg-only, hence the PATH line).
+      # Windows: the Chocolatey package (its tools zip; every exe in a
+      # package gets a shim on PATH — chocolatey/docs, create-cli-package).
+      - name: Ensure sqlite3 (the repair-procedure test runs the real shell)
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            Linux)   sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3 ;;
+            macOS)   if ! command -v sqlite3 >/dev/null; then
+                       brew install sqlite
+                       echo "$(brew --prefix sqlite)/bin" >> "$GITHUB_PATH"
+                       export PATH="$(brew --prefix sqlite)/bin:$PATH"
+                     fi ;;
+            Windows) choco install sqlite --no-progress -y ;;
+            *)       echo "unknown RUNNER_OS=$RUNNER_OS"; exit 1 ;;
+          esac
+          command -v sqlite3
+          sqlite3 --version
+
       - name: Test
         shell: bash
         run: |

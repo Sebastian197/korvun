@@ -12,6 +12,7 @@ package sqlite
 
 import (
 	"database/sql"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -46,6 +47,13 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 	// VACUUM INTO died here — it was not what the document orders).
 	sqlite3bin, lookErr := exec.LookPath("sqlite3")
 	if lookErr != nil {
+		// R12-H10: under CI the skip is IMPOSSIBLE — a green gate that
+		// never ran the documented commands would be a lie. GitHub
+		// exports CI=true; the quality workflow installs the shell
+		// per OS and logs `sqlite3 --version` before this runs.
+		if os.Getenv("CI") != "" {
+			t.Fatalf("R12-H10: the sqlite3 binary is not on PATH on this CI runner (%v) — the documented repair commands MUST run under CI; fix the workflow's sqlite3 step, never skip", lookErr)
+		}
 		t.Skip("SKIP NAMED (R12-A9): no sqlite3 binary on this runner — the documented commands cannot be exercised; the in-driver convergence coverage remains in the rest of the suite")
 	}
 	backupPath := filepath.Join(t.TempDir(), "pre-repair.db")
