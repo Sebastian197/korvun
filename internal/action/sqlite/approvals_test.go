@@ -404,6 +404,7 @@ func TestApproval_finiteDecisionsFailClosed(t *testing.T) {
 	// corruption), and the request untouched. Its red lives in
 	// mutation m-p26: neutralize the door's rule call and the write
 	// door still refuses, but only after the row was consumed.
+	// Evidence level: in-process unit (one store, one connection).
 	_, err := store.decideApproval(context.Background(), a.ApprovalID, "burn",
 		a.RequestedAt.Add(time.Minute), env, ident, "")
 	var fault *TombstoneFault

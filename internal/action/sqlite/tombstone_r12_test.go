@@ -714,3 +714,52 @@ func TestTombstoneTx_digestCollisionNamesTheForeignRow(t *testing.T) {
 		t.Fatalf("nothing written over the foreign story: n=%d err=%v", n, err)
 	}
 }
+
+// P3-1 (adversary second pass) — the arm that was called unreachable is
+// reachable: story A stored legitimately, then its PRIMARY KEY column
+// rewritten to a BLOB of the same bytes (TEXT affinity does not convert
+// it; `=` and the PK index no longer equate it to the text). A's
+// idempotent re-insert collides on the UNIQUE digest, the read by id
+// finds nothing, the read by digest passes the contract and re-derives
+// A itself — so the fault names the KEY: Field approval_id, Stored,
+// typed, with the repair pointer; never a "foreign story" narrative.
+// (Mutation m-blob: the arm back to the untyped collision error — the
+// errors.As assert goes red.)
+func TestTombstoneTx_blobKeyIsNamedAsStoredKeyCorruption(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	a := actionpkgApproval("apr_r12_p31_blob00000000000000001", "act_r12_p31_blob")
+	a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	if err := store.tombstoneTx(ctx, tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt); err != nil {
+		t.Fatalf("legitimate write: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if _, err := store.db.Exec(`UPDATE approval_tombstones SET approval_id = CAST(approval_id AS BLOB) WHERE approval_id = ?`,
+		a.ApprovalID); err != nil {
+		t.Fatalf("auditor's UPDATE: %v", err)
+	}
+	tx2, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin 2: %v", err)
+	}
+	defer func() { _ = tx2.Rollback() }()
+	err = store.tombstoneTx(ctx, tx2, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
+	var fault *TombstoneFault
+	if err == nil || !errors.As(err, &fault) || fault.Field != "approval_id" || !fault.Stored || fault.ApprovalID != a.ApprovalID {
+		t.Fatalf("AUDIT P3-1: the BLOB key is stored corruption of approval_id, typed: %v", err)
+	}
+	if strings.Contains(err.Error(), "foreign story") || !strings.Contains(err.Error(), "tombstone-manual-repair.md") {
+		t.Fatalf("named as key corruption with the repair pointer, not as another story: %v", err)
+	}
+	var n int
+	if err := tx2.QueryRowContext(ctx, `SELECT COUNT(*) FROM approval_tombstones`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("nothing written: n=%d err=%v", n, err)
+	}
+}

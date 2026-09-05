@@ -426,10 +426,16 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 			if ferr != nil {
 				return fmt.Errorf("action/sqlite: tombstone for %q: its sealed digest %s already belongs to another row: %w", a.ApprovalID, sealed.Digest(), ferr)
 			}
-			// Unreachable by construction (a row selected by this digest
-			// carries another approval id, so it cannot re-derive it);
-			// kept closed rather than trusted.
-			return fmt.Errorf("action/sqlite: tombstone_digest_collision: approval %q: its sealed digest %s belongs to another tombstone row — refusing to write over a foreign story", a.ApprovalID, sealed.Digest())
+			// REACHABLE (adversary P3-1): the row by the digest passes the
+			// contract and re-derives THIS story — so it IS this story,
+			// yet `WHERE approval_id = ?` did not find it. The key column
+			// no longer compares equal to its own text: a storage class
+			// change (a BLOB where TEXT is expected, which SQLite's =
+			// and the PK index do not equate). Corruption of the stored
+			// key, named as such — typed, Stored, the repair pointer.
+			return fmt.Errorf("action/sqlite: tombstone for %q: %w", a.ApprovalID, &TombstoneFault{
+				ApprovalID: a.ApprovalID, Field: "approval_id", Stored: true,
+				Detail: "a stored row carries this story's digest and re-derives it, but is not addressable by its approval id — the key column's storage class is not TEXT"})
 		}
 		if gerr != nil {
 			// R12-P3-2: an unreadable existing row is NOT a conflict —
