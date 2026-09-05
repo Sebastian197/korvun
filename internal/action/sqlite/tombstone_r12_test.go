@@ -27,6 +27,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Sebastian197/korvun/internal/action"
 )
 
 // rawDB opens a raw connection to the store file.
@@ -406,5 +408,217 @@ func TestTombstoneIdempotence_wellFormedRowKeepsR10V2Semantics(t *testing.T) {
 	var fault *TombstoneFault
 	if errors.As(err, &fault) {
 		t.Fatalf("a well-formed row is not corruption: %v", err)
+	}
+}
+
+// ---- H2/H3 (the twelfth review's findings 2 and 3): ONE origin-and-
+// vocabulary rule (judgeTombstoneOrigin) with two doors — the read
+// door (judgeStoredTombstone: migrations, scanTombstone, the in-tx
+// idempotence read) and the write door (tombstoneTx, before the
+// INSERT; decideApprovalWithLaw's S2-1 wall delegates to it).
+
+// outOfVocabularyVerbs are the shapes finding 2 let through: a case
+// variant of the clock, a STATUS spelling, and garbage.
+var outOfVocabularyVerbs = []string{"CLOCK", "expired", "bogus"}
+
+// badVerbRow is a stored tombstone whose only flaw is its verb: the
+// principal is named and the digest re-derives over that very story.
+func badVerbRow(aprID, actID, verb string) ([10]any, action.Approval) {
+	a := actionpkgApproval(aprID, actID)
+	a.Decision = verb
+	a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	return [10]any{a.ApprovalID, a.Digest(), a.ActionID, a.ActionDigest, a.PreviewDigest,
+		a.PolicyVersion, a.PolicyDigest, a.DecisionPrincipalID, a.Decision,
+		a.DecisionAt.Format(time.RFC3339Nano)}, a
+}
+
+// seedTombstoneRow inserts one raw tombstone row into an open store.
+func seedTombstoneRow(t *testing.T, store *Store, row [10]any) {
+	t.Helper()
+	if _, err := store.db.Exec(`INSERT INTO approval_tombstones
+	    (approval_id, approval_digest, action_id, action_digest, preview_digest,
+	     policy_version, policy_digest, decision_principal_id, decision, decision_at)
+	 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9]); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+}
+
+// H2(a) — read door 1, the v11→v12 revalidation: a verb outside the
+// vocabulary is the typed fault at Field "decision", never a clean
+// migration. (Its red lives in mutation m-h2: the rule accepts any
+// non-clock string as a human verb.)
+func TestMigrationV12_outOfVocabularyVerbIsCorruptAtDecision(t *testing.T) {
+	t.Parallel()
+	for _, verb := range outOfVocabularyVerbs {
+		row, _ := badVerbRow("apr_r12_h2mig_"+verb+"0000000000001", "act_r12_h2mig_"+verb, verb)
+		path := buildV11LegacyFile(t, row)
+		_, err := Open(path)
+		var fault *TombstoneFault
+		if err == nil || !errors.As(err, &fault) || fault.Field != "decision" {
+			t.Fatalf("AUDIT R12-H2(a) migration, verb %q: must be the typed fault at decision, never err=nil: %v", verb, err)
+		}
+		if v := inspect(t, path, `SELECT version FROM action_schema`); v != 11 {
+			t.Fatalf("v11 stands for %q: %d", verb, v)
+		}
+	}
+}
+
+// H2(a) — read door 2, scanTombstone through ApprovalTombstone and
+// ApprovalTombstoneByDigest. (Mutation m-h2.)
+func TestTombstoneReader_outOfVocabularyVerbIsCorruptAtDecision(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	for _, verb := range outOfVocabularyVerbs {
+		row, a := badVerbRow("apr_r12_h2read_"+verb+"000000000001", "act_r12_h2read_"+verb, verb)
+		seedTombstoneRow(t, store, row)
+		_, _, err := store.ApprovalTombstone(context.Background(), a.ActionID)
+		var fault *TombstoneFault
+		if err == nil || !errors.As(err, &fault) || fault.Field != "decision" {
+			t.Fatalf("AUDIT R12-H2(a) by action, verb %q: %v", verb, err)
+		}
+		_, _, err = store.ApprovalTombstoneByDigest(context.Background(), a.Digest())
+		fault = nil
+		if err == nil || !errors.As(err, &fault) || fault.Field != "decision" {
+			t.Fatalf("AUDIT R12-H2(a) by digest, verb %q: %v", verb, err)
+		}
+	}
+}
+
+// H2(a) — read door 3, the in-tx idempotence read: a VALID story
+// re-inserted over a stored bad-verb row (same approval_id) hits the
+// UNIQUE conflict and the EXISTING row is judged — the typed fault at
+// decision, never tombstone_conflict. (The valid re-insert passes the
+// write door on purpose, so this mold reaches the READ side; the
+// write door has its own molds in H3.) (Mutation m-h2.)
+func TestTombstoneIdempotence_outOfVocabularyExistingRowIsCorruptAtDecision(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	for _, verb := range outOfVocabularyVerbs {
+		row, a := badVerbRow("apr_r12_h2idem_"+verb+"000000000001", "act_r12_h2idem_"+verb, verb)
+		seedTombstoneRow(t, store, row)
+		tx, err := store.db.BeginTx(context.Background(), nil)
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+		err = store.tombstoneTx(context.Background(), tx, a, a.DecisionPrincipalID, action.DecisionRejected, a.DecisionAt)
+		_ = tx.Rollback()
+		var fault *TombstoneFault
+		if err == nil || !errors.As(err, &fault) || fault.Field != "decision" {
+			t.Fatalf("AUDIT R12-H2(a) idempotence, verb %q: the EXISTING row's verb is judged: %v", verb, err)
+		}
+		if strings.Contains(err.Error(), "tombstone_conflict") {
+			t.Fatalf("corruption is not a rewritten history: %v", err)
+		}
+	}
+}
+
+// H2(b) — the principal pairs at the reader and idempotence doors
+// (the migration door is already covered by A2 and A3 above): a clock
+// row carrying a principal, and a human verb with an empty one, are
+// the typed fault at decision_principal_id. Born green — the origin
+// rule already lived in the contract (X1); its reds are mutations
+// m-x1b and m-x1c, re-executed for these molds in the H2 addendum.
+func TestTombstoneReaderAndIdempotence_principalPairsAreCorruptAtPrincipal(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	shapes := []struct{ name, verb, principal string }{
+		{"clock-with-principal", action.DecisionClock, "principal_operator"},
+		{"human-without-principal", action.DecisionRejected, ""},
+	}
+	for _, sh := range shapes {
+		a := actionpkgApproval("apr_r12_h2b_"+sh.name+"000000001", "act_r12_h2b_"+sh.name)
+		a.Decision, a.DecisionPrincipalID = sh.verb, sh.principal
+		a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+		seedTombstoneRow(t, store, [10]any{a.ApprovalID, a.Digest(), a.ActionID, a.ActionDigest, a.PreviewDigest,
+			a.PolicyVersion, a.PolicyDigest, a.DecisionPrincipalID, a.Decision, a.DecisionAt.Format(time.RFC3339Nano)})
+		_, _, err := store.ApprovalTombstone(context.Background(), a.ActionID)
+		var fault *TombstoneFault
+		if err == nil || !errors.As(err, &fault) || fault.Field != "decision_principal_id" {
+			t.Fatalf("AUDIT R12-H2(b) reader, %s: %v", sh.name, err)
+		}
+		tx, err := store.db.BeginTx(context.Background(), nil)
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+		// A VALID story over the same approval_id reaches the read side.
+		err = store.tombstoneTx(context.Background(), tx, a, "principal_operator", action.DecisionRejected, a.DecisionAt)
+		_ = tx.Rollback()
+		fault = nil
+		if err == nil || !errors.As(err, &fault) || fault.Field != "decision_principal_id" {
+			t.Fatalf("AUDIT R12-H2(b) idempotence, %s: %v", sh.name, err)
+		}
+	}
+}
+
+// H3(a) — the WRITE door: tombstoneTx refuses at birth, by the same
+// rule, a human verb without a decider, the clock with a decider, and
+// a verb outside the vocabulary — typed fault, and the table is
+// untouched (COUNT(*) unchanged; the INSERT never ran). (Its red lives
+// in mutation m-h3: tombstoneTx stops calling the rule.)
+func TestTombstoneTx_refusesAtBirthByTheOriginRule(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	shapes := []struct{ name, verb, decider, field string }{
+		{"human-without-decider", action.DecisionRejected, "", "decision_principal_id"},
+		{"clock-with-decider", action.DecisionClock, "principal_operator", "decision_principal_id"},
+		{"out-of-vocabulary", "bogus", "principal_operator", "decision"},
+	}
+	for _, sh := range shapes {
+		a := actionpkgApproval("apr_r12_h3_"+sh.name+"0000000001", "act_r12_h3_"+sh.name)
+		at := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+		var before int
+		if err := store.db.QueryRow(`SELECT COUNT(*) FROM approval_tombstones`).Scan(&before); err != nil {
+			t.Fatalf("count: %v", err)
+		}
+		tx, err := store.db.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+		err = store.tombstoneTx(ctx, tx, a, sh.decider, sh.verb, at)
+		var fault *TombstoneFault
+		if err == nil || !errors.As(err, &fault) || fault.Field != sh.field {
+			_ = tx.Rollback()
+			t.Fatalf("AUDIT R12-H3(a) %s: the write door must refuse by the rule at %s: %v", sh.name, sh.field, err)
+		}
+		// Observed INSIDE the same tx: the refusal wrote nothing, not
+		// merely "the rollback cleaned it".
+		var inTx int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM approval_tombstones`).Scan(&inTx); err != nil {
+			t.Fatalf("count in tx: %v", err)
+		}
+		_ = tx.Rollback()
+		if inTx != before {
+			t.Fatalf("AUDIT R12-H3(a) %s: the refused birth must write NOTHING: %d → %d", sh.name, before, inTx)
+		}
+	}
+}
+
+// H3(b) — regression guard: the two production doors still write —
+// the sweep's clock close (empty decider) and the human decide path
+// (named principal) both land their tombstone and read back clean.
+// Born green.
+func TestTombstoneTx_productionDoorsStillWrite(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	swept := expiredParked(t, store, "act_r12_h3b_sweep")
+	if n, _, err := store.SweepExpiredApprovals(ctx, swept.ExpiresAt.Add(time.Hour)); err != nil || n != 1 {
+		t.Fatalf("sweep: n=%d err=%v", n, err)
+	}
+	tomb, _, err := store.ApprovalTombstone(ctx, "act_r12_h3b_sweep")
+	if err != nil || tomb.Decision != action.DecisionClock || tomb.DecisionPrincipalID != "" {
+		t.Fatalf("the clock door still writes: %+v %v", tomb, err)
+	}
+	human := expiredParked(t, store, "act_r12_h3b_human")
+	env, id := operatorDecisionEnv("reject", human.ApprovalID)
+	if _, err := store.decideApproval(ctx, human.ApprovalID, action.DecisionRejected,
+		human.RequestedAt.Add(time.Second), env, id, "the decision"); err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	tomb, _, err = store.ApprovalTombstone(ctx, "act_r12_h3b_human")
+	if err != nil || tomb.Decision != action.DecisionRejected || tomb.DecisionPrincipalID == "" {
+		t.Fatalf("the human door still writes: %+v %v", tomb, err)
 	}
 }

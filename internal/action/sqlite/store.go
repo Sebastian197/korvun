@@ -500,14 +500,10 @@ func judgeStoredTombstone(r rawTombstone) (action.Approval, bool, *TombstoneFaul
 			return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: f.field, Detail: "empty " + f.field}
 		}
 	}
-	// The origin rule (R12-X1): the domain's system decisions are
-	// decision=DecisionClock with an empty principal — exactly that pair.
-	if a.Decision == action.DecisionClock {
-		if a.DecisionPrincipalID != "" {
-			return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "decision_principal_id", Detail: "a clock decision carrying a principal — a human hand signing as the clock"}
-		}
-	} else if a.DecisionPrincipalID == "" {
-		return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "decision_principal_id", Detail: "empty decision_principal_id on a human verb"}
+	// The origin-and-vocabulary rule (R12-X1, one function since
+	// R12-H2): the READ door of judgeTombstoneOrigin.
+	if fault := judgeTombstoneOrigin(a.ApprovalID, a.Decision, a.DecisionPrincipalID); fault != nil {
+		return action.Approval{}, false, fault
 	}
 	pv, perr := strconv.ParseInt(text(r.policyVersion), 10, 64)
 	if perr != nil {
@@ -536,6 +532,35 @@ func judgeStoredTombstone(r rawTombstone) (action.Approval, bool, *TombstoneFaul
 		}
 	}
 	return a, present, nil
+}
+
+// judgeTombstoneOrigin is THE origin-and-vocabulary rule of a decided
+// story (R12-H2/H3): one pure function, two doors. The READ door is
+// judgeStoredTombstone (migrations v10→v11 and v11→v12, scanTombstone,
+// the in-tx idempotence read); the WRITE door is tombstoneTx before
+// its INSERT, with decideApprovalWithLaw's S2-1 wall delegating here
+// as the early refusal. The rule: the system verb (DecisionClock,
+// written only by the expiry touch and the sweep) carries an EMPTY
+// principal; a human verb (action.IsHumanDecision) demands a named
+// one; any other string — a case variant, a status spelling, garbage,
+// the empty string — is outside the vocabulary and faults at the
+// stable column "decision". The vocabulary itself has ONE source,
+// internal/action (the pinned constants); this function never spells
+// a verb.
+func judgeTombstoneOrigin(approvalID, decision, principal string) *TombstoneFault {
+	switch {
+	case decision == action.DecisionClock:
+		if principal != "" {
+			return &TombstoneFault{ApprovalID: approvalID, Field: "decision_principal_id", Detail: "a clock decision carrying a principal — a human hand signing as the clock"}
+		}
+	case action.IsHumanDecision(decision):
+		if principal == "" {
+			return &TombstoneFault{ApprovalID: approvalID, Field: "decision_principal_id", Detail: "an empty deciding principal cannot consume authority — a human verb demands a named hand"}
+		}
+	default:
+		return &TombstoneFault{ApprovalID: approvalID, Field: "decision", Detail: fmt.Sprintf("verb %q is outside the vocabulary (the human verbs or the clock)", decision)}
+	}
+	return nil
 }
 
 // revalidateTombstonesV11toV12 is the R11 re-validation migration,

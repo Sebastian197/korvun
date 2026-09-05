@@ -172,13 +172,19 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	// BOTH doors (the exported DecideApprovalUnderLaw and the
 	// package-test path) must pass through — the first cut guarded the
 	// test-only door and the adversary named it.
-	if ident.PrincipalID == "" {
-		return "", fmt.Errorf("action/sqlite: decide approval %q: an empty deciding principal cannot consume authority — a human verb demands a named hand", approvalID)
-	}
-	switch decision {
-	case action.DecisionApproved, action.DecisionRejected, action.DecisionCancelled:
-	default:
-		return "", fmt.Errorf("%w: %q", ErrUnknownDecision, decision)
+	// R12-H2/H3: the wall delegates to THE one origin-and-vocabulary
+	// rule (judgeTombstoneOrigin) — the same function the write door
+	// (tombstoneTx) and the read door (judgeStoredTombstone) apply. It
+	// judges the verb before the principal, so an unknown verb faults
+	// at "decision" whatever the principal (superseding the R12
+	// third-pass ordering that named the principal first); the
+	// unknown-verb class keeps its ErrUnknownDecision identity for
+	// callers that test by errors.Is, with the typed fault beside it.
+	if fault := judgeTombstoneOrigin(approvalID, decision, ident.PrincipalID); fault != nil {
+		if fault.Field == "decision" {
+			return "", fmt.Errorf("action/sqlite: decide approval %q: %w: %w", approvalID, ErrUnknownDecision, fault)
+		}
+		return "", fmt.Errorf("action/sqlite: decide approval %q: %w", approvalID, fault)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -363,6 +369,13 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 // takes the rows. Idempotent per action (INSERT OR REPLACE: the
 // preimage of a one-shot decision never changes).
 func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, decider, decision string, at time.Time) error {
+	// R12-H3: the WRITE door of THE one origin-and-vocabulary rule —
+	// judged BEFORE the INSERT, so a story the read door would later
+	// condemn never enters, whoever the caller is; a refusal writes
+	// nothing and rides out as the typed fault.
+	if fault := judgeTombstoneOrigin(a.ApprovalID, decision, decider); fault != nil {
+		return fmt.Errorf("action/sqlite: tombstone for %q refused at birth: %w", a.ApprovalID, fault)
+	}
 	sealed := a
 	sealed.DecisionPrincipalID = decider
 	sealed.Decision = decision
