@@ -77,6 +77,13 @@ func NewBoundApprovalRequest(env Envelope, rawParams string, actx ApprovalContex
 	if actx.Rule == "" {
 		return BoundApprovalRequest{}, fmt.Errorf("action: bound approval: an empty gate rule cannot park anything")
 	}
+	// R12-A12: the law pin's non-emptiness was load-bearing prose —
+	// production always passes a real digest, but nothing refused an
+	// empty one, and the tombstone contract would later call that
+	// story corrupt. The wall lives where the story is born.
+	if actx.LawDigest == "" {
+		return BoundApprovalRequest{}, fmt.Errorf("action: bound approval: an empty law pin cannot park anything — authority is consumed under a NAMED law")
+	}
 	if got := Digest(env.Operation, rawParams); got != env.ParametersDigest {
 		return BoundApprovalRequest{}, fmt.Errorf("action: bound approval: params re-derive digest %s but the envelope carries %s", got, env.ParametersDigest)
 	}
