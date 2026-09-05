@@ -303,3 +303,108 @@ func TestDecideApprovalUnderLaw_refusesAnEmptyPrincipal(t *testing.T) {
 		t.Fatalf("the refused decide must mutate nothing: %v %s", gerr, full.Status)
 	}
 }
+
+// H1 — the in-tx idempotence reader (tombstoneStoredRowTx) judges the
+// EXISTING row through THE one contract too (the twelfth review's
+// finding 1: it was the last reader outside it). A type-corrupt
+// policy_version on the existing row surfaces from tombstoneTx as the
+// typed fault naming the stable column — never a naked driver scan
+// error. (Its red lives in mutation m-h1: the reader drops the fault.)
+func TestTombstoneIdempotence_typeCorruptExistingRowIsFaultTyped(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	a := actionpkgApproval("apr_r12_h1type000000000000000001", "act_r12_h1type")
+	a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	if _, err := store.db.Exec(`INSERT INTO approval_tombstones
+	    (approval_id, approval_digest, action_id, action_digest, preview_digest,
+	     policy_version, policy_digest, decision_principal_id, decision, decision_at)
+	 VALUES (?, ?, ?, ?, ?, 'abc', ?, ?, ?, ?)`,
+		a.ApprovalID, a.Digest(), a.ActionID, a.ActionDigest, a.PreviewDigest,
+		a.PolicyDigest, a.DecisionPrincipalID, a.Decision,
+		a.DecisionAt.Format(time.RFC3339Nano)); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	tx, err := store.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	err = store.tombstoneTx(context.Background(), tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
+	var fault *TombstoneFault
+	if err == nil || !errors.As(err, &fault) || fault.Field != "policy_version" {
+		t.Fatalf("AUDIT R12-H1(a): the existing row's policy_version type is judged by the ONE contract, Field fixed: %v", err)
+	}
+	if strings.Contains(err.Error(), "Scan error") {
+		t.Fatalf("a naked driver scan error is the class X6 killed: %v", err)
+	}
+}
+
+// H1 — present-but-empty decision_at on the EXISTING row is the typed
+// corruption from the idempotence path, never a tombstone_conflict
+// (which would disguise corruption as history rewritten) and never a
+// silent acceptance. (Mutation m-h1 reddens this one too.)
+func TestTombstoneIdempotence_emptyDateExistingRowIsFaultTyped(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	a := actionpkgApproval("apr_r12_h1date000000000000000001", "act_r12_h1date")
+	a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	if _, err := store.db.Exec(`INSERT INTO approval_tombstones
+	    (approval_id, approval_digest, action_id, action_digest, preview_digest,
+	     policy_version, policy_digest, decision_principal_id, decision, decision_at)
+	 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')`,
+		a.ApprovalID, a.Digest(), a.ActionID, a.ActionDigest, a.PreviewDigest,
+		a.PolicyVersion, a.PolicyDigest, a.DecisionPrincipalID, a.Decision); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	tx, err := store.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	err = store.tombstoneTx(context.Background(), tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
+	var fault *TombstoneFault
+	if err == nil || !errors.As(err, &fault) || fault.Field != "decision_at" {
+		t.Fatalf("AUDIT R12-H1(b): '' on the existing row is typed corruption naming decision_at: %v", err)
+	}
+	if strings.Contains(err.Error(), "tombstone_conflict") {
+		t.Fatalf("corruption must not be disguised as a rewritten history: %v", err)
+	}
+}
+
+// H1 — regression pin (R10-V2 unchanged): a well-formed existing row
+// accepts the byte-identical re-insert as a nil no-op and refuses a
+// different story as the named tombstone_conflict. The comparison
+// semantics over the STORED projection are not touched by the cure.
+func TestTombstoneIdempotence_wellFormedRowKeepsR10V2Semantics(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	a := actionpkgApproval("apr_r12_h1same000000000000000001", "act_r12_h1same")
+	a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	if err := store.tombstoneTx(ctx, tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	tx2, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin 2: %v", err)
+	}
+	defer func() { _ = tx2.Rollback() }()
+	if err := store.tombstoneTx(ctx, tx2, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt); err != nil {
+		t.Fatalf("the byte-identical re-insert is a harmless no-op: %v", err)
+	}
+	err = store.tombstoneTx(ctx, tx2, a, a.DecisionPrincipalID, "approved", a.DecisionAt)
+	if err == nil || !strings.Contains(err.Error(), "tombstone_conflict") {
+		t.Fatalf("a different story is the named conflict, exactly as before: %v", err)
+	}
+	var fault *TombstoneFault
+	if errors.As(err, &fault) {
+		t.Fatalf("a well-formed row is not corruption: %v", err)
+	}
+}

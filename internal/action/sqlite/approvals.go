@@ -386,13 +386,21 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 		// request window, Reason...), so whole-struct equality was
 		// structurally false for every real approval. Identity across
 		// every STORED column is a harmless no-op; any stored
-		// difference is the named conflict.
+		// difference between two WELL-FORMED stories is the named
+		// conflict. R12-H1: the existing row is judged by THE one
+		// contract before the projection — a row that fails it (a
+		// stored digest that does not re-derive, type-corrupt or
+		// present-but-empty bytes) is the typed tombstone_corrupt,
+		// never a conflict disguising corruption as a rewrite.
 		storedDigest, existing, storedAt, gerr := s.tombstoneStoredRowTx(ctx, tx, a.ApprovalID)
 		if gerr != nil {
 			// R12-P3-2: an unreadable existing row is NOT a conflict —
 			// disguising a read failure as "history rewritten" would
-			// swallow the real cause.
-			return fmt.Errorf("action/sqlite: tombstone for %q: cannot read the existing row to judge idempotence: %w", a.ApprovalID, gerr)
+			// swallow the real cause. R12-H1: a corrupt existing row
+			// rides out as its typed fault (%w), so the wording claims
+			// only what is true of both classes: the row cannot be
+			// JUDGED — read failure or corruption, each named by itself.
+			return fmt.Errorf("action/sqlite: tombstone for %q: the existing row cannot be judged for idempotence: %w", a.ApprovalID, gerr)
 		}
 		if projectStoredTombstone(storedDigest, existing, storedAt) == projectSealedTombstone(sealed, sealed.DecisionAt) {
 			return nil
@@ -450,21 +458,28 @@ func projectSealedTombstone(sealed action.Approval, at time.Time) [10]string {
 // tombstoneStoredRowTx reads one tombstone by approval id in-tx AS
 // STORED (R10-V2): the raw approval_digest column and the raw
 // decision_at bytes ride out untouched, so the idempotence comparison
-// judges the stored story — never a recomputation of it.
+// judges the stored story — never a recomputation of it. The row is
+// scanned AS RAW TEXT and judged by THE one contract first (R12-H1:
+// this was the last reader outside it): a type-corrupt or
+// present-but-empty existing row is the typed fault, never a naked
+// driver scan error and never a disguised conflict.
 func (s *Store) tombstoneStoredRowTx(ctx context.Context, tx *sql.Tx, approvalID string) (string, action.Approval, sql.NullString, error) {
-	var a action.Approval
-	var storedDigest string
-	var storedAt sql.NullString
+	var r rawTombstone
 	err := tx.QueryRowContext(ctx,
 		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
-		        policy_version, policy_digest, decision_principal_id, decision, decision_at
+		        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
+		        decision, decision_at
 		   FROM approval_tombstones WHERE approval_id = ?`, approvalID).
-		Scan(&storedDigest, &a.ApprovalID, &a.ActionID, &a.ActionDigest, &a.PreviewDigest,
-			&a.PolicyVersion, &a.PolicyDigest, &a.DecisionPrincipalID, &a.Decision, &storedAt)
+		Scan(&r.digest, &r.approvalID, &r.actionID, &r.actionDigest, &r.previewDigest,
+			&r.policyVersion, &r.policyDigest, &r.principal, &r.decision, &r.decisionAt)
 	if err != nil {
 		return "", action.Approval{}, sql.NullString{}, err
 	}
-	return storedDigest, a, storedAt, nil
+	a, _, fault := judgeStoredTombstone(r)
+	if fault != nil {
+		return "", action.Approval{}, sql.NullString{}, fault
+	}
+	return r.digest.String, a, r.decisionAt, nil
 }
 
 // scanTombstone scans one tombstone row AS RAW TEXT and judges it

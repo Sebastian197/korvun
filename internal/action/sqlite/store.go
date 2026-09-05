@@ -446,7 +446,9 @@ func (f *TombstoneFault) Unwrap() error { return f.Cause }
 // rawTombstone is one approval_tombstones row read AS STORED — every
 // column as raw text, so THE contract (judgeStoredTombstone) is the
 // only judge of emptiness, types, dates and digest coherence. The
-// migration and the readers share this one path (R12: X2+X6 unified).
+// migrations (v12, the v10→v11 copy), the readers (scanTombstone) and
+// the in-tx idempotence read (tombstoneStoredRowTx, R12-H1) all share
+// this one path (R12: X2+X6 unified).
 type rawTombstone struct {
 	approvalID    sql.NullString
 	digest        sql.NullString

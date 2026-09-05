@@ -14,6 +14,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,15 @@ import (
 )
 
 // (i) — mutated stored digest + re-insert of the ORIGINAL story must
-// be the named conflict, never a nil no-op over the lying column.
+// be refused by name, never a nil no-op over the lying column.
+// RECLASSIFIED in R12-H1 (director's yes, 2026-09-05): the existing
+// row is now judged by THE one contract before the projection, so a
+// stored digest that does not re-derive from its preimage is the
+// typed tombstone_corrupt at approval_digest — the same class the
+// migration and the readers give it — instead of tombstone_conflict.
+// Still fail-closed, still never nil; only the class name moved.
+// tombstone_conflict stays the name for two WELL-FORMED stories that
+// differ (r7y2, r9w2, (iii) below, and R12-H1(c)).
 func TestTombstone_mutatedStoredDigestMakesReinsertAConflict(t *testing.T) {
 	t.Parallel()
 	store, _ := sealedStore(t)
@@ -47,8 +56,12 @@ func TestTombstone_mutatedStoredDigestMakesReinsertAConflict(t *testing.T) {
 	}
 	defer func() { _ = tx.Rollback() }()
 	err = store.tombstoneTx(ctx, tx, full, full.DecisionPrincipalID, full.Decision, full.DecisionAt)
-	if err == nil || !strings.Contains(err.Error(), "tombstone_conflict") {
-		t.Fatalf("AUDIT R10-V2: a lying stored digest must make the original story's re-insert a CONFLICT, never nil: %v", err)
+	var fault *TombstoneFault
+	if err == nil || !errors.As(err, &fault) || fault.Field != "approval_digest" {
+		t.Fatalf("AUDIT R10-V2 (reclassified R12-H1): a lying stored digest must refuse the original story's re-insert as typed corruption at approval_digest, never nil: %v", err)
+	}
+	if strings.Contains(err.Error(), "tombstone_conflict") {
+		t.Fatalf("corruption is not a rewritten history: %v", err)
 	}
 }
 
