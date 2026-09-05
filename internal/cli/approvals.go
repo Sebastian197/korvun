@@ -173,9 +173,9 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 	}
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
-	decision := "rejected"
+	decision := action.DecisionRejected
 	if verb == "approve" {
-		decision = "approved"
+		decision = action.DecisionApproved
 	}
 	env, ident, err := operatorEnvelope("approval", verb, `{"approval_id":"`+approvalID+`"}`)
 	if err != nil {

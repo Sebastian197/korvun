@@ -133,7 +133,7 @@ func (s *Store) createApprovalParts(ctx context.Context, env action.Envelope, d 
 // DecideApproval consumes the approval ONE-SHOT and, in the SAME
 // transaction, transitions the parked action and records the
 // operator's decision act with its E4 receipt — together or nothing.
-// decision ∈ {"approved", "rejected", "cancelled"} (finite, fail
+// decision ∈ the human verb vocabulary (action.IsHumanDecision; finite, fail
 // closed). Returned rules: "" on success; approval_expired when the
 // touch lands past the window (the approval closes EXPIRED and the
 // action REJECTED, receipted); approval_already_decided when another
@@ -149,7 +149,7 @@ func (s *Store) DecideApprovalUnderLaw(ctx context.Context, approvalID, decision
 	// R4-F2 (FR-R4F2-4): the non-atomic pre-read died — the law is
 	// judged inside decideApprovalWithLaw's transaction over the
 	// RE-READ row, after the clock (F1: expiry wins the cross).
-	if decision == "approved" {
+	if decision == action.DecisionApproved {
 		return s.decideApprovalWithLaw(ctx, approvalID, decision, at, operatorEnv, ident, comment, &law)
 	}
 	return s.decideApprovalWithLaw(ctx, approvalID, decision, at, operatorEnv, ident, comment, nil)
@@ -176,7 +176,7 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 		return "", fmt.Errorf("action/sqlite: decide approval %q: an empty deciding principal cannot consume authority — a human verb demands a named hand", approvalID)
 	}
 	switch decision {
-	case "approved", "rejected", "cancelled":
+	case action.DecisionApproved, action.DecisionRejected, action.DecisionCancelled:
 	default:
 		return "", fmt.Errorf("%w: %q", ErrUnknownDecision, decision)
 	}
@@ -216,7 +216,7 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 		// approval_expired: the touch closes it — EXPIRED approval,
 		// REJECTED action with its terminal receipt, params purged.
 		// R4-F3: a lost race here means someone else already decided.
-		won, err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", "clock", at, "", "")
+		won, err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", action.DecisionClock, at, "", "")
 		if err != nil {
 			return "", err
 		}
@@ -250,9 +250,9 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	// ONE-SHOT consumption: the single PENDING->decided UPDATE. Zero
 	// rows means another operator won between our read and here.
 	status := action.ApprovalRejected
-	if decision == "approved" {
+	if decision == action.DecisionApproved {
 		status = action.ApprovalApproved
-	} else if decision == "cancelled" {
+	} else if decision == action.DecisionCancelled {
 		status = action.ApprovalCancelled
 	}
 	res, err := tx.ExecContext(ctx,
@@ -272,7 +272,7 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	if err := s.tombstoneTx(ctx, tx, a, ident.PrincipalID, decision, at); err != nil {
 		return "", err
 	}
-	if decision == "approved" {
+	if decision == action.DecisionApproved {
 		if err := transitionTx(ctx, tx, a.ActionID, action.StatePendingApproval, action.StateApproved); err != nil {
 			return "", err
 		}
@@ -604,7 +604,7 @@ func (s *Store) sweepExpiredOne(ctx context.Context, approvalID string, at time.
 	if err != nil {
 		return false, err
 	}
-	won, err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", "clock", at, "", "")
+	won, err := s.closeApprovalTx(ctx, tx, a, action.ApprovalExpired, "", action.DecisionClock, at, "", "")
 	if err != nil {
 		return false, err
 	}

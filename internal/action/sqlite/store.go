@@ -467,9 +467,9 @@ type rawTombstone struct {
 // evidence columns non-empty; decision_at NULL allowed (” and
 // unreadable bytes rejected); policy_version an integer; the stored
 // digest re-derived from the preimage; and the origin rule — a
-// system decision (decision "clock", written only by the expiry
+// system decision (decision DecisionClock, written only by the expiry
 // touch and the sweep, approvals.go:210/:577) legitimately carries an
-// EMPTY principal, while a human verb demands one and a "clock" row
+// EMPTY principal, while a human verb demands one and a clock row
 // carrying a principal is an anomaly, both ways. It returns the
 // parsed preimage, whether decision_at is present, or the typed
 // fault naming row and STABLE column.
@@ -501,8 +501,8 @@ func judgeStoredTombstone(r rawTombstone) (action.Approval, bool, *TombstoneFaul
 		}
 	}
 	// The origin rule (R12-X1): the domain's system decisions are
-	// decision="clock" with an empty principal — exactly that pair.
-	if a.Decision == "clock" {
+	// decision=DecisionClock with an empty principal — exactly that pair.
+	if a.Decision == action.DecisionClock {
 		if a.DecisionPrincipalID != "" {
 			return action.Approval{}, false, &TombstoneFault{ApprovalID: a.ApprovalID, Field: "decision_principal_id", Detail: "a clock decision carrying a principal — a human hand signing as the clock"}
 		}

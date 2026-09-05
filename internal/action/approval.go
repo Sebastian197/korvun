@@ -39,6 +39,37 @@ const (
 	ApprovalCancelled ApprovalStatus = "CANCELLED"
 )
 
+// The decision VERB vocabulary — the SINGLE source (R12-H2 refactor).
+// These are the exact bytes persisted in approvals.decision and in
+// every tombstone preimage, so they are digest terms: the pin test
+// (decision_vocabulary_test.go) freezes each one byte for byte, the
+// way the pre-E3 grant ids are frozen. Untyped string constants on
+// purpose: Approval.Decision is scanned, sealed and printed as a plain
+// string in a dozen places, and a named type would force conversions
+// at each of them for no wall — IsHumanDecision is the one boundary.
+const (
+	// DecisionApproved is the human approve verb.
+	DecisionApproved = "approved"
+	// DecisionRejected is the human reject verb.
+	DecisionRejected = "rejected"
+	// DecisionCancelled is the human cancel verb.
+	DecisionCancelled = "cancelled"
+	// DecisionClock is the SYSTEM verb: the expiry touch and the sweep
+	// close an approval with an empty deciding principal.
+	DecisionClock = "clock"
+)
+
+// IsHumanDecision reports whether the verb is one a human hand signs
+// (approved, rejected, cancelled) — the finite set, fail closed for
+// anything else: the clock verb, a case variant, an empty string.
+func IsHumanDecision(decision string) bool {
+	switch decision {
+	case DecisionApproved, DecisionRejected, DecisionCancelled:
+		return true
+	}
+	return false
+}
+
 // The finite invalidation/consume rules (spec FR-APR-2/3/4).
 const (
 	// RuleApprovalInvalidated reports a binding that no longer matches —
