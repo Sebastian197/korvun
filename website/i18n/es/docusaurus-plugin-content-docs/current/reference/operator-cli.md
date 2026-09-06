@@ -125,8 +125,8 @@ cadena hash de solo-añadir, y la CLI lleva al juez.
 korvun receipt verify --config korvun.json rcpt_…
 ```
 
-Un recibo (o todos los de un id `act_…`), re-juzgado offline contra el fichero del store con siete
-checks nombrados: roundtrip canónico, recomputación del hash, firma
+Un recibo (o todos los de un id `act_…`), re-juzgado offline contra el fichero del store, cada check
+nombrado: roundtrip canónico, recomputación del hash, firma
 Ed25519 contra la clave pública REGISTRADA, la ventana de validez de la
 clave, el eslabón de cadena con su predecesor y la coherencia con la
 fila de la acción. Cada fallo lleva su nombre (`hash_mismatch`,
@@ -137,11 +137,16 @@ genérico.
 korvun ledger check --config korvun.json
 ```
 
-La cadena entera, estructura primero: un recibo borrado se denuncia por
-su hueco (`chain_seq_gap` con la posición que falta), una posición
-clonada como `chain_seq_duplicate`, y después cada eslabón por los
-mismos siete checks — el PRIMER eslabón roto detiene el veredicto con
-su id de recibo y su motivo.
+La cadena entera de una partición, estructura primero: un recibo
+borrado de DENTRO de la cadena se denuncia por su hueco
+(`chain_seq_gap` con la posición que falta), una posición clonada como
+`chain_seq_duplicate`, y después cada eslabón por los mismos checks —
+el PRIMER eslabón roto detiene el veredicto con su id de recibo y su
+motivo. Lo que prueba es que el perfil que nombra tu configuración es
+consistente consigo mismo: un corte de cola, una cadena re-firmada con
+una clave que el atacante registró en ese mismo perfil y una
+configuración apuntada a otra tienda sobreviven las tres, y cada una
+exige un anclaje externo que Korvun aún no entrega.
 
 ```sh
 korvun receipt rotate-key --config korvun.json
@@ -152,7 +157,8 @@ acto de rotación deja SU PROPIO recibo sellado con la clave NUEVA; las
 claves retiradas se conservan para siempre, así cada era de la cadena
 verifica con la clave de su era. La verificación es de solo lectura; el
 alcance honesto está documentado: el libro es tamper-evident, jamás
-«immutable» — el operador controla almacenamiento y claves.
+«immutable», y el límite es el acceso de escritura al perfil, no la
+custodia de la clave.
 
 ## El buzón de aprobaciones (v0.15.0)
 

@@ -105,8 +105,9 @@ operator verifies offline, against the file, with the built-in CLI:
 `korvun receipt verify` re-judges one receipt (hash, Ed25519 signature
 against the registered key, key validity window, chain link, coherence
 with the action row — every failure named), and `korvun ledger check`
-walks a whole partition, denouncing the first gap, clone or tampered
-link. `korvun receipt rotate-key` rotates the signing key; retired keys
+walks ONE partition's whole chain, denouncing the first gap, clone or
+tampered link it finds INSIDE what the profile holds — see the honest
+scope below for the three things neither command can prove. `korvun receipt rotate-key` rotates the signing key; retired keys
 are kept forever so each era of the chain verifies with the key of its
 era.
 
@@ -133,23 +134,49 @@ Since the R3 consolidation the boot's recovery closes land in the
 ledger with their era's signed receipt like every other terminal;
 recovery rows closed by BINARIES BEFORE that consolidation carry no
 receipt — a declared historical fact, never rewritten.
-The signing key lives on the same machine as the store, so an attacker
-with full control of the profile can rewrite history with the resident
-key; and any truncation from the TAIL of a partition — the last
-receipt, any suffix, or the whole partition (an empty partition
-reports "0 receipts, chain intact": a reading of `korvun ledger
-check`, captured from the built binary in the R13 canto) — is
-INDETECTABLE by the verifier without an external anchor of the last
-sealed hash, because a shortened chain leaves no hole to detect;
-internal gaps and alterations made WITHOUT the resident key are
-detected and named. The tail anchor is filed to v0.15.1. What
-the design guarantees — for the SEALED RECEIPT CHAIN (signature +
-hash chain) specifically — is that any out-of-band edit, deletion or
-reordering of receipts made without the active key, or with a retired
-one, is detected and NAMED by the verifier. Auxiliary v2-era evidence
-(tombstones, live rows) carries no signature and is governed by the
-"Known limits of the receipt v2 era" section below, not by this
-guarantee. We deliberately avoid the words
+**What the verifier proves, and what it does not.** `korvun ledger
+check` and `korvun receipt verify` prove that the profile your config
+names is consistent WITH ITSELF: every receipt's canonical form, its
+hash, its signature against a key registered in that same profile and
+inside that key's window, its link to the receipt before it, and its
+agreement with the action, approval and tombstone rows the profile
+carries — the action digest for every receipt and the outcome for the
+receipt that closes the action, both only while that action row still
+exists (retention prunes it and the verifier says so with a note,
+`action_row_absent`). `ledger check` adds what only it does: the
+sequence with no gap and no clone. Each failure the ladder judges
+carries ITS OWN name — `hash_mismatch`, `signature_invalid`,
+`custody_mismatch`, … — never a generic "invalid"; when the receipt
+being read does not parse, the command refuses on stderr with the read
+error and no ladder name. The agreement with those rows is a COHERENCE
+check over UNSIGNED evidence: it catches a mismatch, it does not seal
+them, and the auxiliary v2-era evidence (tombstones, live rows) is
+governed by the "Known limits of the receipt v2 era" section below.
+
+They do NOT prove four things. The first three were verified BY
+EXECUTION against a disposable profile with the built binary (the R14
+canto carries the captures):
+
+1. that the profile is the one your history wrote — point the config at
+   another store and the verifier judges THAT one; the same follows
+   from a relative `storage.path` run from another directory;
+2. that the chain is COMPLETE — cut its tail (the last receipt, a
+   suffix, or the whole partition) and what survives is still
+   self-consistent; an empty partition still reports "chain intact";
+3. that the keys are the AUTHORITATIVE ones — an attacker who can write
+   the store registers a signing key of his own, re-signs every receipt
+   and re-links the chain, and every check that runs passes, because
+   the key registry lives inside the profile being judged;
+4. that a row whose LOOKUP column changed storage class is still there:
+   a reader that seeks such a row cannot distinguish it from absence.
+
+All four need what Korvun does not ship yet — an EXTERNAL anchor (the
+store's identity, the last sealed hash, the authoritative key) or a
+verifier that scans instead of looking up. Filed to v0.15.1. The
+signing key living on the same machine as the store remains true and
+is the older half of the same fact: an attacker with full control of
+the profile can rewrite history, with the resident key or with one of
+his own. We deliberately avoid the words
 "immutable", "unforgeable" or "blockchain-grade" anywhere in Korvun's
 public materials; reports of public copy overstating these properties
 are welcome exactly like any other invariant violation.

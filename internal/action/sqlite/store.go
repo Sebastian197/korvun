@@ -208,8 +208,11 @@ ALTER TABLE action_decisions ADD COLUMN policy_version INTEGER NOT NULL DEFAULT 
 ALTER TABLE action_decisions ADD COLUMN policy_digest TEXT NOT NULL DEFAULT '';`,
 	// v4→v5 (Trust Layer Etapa 4, FR-KEY): the signing_keys table — the
 	// ledger's ink registry. Retired keys are KEPT FOREVER (no delete
-	// path exists on this table); at most one row has retired_at NULL
-	// (the active key). Receipts arrive with v6 (batch 3).
+	// path exists on this table); the domain API keeps at most one row
+	// with retired_at NULL (the active key) — the TABLE does not
+	// constrain it, and direct SQL can register a second active key
+	// (R14, verified by execution; the rule in the table is filed to
+	// v0.15.1). Receipts arrive with v6 (batch 3).
 	4: `
 CREATE TABLE signing_keys (
     key_id     TEXT NOT NULL PRIMARY KEY,

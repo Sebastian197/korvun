@@ -5,7 +5,8 @@
 // the ledger's ink registry. Retired keys are KEPT FOREVER — the domain
 // API offers no delete, and every rotation closes the old key's
 // validity window in the SAME transaction that opens the new one. At
-// most one key is active. Growth is rotation-scale: a handful of rows
+// most one key is active THROUGH THIS API — the table carries no such
+// constraint, so direct SQL can add a second (R14, canto). Growth is rotation-scale: a handful of rows
 // per profile lifetime, the reason written here.
 package sqlite
 

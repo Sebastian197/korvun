@@ -215,12 +215,15 @@ store: an attempt that cannot be recorded fails closed before any
 effect; a crash past the point where an effect may have fired closes
 `OUTCOME_UNKNOWN` — named uncertainty, never a false FAILED — and
 reconciliation of those outcomes is stage 6's declared scope. The operator re-judges the book offline with
-seven named checks — `korvun receipt verify`, `korvun ledger check`,
-`korvun receipt rotate-key` (each era of the chain verifies with the
-key of its era) — a forged outcome is caught in triplicate, a deleted
-receipt is denounced by its hole, and the limit is confessed out loud:
-tamper-evident, never "immutable", because the operator controls
-storage and keys. Raw results never touch the disk — digests only.
+`korvun receipt verify`, `korvun ledger check` and `korvun receipt
+rotate-key` (each era of the chain verifies with the key of its era),
+and every failure carries its own name, never a generic "invalid": a
+receipt deleted from INSIDE the chain is denounced by its hole, an
+edited one by its hash. The limit is confessed out loud, and it is
+wider than key custody: cutting the chain's tail, registering a key of
+one's own and re-signing, or pointing the config at another store all
+leave a book that is consistent with itself — tamper-evident, never
+"immutable". SECURITY.md carries the whole scope. Raw results never touch the disk — digests only.
 Automatic crash-proof v4→v6 migrations; receipts exempt from the
 retention prune; ~1.25 ms per governed action, under the 5 ms ceiling
 with 4× margin. See the [v0.14.0 release notes](docs/releases/v0.14.0.md).

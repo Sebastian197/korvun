@@ -100,13 +100,15 @@ small piece inside this stage when ordering allows.
   SAME transaction as the row they reify (the FR-EVID-2 mold: together
   or nothing) through the domain API only — no UPDATE/DELETE paths
   exist on receipts (append-only by construction, and the verifier
-  detects out-of-band edits).
+  detects out-of-band edits that leave the profile inconsistent with
+  itself — R14, SECURITY.md).
 - **FR-LED-2** Hash chain per partition: `previous_receipt_hash` +
   `receipt_hash` with a stable order (chain sequence per partition).
   v1 ships ONE partition (`"main"`) — the local single-operator truth —
   with the partition field real, so E10 shards without a schema break.
   The genesis receipt links to the empty hash (documented constant).
-- **FR-LED-3** Gap and tamper detection is a FIRST-CLASS operation
+- **FR-LED-3** Gap and tamper detection INSIDE one partition's chain
+  is a FIRST-CLASS operation
   (`ledger check`, FR-VER-2): re-canonicalize → re-hash → walk the
   chain → verify signatures and key validity windows; the FIRST broken
   link is NAMED (receipt id, position, which check failed: hash
@@ -116,7 +118,11 @@ small piece inside this stage when ordering allows.
   (they are the evidence; the actions cap keeps pruning operational
   rows). Bounded-growth reason written: receipts are one bounded row
   per action outcome, dominated by the same cap dynamics upstream —
-  and `ledger check` reports counts so growth is observable. (Per-
+  and `ledger check` reports the receipt count so growth is
+  observable. [amended 2026-09-06, R14: the wire prints ONE summary
+  line with the receipt count; FR-VER-2's partitions/keys/oldest/newest
+  counts are UNIMPLEMENTED and carried forward as an open
+  requirement.] (Per-
   tenant retention: E10.)
 
 ### FR-REC — the canonicalized receipt (§10.10 subset v1)
@@ -163,7 +169,10 @@ small piece inside this stage when ordering allows.
 - **FR-KEY-3** Threat honesty (§23): the private key lives on the disk
   the operator controls — the ledger is tamper-EVIDENT against
   accidental/after-the-fact modification and third-party doubt, not
-  against the key-holding operator. Written in the spec, in SECURITY.md
+  against anyone who can WRITE the profile. [amended 2026-09-06, R14:
+  the boundary is not key custody. An attacker who never touches the
+  profile key registers one of his own inside the store and re-signs
+  the chain; verified by execution, R14 canto.] Written in the spec, in SECURITY.md
   when this ships, and governing all public copy (Goal above).
 
 ### FR-VER — the operator's verifier (CLI, E2 mold)
@@ -171,13 +180,16 @@ small piece inside this stage when ordering allows.
 - **FR-VER-1** `korvun receipt verify --config <path> <receipt-id>`:
   OFFLINE, against the file — re-canonicalize, recompute digests,
   verify signature, verify previous-hash link, check the key's validity
-  window, and check COHERENCE with the underlying decision row
-  (outcome/rule/policy pin match). Human output, stable exit codes
+  window, and check COHERENCE with the underlying ACTION row (its
+  state against the outcome of the receipt that closes it, its
+  parameters digest against every receipt). [amended 2026-09-06, R14:
+  the wire compares the action row, never a rule or a policy pin.] Human output, stable exit codes
   (0 verified / 1 failed naming the check / 2 usage).
 - **FR-VER-2** `korvun ledger check --config <path>`: the whole chain —
   every receipt re-verified, sequence continuity, gap/tamper NAMED at
-  first break; summary line with counts (receipts, partitions, keys,
-  oldest/newest). Brief WAL-safe access, the E2 CLI discipline.
+  first break; summary line with the receipt count. [amended
+  2026-09-06, R14: partitions, keys and oldest/newest are NOT
+  implemented — open requirement, filed to v0.15.1.] Brief WAL-safe access, the E2 CLI discipline.
 - **FR-VER-3** Backup/restore verifiable (blueprint mandatory test 3):
   `ledger check` over a file-level backup copy verifies identically —
   the chain carries its own evidence; the test restores a backup and
@@ -202,9 +214,11 @@ small piece inside this stage when ordering allows.
 
 - **AS-1 (tampering detected — mandatory)** Given a populated ledger,
   When any receipt row is modified out of band (a byte of the outcome,
-  a timestamp, a signature), Then `ledger check` FAILS naming that
-  receipt and the failed check; same for a deleted row (sequence gap)
-  and a reordered chain.
+  a timestamp, a signature) WITHOUT re-signing it, Then `ledger check`
+  FAILS naming that receipt and the failed check; same for a row
+  deleted from INSIDE the chain (sequence gap) and a reordered chain.
+  [amended 2026-09-06, R14: a tail cut and a chain re-signed with a
+  self-registered key are NOT covered — SECURITY.md's honest scope.]
 - **AS-2 (rotation preserves history — mandatory)** Given receipts
   signed under key A, When the operator rotates to key B and records
   more, Then `ledger check` verifies the WHOLE chain — historical

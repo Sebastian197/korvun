@@ -854,7 +854,7 @@ El ledger no se enviará automáticamente al transcript ni al feed general.
 - Escrituras transaccionales.
 - Orden estable por acción y transacción.
 - Hash encadenado por partición.
-- Detección de huecos o alteraciones.
+- Detección de huecos y alteraciones DENTRO del perfil que la configuración nombra (R14: no de un truncado de cola, ni de una cadena re-firmada con clave propia, ni de un perfil redirigido — SECURITY.md).
 - Backups y restauración verificables.
 - Retención configurable por tenant.
 - Cifrado de parámetros protegidos.
@@ -1000,7 +1000,7 @@ La extracción a un servicio o base compartida solo se plantea después de estab
 | Exfiltración de secretos | Credential Broker, referencias y redacción |
 | Cambio de política en vuelo | Pin de versión y digest por decisión |
 | Approval reutilizado | Vinculación al digest exacto y expiración |
-| Alteración del audit | Ledger encadenado, receipts firmados y verificación |
+| Alteración del audit | Ledger encadenado, receipts firmados y verificación — mitigación PARCIAL (R14): cubre lo que rompe la auto-consistencia del perfil; el truncado de cola, la re-firma con clave propia registrada y la redirección del perfil exigen anclaje externo, fichado a v0.15.1 |
 | Resultado ambiguo | Estado explícito y consulta antes de repetir |
 | Admin expuesto | Auth obligatoria, bind seguro y TLS cuando no sea loopback |
 | Tenant crossing | Tenant en todas las claves y checks de autorización |
@@ -1144,7 +1144,7 @@ Construir:
 
 Pruebas obligatorias:
 
-- Una modificación de ledger se detecta.
+- Una modificación de ledger que deje el perfil inconsistente consigo mismo se detecta (R14: las tres clases que lo dejan consistente exigen anclaje externo — SECURITY.md).
 - Receipts históricos siguen verificando tras rotar claves.
 - Restaurar un backup conserva cadena y estados.
 - Ningún secreto llega a logs, SSE o métricas.

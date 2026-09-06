@@ -4,7 +4,7 @@
 // The operator's verifier, chain half — Etapa 4, lote 4 (spec FR-VER
 // §19.2): `korvun ledger check` walks one partition's WHOLE chain and
 // names the FIRST broken link with its reason. Gap and tamper detection
-// as a first-class operation:
+// INSIDE the profile the config names, as a first-class operation:
 //
 //	chain_seq_gap       — a sequence position is missing (a deleted
 //	                      receipt is denounced by its hole)
@@ -13,11 +13,14 @@
 //	key window, link, custody), applied link by link.
 //
 // Read-only, like verify: plain opener, nothing written. Honest limit,
-// documented (SECURITY.md, R13 D11): any truncation from the TAIL of a
-// partition — the last receipt, any suffix, or the whole partition (an
-// empty partition reports "0 receipts, chain intact") — is INDETECTABLE
-// without an external anchor of the last sealed hash; internal gaps and
-// alterations made without the resident key are detected and named.
+// documented (SECURITY.md; R13 D11 and R14): this command proves the
+// profile is consistent WITH ITSELF. It does not prove that the profile
+// is the one your history wrote (a redirected config judges another
+// store), that the chain is COMPLETE (any truncation from the TAIL —
+// the last receipt, any suffix, or the whole partition, which reports
+// "0 receipts, chain intact" — leaves no hole to detect), or that the
+// keys are the AUTHORITATIVE ones (the registry lives inside the file
+// being judged). All three verified by execution, R14 canto.
 // The ledger is tamper-evident, not tamper-proof (§23 honesty sentence);
 // the tail anchor is filed to v0.15.1.
 package cli

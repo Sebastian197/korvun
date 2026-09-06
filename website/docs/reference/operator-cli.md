@@ -118,8 +118,8 @@ append-only hash chain, and the CLI carries the judge.
 korvun receipt verify --config korvun.json rcpt_…
 ```
 
-One receipt (or every receipt of an `act_…` id), re-judged offline against the store file with seven named
-checks: canonical roundtrip, hash recompute, Ed25519 signature against
+One receipt (or every receipt of an `act_…` id), re-judged offline against the store file, every check
+named: canonical roundtrip, hash recompute, Ed25519 signature against
 the REGISTERED public key, the key's validity window, the chain link to
 the predecessor, and coherence with the action row. Every failure
 carries its name (`hash_mismatch`, `signature_invalid`,
@@ -129,10 +129,15 @@ carries its name (`hash_mismatch`, `signature_invalid`,
 korvun ledger check --config korvun.json
 ```
 
-The whole chain, structure first: a deleted receipt is denounced by its
-hole (`chain_seq_gap` with the missing position), a cloned position as
-`chain_seq_duplicate`, then every link through the same seven checks —
-the FIRST broken link stops the verdict with its receipt id and reason.
+One partition's whole chain, structure first: a receipt deleted from
+INSIDE the chain is denounced by its hole (`chain_seq_gap` with the
+missing position), a cloned position as `chain_seq_duplicate`, then
+every link through the same checks — the FIRST broken link stops the
+verdict with its receipt id and reason. What it proves is that the
+profile your config names is consistent with itself: a tail cut, a
+chain re-signed with a key the attacker registered inside that profile,
+and a config pointed at another store all survive, and each needs an
+external anchor Korvun does not ship yet.
 
 ```sh
 korvun receipt rotate-key --config korvun.json
@@ -142,8 +147,8 @@ Atomic retire-and-activate rotation of the profile's signing key. The
 rotation act leaves its OWN receipt sealed with the NEW key; retired
 keys are kept forever, so each era of the chain verifies with the key
 of its era. Verification is read-only; the honest scope is documented:
-the ledger is tamper-evident, never "immutable" — the operator controls
-storage and keys.
+the ledger is tamper-evident, never "immutable", and the boundary is
+write access to the profile, not key custody.
 
 ## The approvals inbox (v0.15.0)
 

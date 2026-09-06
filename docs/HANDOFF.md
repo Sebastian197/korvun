@@ -407,7 +407,7 @@ explicit decision.
 > **CURRENT (2026-08-30): TRUST LAYER ETAPA 4 — COMPLETA y v0.14.0
 > PUBLICADA E INSTALADA.** Master at `2b82337` (= the v0.14.0 tag).
 > Ceremony verdict: mini-bash APPROVED by Chano — "the judge approved":
-> the seven seals on his real receipt, the forgery caught in triplicate
+> the seals on his real receipt, the forgery named
 > with the hashes face to face, the mid-chain hole denounced with its
 > position, and the tail-truncation limit shown ON PURPOSE as the
 > documented feature. Release published draft-until-complete (23 signed
@@ -513,8 +513,8 @@ explicit decision.
 
 > **PREVIOUS (2026-08-30): TRUST LAYER ETAPA 4 — COMPLETA. Five batches
 > on master through the green path, mini-bash APPROVED by Chano
-> 2026-08-30 (full function: the seven seals on his real receipt, the
-> forgery caught in triplicate with the hashes face to face, the
+> 2026-08-30 (full function: the seals on his real receipt, the
+> forgery named with the hashes face to face, the
 > mid-chain hole denounced with its position, the tail-truncation limit
 > named as a FEATURE, and his real book intact).** The stage: the
 > canonical Receipt v1 (digest-only, birth-fuzzed strict parser), the
@@ -525,7 +525,9 @@ explicit decision.
 > cannot exist; genesis-linked hash chain, race-hammered, prune-exempt),
 > the live result digest (NC-3: raw results never touch the disk), and
 > the operator's verifier (receipt verify with seven NAMED checks;
-> ledger check denouncing the first broken link, gap or clone;
+> ledger check denouncing the first broken link, gap or clone [scoped
+> 2026-09-06, R14: inside the profile the config names — see
+> SECURITY.md];
 > rotate-key with each era verifying under its era's key). The honest
 > scope is now public law in SECURITY.md: tamper-evident, never
 > "immutable". Toll ~1.25ms sealed (ceiling 5ms, 4x margin). The

@@ -5,9 +5,12 @@
 // FR-VER §19.2): `korvun ledger check` walks one partition's WHOLE
 // chain — sequence continuity (no gaps, no duplicates), hash-to-hash
 // linkage from the genesis, every signature — and names the FIRST
-// broken link with its reason. Gap and tamper detection as a
-// first-class operation: a deleted receipt is denounced by its hole, an
-// edited one by its hash. Read-only. Approved-red contract.
+// broken link with its reason. Gap and tamper detection INSIDE the
+// profile the config names: a receipt deleted from inside the chain is
+// denounced by its hole, an edited one by its hash. What no test here
+// can catch — a tail cut, a chain re-signed with a self-registered
+// key, a redirected profile — is SECURITY.md's honest scope, captured
+// by execution in the R14 canto. Read-only. Approved-red contract.
 
 package cli
 
