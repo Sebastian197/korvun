@@ -124,8 +124,9 @@ canonical roundtrip, the hash recomputed, the signing key found in the
 registry, the Ed25519 signature against that key, the key's validity
 window, the chain link to its predecessor, then — when the receipt
 seals an approval digest — the approval and its tombstone, and last the
-coherence with the action row. The order is visible: the command prints
-the FIRST failure only. Each failure the ladder judges carries its name
+coherence with the action row. `receipt verify` prints EVERY failure it
+finds, one line each, in that order; `korvun ledger check` below prints
+only the FIRST failure of the first receipt that fails. Each failure the ladder judges carries its name
 (`hash_mismatch`, `signature_invalid`, `custody_mismatch`, …) rather
 than a generic "invalid"; a receipt whose stored bytes do not parse is
 refused with the read error and no ladder name.

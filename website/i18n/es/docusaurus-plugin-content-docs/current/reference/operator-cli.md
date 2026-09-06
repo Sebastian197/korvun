@@ -131,8 +131,10 @@ roundtrip canónico, el hash recomputado, la clave de firma encontrada
 en el registro, la firma Ed25519 contra esa clave, la ventana de
 validez de la clave, el eslabón de cadena con su predecesor, después
 —cuando el recibo sella un digest de aprobación— la aprobación y su
-lápida, y en último lugar la coherencia con la fila de la acción. El
-orden se ve: el comando imprime solo el PRIMER fallo. Cada fallo que juzga la escalera lleva su
+lápida, y en último lugar la coherencia con la fila de la acción. `receipt
+verify` imprime TODOS los fallos que encuentra, uno por línea, en ese
+orden; `korvun ledger check`, más abajo, imprime solo el PRIMER fallo
+del primer recibo que falla. Cada fallo que juzga la escalera lleva su
 nombre (`hash_mismatch`, `signature_invalid`, `custody_mismatch`, …) en
 vez de un «invalid» genérico; un recibo cuyos bytes almacenados no
 parsean se rechaza con el error de lectura y sin nombre de escalera.

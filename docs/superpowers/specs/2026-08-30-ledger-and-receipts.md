@@ -221,8 +221,13 @@ small piece inside this stage when ordering allows.
   µs over the ~0.9 ms identified+classified path).
 - **FR-COMPAT-3** `record_failed` elevated (blueprint mandatory test
   5): every denial and every execution produces its receipt in the
-  same transaction, or the attempt fails CLOSED with the visible error
-  — an unreceipted effect cannot exist.
+  same transaction, or the attempt fails CLOSED with the visible error.
+  [amended 2026-09-06, R14: the original clause "an unreceipted effect
+  cannot exist" is over-broad and the repository's own erratum says so
+  (`docs/releases/v0.14.0.md:119-123`, `v0.14.1`). Atomicity holds
+  INSIDE the store; an EXTERNAL effect completed just before a failed
+  terminal close is a real, documented window until stage 6's
+  reconciliation.]
 
 ## Acceptance scenarios (Given / When / Then)
 
@@ -247,7 +252,9 @@ small piece inside this stage when ordering allows.
   receipt payloads appear — digests and finite labels only (ADR-0024).
 - **AS-5 (every outcome receipts or dies — mandatory)** Given a
   recorder whose receipt append fails, When an attempt reaches the
-  gate, Then it fails CLOSED (record_failed — no effect without proof);
+  gate, Then it fails CLOSED (record_failed — no effect that the STORE
+  records lacks its proof; the external window of the v0.14.0 erratum
+  stands, amended 2026-09-06, R14);
   and Given normal operation, every DENIED/SHADOWED/SUCCEEDED/FAILED
   row has exactly one receipt.
 - **AS-6 (determinism)** Given one logical action, When its receipt is

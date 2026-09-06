@@ -521,10 +521,16 @@ explicit decision.
 > Ed25519 profile keystore (0600 seed beside the store, permissions
 > verified every boot, retired ink never signs again), the persisted
 > ledger (v5/v6 anti-zombie migrations; every terminal outcome births
-> its SIGNED receipt in the same transaction — an unreceipted effect
-> cannot exist; genesis-linked hash chain, race-hammered, prune-exempt),
+> its SIGNED receipt in the same transaction [scoped 2026-09-06, R14:
+> the v0.14.0 line "an unreceipted effect cannot exist" is over-broad —
+> atomicity holds INSIDE the store; an external effect completed just
+> before a failed terminal close is a documented window until stage 6,
+> `docs/releases/v0.14.0.md:119-123`]; genesis-linked hash chain,
+> race-hammered, prune-exempt),
 > the live result digest (NC-3: raw results never touch the disk), and
-> the operator's verifier (receipt verify with every check NAMED;
+> the operator's verifier (receipt verify naming each failure the
+> LADDER judges, a receipt whose stored bytes do not parse refused with
+> the read error and no ladder name;
 > ledger check denouncing the first broken link, gap or clone [scoped
 > 2026-09-06, R14: inside the profile the config names — see
 > SECURITY.md];
