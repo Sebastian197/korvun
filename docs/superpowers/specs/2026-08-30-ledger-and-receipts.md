@@ -285,9 +285,10 @@ small piece inside this stage when ordering allows.
   offline, from the file, with the operator's CLI. [amended 2026-09-06,
   R14: what the third party verifies is that the FILE is consistent
   with itself. It does not establish that the file is the one history
-  wrote, that the chain is complete, or that the keys are the
-  authoritative ones — SECURITY.md's four, three of them captured by
-  binary in `docs/cantos/R14.md` §3.1-§3.3.]
+  wrote, that the chain is complete, that the keys are the
+  authoritative ones, or that a row whose lookup column changed storage
+  class is present rather than absent — SECURITY.md's four, the first
+  three captured by binary in `docs/cantos/R14.md` §3.1-§3.3.]
 
 ## Decisions folded in
 

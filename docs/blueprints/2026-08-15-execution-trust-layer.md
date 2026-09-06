@@ -854,7 +854,7 @@ El ledger no se enviará automáticamente al transcript ni al feed general.
 - Escrituras transaccionales.
 - Orden estable por acción y transacción.
 - Hash encadenado por partición.
-- Detección de huecos y alteraciones DENTRO del perfil que la configuración nombra (R14: no de un truncado de cola, ni de una cadena re-firmada con clave propia, ni de un perfil redirigido — SECURITY.md).
+- Detección de huecos y alteraciones DENTRO del perfil que la configuración nombra (R14: no de un truncado de cola, ni de una cadena re-firmada con clave propia, ni de un perfil redirigido, ni de una fila cuya columna de búsqueda cambió de clase de almacenamiento — las CUATRO de SECURITY.md).)
 - Backups y restauración verificables.
 - Retención configurable por tenant.
 - Cifrado de parámetros protegidos.
@@ -1144,13 +1144,13 @@ Construir:
 
 Pruebas obligatorias:
 
-- Una modificación de ledger que deje el perfil inconsistente consigo mismo se detecta (R14: las tres clases que lo dejan consistente exigen anclaje externo — SECURITY.md).
+- Una modificación de ledger que deje el perfil inconsistente consigo mismo se detecta (R14: las clases que lo dejan consistente exigen anclaje externo, y `ledger check` recorre UNA partición — SECURITY.md las enumera todas).
 - Receipts históricos siguen verificando tras rotar claves.
 - Restaurar un backup conserva cadena y estados.
 - Ningún secreto llega a logs, SSE o métricas.
 - Todas las denegaciones y ejecuciones producen receipt o error fatal visible.
 
-Criterio de salida: un tercero puede verificar qué se pidió, qué política decidió y qué resultado se registró. [enmendado 2026-09-06, R14: lo que verifica es que el FICHERO es consistente CONSIGO MISMO. No establece que el fichero sea el que escribió la historia, que la cadena esté completa, ni que las claves sean las autoritativas — las cuatro de SECURITY.md, tres capturadas por binario en `docs/cantos/R14.md` §3.1-§3.3.]
+Criterio de salida: un tercero puede verificar qué se pidió, qué política decidió y qué resultado se registró. [enmendado 2026-09-06, R14: lo que verifica es que el FICHERO es consistente CONSIGO MISMO. No establece que el fichero sea el que escribió la historia, que la cadena esté completa, ni que las claves sean las autoritativas, ni que esté presente una fila cuya columna de búsqueda cambió de clase de almacenamiento — las cuatro de SECURITY.md, las tres primeras capturadas por binario en `docs/cantos/R14.md` §3.1-§3.3.]
 
 ### Etapa 5: preview, agent diff y approvals
 

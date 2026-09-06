@@ -29,7 +29,7 @@
 // one shape: the last receipt of a two-receipt chain, a redirected
 // config, a self-registered key. An intermediate suffix follows from
 // the same index-derived expectation and was NOT executed;
-// SECURITY.md's list carries a FOURTH this command does not execute —
+// SECURITY.md's list carries a FOURTH this train did NOT execute —
 // a row whose LOOKUP column changed storage class is indistinguishable
 // from absence for the reader that seeks it.
 // The ledger is tamper-evident, not tamper-proof (§23 honesty sentence);

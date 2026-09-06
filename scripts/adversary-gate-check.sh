@@ -14,8 +14,11 @@
 #
 # THE PERIMETER, said once so no reader has to infer it: this check is a
 # DISCIPLINE AID inside the perimeter declared below, NOT a security
-# boundary. The hatches it does not cover are declared in this header
-# and in the sibling door. "Fails closed" in this file means: when the
+# boundary. The hatches this check KNOWS it does not cover are declared
+# in this header and in the sibling door; that is a declaration of what
+# has been found, not a proof that nothing else exists — no test from
+# outside this component establishes completeness, so it is not claimed
+# (CLAUDE.md, the cross-verification law). "Fails closed" in this file means: when the
 # check cannot READ what it must judge, it blocks instead of guessing.
 # It never means a push is impossible.
 #

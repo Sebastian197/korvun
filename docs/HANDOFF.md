@@ -427,7 +427,9 @@ explicit decision.
 >   dimension, every decision pinning its exact law.
 > - **v0.14.0 (17:25Z)** — the ledger and the verifiable receipts:
 >   Ed25519-signed receipts on an append-only hash chain born in the
->   same transaction; the offline verifier, every check NAMED;
+>   same transaction; the offline verifier, each failure the LADDER
+>   judges NAMED (a receipt whose stored bytes do not parse is refused
+>   with the read error and no ladder name — R14, SECURITY.md);
 >   tamper-evident, never "immutable" (SECURITY.md).
 >
 > **Public truth cured at the root**: `website/src/releaseFacts.ts` is

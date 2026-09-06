@@ -9,8 +9,10 @@
 // so a chain re-signed with a key the attacker registered there passes
 // (R14, verified by execution; SECURITY.md's honest scope lists that
 // one and the other THREE — the profile's identity, the chain's
-// completeness, and a row whose lookup column changed storage class). Every check fails with
-// a NAMED reason, never a generic "invalid":
+// completeness, and a row whose lookup column changed storage class).
+// Each failure the LADDER judges carries a NAMED reason rather than a
+// generic "invalid" — while a receipt whose STORED BYTES do not parse
+// is refused with the read error and no ladder name at all (R14 §3.5):
 //
 //	canonical_roundtrip_broken — the sealed form no longer survives the
 //	                             fuzzed strict parser
