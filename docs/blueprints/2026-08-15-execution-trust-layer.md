@@ -1000,7 +1000,7 @@ La extracción a un servicio o base compartida solo se plantea después de estab
 | Exfiltración de secretos | Credential Broker, referencias y redacción |
 | Cambio de política en vuelo | Pin de versión y digest por decisión |
 | Approval reutilizado | Vinculación al digest exacto y expiración |
-| Alteración del audit | Ledger encadenado, receipts firmados y verificación — mitigación PARCIAL (R14): cubre lo que rompe la auto-consistencia del perfil; el truncado de cola, la re-firma con clave propia registrada y la redirección del perfil exigen anclaje externo, fichado a v0.15.1 |
+| Alteración del audit | Ledger encadenado, receipts firmados y verificación — mitigación PARCIAL (R14): cubre lo que rompe la auto-consistencia del perfil; el truncado de cola, la re-firma con clave propia registrada, la redirección del perfil y una fila cuya columna de búsqueda cambió de clase de almacenamiento —las CUATRO de SECURITY.md— quedan fuera; las tres primeras exigen anclaje externo, fichado a v0.15.1 |
 | Resultado ambiguo | Estado explícito y consulta antes de repetir |
 | Admin expuesto | Auth obligatoria, bind seguro y TLS cuando no sea loopback |
 | Tenant crossing | Tenant en todas las claves y checks de autorización |

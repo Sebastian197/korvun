@@ -45,7 +45,12 @@ names, made WITHOUT re-signing it, is DETECTED and NAMED. [amended
 consistent WITH ITSELF; SECURITY.md's honest scope lists FOUR things it
 does not prove — the profile's identity, the chain's completeness, the
 keys' authority, and the presence of a row whose lookup column changed
-storage class. The first three are verified by execution.] §7.8 elevated: proof was already part of execution
+storage class. The first three are verified by execution.] [amended 2026-09-06, R14, second clause: "NAMED" holds only where the
+  LADDER runs. A receipt whose STORED BYTES do not parse aborts the read
+  before pass 1 — `korvun ledger check` exits 1 with the read error on
+  stderr, no receipt id and no check name (captured in
+  `docs/cantos/R14.md` §3.5). The tenth diff pass found this promise
+  standing on four surfaces of this file at once.] §7.8 elevated: proof was already part of execution
 (record_failed, E1); now the proof itself is verifiable. The engine
 stays invisible: transcript, feeds and SSE receive nothing (§19.1); the
 experience does not move one pixel.
@@ -118,7 +123,12 @@ small piece inside this stage when ordering allows.
   chain → verify signatures and key validity windows; the FIRST broken
   link is NAMED (receipt id, position, which check failed: hash
   mismatch / chain break / missing sequence / bad signature / key
-  invalid at signing time). [amended 2026-09-06, R14: "gap and tamper
+  invalid at signing time). [amended 2026-09-06, R14, second clause: "NAMED" holds only where the
+  LADDER runs. A receipt whose STORED BYTES do not parse aborts the read
+  before pass 1 — `korvun ledger check` exits 1 with the read error on
+  stderr, no receipt id and no check name (captured in
+  `docs/cantos/R14.md` §3.5). The tenth diff pass found this promise
+  standing on four surfaces of this file at once.] [amended 2026-09-06, R14: "gap and tamper
   detection INSIDE one partition's chain" is the operation's SHAPE, not
   a guarantee of coverage. Two alterations inside one partition are NOT
   detected: a cut from the TAIL leaves no hole, and a chain re-signed
@@ -201,7 +211,12 @@ small piece inside this stage when ordering allows.
   error and no ladder name — captured in `docs/cantos/R14.md` §3.5.]
 - **FR-VER-2** `korvun ledger check --config <path>`: the whole chain —
   every receipt re-verified, sequence continuity, gap/tamper NAMED at
-  first break; summary line with the receipt count. [amended
+  first break; summary line with the receipt count. [amended 2026-09-06, R14, second clause: "NAMED" holds only where the
+  LADDER runs. A receipt whose STORED BYTES do not parse aborts the read
+  before pass 1 — `korvun ledger check` exits 1 with the read error on
+  stderr, no receipt id and no check name (captured in
+  `docs/cantos/R14.md` §3.5). The tenth diff pass found this promise
+  standing on four surfaces of this file at once.] [amended
   2026-09-06, R14, twice. (1) partitions, keys and oldest/newest are
   NOT implemented — open requirement, filed to v0.15.1. (2) "the whole
   chain … gap/tamper NAMED at first break" is the operation's SHAPE,
@@ -230,7 +245,7 @@ small piece inside this stage when ordering allows.
   same transaction, or the attempt fails CLOSED with the visible error.
   [amended 2026-09-06, R14: the original clause "an unreceipted effect
   cannot exist" is over-broad and the repository's own erratum says so
-  (`docs/releases/v0.14.0.md:121-125`, `v0.14.1`). Atomicity holds
+  (`docs/releases/v0.14.0.md:124-128`, `v0.14.1`). Atomicity holds
   INSIDE the store; an EXTERNAL effect completed just before a failed
   terminal close is a real, documented window until stage 6's
   reconciliation.]
@@ -240,8 +255,11 @@ small piece inside this stage when ordering allows.
 - **AS-1 (tampering detected — mandatory)** Given a populated ledger,
   When any receipt row is modified out of band (a byte of the outcome,
   a timestamp, a signature) WITHOUT re-signing it, Then `ledger check`
-  FAILS naming that receipt and the failed check; same for a row
-  deleted from INSIDE the chain (sequence gap) and a reordered chain.
+  FAILS naming that receipt and the failed check — EXCEPT where the
+  modified bytes do not PARSE, in which case the read aborts before the
+  ladder and the refusal carries the read error and no names at all
+  (R14 §3.5, captured); same for a row deleted from INSIDE the chain
+  (sequence gap) and a reordered chain.
   [amended 2026-09-06, R14: a tail cut and a chain re-signed with a
   self-registered key are NOT covered — SECURITY.md's honest scope.]
 - **AS-2 (rotation preserves history — mandatory)** Given receipts
