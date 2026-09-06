@@ -16,8 +16,10 @@
 // documented (SECURITY.md; R13 D11 and R14): this command proves that
 // ONE PARTITION of the profile — the one named by --partition, "main"
 // by default — is consistent with itself. It says nothing about the
-// receipts of any other partition, so a receipt moved out of "main" by
-// an UPDATE leaves no hole in the default walk. It does not prove that the profile
+// receipts of any other partition. Moving a receipt out of "main" is
+// therefore the DELETION case and behaves like it: from the middle of
+// the chain it is denounced as chain_seq_gap, because the expectation
+// in pass 1 is index-derived; from the TAIL it leaves no hole at all. It does not prove that the profile
 // is the one your history wrote (a redirected config judges another
 // store), that the chain is COMPLETE (any truncation from the TAIL —
 // the last receipt, any suffix, or the whole partition, which reports

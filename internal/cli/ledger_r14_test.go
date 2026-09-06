@@ -15,9 +15,11 @@
 //
 // Its conforming probing mutation, executed and recorded in the canto
 // (M7): delete the forger's key registration and leave the re-sign
-// loop intact — the pin goes RED with `key_unknown`, because its green
-// DEPENDS on the key being self-registered. That is the mutation that
-// proves what this test is named for. Beside it (M6): invert the
+// loop intact — the pin goes RED before either command runs, at the
+// active-key probe below ("1 active keys in the registry, want 2"),
+// because its green DEPENDS on the key being self-registered. That is
+// the mutation that proves what this test is named for, and the red it
+// produces is a precondition red, not a ladder name. Beside it (M6): invert the
 // key-lookup arm of the ladder
 // (`internal/cli/receipt.go`, the `key_unknown` branch) so a FOUND key
 // fails — the PIN'S OWN assertion goes RED with that exact name. The
@@ -144,7 +146,7 @@ func TestLedgerCheck_chainReSignedWithASelfRegisteredKeyIsNOTDetected(t *testing
 	// EXACT outcome, never "some success": the summary line with its
 	// count, and the receipt's OK line with its sequence.
 	code, stdout, stderr := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
-	if code != 0 || !strings.Contains(stdout, "2 receipts, chain intact") {
+	if code != 0 || !strings.Contains(stdout, "ledger main: 2 receipts, chain intact") {
 		t.Fatalf("AUDIT R14: `ledger check` does NOT detect a chain re-signed with a "+
 			"self-registered key — if this reddened, the external anchor of v0.15.1 has "+
 			"landed and this pin must be rewritten by that train: %d %q %q", code, stdout, stderr)

@@ -155,8 +155,11 @@ keys are kept forever, so each era of the chain verifies with the key
 of its era. Verification is read-only; the honest scope is documented:
 the ledger is tamper-evident, never "immutable". The scope is not an
 access boundary but a property: the commands prove the profile is
-consistent with itself, and SECURITY.md lists the four things they do
-not prove.
+consistent with itself. The four things they do NOT prove: that the
+profile is the one your history wrote, that the chain is complete, that
+its keys are the authoritative ones, and that a row whose lookup column
+changed storage class is present rather than absent. The project's
+security notes carry them in full.
 
 ## The approvals inbox (v0.15.0)
 

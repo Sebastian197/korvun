@@ -165,7 +165,11 @@ verifica con la clave de su era. La verificación es de solo lectura; el
 alcance honesto está documentado: el libro es tamper-evident, jamás
 «immutable». El alcance no es un límite de acceso sino una propiedad:
 los comandos prueban que el perfil es consistente consigo mismo, y
-SECURITY.md enumera las cuatro cosas que no prueban.
+Las cuatro cosas que NO prueban: que el perfil sea el que escribió tu
+historia, que la cadena esté completa, que sus claves sean las
+autoritativas y que una fila cuya columna de búsqueda cambió de clase
+de almacenamiento esté presente en vez de ausente. Las notas de
+seguridad del proyecto las llevan enteras.
 
 ## El buzón de aprobaciones (v0.15.0)
 
