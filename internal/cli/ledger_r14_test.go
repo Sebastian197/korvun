@@ -16,7 +16,10 @@
 // Its conforming probing mutation, executed and recorded in the canto
 // (M6): invert the key-lookup arm of the ladder
 // (`internal/cli/receipt.go`, the `key_unknown` branch) so a FOUND key
-// fails — the pin goes RED with that exact name. Its separation half
+// fails — the PIN'S OWN assertion goes RED with that exact name. The
+// first form of this test carried an honest-chain precondition, and
+// the mutation reddened THAT line instead, proving nothing; the
+// precondition is gone for exactly that reason. Its separation half
 // (M4): `want := int64(i)` → `want := r.ChainSeq` in ledgerCheck's
 // pass 1 leaves this pin GREEN while reddening the gap and duplicate
 // tests. Red under M6, green under M4: that pair is the evidence.
@@ -43,12 +46,11 @@ func TestLedgerCheck_chainReSignedWithASelfRegisteredKeyIsNOTDetected(t *testing
 	t.Parallel()
 	cfgPath, dbPath := seedChain(t, 2)
 
-	// The honest chain verifies.
-	code, stdout, stderr := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
-	if code != 0 || !strings.Contains(stdout, "2 receipts, chain intact") {
-		t.Fatalf("the honest chain must verify: %d %q %q", code, stdout, stderr)
-	}
-
+	// NO honest-chain precondition here, on purpose: it would share the
+	// blast radius of this pin's own mutation (M6 breaks verification
+	// for every receipt), so the red would land on the precondition and
+	// prove nothing about the pin. The intact chain has its own test.
+	//
 	// THE SABOTAGE, by direct SQL only: a key of the forger's own,
 	// registered active, then every receipt re-hashed, re-linked and
 	// re-signed with it, and the action row fixed to agree.
@@ -104,7 +106,7 @@ func TestLedgerCheck_chainReSignedWithASelfRegisteredKeyIsNOTDetected(t *testing
 	// THE PIN. Both verifiers bless the forgery. The assertions name the
 	// EXACT outcome, never "some success": the summary line with its
 	// count, and the receipt's OK line with its sequence.
-	code, stdout, stderr = runIntentCLI(t, "ledger", "check", "--config", cfgPath)
+	code, stdout, stderr := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
 	if code != 0 || !strings.Contains(stdout, "2 receipts, chain intact") {
 		t.Fatalf("AUDIT R14: `ledger check` does NOT detect a chain re-signed with a "+
 			"self-registered key — if this reddened, the external anchor of v0.15.1 has "+

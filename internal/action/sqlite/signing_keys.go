@@ -93,8 +93,11 @@ func (s *Store) RotateSigningKey(ctx context.Context, keyID, publicKey string, a
 	return nil
 }
 
-// ActiveSigningKey returns the single active key (ErrNotFound when the
-// keystore is empty or fully retired).
+// ActiveSigningKey returns AN active key (ErrNotFound when the keystore
+// is empty or fully retired). This API keeps at most one, but the table
+// carries no such constraint: with a second row written by direct SQL
+// the query returns one of them and says nothing about the other
+// (R14; the rule in the table is filed to v0.15.1).
 func (s *Store) ActiveSigningKey(ctx context.Context) (SigningKey, error) {
 	return s.scanSigningKey(s.db.QueryRowContext(ctx,
 		`SELECT key_id, public_key, created_at, retired_at FROM signing_keys

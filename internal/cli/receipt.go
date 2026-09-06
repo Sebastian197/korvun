@@ -3,8 +3,13 @@
 
 // The operator's verifier — Etapa 4, lote 4 (spec FR-VER, the E2 CLI
 // mold): `korvun receipt verify` re-judges one receipt OFFLINE against
-// the store file, trusting nothing — not even its own base. Every check
-// fails with a NAMED reason, never a generic "invalid":
+// the store file, recomputing every derived value instead of trusting
+// the stored one. What it CANNOT re-derive is the store's own registry:
+// the key it verifies against is registered inside the file it judges,
+// so a chain re-signed with a key the attacker registered there passes
+// (R14, verified by execution; SECURITY.md's honest scope, with the
+// other two things this command does not prove). Every check fails with
+// a NAMED reason, never a generic "invalid":
 //
 //	canonical_roundtrip_broken — the sealed form no longer survives the
 //	                             fuzzed strict parser
@@ -16,6 +21,17 @@
 //	chain_link_broken          — the previous hash does not match the
 //	                             predecessor (or the genesis link)
 //	custody_mismatch           — the receipt and its action row disagree
+//
+// and, when the receipt seals an approval digest, the arms that judge
+// the approval and tombstone evidence behind it:
+//
+//	approval_mismatch          — the sealed digest and the approval row
+//	                             re-derive differently
+//	tombstone_action_mismatch  — the tombstone points at another action
+//	tombstone_corrupt          — the tombstone selected by the digest is
+//	                             corrupt at a named field
+//	tombstone_read_failed      — that evidence cannot be read, said by
+//	                             name and never disguised as old history
 //
 // Verification is READ-ONLY: it opens the store plainly (no sealer, no
 // key generation) and records nothing.

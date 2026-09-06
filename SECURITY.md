@@ -147,8 +147,11 @@ exists (retention prunes it and the verifier says so with a note,
 sequence with no gap and no clone. Each failure the ladder judges
 carries ITS OWN name — `hash_mismatch`, `signature_invalid`,
 `custody_mismatch`, … — never a generic "invalid"; when the receipt
-being read does not parse, the command refuses on stderr with the read
-error and no ladder name. The agreement with those rows is a COHERENCE
+being READ does not parse, the command refuses on stderr with the read
+error and no ladder name; when ANOTHER receipt of the same chain does
+not parse, the failure reported may carry a name that describes a
+disagreement rather than the unreadable byte, which is a defect filed
+to v0.15.1, not a guarantee. The agreement with those rows is a COHERENCE
 check over UNSIGNED evidence: it catches a mismatch, it does not seal
 them, and the auxiliary v2-era evidence (tombstones, live rows) is
 governed by the "Known limits of the receipt v2 era" section below.

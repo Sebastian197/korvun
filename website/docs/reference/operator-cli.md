@@ -147,8 +147,10 @@ Atomic retire-and-activate rotation of the profile's signing key. The
 rotation act leaves its OWN receipt sealed with the NEW key; retired
 keys are kept forever, so each era of the chain verifies with the key
 of its era. Verification is read-only; the honest scope is documented:
-the ledger is tamper-evident, never "immutable", and the boundary is
-write access to the profile, not key custody.
+the ledger is tamper-evident, never "immutable". The scope is not an
+access boundary but a property: the commands prove the profile is
+consistent with itself, and SECURITY.md lists the four things they do
+not prove.
 
 ## The approvals inbox (v0.15.0)
 

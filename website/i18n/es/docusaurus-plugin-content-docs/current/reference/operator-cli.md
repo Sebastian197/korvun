@@ -157,8 +157,9 @@ acto de rotación deja SU PROPIO recibo sellado con la clave NUEVA; las
 claves retiradas se conservan para siempre, así cada era de la cadena
 verifica con la clave de su era. La verificación es de solo lectura; el
 alcance honesto está documentado: el libro es tamper-evident, jamás
-«immutable», y el límite es el acceso de escritura al perfil, no la
-custodia de la clave.
+«immutable». El alcance no es un límite de acceso sino una propiedad:
+los comandos prueban que el perfil es consistente consigo mismo, y
+SECURITY.md enumera las cuatro cosas que no prueban.
 
 ## El buzón de aprobaciones (v0.15.0)
 

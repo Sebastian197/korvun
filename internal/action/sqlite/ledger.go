@@ -9,7 +9,9 @@
 // offers NO update and NO delete on receipts: append-only by
 // construction, and the chain — monotonic sequence per partition, each
 // receipt carrying its predecessor's hash from the documented genesis
-// link — makes out-of-band edits DETECTABLE. Tamper-evident, never
+// link — makes out-of-band edits DETECTABLE unless the editor also
+// re-signs and re-links with a key registered in the same file (R14,
+// SECURITY.md's honest scope). Tamper-evident, never
 // immutable: the operator controls storage and keys (§19.3). Receipts
 // are EXEMPT from the E1 actions prune (the sealed exemption): the
 // evidence outlives operational pruning; growth stays one bounded row

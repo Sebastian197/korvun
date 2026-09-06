@@ -427,7 +427,7 @@ explicit decision.
 >   dimension, every decision pinning its exact law.
 > - **v0.14.0 (17:25Z)** — the ledger and the verifiable receipts:
 >   Ed25519-signed receipts on an append-only hash chain born in the
->   same transaction; the offline verifier with seven NAMED checks;
+>   same transaction; the offline verifier, every check NAMED;
 >   tamper-evident, never "immutable" (SECURITY.md).
 >
 > **Public truth cured at the root**: `website/src/releaseFacts.ts` is
@@ -524,7 +524,7 @@ explicit decision.
 > its SIGNED receipt in the same transaction — an unreceipted effect
 > cannot exist; genesis-linked hash chain, race-hammered, prune-exempt),
 > the live result digest (NC-3: raw results never touch the disk), and
-> the operator's verifier (receipt verify with seven NAMED checks;
+> the operator's verifier (receipt verify with every check NAMED;
 > ledger check denouncing the first broken link, gap or clone [scoped
 > 2026-09-06, R14: inside the profile the config names — see
 > SECURITY.md];
