@@ -70,12 +70,13 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 	}
 }
 
-// The doc guard BY STATEMENT: every SQL statement inside a code fence
-// of the document that names `approval_tombstones` — a shell-prompt
-// statement joined across its `...>` continuation lines until `;`, an
-// unterminated one judged at the fence close, or the SQL argument of a
-// `sqlite3 "<db>" "…"` one-liner — binds the id (`@apr`) and never
-// interpolates one (`'apr_…'` or `"apr_…"`). EXEMPT, by site: the
+// The doc guard BY STATEMENT: every SQL statement of the document that
+// names `approval_tombstones` — a shell-prompt statement joined across
+// its `...>` continuation lines until `;` (an unterminated one judged
+// where the prompt lines stop — fences, indentation or `~~~` play no
+// part: the SITE is the prompt), or the SQL argument of a `sqlite3
+// "<db>" "…"` one-liner — binds the id (`@apr`, outside SQL comments)
+// and never interpolates one (`'apr_…'` or `"apr_…"`). EXEMPT, by site: the
 // dot-command lines (`sqlite> .param …`, and a `sqlite3 …` invocation
 // whose arguments after the path are all dot-commands — `.dump
 // approval_tombstones` is a dot-command, not a statement) — they are
@@ -98,11 +99,14 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	// exists); WHERE matched case-insensitively.
 	interpolated := regexp.MustCompile(`['"]apr_[^'"]*['"]`)
 	whereClause := regexp.MustCompile(`(?i)\bwhere\b`)
-	inFence, sqlStatements := false, 0
+	// SQL comments are stripped before judging: a `-- @apr` in a comment
+	// is not a bind (the sixth pass).
+	sqlComment := regexp.MustCompile(`--[^\n]*`)
+	sqlStatements := 0
 	var stmt strings.Builder
 	stmtStart := 0
 	judge := func() {
-		s := stmt.String()
+		s := sqlComment.ReplaceAllString(stmt.String(), "")
 		stmt.Reset()
 		if !strings.Contains(s, "approval_tombstones") {
 			return
@@ -203,17 +207,24 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		trimmed = strings.TrimPrefix(trimmed, "sqlite> ")
 		return strings.TrimPrefix(trimmed, "...>")
 	}
+	// The SITE is the prompt, not the fence (the sixth pass: an indented
+	// block or a `~~~` fence renders as code too): a line is a statement
+	// site when it carries the shell prompt (`sqlite> `), the
+	// continuation prompt (`...>`) or a `sqlite3 …` invocation, wherever
+	// it sits in the document; any other line closes an open statement,
+	// which is judged as it stands — never dropped.
+	isSite := func(line string) bool {
+		trimmed := strings.TrimSpace(line)
+		return strings.HasPrefix(trimmed, "sqlite> ") || strings.HasPrefix(trimmed, "...>") || strings.HasPrefix(trimmed, "sqlite3 ")
+	}
 	for n, line := range strings.Split(string(doc), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "```") {
-			// A statement left unterminated at the closing fence is
-			// judged as it stands — never dropped.
-			if inFence && stmt.Len() > 0 {
+		if !isSite(line) {
+			if stmt.Len() > 0 {
 				judge()
 			}
-			inFence = !inFence
 			continue
 		}
-		if !inFence || isExemptSite(line) {
+		if isExemptSite(line) {
 			continue
 		}
 		if stmt.Len() == 0 {
@@ -227,6 +238,9 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		if strings.HasPrefix(strings.TrimSpace(line), "sqlite3 ") || strings.HasSuffix(strings.TrimSpace(line), ";") {
 			judge()
 		}
+	}
+	if stmt.Len() > 0 {
+		judge()
 	}
 	if sqlStatements < 3 {
 		t.Fatalf("the guard must see the document's SQL statements (found %d) — the document moved or the fences changed", sqlStatements)

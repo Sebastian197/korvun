@@ -6,7 +6,9 @@
 # Both doors call it — the session PreToolUse hook
 # (.claude/hooks/adversary-gate.sh, door 1, judging the HEAD of
 # CLAUDE_PROJECT_DIR) and git's own pre-push hook (.githooks/pre-push,
-# door 2, judging EVERY pushed sha from git's stdin, one call per line).
+# door 2, judging the pushed shas from git's stdin in order, one call
+# per line, STOPPING at the first failing ref — later refs are not
+# judged).
 #
 #   scripts/adversary-gate-check.sh <root> <sha-to-judge>
 #
@@ -16,13 +18,17 @@
 # rest: no grep, no head, no wc, no stat).
 #
 # WHAT IS ENFORCED (the wire, in THIS order):
+#  -1. the caller's git environment overrides dropped (GIT_DIR and its
+#      family, GIT_GRAFT_FILE — the list below), before anything runs;
 #   0. argument presence (an empty root → "no root argument"; an empty
 #      sha → "no sha argument" — judged before anything runs, so
 #      `git -C ""` can never silently mean "here");
 #   1. tools: git;
 #   2. the ROOT wall — <root> must be an existing directory whose
 #      canonical path (`cd`, `pwd -P`, CDPATH unset) equals the physical
-#      top level git names for it (`rev-parse --show-toplevel`);
+#      top level git names for it (`rev-parse --show-toplevel`, stdout
+#      only; on failure a SECOND call fetches git's words for the
+#      reason text — the judgement is the first call's exit);
 #   3. the argument resolved through
 #      `git rev-parse --verify --end-of-options "<arg>^{commit}"` — J is
 #      its output: an annotated tag is peeled to its commit, a
@@ -81,8 +87,11 @@ MARKER=".claude/adversary/last-verdict.md"
 # The repository judged is the one <root> names, never one the caller's
 # environment points git at: the object-directory and work-tree
 # overrides are dropped here (fixture ENVDIR, mutant m-env). GIT_TRACE
-# and friends write to stderr, which no capture below folds into a
-# value (fixture GITTRACE, mutant m-n7tr). NOT dropped, declared: the
+# and friends write to stderr, which no capture that feeds a JUDGEMENT
+# folds into a value (fixture GITTRACE, mutant m-n7tr); the one capture
+# of stderr, ERR below, feeds a reason text on the failure path only
+# (under GIT_TRACE=1 that text carries trace lines — cosmetic,
+# declared). NOT dropped, declared: the
 # config layer — GIT_CONFIG_*, a swapped HOME, a config file carrying
 # core.useReplaceRefs=false or an alias — the same class of hatch the
 # session hook's header confesses (reached without hatch text); of

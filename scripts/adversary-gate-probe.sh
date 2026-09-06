@@ -19,7 +19,9 @@
 # the blob by object id (size, then content) → the first line exactly
 # `VETO LEVANTADO <40-hex>` → the hex equals the parent → diff-tree
 # exactly the marker path.
-# Fixture names and expectations are the R13 paper's §6 G7 table;
+# Fixture names and expectations are the R13 paper's §6 G7 table plus
+# the fixtures the adversary's diff passes added (UNSEARCHABLE, GITTRACE,
+# ENVDIR, GRAFTENV, WORKTREE — their expectations in the R13 canto §5);
 # outcomes marked "captured" there are observed here, not assumed.
 set -u
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || dirname "$(dirname "$(readlink -f "$0")")")
@@ -252,7 +254,11 @@ out=$(GIT_GRAFT_FILE="$TMP/grafts" bash "$CHECK" "$GR" "$K_GR" 2>&1); code=$?
 if [ "$code" -ne 2 ] || ! printf '%s' "$out" | grep -qF "records $P_GR"; then fail "check-direct GRAFTENV: expected 2 + \"records $P_GR\" (the real parent judged), got $code" "$out"; else pass "check-direct GRAFTENV (exit 2, the caller's GIT_GRAFT_FILE dropped)"; fi
 echo "GRAFTENV captured: without the drop, rev-list --parents under GIT_GRAFT_FILE reads: $(GIT_GRAFT_FILE="$TMP/grafts" git -C "$GR" rev-list --parents -n 1 "$K_GR" 2>/dev/null)"
 # ENVDIR: GIT_DIR pointing at ANOTHER repository must not redirect the judgement — the check judges <root>, positive control.
-OTHER=$(parentok envdir-other)
+# OTHER carries DIFFERENT content from PARENTOK (the sixth pass: a byte-identical twin committed in the same second
+# would carry the SAME shas, and J_POK would resolve inside OTHER — m-env's red would then hang on the clock);
+# with distinct content J_POK is never an object of OTHER, so the red is by construction.
+OTHER=$(mkfix envdir-other); code "$OTHER" other-content >/dev/null; marker "$OTHER" "$(git -C "$OTHER" rev-parse HEAD)" >/dev/null
+if git -C "$OTHER" cat-file -e "$J_POK" 2>/dev/null; then fail "ENVDIR fixture: OTHER must not contain J_POK" ""; fi
 out=$(GIT_DIR="$OTHER/.git" bash "$CHECK" "$POK" "$J_POK" 2>&1); code=$?
 if [ "$code" -ne 0 ]; then fail "check-direct ENVDIR: expected 0 with GIT_DIR pointing elsewhere, got $code" "$out"; else pass "check-direct ENVDIR (exit 0, the caller's GIT_DIR dropped)"; fi
 # WORKTREE: a LINKED worktree of the PARENTOK repository (its .git is a FILE; git exports an absolute GIT_DIR to the
