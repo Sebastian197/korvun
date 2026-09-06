@@ -158,7 +158,9 @@ governed by the "Known limits of the receipt v2 era" section below.
 
 They do NOT prove four things. The first three were verified BY
 EXECUTION against a disposable profile with the built binary (the R14
-canto carries the captures):
+canto carries the captures), each in ONE shape — the tail cut removed
+the last receipt of a two-receipt chain; a longer intermediate suffix
+follows from the same index-derived expectation and was NOT executed:
 
 1. that the profile is the one your history wrote — point the config at
    another store and the verifier judges THAT one; the same follows

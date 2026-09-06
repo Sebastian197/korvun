@@ -106,7 +106,7 @@ small piece inside this stage when ordering allows.
   or nothing) through the domain API only — no UPDATE/DELETE paths
   exist on receipts (append-only by construction, and the verifier
   detects out-of-band edits that leave the profile inconsistent with
-  itself — R14, SECURITY.md).
+  itself — amended 2026-09-06, R14; SECURITY.md carries the scope).
 - **FR-LED-2** Hash chain per partition: `previous_receipt_hash` +
   `receipt_hash` with a stable order (chain sequence per partition).
   v1 ships ONE partition (`"main"`) — the local single-operator truth —
@@ -118,7 +118,13 @@ small piece inside this stage when ordering allows.
   chain → verify signatures and key validity windows; the FIRST broken
   link is NAMED (receipt id, position, which check failed: hash
   mismatch / chain break / missing sequence / bad signature / key
-  invalid at signing time).
+  invalid at signing time). [amended 2026-09-06, R14: "gap and tamper
+  detection INSIDE one partition's chain" is the operation's SHAPE, not
+  a guarantee of coverage. Two alterations inside one partition are NOT
+  detected: a cut from the TAIL leaves no hole, and a chain re-signed
+  with a key the attacker registered in the same profile passes every
+  arm. Both captured by binary in `docs/cantos/R14.md` §3.1-§3.2;
+  SECURITY.md carries the scope and the anchors filed to v0.15.1.]
 - **FR-LED-4** Retention: receipts are EXEMPT from the E1 actions cap
   (they are the evidence; the actions cap keeps pruning operational
   rows). Bounded-growth reason written: receipts are one bounded row
@@ -188,8 +194,11 @@ small piece inside this stage when ordering allows.
   window, and check COHERENCE with the underlying ACTION row (its
   state against the outcome of the receipt that closes it, its
   parameters digest against every receipt). [amended 2026-09-06, R14:
-  the wire compares the action row, never a rule or a policy pin.] Human output, stable exit codes
-  (0 verified / 1 failed naming the check / 2 usage).
+  the wire compares the action row, never a rule or a policy pin.] Human
+  output, stable exit codes (0 verified / 1 failed / 2 usage). [amended
+  2026-09-06, R14: exit 1 does NOT always name a check. When the receipt
+  being read does not parse, the command refuses on stderr with the read
+  error and no ladder name — captured in `docs/cantos/R14.md` §3.5.]
 - **FR-VER-2** `korvun ledger check --config <path>`: the whole chain —
   every receipt re-verified, sequence continuity, gap/tamper NAMED at
   first break; summary line with the receipt count. [amended

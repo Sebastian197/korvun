@@ -20,7 +20,10 @@
 // the last receipt, any suffix, or the whole partition, which reports
 // "0 receipts, chain intact" — leaves no hole to detect), or that the
 // keys are the AUTHORITATIVE ones (the registry lives inside the file
-// being judged). Those three are verified by execution, R14 canto;
+// being judged). Those three were EXECUTED in the R14 canto, each in
+// one shape: the last receipt of a two-receipt chain, a redirected
+// config, a self-registered key. An intermediate suffix follows from
+// the same index-derived expectation and was NOT executed;
 // SECURITY.md's list carries a FOURTH this command does not execute —
 // a row whose LOOKUP column changed storage class is indistinguishable
 // from absence for the reader that seeks it.

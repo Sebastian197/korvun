@@ -217,7 +217,9 @@ effect; a crash past the point where an effect may have fired closes
 reconciliation of those outcomes is stage 6's declared scope. The operator re-judges the book offline with
 `korvun receipt verify`, `korvun ledger check` and `korvun receipt
 rotate-key` (each era of the chain verifies with the key of its era),
-and every failure carries its own name, never a generic "invalid": a
+and each failure the ladder judges carries its own name rather than a
+generic "invalid" (a receipt whose stored bytes do not parse is refused
+with the read error and no ladder name): a
 receipt deleted from INSIDE the chain is denounced by its hole, an
 edited one by its hash. The limit is confessed out loud, and it is
 wider than key custody: cutting the chain's tail, registering a key of

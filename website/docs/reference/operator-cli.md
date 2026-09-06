@@ -118,12 +118,16 @@ append-only hash chain, and the CLI carries the judge.
 korvun receipt verify --config korvun.json rcpt_…
 ```
 
-One receipt (or every receipt of an `act_…` id), re-judged offline against the store file, every check named — these
-six always, plus four more when the receipt seals an approval digest: canonical roundtrip, hash recompute, Ed25519 signature against
-the REGISTERED public key, the key's validity window, the chain link to
-the predecessor, and coherence with the action row. Every failure
-carries its name (`hash_mismatch`, `signature_invalid`,
-`custody_mismatch`, …) — never a generic "invalid".
+One receipt (or every receipt of an `act_…` id), re-judged offline
+against the store file. What the ladder judges, in order: the canonical
+roundtrip, the hash recomputed, the signing key found in the registry,
+the Ed25519 signature against that key, the key's validity window, the
+chain link to its predecessor, and coherence with the action row — and,
+when the receipt seals an approval digest, the approval and its
+tombstone. Each failure the ladder judges carries its name
+(`hash_mismatch`, `signature_invalid`, `custody_mismatch`, …) rather
+than a generic "invalid"; a receipt whose stored bytes do not parse is
+refused with the read error and no ladder name.
 
 ```sh
 korvun ledger check --config korvun.json

@@ -196,8 +196,12 @@ const logo = `
 
 `
 
-// helpText is the usage screen. It names every subcommand with a one-line
-// description plus a couple of copy-paste examples, and points to the docs.
+// helpText is the usage screen. It names the subcommands an operator
+// starts from, with a one-line description plus a couple of copy-paste
+// examples, and points to the docs. It is NOT the full dispatch list:
+// receipt, ledger and approvals dispatch (see run) and are documented
+// in SECURITY.md and the operator reference, not here. Widening the
+// screen is a UX change, filed, not a comment fix.
 const helpText = `korvun — a single Go binary: messaging gateway + multi-model router + multi-brain orchestrator.
 
 Usage:
