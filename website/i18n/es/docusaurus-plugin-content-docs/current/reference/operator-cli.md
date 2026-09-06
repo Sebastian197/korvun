@@ -126,12 +126,13 @@ korvun receipt verify --config korvun.json rcpt_…
 ```
 
 Un recibo (o todos los de un id `act_…`), re-juzgado offline contra el
-fichero del store. Lo que juzga la escalera, en orden: el roundtrip
-canónico, el hash recomputado, la clave de firma encontrada en el
-registro, la firma Ed25519 contra esa clave, la ventana de validez de la
-clave, el eslabón de cadena con su predecesor y la coherencia con la
-fila de la acción — y, cuando el recibo sella un digest de aprobación,
-la aprobación y su lápida. Cada fallo que juzga la escalera lleva su
+fichero del store. Lo que juzga la escalera, en el orden en que lo juzga: el
+roundtrip canónico, el hash recomputado, la clave de firma encontrada
+en el registro, la firma Ed25519 contra esa clave, la ventana de
+validez de la clave, el eslabón de cadena con su predecesor, después
+—cuando el recibo sella un digest de aprobación— la aprobación y su
+lápida, y en último lugar la coherencia con la fila de la acción. El
+orden se ve: el comando imprime solo el PRIMER fallo. Cada fallo que juzga la escalera lleva su
 nombre (`hash_mismatch`, `signature_invalid`, `custody_mismatch`, …) en
 vez de un «invalid» genérico; un recibo cuyos bytes almacenados no
 parsean se rechaza con el error de lectura y sin nombre de escalera.

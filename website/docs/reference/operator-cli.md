@@ -119,12 +119,13 @@ korvun receipt verify --config korvun.json rcpt_…
 ```
 
 One receipt (or every receipt of an `act_…` id), re-judged offline
-against the store file. What the ladder judges, in order: the canonical
-roundtrip, the hash recomputed, the signing key found in the registry,
-the Ed25519 signature against that key, the key's validity window, the
-chain link to its predecessor, and coherence with the action row — and,
-when the receipt seals an approval digest, the approval and its
-tombstone. Each failure the ladder judges carries its name
+against the store file. What the ladder judges, in the order it judges it: the
+canonical roundtrip, the hash recomputed, the signing key found in the
+registry, the Ed25519 signature against that key, the key's validity
+window, the chain link to its predecessor, then — when the receipt
+seals an approval digest — the approval and its tombstone, and last the
+coherence with the action row. The order is visible: the command prints
+the FIRST failure only. Each failure the ladder judges carries its name
 (`hash_mismatch`, `signature_invalid`, `custody_mismatch`, …) rather
 than a generic "invalid"; a receipt whose stored bytes do not parse is
 refused with the read error and no ladder name.

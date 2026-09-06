@@ -104,7 +104,9 @@ NEVER persisted (the result is attested by an on-the-fly digest). The
 operator verifies offline, against the file, with the built-in CLI:
 `korvun receipt verify` re-judges one receipt (hash, Ed25519 signature
 against the registered key, key validity window, chain link, coherence
-with the action row — every failure named), and `korvun ledger check`
+with the action row — each failure the LADDER judges named; a receipt
+whose stored bytes do not parse is refused with the read error and no
+ladder name), and `korvun ledger check`
 walks ONE partition's whole chain, denouncing the first gap, clone or
 tampered link it finds INSIDE what the profile holds — see the honest
 scope below for the four things neither command can prove. `korvun receipt rotate-key` rotates the signing key; retired keys

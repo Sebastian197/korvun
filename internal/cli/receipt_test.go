@@ -7,7 +7,12 @@
 // the fuzzed parser, hash recompute, signature against the REGISTERED
 // public key by its signing_key_id, the key's validity window, the
 // chain link to the predecessor, and coherence with the action row.
-// Every failure NAMED — never a generic "invalid". The operator's own
+// Each failure the LADDER judges is NAMED rather than a generic
+// "invalid"; a receipt whose stored bytes do not parse is refused with
+// the read error and no ladder name (R14, SECURITY.md). What the
+// command proves is that the profile is consistent WITH ITSELF — not
+// that it is the book history wrote, nor that its keys are the
+// authoritative ones. The operator's own
 // CLI acts leave signed receipts that verify (the judge judges itself).
 // Approved-red contract.
 

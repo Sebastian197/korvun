@@ -15,7 +15,9 @@
 // immutable: the operator controls storage and keys (§19.3). Receipts
 // are EXEMPT from the E1 actions prune (the sealed exemption): the
 // evidence outlives operational pruning; growth stays one bounded row
-// per outcome, observable via the verifier's counts.
+// per outcome. `ledger check` prints ONE count, the receipts of the
+// partition it walked; the per-partition, per-key, oldest and newest
+// counts FR-VER-2 asks for are unimplemented and filed (R14 D5).
 package sqlite
 
 import (

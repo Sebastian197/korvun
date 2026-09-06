@@ -1150,7 +1150,7 @@ Pruebas obligatorias:
 - Ningún secreto llega a logs, SSE o métricas.
 - Todas las denegaciones y ejecuciones producen receipt o error fatal visible.
 
-Criterio de salida: un tercero puede verificar qué se pidió, qué política decidió y qué resultado se registró.
+Criterio de salida: un tercero puede verificar qué se pidió, qué política decidió y qué resultado se registró. [enmendado 2026-09-06, R14: lo que verifica es que el FICHERO es consistente CONSIGO MISMO. No establece que el fichero sea el que escribió la historia, que la cadena esté completa, ni que las claves sean las autoritativas — las cuatro de SECURITY.md, tres capturadas por binario en `docs/cantos/R14.md` §3.1-§3.3.]
 
 ### Etapa 5: preview, agent diff y approvals
 

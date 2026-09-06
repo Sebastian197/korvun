@@ -269,7 +269,12 @@ small piece inside this stage when ordering allows.
   `go.mod` untouched; toll declared under ceiling.
 - Exit criterion (blueprint): a third party can verify what was
   requested, which policy decided, and what result was recorded —
-  offline, from the file, with the operator's CLI.
+  offline, from the file, with the operator's CLI. [amended 2026-09-06,
+  R14: what the third party verifies is that the FILE is consistent
+  with itself. It does not establish that the file is the one history
+  wrote, that the chain is complete, or that the keys are the
+  authoritative ones — SECURITY.md's four, three of them captured by
+  binary in `docs/cantos/R14.md` §3.1-§3.3.]
 
 ## Decisions folded in
 
@@ -361,6 +366,13 @@ untouched.
 Exit criterion, standing: a third party holding only the store file and
 the `korvun` binary can verify what was requested (action digests),
 which policy decided (decision digest, policy pin, rule), and what
-result was recorded (outcome + result digest) — offline, with every
-failure named. Honest limit in public language (SECURITY.md): the
-ledger is tamper-evident, never "immutable".
+result was recorded (outcome + result digest) — offline, each failure
+the ladder judges named. [amended 2026-09-06, R14, twice. (1) "verify"
+here means AGAINST THE FILE ITSELF: a party who can write the store
+registers a key of his own, re-signs the chain and fixes the action
+row, and both commands exit 0 — captured by binary,
+`docs/cantos/R14.md` §3.2. Verifying without trusting the holder needs
+an external anchor, filed to v0.15.1. (2) "every failure named" was
+false: a receipt whose stored bytes do not parse is refused with the
+read error and no ladder name, §3.5.] Honest limit in public language
+(SECURITY.md): the ledger is tamper-evident, never "immutable".
