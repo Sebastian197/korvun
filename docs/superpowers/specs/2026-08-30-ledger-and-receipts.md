@@ -133,7 +133,10 @@ small piece inside this stage when ordering allows.
   a guarantee of coverage. Two alterations inside one partition are NOT
   detected: a cut from the TAIL leaves no hole, and a chain re-signed
   with a key the attacker registered in the same profile passes every
-  arm. Both captured by binary in `docs/cantos/R14.md` §3.1-§3.2;
+  arm that RUNS — seven of the ladder's eleven; the four approval and
+  tombstone arms are gated on a non-empty approval_digest and never
+  run for that receipt. Both captured by binary in
+  `docs/cantos/R14.md` §3.1-§3.2;
   SECURITY.md carries the scope and the anchors filed to v0.15.1.]
 - **FR-LED-4** Retention: receipts are EXEMPT from the E1 actions cap
   (they are the evidence; the actions cap keeps pruning operational
@@ -223,8 +226,9 @@ small piece inside this stage when ordering allows.
   not a guarantee of coverage: the command walks ONE partition, and two
   alterations inside it are not named at all — a cut from the TAIL
   leaves no hole, and a chain re-signed with a key the attacker
-  registered in the same profile passes every arm. Both captured in
-  `docs/cantos/R14.md` §3.1-§3.2; SECURITY.md carries the scope.] Brief WAL-safe access, the E2 CLI discipline.
+  registered in the same profile passes every arm that RUNS — seven of
+  the ladder's eleven, the other four gated on a non-empty
+  approval_digest. Both captured in `docs/cantos/R14.md` §3.1-§3.2; SECURITY.md carries the scope.] Brief WAL-safe access, the E2 CLI discipline.
 - **FR-VER-3** Backup/restore verifiable (blueprint mandatory test 3):
   `ledger check` over a file-level backup copy verifies identically —
   the chain carries its own evidence; the test restores a backup and

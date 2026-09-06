@@ -5,7 +5,9 @@
 // FR-KEY-1/2): migration v4→v5 on the anti-zombie runner brings the
 // signing_keys table — key_id, public key, created_at, retired_at.
 // Retired keys are KEPT FOREVER (no delete path exists); at most ONE
-// key is active; rotation retires the old and activates the new in ONE
+// key is active — a rule this API keeps, NOT a constraint of the
+// TABLE, which carries none and which direct SQL can leave with two
+// active rows (R14 §3.2 does exactly that); rotation retires the old and activates the new in ONE
 // transaction. Batch decision declared: v5 = signing_keys (this batch),
 // v6 = receipts (batch 3). Approved-red contract.
 
