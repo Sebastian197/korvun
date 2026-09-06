@@ -21,8 +21,8 @@ R13 every read of a tombstone row judges the STORAGE CLASS of every
 column next to its value, so such a row is named by its column and
 its class — for example `approval_id (storage class blob)`: the key
 column no longer holds TEXT. That row will NOT answer `WHERE
-approval_id = @apr` in steps 3 and 4 — SQLite's `=` and the primary
-key index do not equate a BLOB to its own text. Find it by the
+approval_id = @apr` in steps 3 and 4 — the `=` of SQLite and the
+primary key index do not equate a BLOB to its own text. Find it by the
 value's bytes instead, and read its storage class:
 
 ```

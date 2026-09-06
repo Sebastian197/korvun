@@ -7,9 +7,10 @@
 // prompt and the `sqlite3` invocation lines — free of an interpolated
 // id and bound by @apr where a WHERE selects over the tombstones —
 // statement by statement, each argument and each `;`-separated piece
-// judged alone; the channels it cannot see are refused by a shell lexer
-// for what they are, and by NAME for exactly two: the `-init`/`--init`
-// flag and the closed dot-command allowlist. Evidence level:
+// judged alone; whatever bash could rewrite or feed before sqlite3 sees
+// it (an expansion, a substitution, a backslash, a redirection, a pipe,
+// a glob, a brace, a continuation, a file-reading flag, an unknown
+// dot-command) is REFUSED by name, never emulated. Evidence level:
 // in-process + the real sqlite3 shell (the CI forbids the skip,
 // R12-H10). The doc guard's red lives in mutation m-n5d: an `'<apr>'`
 // interpolated into a SQL statement line of the document reddens it.
@@ -77,62 +78,63 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 	}
 }
 
-// The doc guard BY STATEMENT, sixth form (the twelfth diff pass found
-// the fifth's `\` join swallowing a prompt line, its `;` split running
-// before the comment strip, and the site word blind to an expansion
-// inside it). What it judges, exactly:
-//   - LINES: a prompt line (`sqlite> `, one space) or a continuation
-//     line (`...>`) is SQL typed at the shell; every other line ending
-//     in `\` is FIRST joined with the next line(s) (an over-join:
-//     `\ `, `\\` and a `\` inside single quotes join too — the joined
-//     text is only ever MORE judged, never less) — a continuation INTO
-//     a prompt-like line FAILS by name (a prompt line is never read as
-//     a command's argument); a prompt-LIKE line that is not one of the
-//     two exact forms FAILS by name.
-//   - SITES are decided AFTER the shell lexer, never by the raw text:
-//     the text outside the line's inline code spans is read by the
-//     lexer and, if its quote-removed words name `sqlite3` (any case;
-//     `sqli\te3`, `sqlite"3"` and `sqlite` + two single quotes + `3`
-//     are the same word to bash
-//     and to the lexer; an expansion INSIDE the word — `sqlite${x}3`,
-//     `sqlite$(true)3`, `sqlite"$x"3` — leaves a mark the site word
-//     tolerates, since bash may expand it to nothing), the WHOLE raw
-//     line is a command line — a
-//     backtick there is bash's substitution; otherwise, if any code
-//     span's quote-removed text names `sqlite3`, EVERY span on the
-//     line is read as a command line (a span beside it carrying the
-//     SQL argument is judged too). A line that names it nowhere is
-//     prose.
-//   - The LEXER reads a command line as bash would: quotes removed,
-//     their content kept; unquoted whitespace is an ARGUMENT boundary
-//     (sqlite3 runs each argument as its own SQL); an input redirection
-//     or heredoc (`<` outside quotes, wherever it sits), a pipe, a
-//     command substitution (`$(`, a backtick, inside double quotes
-//     too), any other `$` followed by a non-blank (`$'…'`, `$"…"`, a
-//     parameter expansion), an unterminated shell quote, or the
-//     `-init`/`--init` flag FAILS by name — those carry SQL this guard
-//     cannot see. Prose naming `sqlite3` outside a code span is read the
-//     same way: an apostrophe there reddens as an unterminated quote —
-//     put the mention in a code span.
+// The doc guard BY STATEMENT, seventh form. The thirteenth diff pass
+// found the sixth still EMULATING bash — a `\` join that inserted a
+// space bash does not insert, a `$name` consumer that read a positional
+// parameter as a name, brace and glob expansions never modelled — and
+// every emulation had opened the next hole. The seventh form emulates
+// nothing it does not have to: whatever bash could rewrite before
+// sqlite3 sees it is REFUSED by name, and the document is held to the
+// forms it actually uses. What it judges, exactly:
+//   - MARKDOWN, read structurally: a line starting with ``` or ~~~
+//     toggles a fence and is skipped; outside a fence, backticks open
+//     and close inline code spans and a span may continue across lines
+//     (the running state carries); inside a fence there are no spans —
+//     a backtick there is bash's.
+//   - PROMPT lines (`sqlite> `, one space) and continuation lines
+//     (`...>`) are SQL typed at the shell; a prompt-LIKE line that is
+//     not one of the two exact forms FAILS by name.
+//   - EVERY other line: one ending in `\` FAILS by name (a line
+//     continuation is not a form this document may use — no join is
+//     emulated); a `$` in its text outside code spans FAILS by name (a
+//     shell expansion is not read, wherever it sits — a prose dollar
+//     goes in a code span; `S=sqlite3` on one line and `$S …` on the
+//     next is refused at the `$`).
+//   - SITES: a line whose text outside its code spans carries the stem
+//     `sqlite` (any case, as a substring — `$1sqlite3`, `sqlite{3..3}`,
+//     `sqlite[3]`, `SQLite's` all carry it), raw or after the shell
+//     lexer's quote removal (`sqlite"3"`, two single quotes inside the
+//     word), is read as a
+//     COMMAND LINE; prose naming SQLite outside a code span is read the
+//     same way, and an apostrophe there reddens as an unterminated
+//     quote — put the mention in a code span. A line whose spans carry
+//     the stem has EVERY span read as a command line.
+//   - The LEXER reads a command line as bash would read its quotes:
+//     quotes removed, their content kept; unquoted whitespace is an
+//     ARGUMENT boundary (sqlite3 runs each argument as its own SQL).
+//     It REFUSES by name, outside single quotes: `$` (a shell
+//     expansion), a backtick (a command substitution), a backslash (an
+//     escape or a continuation), and, outside all quotes: `<` (an input
+//     redirection or a heredoc), `|` (a pipe), and any of `{ } [ ] * ?
+//     ~ & !` (a brace, a glob, a tilde, a background or a history
+//     expansion); an unterminated shell quote; and the `-init`/`--init`
+//     flag. The document's command lines use none of these; anything
+//     the lexer does not model is refused, never guessed.
 //   - STATEMENTS: the lexer's text is split at every argument
 //     boundary, each argument (and a prompt group) has its SQL comments
 //     stripped, and the result is split at every `;` outside a SQL
-//     literal; each piece is judged ALONE, so a bound decoy cannot mask
-//     an unbound WHERE beside it, and a `;` inside a comment splits
-//     nothing. A prompt group closes when its comment-stripped text
-//     ends in `;`. On each piece, in this order: the
-//     dot-command allowlist — `.param`, `.backup`, `.dump` pass, every
-//     other dot-command (`.read`, `.shell`, `.system`, `.import`,
-//     `.restore`, `.parameter`, …) FAILS by name; the `sqlite> .param
-//     set @apr "…"` prompt line, in EXACTLY that form and nothing after
-//     the closing quote, is the ONE exempt typing site — any other
-//     `.param` line, and a `.param` argument on a command line, is
-//     judged like any piece; then (a) NO
-//     interpolated id — a literal beginning `apr_` in either quoting,
-//     case-insensitively — and (b) a piece naming `approval_tombstones`
-//     or `approval_id` (case-insensitively, literals KEPT so a quoted
-//     identifier counts) that carries a WHERE must carry the bind
-//     `@apr` as a whole TOKEN outside every literal and comment.
+//     literal; each piece is judged ALONE. A prompt group closes when
+//     the LINE's comment-stripped text ends in `;` (the group's own
+//     comments are stripped again when it is split). On each piece, in
+//     this order: the dot-command allowlist — `.param`, `.backup`,
+//     `.dump` pass, every other dot-command FAILS by name; the
+//     `sqlite> .param set @apr "…"` prompt line, in EXACTLY that form,
+//     is the ONE exempt typing site; then (a) NO interpolated id — a
+//     literal beginning `apr_` in either quoting, case-insensitively —
+//     and (b) a piece naming `approval_tombstones` or `approval_id`
+//     (case-insensitively, literals KEPT so a quoted identifier counts)
+//     that carries a WHERE must carry the bind `@apr` as a whole TOKEN
+//     outside every literal and comment.
 //   - A floor: at least three pieces naming the table exist.
 //
 // NOT judged, declared: an id hidden behind `hex()`/`CAST(X'…')` in a
@@ -146,13 +148,11 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 // satisfies (b)), an odd apostrophe inside a quoted argument BEFORE the
 // SQL (`"/Users/it's/korvun.db"`: after unwrapping, the SQL scanner
 // reads it as a literal's opening — the document's path is the
-// placeholder `<profile>`, never a real one), and SQL given to sqlite3
-// as UNQUOTED words (`sqlite3 db SELECT '*' FROM …`: bash passes each
-// word as its own argument and sqlite3 fails on the first — not a
-// working invocation; the lexer reads the SQL's quotes as the shell's
-// and judges word by word). A fence info string ```` ```sqlite3 ```` or
-// a double-backtick span would redden as a substitution: markdown this
-// guard does not read.
+// placeholder `<profile>`, never a real one), SQL given to sqlite3 as
+// UNQUOTED words (each word its own argument, not a working
+// invocation), and a zsh-only spelling bash does not share. A fence
+// left unclosed makes every later line a fence line (prose there is
+// read as shell).
 func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	t.Parallel()
 	doc, err := os.ReadFile(filepath.Clean(repairDocPath))
@@ -162,20 +162,17 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	interpolated := regexp.MustCompile(`(?i)['"]apr_[^'"]*['"]`)
 	whereClause := regexp.MustCompile(`(?i)\bwhere\b`)
 	bindToken := regexp.MustCompile(`(^|[^A-Za-z0-9_@])@apr([^A-Za-z0-9_]|$)`)
-	siteWord := regexp.MustCompile("(?i)(^|[^A-Za-z0-9_])s\x01*q\x01*l\x01*i\x01*t\x01*e\x01*3([^A-Za-z0-9_]|$)")
-	isWordByte := func(c byte) bool {
-		return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
-	}
+	stem := regexp.MustCompile(`(?i)sqlite`)
 	promptLike := regexp.MustCompile(`(?i)^(sqlite\s*>|\.{2,}\s*>)`)
 	dotCommand := regexp.MustCompile(`(^|\s)\.([A-Za-z]+)`)
 	allowedDot := map[string]bool{"param": true, "backup": true, "dump": true}
 	initFlag := regexp.MustCompile(`(^|\s)--?init\b`)
-	codeSpan := regexp.MustCompile("`[^`]*`")
 	paramSite := regexp.MustCompile(`^\.param set @apr "[^"]*"$`)
-	// unwrap reads a command line as bash would: quotes removed, their
-	// content kept, an argument boundary marked by NUL; the FIRST
-	// channel the guard cannot see is named, and the reading goes on
-	// to the end so the site can be decided on the quote-removed words.
+	// unwrap reads a command line's quotes as bash would: quotes
+	// removed, their content kept, an argument boundary marked by NUL;
+	// the FIRST thing bash could rewrite or feed that the guard does not
+	// model is named, and the reading goes on to the end so the site
+	// can be decided on the quote-removed words.
 	unwrap := func(s string) (string, string) {
 		var out strings.Builder
 		q := byte(0)
@@ -194,53 +191,12 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 				} else {
 					out.WriteByte(c)
 				}
+			case c == '$':
+				note("a shell expansion")
 			case c == '`':
 				note("a command substitution")
-			case c == '$' && i+1 < len(s) && s[i+1] != ' ' && s[i+1] != '\t':
-				switch s[i+1] {
-				case '(', '{':
-					if s[i+1] == '(' {
-						note("a command substitution")
-					} else {
-						note("a parameter expansion")
-					}
-					// Consume to the matching close, as bash would, and
-					// leave a mark: the expansion may be empty.
-					open, closer, depth := s[i+1], byte(')'), 0
-					if open == '{' {
-						closer = '}'
-					}
-					for i++; i < len(s); i++ {
-						if s[i] == open {
-							depth++
-						} else if s[i] == closer {
-							depth--
-							if depth == 0 {
-								break
-							}
-						}
-					}
-					out.WriteByte(1)
-				case '\'':
-					note("an ANSI-C quoted string")
-				case '"':
-					note("a locale-translated string")
-				default:
-					note("a parameter expansion")
-					// A name or one special parameter, then a mark.
-					i++
-					for i+1 < len(s) && isWordByte(s[i]) && isWordByte(s[i+1]) {
-						i++
-					}
-					out.WriteByte(1)
-				}
-			case c == '\\' && i+1 < len(s):
-				if q == '"' && !strings.ContainsRune("\"\\$`", rune(s[i+1])) {
-					out.WriteByte(c)
-					continue
-				}
-				i++
-				out.WriteByte(s[i])
+			case c == '\\':
+				note("a backslash (an escape or a continuation)")
 			case q == '"':
 				if c == '"' {
 					q = 0
@@ -253,6 +209,8 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 				note("an input redirection or a heredoc")
 			case c == '|':
 				note("a pipe")
+			case strings.IndexByte("{}[]*?~&!", c) >= 0:
+				note("a shell character `" + string(c) + "` (a brace, a glob, a tilde, a background or a history expansion)")
 			case c == ' ' || c == '\t':
 				out.WriteByte(0)
 			default:
@@ -375,8 +333,11 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		judge(n, text)
 	}
 	namesSQLite := func(s string) bool {
+		if stem.MatchString(s) {
+			return true
+		}
 		text, _ := unwrap(s)
-		return siteWord.MatchString(text)
+		return stem.MatchString(text)
 	}
 	isPrompt := func(trimmed string) bool {
 		return strings.HasPrefix(trimmed, "sqlite> ") || strings.HasPrefix(trimmed, "...>")
@@ -390,47 +351,73 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			judge(stmtStart, s)
 		}
 	}
-	lines := strings.Split(string(doc), "\n")
-	for n := 0; n < len(lines); n++ {
-		trimmed := strings.TrimSpace(lines[n])
+	inFence, inSpan := false, false
+	for n, line := range strings.Split(string(doc), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			closeOpen()
+			inFence = !inFence
+			continue
+		}
 		if promptLike.MatchString(trimmed) && !isPrompt(trimmed) {
 			t.Fatalf("AUDIT R13-G5b doc guard, line %d: a malformed prompt (`sqlite> ` with one space and `...>` are the forms) would close the open statement in silence: %q", n+1, trimmed)
 		}
 		if !isPrompt(trimmed) {
 			closeOpen()
-			// `\` continuations joined BEFORE the site is decided, in
-			// both directions (the channel may sit on the first physical
-			// line and the word on the second).
-			start := n + 1
-			for strings.HasSuffix(trimmed, `\`) && n+1 < len(lines) {
-				next := strings.TrimSpace(lines[n+1])
-				if promptLike.MatchString(next) {
-					t.Fatalf("AUDIT R13-G5b doc guard, line %d: a `\\` continuation into a prompt line would read the prompt's SQL as a command's arguments: %q", n+2, next)
-				}
-				n++
-				trimmed = strings.TrimSuffix(trimmed, `\`) + " " + next
+			if strings.HasSuffix(trimmed, `\`) {
+				t.Fatalf("AUDIT R13-G5b doc guard, line %d: a `\\` line continuation is not a form this document may use — no join is emulated: %q", n+1, trimmed)
 			}
-			if namesSQLite(codeSpan.ReplaceAllString(trimmed, " ")) {
-				judgeCommand(start, trimmed)
+			// The markdown split: the text outside code spans, and the
+			// span segments on this line (a span may carry across lines).
+			var outside, cur strings.Builder
+			var spans []string
+			if inFence {
+				outside.WriteString(trimmed)
+			} else {
+				for i := 0; i < len(trimmed); i++ {
+					c := trimmed[i]
+					if c == '`' {
+						if inSpan {
+							spans = append(spans, cur.String())
+							cur.Reset()
+						}
+						inSpan = !inSpan
+						continue
+					}
+					if inSpan {
+						cur.WriteByte(c)
+					} else {
+						outside.WriteByte(c)
+					}
+				}
+				if inSpan {
+					spans = append(spans, cur.String())
+				}
+			}
+			if strings.Contains(outside.String(), "$") {
+				t.Fatalf("AUDIT R13-G5b doc guard, line %d: a `$` outside a code span is a shell expansion this guard does not read, wherever it sits: %q", n+1, trimmed)
+			}
+			if namesSQLite(outside.String()) {
+				judgeCommand(n+1, outside.String())
 				continue
 			}
-			spans := codeSpan.FindAllString(trimmed, -1)
 			site := false
 			for _, span := range spans {
-				if namesSQLite(span[1 : len(span)-1]) {
+				if namesSQLite(span) {
 					site = true
 				}
 			}
 			if site {
 				for _, span := range spans {
-					judgeCommand(start, span[1:len(span)-1])
+					judgeCommand(n+1, span)
 				}
 			}
 			continue
 		}
 		text := strings.TrimPrefix(strings.TrimPrefix(trimmed, "sqlite> "), "...>")
 		if strings.HasPrefix(strings.TrimSpace(text), ".") {
-			// A dot-command at the prompt: the allowlist, .param exempt.
+			// A dot-command at the prompt: the allowlist, the exact
+			// typing site exempt.
 			closeOpen()
 			text = strings.TrimSpace(text)
 			if paramSite.MatchString(text) {
