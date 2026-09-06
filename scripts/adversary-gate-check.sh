@@ -14,8 +14,11 @@
 #
 # Both arguments are mandatory and positional: no default to `.`, to the
 # top level, or to HEAD. Exit 0 = authorized. Exit 2 = blocked, ONE named
-# reason on stderr. The tool loop is `git` ONLY (bash builtins do the
-# rest: no grep, no head, no wc, no stat).
+# reason on stderr. The DECISION loop is `git` ONLY (bash builtins do
+# the rest: no grep, no head, no wc, no stat); the one external binary
+# in the file is a `tr` inside the LAST reason string, after the
+# decision is already taken — without it the reason loses its spacing,
+# never its exit (the eighteenth pass, P3-3).
 #
 # WHAT IS ENFORCED (the wire, in THIS order):
 #  -1. the caller's git environment overrides dropped (GIT_DIR and its

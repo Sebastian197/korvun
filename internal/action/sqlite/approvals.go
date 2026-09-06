@@ -604,7 +604,13 @@ func scanTombstone(row *sql.Row, origin tombstoneOrigin) (action.Approval, bool,
 }
 
 // ApprovalTombstone reconstructs the decided approval's digest
-// preimage for one action (R6-X2; with reuse, the LATEST decision).
+// preimage for one action (R6-X2). With reuse it returns the row whose
+// `decision_at` is greatest under SQLite's BINARY collation — NOT
+// necessarily the latest decision: the column stores RFC3339Nano,
+// which elides trailing zeros, and `.` sorts before `Z`, so
+// `…10:00:00.5Z` compares LESS than `…10:00:00Z` (captured; canto R13
+// §8). No production path calls this reader today; the fix belongs to
+// the train that gives it one.
 // ErrNotFound when no decided close ever wrote one.
 func (s *Store) ApprovalTombstone(ctx context.Context, actionID string) (action.Approval, bool, error) {
 	a, present, err := scanTombstone(s.db.QueryRowContext(ctx,

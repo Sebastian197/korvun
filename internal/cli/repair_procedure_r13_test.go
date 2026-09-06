@@ -40,6 +40,7 @@ package cli
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,12 +74,14 @@ func runBinary(t *testing.T, bin string, args ...string) (int, string) {
 	out, err := cmd.CombinedOutput()
 	code := 0
 	if err != nil {
+		// BY TYPE, never by the error's text (the eighteenth pass,
+		// P3-4: the receiver was written and then neutralized with a
+		// blank assignment, leaving a guard by substring).
 		var exitErr *exec.ExitError
-		if !strings.Contains(err.Error(), "exit status") {
+		if !errors.As(err, &exitErr) {
 			t.Fatalf("run %s %v: %v", bin, args, err)
 		}
-		_ = exitErr
-		code = cmd.ProcessState.ExitCode()
+		code = exitErr.ExitCode()
 	}
 	return code, string(out)
 }
@@ -213,8 +216,10 @@ func TestManualRepairProcedure_byBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("after the honest repair the boot (Open in process) must converge: %v", err)
 	}
-	if _, _, err := store.ApprovalTombstoneByDigest(context.Background(), ""); err == nil {
-		t.Fatal("sanity: an empty digest never selects a row")
+	// BY NAME, not "some error" (the eighteenth pass, P3-7): the empty
+	// digest selects no row, so the named absence is what must come back.
+	if _, _, err := store.ApprovalTombstoneByDigest(context.Background(), ""); !errors.Is(err, actionsqlite.ErrNotFound) {
+		t.Fatalf("sanity: an empty digest must be the named absence, got %v", err)
 	}
 	_ = store.Close()
 	// Step 6 — verify after, by the BINARY.

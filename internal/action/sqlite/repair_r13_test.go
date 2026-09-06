@@ -156,8 +156,10 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 //     comments are stripped again when it is split). On each piece, in
 //     this order: the dot-command allowlist — `.param`, `.backup`,
 //     `.dump` pass, every other dot-command FAILS by name; the
-//     `sqlite> .param set @apr "…"` prompt line, in EXACTLY that form,
-//     is the ONE exempt typing site; then (a) NO interpolated id — a
+//     `sqlite> .param set @apr "…"` prompt line, in EXACTLY that form
+//     and at the `sqlite> ` prompt only, is the ONE exempt typing site
+//     — every other prompt line is judged on its RAW text too, so a
+//     SQL comment cannot carry a quoted id past the strip; then (a) NO interpolated id — a
 //     literal beginning `apr_` in either quoting, case-insensitively —
 //     and (b) a piece naming `approval_tombstones` or `approval_id`
 //     (case-insensitively, literals KEPT so a quoted identifier counts)
@@ -498,15 +500,25 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			t.Fatalf("AUDIT R13-G5b doc guard, line %d: a prompt line falls inside an inline code span opened on line %d — an unbalanced backtick would make one command out of lines the reader never sees together: %q", n+1, spanOpenedAt+1, trimmed)
 		}
 		text := strings.TrimPrefix(strings.TrimPrefix(trimmed, "sqlite> "), "...>")
-		if strings.HasPrefix(strings.TrimSpace(text), ".") {
-			// A dot-command at the prompt: the allowlist, the exact
-			// typing site exempt.
+		dot := strings.TrimSpace(text)
+		if strings.HasPrefix(trimmed, "sqlite> ") && paramSite.MatchString(dot) {
+			// The ONE exempt typing site, at the `sqlite> ` prompt only
+			// (the eighteenth pass: a `...>` continuation had been
+			// exempted too, which no sqlite3 session can produce).
 			closeOpen()
-			text = strings.TrimSpace(text)
-			if paramSite.MatchString(text) {
-				continue
-			}
-			judge(n+1, text)
+			continue
+		}
+		// THE PAYLOAD's interpolation check on the RAW prompt line: a
+		// SQL comment is stripped before `judgeOne` ever sees the line,
+		// so `… = @apr; -- e.g. 'apr_9f3c…'` would show the reader a
+		// pasted id the guard never read (the eighteenth pass, P2-1).
+		if interpolated.MatchString(trimmed) {
+			t.Fatalf("AUDIT R13-G5b doc guard, line %d: an interpolated id — bind it with @apr, never paste it: %q", n+1, trimmed)
+		}
+		if strings.HasPrefix(dot, ".") {
+			// A dot-command at the prompt: the allowlist judges it.
+			closeOpen()
+			judge(n+1, dot)
 			continue
 		}
 		if stmt.Len() == 0 {
