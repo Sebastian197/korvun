@@ -88,18 +88,21 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 // forms it actually uses. What it judges, exactly:
 //   - MARKDOWN, read structurally: a line starting with ``` or ~~~
 //     toggles a fence and is skipped; outside a fence, backticks open
-//     and close inline code spans and a span may continue across lines
-//     (the running state carries); inside a fence there are no spans —
-//     a backtick there is bash's.
+//     and close inline code spans and a span may continue onto the
+//     NEXT line only — a span still open at the end of its second
+//     line, open when a fence starts, or open at the end of the
+//     document FAILS by name (an unbalanced backtick would otherwise
+//     invert what is span and what is prose for every line after it);
+//     inside a fence there are no spans — a backtick there is bash's.
 //   - PROMPT lines (`sqlite> `, one space) and continuation lines
 //     (`...>`) are SQL typed at the shell; a prompt-LIKE line that is
 //     not one of the two exact forms FAILS by name.
 //   - EVERY other line: one ending in `\` FAILS by name (a line
 //     continuation is not a form this document may use — no join is
-//     emulated); a `$` in its text outside code spans FAILS by name (a
-//     shell expansion is not read, wherever it sits — a prose dollar
-//     goes in a code span; `S=sqlite3` on one line and `$S …` on the
-//     next is refused at the `$`).
+//     emulated); a `$` ANYWHERE on it — in prose, in a code span, in a
+//     fence — FAILS by name (a shell expansion is not read, wherever
+//     it sits and whatever the span state; `S=sqlite3` on one line and
+//     `$S …` on the next is refused at the `$`).
 //   - SITES: a line whose text outside its code spans carries the stem
 //     `sqlite` (any case, as a substring — `$1sqlite3`, `sqlite{3..3}`,
 //     `sqlite[3]`, `SQLite's` all carry it), raw or after the shell
@@ -353,11 +356,14 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			judge(stmtStart, s)
 		}
 	}
-	inFence, inSpan := false, false
+	inFence, inSpan, spanOpenedAt := false, false, 0
 	for n, line := range strings.Split(string(doc), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
 			closeOpen()
+			if inSpan {
+				t.Fatalf("AUDIT R13-G5b doc guard, line %d: a fence starts while an inline code span opened on line %d is still open (an unbalanced backtick)", n+1, spanOpenedAt+1)
+			}
 			inFence = !inFence
 			continue
 		}
@@ -369,8 +375,12 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			if strings.HasSuffix(trimmed, `\`) {
 				t.Fatalf("AUDIT R13-G5b doc guard, line %d: a `\\` line continuation is not a form this document may use — no join is emulated: %q", n+1, trimmed)
 			}
+			if strings.Contains(trimmed, "$") {
+				t.Fatalf("AUDIT R13-G5b doc guard, line %d: a `$` on a line that is not a prompt line is a shell expansion this guard does not read, wherever it sits: %q", n+1, trimmed)
+			}
 			// The markdown split: the text outside code spans, and the
-			// span segments on this line (a span may carry across lines).
+			// span segments on this line (a span may carry onto the next
+			// line only).
 			var outside, cur strings.Builder
 			var spans []string
 			if inFence {
@@ -382,6 +392,8 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 						if inSpan {
 							spans = append(spans, cur.String())
 							cur.Reset()
+						} else {
+							spanOpenedAt = n
 						}
 						inSpan = !inSpan
 						continue
@@ -394,10 +406,10 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 				}
 				if inSpan {
 					spans = append(spans, cur.String())
+					if n > spanOpenedAt {
+						t.Fatalf("AUDIT R13-G5b doc guard, line %d: an inline code span opened on line %d is still open at the end of this line — an unbalanced backtick would invert span and prose for every line after it: %q", n+1, spanOpenedAt+1, trimmed)
+					}
 				}
-			}
-			if strings.Contains(outside.String(), "$") {
-				t.Fatalf("AUDIT R13-G5b doc guard, line %d: a `$` outside a code span is a shell expansion this guard does not read, wherever it sits: %q", n+1, trimmed)
 			}
 			if namesSQLite(outside.String()) {
 				// A command line: read RAW, spans and all — a backtick on
@@ -442,6 +454,9 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		}
 	}
 	closeOpen()
+	if inSpan {
+		t.Fatalf("AUDIT R13-G5b doc guard: an inline code span opened on line %d is still open at the end of the document (an unbalanced backtick)", spanOpenedAt+1)
+	}
 	if tableStatements < 3 {
 		t.Fatalf("the guard must see the document's statements over approval_tombstones (found %d) — the document moved or its examples changed", tableStatements)
 	}
