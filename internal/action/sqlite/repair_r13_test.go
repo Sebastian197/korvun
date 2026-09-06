@@ -104,11 +104,13 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 //     `sqlite` (any case, as a substring — `$1sqlite3`, `sqlite{3..3}`,
 //     `sqlite[3]`, `SQLite's` all carry it), raw or after the shell
 //     lexer's quote removal (`sqlite"3"`, two single quotes inside the
-//     word), is read as a
-//     COMMAND LINE; prose naming SQLite outside a code span is read the
-//     same way, and an apostrophe there reddens as an unterminated
-//     quote — put the mention in a code span. A line whose spans carry
-//     the stem has EVERY span read as a command line.
+//     word), is read as a COMMAND LINE — the WHOLE raw line, backticks
+//     included: on a command line a backtick is bash's substitution,
+//     not markdown, wherever the line sits (a fence, an indented code
+//     block, prose); prose naming SQLite outside a code span is read
+//     the same way, and an apostrophe or a backtick there reddens —
+//     put the whole mention in a code span or drop the name. A line
+//     whose spans carry the stem has EVERY span read as a command line.
 //   - The LEXER reads a command line as bash would read its quotes:
 //     quotes removed, their content kept; unquoted whitespace is an
 //     ARGUMENT boundary (sqlite3 runs each argument as its own SQL).
@@ -398,7 +400,11 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 				t.Fatalf("AUDIT R13-G5b doc guard, line %d: a `$` outside a code span is a shell expansion this guard does not read, wherever it sits: %q", n+1, trimmed)
 			}
 			if namesSQLite(outside.String()) {
-				judgeCommand(n+1, outside.String())
+				// A command line: read RAW, spans and all — a backtick on
+				// it is bash's substitution, not markdown (the fourteenth
+				// pass: an indented code block is runnable, and its spans
+				// had been split off before the lexer could refuse them).
+				judgeCommand(n+1, trimmed)
 				continue
 			}
 			site := false
