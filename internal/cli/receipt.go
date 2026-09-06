@@ -7,8 +7,9 @@
 // the stored one. What it CANNOT re-derive is the store's own registry:
 // the key it verifies against is registered inside the file it judges,
 // so a chain re-signed with a key the attacker registered there passes
-// (R14, verified by execution; SECURITY.md's honest scope, with the
-// other two things this command does not prove). Every check fails with
+// (R14, verified by execution; SECURITY.md's honest scope lists that
+// one and the other THREE — the profile's identity, the chain's
+// completeness, and a row whose lookup column changed storage class). Every check fails with
 // a NAMED reason, never a generic "invalid":
 //
 //	canonical_roundtrip_broken — the sealed form no longer survives the

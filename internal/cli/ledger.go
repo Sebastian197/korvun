@@ -20,7 +20,10 @@
 // the last receipt, any suffix, or the whole partition, which reports
 // "0 receipts, chain intact" — leaves no hole to detect), or that the
 // keys are the AUTHORITATIVE ones (the registry lives inside the file
-// being judged). All three verified by execution, R14 canto.
+// being judged). Those three are verified by execution, R14 canto;
+// SECURITY.md's list carries a FOURTH this command does not execute —
+// a row whose LOOKUP column changed storage class is indistinguishable
+// from absence for the reader that seeks it.
 // The ledger is tamper-evident, not tamper-proof (§23 honesty sentence);
 // the tail anchor is filed to v0.15.1.
 package cli

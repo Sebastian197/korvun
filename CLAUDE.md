@@ -93,7 +93,11 @@ that the rule is fixed and is not a judgement call:
 
 - what folds in a LINE is folded, in place, and the text ships;
 - what would demand a REDESIGN of a sentence is FILED to the next train
-  WITH its capture, and the text ships with what it has.
+  WITH its capture, and the text ships with what it has — EXCEPT a
+  sentence known to be FALSE, which is NEVER shipped: it is scoped down
+  or deleted in the same commit that notices it, and only its full
+  redesign is deferred. The Tone law admits no exception and this
+  ceiling grants none.
 
 What is capped is the number of rounds spent perfecting prose. Nothing
 else moves: the destructive doctrine's evidence requirements stand

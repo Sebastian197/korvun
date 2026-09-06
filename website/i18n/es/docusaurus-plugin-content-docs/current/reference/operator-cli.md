@@ -125,8 +125,9 @@ cadena hash de solo-añadir, y la CLI lleva al juez.
 korvun receipt verify --config korvun.json rcpt_…
 ```
 
-Un recibo (o todos los de un id `act_…`), re-juzgado offline contra el fichero del store, cada check
-nombrado: roundtrip canónico, recomputación del hash, firma
+Un recibo (o todos los de un id `act_…`), re-juzgado offline contra el fichero del store, cada check nombrado —
+estos seis siempre, y cuatro más cuando el recibo sella un digest de
+aprobación: roundtrip canónico, recomputación del hash, firma
 Ed25519 contra la clave pública REGISTRADA, la ventana de validez de la
 clave, el eslabón de cadena con su predecesor y la coherencia con la
 fila de la acción. Cada fallo lleva su nombre (`hash_mismatch`,

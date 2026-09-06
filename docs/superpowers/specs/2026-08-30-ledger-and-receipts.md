@@ -42,10 +42,10 @@ WHAT was requested, WHICH policy decided and WHAT result was recorded —
 and any modification, gap or reordering INSIDE the ledger the config
 names, made WITHOUT re-signing it, is DETECTED and NAMED. [amended
 2026-09-06, R14: what the verifier proves is that the profile is
-consistent WITH ITSELF; it does not prove that the profile is the one
-your history wrote, that the chain is complete, or that the keys are
-the authoritative ones — SECURITY.md's honest scope, verified by
-execution.] §7.8 elevated: proof was already part of execution
+consistent WITH ITSELF; SECURITY.md's honest scope lists FOUR things it
+does not prove — the profile's identity, the chain's completeness, the
+keys' authority, and the presence of a row whose lookup column changed
+storage class. The first three are verified by execution.] §7.8 elevated: proof was already part of execution
 (record_failed, E1); now the proof itself is verifiable. The engine
 stays invisible: transcript, feeds and SSE receive nothing (§19.1); the
 experience does not move one pixel.

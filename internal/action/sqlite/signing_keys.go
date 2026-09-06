@@ -29,9 +29,10 @@ type SigningKey struct {
 }
 
 // PutSigningKey registers the FIRST key of a profile. While any key is
-// active it refuses — rotation is the only path forward (the invariant:
-// at most one active key, enforced here and by RotateSigningKey's
-// transaction).
+// active it refuses — rotation is the only path forward (the rule this
+// API keeps, NOT the table: at most one active key, enforced here and
+// by RotateSigningKey's transaction, and defeated by direct SQL —
+// R14).
 func (s *Store) PutSigningKey(ctx context.Context, keyID, publicKey string, at time.Time) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

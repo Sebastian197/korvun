@@ -14,7 +14,11 @@
 // R14 canto; this pin is the durable half so the capture cannot decay.
 //
 // Its conforming probing mutation, executed and recorded in the canto
-// (M6): invert the key-lookup arm of the ladder
+// (M7): delete the forger's key registration and leave the re-sign
+// loop intact — the pin goes RED with `key_unknown`, because its green
+// DEPENDS on the key being self-registered. That is the mutation that
+// proves what this test is named for. Beside it (M6): invert the
+// key-lookup arm of the ladder
 // (`internal/cli/receipt.go`, the `key_unknown` branch) so a FOUND key
 // fails — the PIN'S OWN assertion goes RED with that exact name. The
 // first form of this test carried an honest-chain precondition, and
@@ -101,6 +105,39 @@ func TestLedgerCheck_chainReSignedWithASelfRegisteredKeyIsNOTDetected(t *testing
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("close the store: %v", err)
+	}
+
+	// THE FORGERY LANDED — observed, not assumed. Without this the pin's
+	// oracle would be satisfied by an untouched honest chain (exit 0,
+	// the same summary line, the same OK): the assertions below cannot
+	// distinguish the attack from no attack, so the attack is proved
+	// here, from the store, before they run.
+	db3, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("reopen to observe the sabotage: %v", err)
+	}
+	var storedKey, storedOutcome string
+	if err := db3.QueryRowContext(ctx,
+		`SELECT signing_key_id, outcome FROM receipts WHERE chain_seq = 0`).
+		Scan(&storedKey, &storedOutcome); err != nil {
+		t.Fatalf("read back the forged receipt: %v", err)
+	}
+	var actives int
+	if err := db3.QueryRowContext(ctx,
+		`SELECT count(*) FROM signing_keys WHERE retired_at IS NULL`).Scan(&actives); err != nil {
+		t.Fatalf("count the active keys: %v", err)
+	}
+	_ = db3.Close()
+	if storedKey != keyID {
+		t.Fatalf("the sabotage did not land: seq 0 is signed by %q, not by the forger's %q",
+			storedKey, keyID)
+	}
+	if storedOutcome != forged {
+		t.Fatalf("the sabotage did not land: seq 0 attests %q, not the forged %q",
+			storedOutcome, forged)
+	}
+	if actives != 2 {
+		t.Fatalf("the sabotage did not land: %d active keys in the registry, want 2", actives)
 	}
 
 	// THE PIN. Both verifiers bless the forgery. The assertions name the

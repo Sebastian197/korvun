@@ -544,7 +544,7 @@ suite tests exercise the full CLI surface IN-PROCESS and are labeled
 | 14 | Same conduct = same law; cage-irrelevant fields never move the pin (R4F5) | BINARY: park under max_bytes absent ↔ explicit default crosses approve (gate 7); golden digest suite-pinned |
 | 15 | One resolver, one verdict — structurally; three production resolution points, guarded (R4F5/S3) | Structural: typed signatures + resolution-count guard + defensive-copy pin (suite); network shield arm identical live/deferred (BINARY: gate 7 shield vs override) |
 | 16 | Operator doors never run recovery/prune/migration; the class guard is unbribable at reference level (C4/R2/F2) | BINARY: v6 store refusals + rotate-beside-live (3rd-pass battery); guard: alias/dot/value/paren fixtures + live briber plants (suite) |
-| 17 | The ledger is tamper-evident, never immutable (SECURITY) | BINARY: ledger check + verify on every gate battery; sabotage arms in-suite; the limit stays confessed in SECURITY.md [amended 2026-09-06, R14: that confession now carries three blind spots, not one] |
+| 17 | The ledger is tamper-evident, never immutable (SECURITY) | BINARY: ledger check + verify on every gate battery; sabotage arms in-suite; the limit stays confessed in SECURITY.md [amended 2026-09-06, R14: that confession now carries four blind spots, not one] |
 | 18 | Params capped 64KiB; approvals bounded by the actions cap (C6/F4) | Suite: cap refusal named; 2000-cycle bound demonstration |
 
 ### R6 EXPRESS (fifth pass REJECTED verdict, adjudicated — surgical)

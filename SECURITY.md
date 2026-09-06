@@ -107,7 +107,7 @@ against the registered key, key validity window, chain link, coherence
 with the action row — every failure named), and `korvun ledger check`
 walks ONE partition's whole chain, denouncing the first gap, clone or
 tampered link it finds INSIDE what the profile holds — see the honest
-scope below for the three things neither command can prove. `korvun receipt rotate-key` rotates the signing key; retired keys
+scope below for the four things neither command can prove. `korvun receipt rotate-key` rotates the signing key; retired keys
 are kept forever so each era of the chain verifies with the key of its
 era.
 
