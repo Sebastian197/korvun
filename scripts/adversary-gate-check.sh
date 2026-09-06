@@ -67,7 +67,10 @@
 # substitution depending on the bash version — not captured, not a
 # claim. The marker is never read from the working tree; the check
 # script and the hooks themselves DO run from it — an edited check
-# decides (the session hook's header confesses that hatch).
+# decides, and so does an OLD one: door 2 execs the check of the
+# checkout it pushes from, so a linked worktree checked out at an
+# older commit runs that commit's `scripts/` copy (the session hook's
+# header confesses both hatches).
 #
 # No mtime, no freshness by clock (D2 revoked, definitive): a blob has
 # no mtime, and the SHA binding above is what a fresh clone or worktree

@@ -262,9 +262,18 @@ WT="$TMP/parentok-wt"; git -C "$POK" worktree add -q "$WT" -b wtb
 # The fixtures keep their scripts UNTRACKED (the real repository tracks them), so the worktree gets its own copy —
 # the check the pre-push runs is the WORKTREE's copy ("an edited check decides", the check's header).
 mkdir -p "$WT/scripts"; cp "$CHECK" "$WT/scripts/"
-out=$(GIT_DIR="$POK/.git/worktrees/parentok-wt" bash "$CHECK" "$WT" "$J_POK" 2>&1); code=$?
-if [ "$code" -ne 0 ]; then fail "check-direct WORKTREE: expected 0 from a linked worktree with GIT_DIR exported, got $code" "$out"; else pass "check-direct WORKTREE (exit 0, the worktree's .git file rediscovered)"; fi
-door2 WORKTREE "$WT" allowed "$(newbare worktree)" "wtb:refs/heads/probe"
+# Check-direct from the worktree root, GIT_DIR exported at ANOTHER repository (the fifth pass: git's OWN exported
+# worktree gitdir is inert for the check — with it kept or dropped the outcome is the same — so the observable
+# shape is the foreign GIT_DIR: dropped → the worktree's .git file is rediscovered → 0; kept (m-env) → BLOCKED).
+out=$(GIT_DIR="$OTHER/.git" bash "$CHECK" "$WT" "$J_POK" 2>&1); code=$?
+if [ "$code" -ne 0 ]; then fail "check-direct WORKTREE: expected 0 from a linked worktree with a foreign GIT_DIR exported, got $code" "$out"; else pass "check-direct WORKTREE (exit 0, the worktree's .git file rediscovered under a foreign GIT_DIR)"; fi
+# Door 2 from the worktree, OBSERVED both ways: a code commit made IN the worktree on top of M inherits M's marker
+# (which names C0) — pushing it must be BLOCKED "records C0…" (OLDSHA's shape): the proof that the main repository's
+# hook fired from the worktree and ran the worktree's copy of the check; the push of the marker tip M by sha is the
+# positive control.
+K_WT=$(code "$WT" wt)
+door2 WORKTREE-oldsha "$WT" blocked "$(newbare worktree-oldsha)" "$K_WT:refs/heads/probe" "records $C0_POK"
+door2 WORKTREE "$WT" allowed "$(newbare worktree)" "$J_POK:refs/heads/probe"
 check_probe WRONGROOT 2 "root is not the repository top level" "$POK/scripts" "$J_POK"
 ln -s "$POK" "$TMP/rootlink"
 check_probe SYMLINKROOT 0 "" "$TMP/rootlink" "$J_POK"

@@ -41,8 +41,12 @@
 #   a config file written by another command or outside Bash
 #   (`GIT_CONFIG_GLOBAL=<file>`, a swapped `HOME`, `.git/config`
 #   edited with the Edit tool). The ways to DISARM the pre-push door
-#   with no git word: `rm .git/hooks/pre-push`, `chmod -x` on it, or
-#   editing scripts/adversary-gate-check.sh outside Bash. (The old
+#   with no git word: `rm .git/hooks/pre-push`, `chmod -x` on it,
+#   editing scripts/adversary-gate-check.sh outside Bash, writing
+#   `.git/info/grafts` (the file form of the graft the check drops from
+#   the environment), or pushing from a LINKED WORKTREE checked out at an
+#   older commit — the pre-push runs THAT checkout's copy of the check
+#   (the worktree's `scripts/`), whatever the main checkout carries. (The old
 #   "freshness gap of a fresh clone or worktree" is DEAD since R13: the
 #   marker is a committed blob naming the audited commit's sha — it
 #   travels with history and no clock is judged.)

@@ -76,11 +76,13 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 // unterminated one judged at the fence close, or the SQL argument of a
 // `sqlite3 "<db>" "…"` one-liner — binds the id (`@apr`) and never
 // interpolates one (`'apr_…'` or `"apr_…"`). EXEMPT, by site: the
-// dot-command lines (`sqlite> .param …`, and the `".backup`/`".dump`
-// invocations — `.dump approval_tombstones` is a dot-command, not a
-// statement) — they are the ONE place an id is typed, and the document
-// says "retype after visual inspection" governs them too — and the bare
-// `sqlite3 "<profile>/korvun.db"` invocation.
+// dot-command lines (`sqlite> .param …`, and a `sqlite3 …` invocation
+// whose arguments after the path are all dot-commands — `.dump
+// approval_tombstones` is a dot-command, not a statement) — they are
+// the ONE place an id is typed, and the document says "retype after
+// visual inspection" governs them too — and the bare
+// `sqlite3 "<profile>/korvun.db"` invocation (no argument after the
+// path). The arguments are tokenized as shell words, never counted.
 func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	t.Parallel()
 	doc, err := os.ReadFile(filepath.Clean(repairDocPath))
@@ -112,15 +114,72 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	}
 	// Exempt BY SITE: a dot-command — the shell prompt followed by a dot
 	// (`sqlite> .param …`) or a bare dot-command — and a shell invocation
-	// line that carries NO SQL: the bare `sqlite3 "<profile>/korvun.db"`
-	// (one quoted argument) or one whose quoted argument is a dot-command
-	// (`".backup …"`, `".dump …"`). A `sqlite3 "<db>" "SELECT …"` one-liner
-	// carries SQL as its second quoted argument and IS judged (the fourth
-	// diff pass caught the prefix-only exemption as a hole). The
-	// CONTINUATION prompt (`...>`) is NOT a dot-command: it starts with a
-	// dot too, and the third diff pass caught the guard skipping every
-	// continuation line — the WHERE of a two-line statement — by that
-	// resemblance.
+	// line whose ARGUMENTS after the database path are all dot-commands
+	// (`".backup …"`, `".dump …"`) or absent; any other argument of a
+	// `sqlite3 …` line is SQL and IS judged, whatever its quoting (the
+	// fourth diff pass caught the prefix-only exemption, the fifth the
+	// quote-count rule). The CONTINUATION prompt (`...>`) is NOT a
+	// dot-command: it starts with a dot too, and the third diff pass
+	// caught the guard skipping every continuation line — the WHERE of a
+	// two-line statement — by that resemblance.
+	// shellWords splits a shell invocation line into its words, honoring
+	// single and double quotes (no escapes beyond `\"` inside double
+	// quotes) — the ARGUMENT list is what is judged, never a quote count
+	// (the fifth pass: an unquoted path, single-quoted arguments, or a
+	// dot-command riding beside the SQL argument all fooled a count).
+	shellWords := func(s string) []string {
+		var words []string
+		var cur strings.Builder
+		inWord, quote := false, byte(0)
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			switch {
+			case quote != 0:
+				if c == '\\' && quote == '"' && i+1 < len(s) {
+					i++
+					cur.WriteByte(s[i])
+				} else if c == quote {
+					quote = 0
+				} else {
+					cur.WriteByte(c)
+				}
+			case c == '"' || c == '\'':
+				quote, inWord = c, true
+			case c == ' ' || c == '\t':
+				if inWord {
+					words = append(words, cur.String())
+					cur.Reset()
+					inWord = false
+				}
+			default:
+				cur.WriteByte(c)
+				inWord = true
+			}
+		}
+		if inWord {
+			words = append(words, cur.String())
+		}
+		return words
+	}
+	// A `sqlite3 …` invocation is exempt only when NO argument after the
+	// database path is SQL: every further argument is a dot-command.
+	invocationSQL := func(line string) (sql string, exempt bool) {
+		words := shellWords(strings.TrimSpace(line))
+		if len(words) < 2 {
+			return "", true
+		}
+		var parts []string
+		for _, w := range words[2:] {
+			if strings.HasPrefix(w, ".") {
+				continue
+			}
+			parts = append(parts, w)
+		}
+		if len(parts) == 0 {
+			return "", true
+		}
+		return strings.Join(parts, "\n"), false
+	}
 	isExemptSite := func(line string) bool {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "...>") {
@@ -130,13 +189,17 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			return true
 		}
 		if strings.HasPrefix(trimmed, "sqlite3 ") {
-			quotes := strings.Count(trimmed, `"`)
-			return quotes <= 2 || strings.Contains(trimmed, `".`)
+			_, exempt := invocationSQL(trimmed)
+			return exempt
 		}
 		return false
 	}
 	sqlText := func(line string) string {
 		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "sqlite3 ") {
+			sql, _ := invocationSQL(trimmed)
+			return sql
+		}
 		trimmed = strings.TrimPrefix(trimmed, "sqlite> ")
 		return strings.TrimPrefix(trimmed, "...>")
 	}
@@ -156,9 +219,12 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		if stmt.Len() == 0 {
 			stmtStart = n + 1
 		}
-		stmt.WriteString(sqlText(line))
+		text := sqlText(line)
+		stmt.WriteString(text)
 		stmt.WriteString("\n")
-		if strings.HasSuffix(strings.TrimSpace(line), ";") {
+		// A one-liner's SQL arguments are a whole statement whatever
+		// their terminator; a prompt line ends its statement at `;`.
+		if strings.HasPrefix(strings.TrimSpace(line), "sqlite3 ") || strings.HasSuffix(strings.TrimSpace(line), ";") {
 			judge()
 		}
 	}
