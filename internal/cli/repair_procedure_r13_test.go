@@ -1,9 +1,20 @@
 // Copyright 2026 Sebastián Moreno Saavedra
 // SPDX-License-Identifier: Apache-2.0
 
-// R13-G6b: the manual repair procedure, EVERY step, with the operator's
-// real tools and the BUILT BINARY in a separate OS process where the
-// document names a korvun command. What this file runs, exactly:
+// R13-G6b: the manual repair procedure with the operator's real tools.
+// The BUILT BINARY in a separate OS process runs FOUR times: `ledger
+// check` against the unrepaired v11 profile (the A21 refusal pin),
+// `ledger check` and `receipt verify` after the repair (the two
+// commands the document tells the operator to run), and `ledger check
+// --partition never-written` (an extra pin; that flag is documented
+// nowhere). TWO steps run IN PROCESS and are labelled substitutions:
+// the boot the document prescribes as `korvun serve`
+// (`actionsqlite.Open`), and step 5's adjudication, which the document
+// places in the operator's sqlite3 session and this file performs
+// through the Go driver. The document's `.param` BINDING is exercised
+// by the real shell inside step 4's hex recipe ("bind the id as in
+// step 3"); step 3's own SELECT is not run separately.
+// What this file runs, exactly:
 //   - step 1's process check: `pgrep -f korvun` EXECUTED against
 //     controlled children — the host's `sleep` through a SYMLINK under
 //     <tmp>/korvun/ run by absolute path (the FALSE POSITIVE the document

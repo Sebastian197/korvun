@@ -1,6 +1,10 @@
 #!/bin/bash
 # .githooks/pre-push — git's own push door (R12-H8 B2; R13-G7 door 2).
 #
+# THE PERIMETER: this door is a DISCIPLINE AID inside the perimeter
+# declared here, NOT a security boundary. What it does not stop is
+# listed below, by name.
+#
 # Git runs this hook for every `git push` from THIS checkout, whatever
 # shell form invoked it (keywords, wrappers, backslashes, absolute
 # paths: none of the shapes that fool a command regex exist here), and

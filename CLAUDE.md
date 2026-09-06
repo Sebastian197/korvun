@@ -81,6 +81,29 @@ A push to master is NEVER bundled as a conditional step inside another
 task's prompt. It always gets its own prompt, issued after the copilot
 verifies the full-green rehearsal at source.
 
+## The paper's ceiling — a train without production code (2026-09-06) — CRITICAL
+
+Born from R14: a documentary train whose pre-test paper took FIVE
+adversarial passes while the train writes no production code at all.
+The paper cost more than the code that does not exist.
+
+A train with NO production code admits at most TWO paper passes: the
+9-bis over the design, and ONE scoped re-pass over its cures. Beyond
+that the rule is fixed and is not a judgement call:
+
+- what folds in a LINE is folded, in place, and the text ships;
+- what would demand a REDESIGN of a sentence is FILED to the next train
+  WITH its capture, and the text ships with what it has.
+
+What is capped is the number of rounds spent perfecting prose. Nothing
+else moves: the destructive doctrine's evidence requirements stand
+untouched — a capture is still a capture, a probing mutation is still a
+probing mutation, and a letrero wider than its wire is still a
+public-truth violation the moment it is noticed. A CI step is the same
+discipline in another surface: every new step is born pinned OR with
+its exception written in the same commit, and a Scorecard alert opened
+by our own commit is debt of the same train.
+
 ## Diagnosis discipline (2026-08-09) — CRITICAL
 
 A diagnosis is stated ONLY with primary evidence in hand (raw logs,
