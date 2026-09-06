@@ -37,8 +37,12 @@ func TestReceiptVerify_mutatedPreimageUnderIntactDigestIsCorruptNamed(t *testing
 	_ = db.Close()
 	code, stdout, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
 	out := stdout + stderr
-	if code != 1 || !strings.Contains(out, "tombstone_corrupt") {
-		t.Fatalf("AUDIT R12-A11: a mutated preimage under an intact digest is typed corruption, named: %d %q", code, out)
+	// R13 elevation (the diff pass, P3-2): the VERDICT line is asserted
+	// ("FAIL tombstone_corrupt:"), not the bare substring — under m-a11
+	// the read-failed verdict WRAPS the fault whose text carries
+	// "tombstone_corrupt", and a bare substring would stay green.
+	if code != 1 || !strings.Contains(out, "FAIL tombstone_corrupt:") {
+		t.Fatalf("AUDIT R12-A11: a mutated preimage under an intact digest is typed corruption, named as the verdict: %d %q", code, out)
 	}
 	if strings.Contains(out, "tombstone_read_failed") {
 		t.Fatalf("the bytes were read perfectly — 'cannot read' would be a lie: %q", out)

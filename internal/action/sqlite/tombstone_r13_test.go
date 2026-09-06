@@ -673,6 +673,45 @@ func TestTombstoneReader_blobLookupColumnIsIndistinguishableFromAbsence(t *testi
 	}
 }
 
+// ---- the collision arm: a PHANTOM collision (the diff pass, P2-1) ----
+
+// The INSERT reports a UNIQUE collision — forged here by a trigger that
+// RAISEs the exact text — yet no row by this id and no row by this
+// digest exists. The arm names index corruption as a TYPED, Stored
+// fault at approval_digest with its exact Detail; it never carries the
+// identity of absence (errors.Is sql.ErrNoRows is false), and it writes
+// nothing (the count inside the tx is unchanged). (Mutation m-phantom:
+// the arm returns nil — a silent no-op on a lying index — red.)
+func TestTombstoneTx_phantomCollisionIsNamedAsIndexCorruption(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	ctx := context.Background()
+	a := actionpkgApproval("apr_r13_phantom0000000000000001", "act_r13_phantom")
+	a.DecisionAt = r13At
+	if _, err := store.db.Exec(`CREATE TRIGGER forge_unique BEFORE INSERT ON approval_tombstones
+	    BEGIN SELECT RAISE(ABORT, 'UNIQUE constraint failed: forged by the auditor'); END;`); err != nil {
+		t.Fatalf("auditor's trigger: %v", err)
+	}
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	err = store.tombstoneTx(ctx, tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
+	mustFault(t, "AUDIT R13 phantom collision", err, "approval_digest",
+		"index corruption: phantom collision — the INSERT reported a UNIQUE collision on this digest, yet no row carries it", true)
+	if errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("index corruption must never carry the identity of absence: %v", err)
+	}
+	if !strings.Contains(err.Error(), "tombstone-manual-repair.md") {
+		t.Fatalf("a human adjudicates: the repair pointer rides out: %v", err)
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM approval_tombstones`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("nothing written: n=%d err=%v", n, err)
+	}
+}
+
 // ---- the funnel's idempotence read ----
 
 func idempotenceFault(t *testing.T, store *Store, a action.Approval) error {

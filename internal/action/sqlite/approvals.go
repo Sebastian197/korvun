@@ -437,13 +437,20 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 				        typeof(decision), decision, typeof(decision_at), decision_at
 				   FROM approval_tombstones WHERE approval_digest = ?`, sealed.Digest()), originV11Plus)
 			if errors.Is(ferr, sql.ErrNoRows) {
-				// CLOSED GUARD (R13 diff pass, P3-6): the UNIQUE index
-				// reported this story's digest in use, yet no row carries
-				// it — an index that lies about the table. Reachable only
-				// by a hand-edited index page, never by SQL; no row was
-				// read, so it is NOT narrated as a contract failure and
-				// carries no Stored fault: index corruption, named.
-				return fmt.Errorf("action/sqlite: tombstone for %q: the UNIQUE index reported the digest %s in use, yet no row carries it — index corruption, adjudicate by hand (docs/operations/tombstone-manual-repair.md): %w", a.ApprovalID, sealed.Digest(), ferr)
+				// Index corruption, the PHANTOM COLLISION arm (R13 diff
+				// passes, P3-6 then P2-1): the INSERT reported a UNIQUE
+				// collision, yet neither the row by this approval id nor
+				// the row by this digest exists — the index lies about
+				// the table, or the error text was forged (a trigger can
+				// RAISE the UNIQUE text: the mold does exactly that). A
+				// typed, Stored fault naming the digest column — the
+				// STORE's index is the corrupt evidence and a human
+				// adjudicates — and NEVER the identity of absence: the
+				// driver's sql.ErrNoRows is not wrapped, so no caller can
+				// read this as "no tombstone".
+				return fmt.Errorf("action/sqlite: tombstone for %q: %w", a.ApprovalID, &TombstoneFault{
+					ApprovalID: a.ApprovalID, Field: "approval_digest", Stored: true,
+					Detail: "index corruption: phantom collision — the INSERT reported a UNIQUE collision on this digest, yet no row carries it"})
 			}
 			if ferr != nil {
 				// The row this story's digest selects fails the contract
@@ -454,17 +461,19 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 				// this wrapper never says "belongs to another row".
 				return fmt.Errorf("action/sqlite: tombstone for %q: the row this story's digest selects fails the contract: %w", a.ApprovalID, ferr)
 			}
-			// CLOSED GUARD since R13 ("index corruption", unreachable after
-			// typeof): the row by the digest passes the contract — every
+			// Index corruption, the UNADDRESSABLE-KEY arm — a CLOSED GUARD
+			// since R13: the row by the digest passes the contract — every
 			// column in its class, the key TEXT — and re-derives THIS
 			// story, yet `WHERE approval_id = ?` did not find it. Before
 			// R13 this arm was the BLOB-key path (adversary P3-1); now the
-			// class wall above names that shape first, and only an index
-			// that lies about a TEXT key could land here. Named as stored
-			// key corruption — typed, Stored, the repair pointer.
+			// class wall above names that shape first ("storage class
+			// blob" at scanTombstone), so only a primary-key index that
+			// lies about a TEXT key could land here. Named as such —
+			// typed, Stored, the repair pointer; the Detail says what the
+			// wire proved, never a class the judge just refuted.
 			return fmt.Errorf("action/sqlite: tombstone for %q: %w", a.ApprovalID, &TombstoneFault{
 				ApprovalID: a.ApprovalID, Field: "approval_id", Stored: true,
-				Detail: "a stored row carries this story's digest and re-derives it, but is not addressable by its approval id — the key column's storage class is not TEXT"})
+				Detail: "index corruption: unaddressable key — a stored row carries this story's digest, re-derives it and reads as TEXT, yet is not selected by its approval id"})
 		}
 		if gerr != nil {
 			// R12-P3-2: an unreadable existing row is NOT a conflict —

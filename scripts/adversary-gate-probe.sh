@@ -228,8 +228,19 @@ if [ "$code" -ne 2 ] || ! printf '%s' "$out" | grep -qF "git cannot name a top l
 # UNSEARCHABLE: an existing directory without search permission falls to NOTAREPO's reason (the paper's §4); as uid 0 it cannot be built — a FAILURE named, never a skip.
 UNS="$TMP/unsearchable"; mkdir -p "$UNS"; chmod 000 "$UNS"
 if [ "$(id -u)" = 0 ]; then fail "check-direct UNSEARCHABLE: cannot be built as uid 0 (root enters any directory) — run the probe as a regular user" ""
-else check_probe UNSEARCHABLE 2 "git cannot name a top level for" "$UNS" "$J_POK"; fi
+else
+  # Forced AND observed: the reason carries git's own words for the cd failure ("Permission denied"), which a searchable non-repository never says.
+  out=$(bash "$CHECK" "$UNS" "$J_POK" 2>&1); code=$?
+  if [ "$code" -ne 2 ] || ! printf '%s' "$out" | grep -qF "git cannot name a top level for" || ! printf '%s' "$out" | grep -qF "Permission denied"; then fail "check-direct UNSEARCHABLE: expected 2 + \"git cannot name a top level for\" + \"Permission denied\", got $code" "$out"; else pass "check-direct UNSEARCHABLE (exit 2, Permission denied observed)"; fi
+fi
 chmod 755 "$UNS"
+# GITTRACE: a tracing environment writes to git's stderr; a successful git must still name the top level — positive control.
+out=$(GIT_TRACE=1 bash "$CHECK" "$POK" "$J_POK" 2>&1); code=$?
+if [ "$code" -ne 0 ]; then fail "check-direct GITTRACE: expected 0 under GIT_TRACE=1, got $code" "$out"; else pass "check-direct GITTRACE (exit 0 under GIT_TRACE=1)"; fi
+# ENVDIR: GIT_DIR pointing at ANOTHER repository must not redirect the judgement — the check judges <root>, positive control.
+OTHER=$(parentok envdir-other)
+out=$(GIT_DIR="$OTHER/.git" bash "$CHECK" "$POK" "$J_POK" 2>&1); code=$?
+if [ "$code" -ne 0 ]; then fail "check-direct ENVDIR: expected 0 with GIT_DIR pointing elsewhere, got $code" "$out"; else pass "check-direct ENVDIR (exit 0, the caller's GIT_DIR dropped)"; fi
 check_probe WRONGROOT 2 "root is not the repository top level" "$POK/scripts" "$J_POK"
 ln -s "$POK" "$TMP/rootlink"
 check_probe SYMLINKROOT 0 "" "$TMP/rootlink" "$J_POK"

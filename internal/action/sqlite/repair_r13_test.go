@@ -89,13 +89,35 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	inFence, sqlStatements := false, 0
 	var stmt strings.Builder
 	stmtStart := 0
+	judge := func() {
+		s := stmt.String()
+		stmt.Reset()
+		if !strings.Contains(s, "approval_tombstones") {
+			return
+		}
+		sqlStatements++
+		if interpolated.MatchString(s) || strings.Contains(s, "WHERE") && !strings.Contains(s, "@apr") {
+			t.Fatalf("AUDIT R13-G5b doc guard, statement at line %d: a SQL statement over approval_tombstones must bind @apr, never interpolate an id: %q", stmtStart, s)
+		}
+	}
+	// A dot-command line is exempt BY SITE — the shell prompt followed by
+	// a dot (`sqlite> .param …`) or a bare `.backup`/`.dump` invocation —
+	// never by a substring anywhere on the line.
+	isDotCommand := func(line string) bool {
+		trimmed := strings.TrimSpace(line)
+		return strings.HasPrefix(trimmed, "sqlite> .") || strings.HasPrefix(trimmed, ".")
+	}
 	for n, line := range strings.Split(string(doc), "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			// A statement left unterminated at the closing fence is
+			// judged as it stands — never dropped.
+			if inFence && stmt.Len() > 0 {
+				judge()
+			}
 			inFence = !inFence
-			stmt.Reset()
 			continue
 		}
-		if !inFence || strings.Contains(line, ".param") || strings.Contains(line, ".backup") || strings.Contains(line, ".dump") {
+		if !inFence || isDotCommand(line) || strings.Contains(line, `".backup`) || strings.Contains(line, `".dump`) {
 			continue
 		}
 		if stmt.Len() == 0 {
@@ -103,17 +125,8 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		}
 		stmt.WriteString(line)
 		stmt.WriteString("\n")
-		if !strings.HasSuffix(strings.TrimSpace(line), ";") {
-			continue
-		}
-		s := stmt.String()
-		stmt.Reset()
-		if !strings.Contains(s, "approval_tombstones") {
-			continue
-		}
-		sqlStatements++
-		if interpolated.MatchString(s) || strings.Contains(s, "WHERE") && !strings.Contains(s, "@apr") {
-			t.Fatalf("AUDIT R13-G5b doc guard, statement at line %d: a SQL statement over approval_tombstones must bind @apr, never interpolate an id: %q", stmtStart, s)
+		if strings.HasSuffix(strings.TrimSpace(line), ";") {
+			judge()
 		}
 	}
 	if sqlStatements < 3 {

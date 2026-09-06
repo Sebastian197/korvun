@@ -75,6 +75,18 @@
 set -u
 LC_ALL=C
 MARKER=".claude/adversary/last-verdict.md"
+# The repository judged is the one <root> names, never one the caller's
+# environment points git at: the object-directory and work-tree
+# overrides are dropped here (fixture ENVDIR, mutant m-env). GIT_TRACE
+# and friends write to stderr, which no capture below folds into a
+# value (fixture GITTRACE, mutant m-n7tr). NOT dropped, declared: the
+# config layer — GIT_CONFIG_*, a swapped HOME, a config file carrying
+# core.useReplaceRefs=false or an alias — the same class of hatch the
+# session hook's header confesses (reached without hatch text); of
+# these the probe asserts only the replace switches in its own
+# environment (GIT_NO_REPLACE_OBJECTS unset, core.useReplaceRefs not
+# false), the rest declared.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_INDEX_FILE GIT_NAMESPACE
 
 block() { echo "BLOCKED by adversary gate: $1" >&2; exit 2; }
 
@@ -94,7 +106,13 @@ command -v git >/dev/null 2>&1 || block "tool missing: git — the check cannot 
 # into it either) — one reason, NOTAREPO's, as the paper's §4 disposes;
 # were git to name a top level anyway, the equality wall blocks.
 CANON=$(unset CDPATH; cd -- "$ROOT" >/dev/null 2>&1 && pwd -P)
-TOP=$(git -C "$ROOT" rev-parse --show-toplevel 2>&1 </dev/null) || block "git cannot name a top level for $ROOT: $TOP"
+# stdout only into TOP (a tracing environment writes to stderr and must
+# never become the "top level"); git's own words are fetched for the
+# reason only on the failure path.
+if ! TOP=$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null </dev/null); then
+  ERR=$(git -C "$ROOT" rev-parse --show-toplevel 2>&1 >/dev/null </dev/null)
+  block "git cannot name a top level for $ROOT: $ERR"
+fi
 [ "$CANON" = "$TOP" ] || block "root is not the repository top level (root $CANON, top level $TOP)."
 
 G() { git --no-replace-objects -C "$ROOT" "$@" </dev/null; }
