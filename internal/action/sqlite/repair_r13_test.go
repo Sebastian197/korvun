@@ -86,14 +86,19 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 // nothing it does not have to: whatever bash could rewrite before
 // sqlite3 sees it is REFUSED by name, and the document is held to the
 // forms it actually uses. What it judges, exactly:
-//   - MARKDOWN, read structurally: a line starting with ``` or ~~~
-//     toggles a fence and is skipped; outside a fence, backticks open
-//     and close inline code spans and a span may continue onto the
-//     NEXT line only — a span still open at the end of its second
-//     line, open when a fence starts, or open at the end of the
-//     document FAILS by name (an unbalanced backtick would otherwise
-//     invert what is span and what is prose for every line after it);
-//     inside a fence there are no spans — a backtick there is bash's.
+//   - MARKDOWN, read structurally: a fence is a COMMAND context —
+//     every line inside it is read by the shell lexer, no stem asked
+//     for, so a fence carries pasteable commands and nothing else (a
+//     placeholder inside one is quoted, as a real command must quote
+//     it). A line starting with ``` or ~~~ toggles a fence and is
+//     skipped; outside a fence, backticks open and close inline code
+//     spans and a span may continue onto the NEXT line only — a span
+//     still open at the end of its second line, open when a fence
+//     starts, or open at the end of the document FAILS by name (an
+//     unbalanced backtick would otherwise invert what is span and what
+//     is prose for every line after it), and its two halves are JOINED
+//     into one command, as the reader sees it; inside a fence there
+//     are no spans — a backtick there is bash's.
 //   - PROMPT lines (`sqlite> `, one space) and continuation lines
 //     (`...>`) are SQL typed at the shell; a prompt-LIKE line that is
 //     not one of the two exact forms FAILS by name.
@@ -103,6 +108,14 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 //     fence — FAILS by name (a shell expansion is not read, wherever
 //     it sits and whatever the span state; `S=sqlite3` on one line and
 //     `$S …` on the next is refused at the `$`).
+//   - THE PAYLOAD, on every such line whatever it is: an interpolated
+//     id anywhere in its RAW text, or a WHERE over the tombstones
+//     without the bind in its comment-stripped, literal-blanked text,
+//     FAILS by name. This check asks nothing about the command word —
+//     it is the guarantee itself, and it stands whether the line names
+//     `sqlite3`, `sq{l..l}ite3`, `/usr/bin/sq?ite3`, a name bound by
+//     `hash -p` or `alias`, or nothing at all. The command judgment
+//     below adds the CHANNELS (what the guard cannot see) on top.
 //   - SITES: a line whose text outside its code spans carries the stem
 //     `sqlite` (any case, as a substring — `$1sqlite3`, `sqlite{3..3}`,
 //     `sqlite[3]`, `SQLite's` all carry it), raw or after the shell
@@ -155,7 +168,14 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 // reads it as a literal's opening — the document's path is the
 // placeholder `<profile>`, never a real one), SQL given to sqlite3 as
 // UNQUOTED words (each word its own argument, not a working
-// invocation), and a zsh-only spelling bash does not share. A fence
+// invocation), and a zsh-only spelling bash does not share. SCOPE of
+// the channel walls, declared: they read COMMAND lines — every line of
+// a fence, and outside one a line whose visible text names the stem
+// (or, failing that, its code spans when one of them does). On a prose
+// line whose command word is disguised so that no stem survives
+// (`sq{l..l}ite3`, `/usr/bin/sq?ite3`, a name bound by `hash -p` or
+// `alias`), the guard judges the PAYLOAD — which is the guarantee —
+// and does not read that line's channels. A fence
 // left unclosed makes every later line a fence line (prose there is
 // read as shell).
 func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
@@ -356,7 +376,7 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			judge(stmtStart, s)
 		}
 	}
-	inFence, inSpan, spanOpenedAt := false, false, 0
+	inFence, inSpan, spanOpenedAt, carry := false, false, 0, ""
 	for n, line := range strings.Split(string(doc), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
@@ -378,11 +398,27 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			if strings.Contains(trimmed, "$") {
 				t.Fatalf("AUDIT R13-G5b doc guard, line %d: a `$` on a line that is not a prompt line is a shell expansion this guard does not read, wherever it sits: %q", n+1, trimmed)
 			}
+			// THE PAYLOAD, judged on EVERY line whatever it is: an
+			// interpolated id anywhere in its raw text, or a WHERE over
+			// the tombstones without the bind in its comment-stripped,
+			// literal-blanked text. This check asks nothing about the
+			// command word — it is the guarantee itself, and it holds
+			// for prose, fences and spans alike.
+			if interpolated.MatchString(trimmed) {
+				t.Fatalf("AUDIT R13-G5b doc guard, line %d: an interpolated id — bind it with @apr, never paste it: %q", n+1, trimmed)
+			}
+			if payload := scan(trimmed, true); whereClause.MatchString(payload) && !bindToken.MatchString(payload) {
+				lower := strings.ToLower(payload)
+				if strings.Contains(lower, "approval_tombstones") || strings.Contains(lower, "approval_id") {
+					t.Fatalf("AUDIT R13-G5b doc guard, line %d: a WHERE over the tombstones must bind @apr as a whole token outside literals and comments: %q", n+1, trimmed)
+				}
+			}
 			// The markdown split: the text outside code spans, and the
-			// span segments on this line (a span may carry onto the next
-			// line only).
+			// COMPLETE spans (a span may carry onto the next line only;
+			// its halves are joined, as the reader sees them).
 			var outside, cur strings.Builder
 			var spans []string
+			var spanLines []int
 			if inFence {
 				outside.WriteString(trimmed)
 			} else {
@@ -390,7 +426,9 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 					c := trimmed[i]
 					if c == '`' {
 						if inSpan {
-							spans = append(spans, cur.String())
+							spans = append(spans, carry+cur.String())
+							spanLines = append(spanLines, spanOpenedAt+1)
+							carry = ""
 							cur.Reset()
 						} else {
 							spanOpenedAt = n
@@ -405,11 +443,22 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 					}
 				}
 				if inSpan {
-					spans = append(spans, cur.String())
 					if n > spanOpenedAt {
 						t.Fatalf("AUDIT R13-G5b doc guard, line %d: an inline code span opened on line %d is still open at the end of this line — an unbalanced backtick would invert span and prose for every line after it: %q", n+1, spanOpenedAt+1, trimmed)
 					}
+					// Carried onto the next line, where it closes: the
+					// reader sees ONE span, so the guard judges one (the
+					// line ending folds to a space, as CommonMark folds it).
+					carry = cur.String() + " "
 				}
+			}
+			if inFence {
+				// A fence is a COMMAND context: every line in it is a
+				// command the reader may paste, so every line is read by
+				// the lexer — no stem is asked for (the sixteenth pass:
+				// a disguised command word is still a command).
+				judgeCommand(n+1, trimmed)
+				continue
 			}
 			if namesSQLite(outside.String()) {
 				// A command line: read RAW, spans and all — a backtick on
@@ -426,8 +475,8 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 				}
 			}
 			if site {
-				for _, span := range spans {
-					judgeCommand(n+1, span)
+				for i, span := range spans {
+					judgeCommand(spanLines[i], span)
 				}
 			}
 			continue

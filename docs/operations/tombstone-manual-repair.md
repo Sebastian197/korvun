@@ -134,8 +134,8 @@ full-table scan verifier that judges every row is filed to v0.15.1.
    2. then verify the surviving evidence:
 
    ```
-   korvun ledger check --config <config>
-   korvun receipt verify --config <config> <action-or-receipt-id>
+   korvun ledger check --config "<config>"
+   korvun receipt verify --config "<config>" "<action-or-receipt-id>"
    ```
 
    Only a green boot plus a clean check closes the incident. (An empty
