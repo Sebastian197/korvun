@@ -5,12 +5,14 @@
 // real tools and the BUILT BINARY in a separate OS process where the
 // document names a korvun command. What this file runs, exactly:
 //   - step 1's process check: `pgrep -f korvun` EXECUTED against
-//     controlled children — a copied `sleep` under <tmp>/korvun/ run by
-//     absolute path (the FALSE POSITIVE the document warns about: the
-//     word in a path matches) and a copy under a wordless path (a TRUE
-//     negative that demonstrates the matching mechanism — the false
-//     negative proper would be a korvun binary at a wordless path, and
-//     the document says so); asserted by MEMBERSHIP of the spawned pids
+//     controlled children — the host's `sleep` through a SYMLINK under
+//     <tmp>/korvun/ run by absolute path (the FALSE POSITIVE the document
+//     warns about: the word in a path matches; a byte COPY of /bin/sleep
+//     is killed at exec by macOS code signing — captured, so symlinks)
+//     and a symlink under a wordless path (a TRUE negative that
+//     demonstrates the matching mechanism — the false negative proper
+//     would be a korvun binary at a wordless path, and the document says
+//     so); asserted by MEMBERSHIP of the spawned pids
 //     in pgrep's output, never by an empty list (other matches MAY exist
 //     in the environment — which ones is a capture on each runner);
 //     precondition "TMPDIR carries no 'korvun'" asserted by name; scope

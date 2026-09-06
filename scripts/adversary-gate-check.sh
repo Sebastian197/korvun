@@ -89,7 +89,11 @@ command -v git >/dev/null 2>&1 || block "tool missing: git — the check cannot 
 
 # 2. The ROOT wall, in canonical forms.
 [ -d "$ROOT" ] || block "root is not a directory: $ROOT"
-CANON=$(unset CDPATH; cd -- "$ROOT" >/dev/null 2>&1 && pwd -P) || block "root cannot be entered: $ROOT"
+# A directory that exists but cannot be entered (no search permission)
+# leaves CANON empty and FALLS to the git wall below (git cannot chdir
+# into it either) — one reason, NOTAREPO's, as the paper's §4 disposes;
+# were git to name a top level anyway, the equality wall blocks.
+CANON=$(unset CDPATH; cd -- "$ROOT" >/dev/null 2>&1 && pwd -P)
 TOP=$(git -C "$ROOT" rev-parse --show-toplevel 2>&1 </dev/null) || block "git cannot name a top level for $ROOT: $TOP"
 [ "$CANON" = "$TOP" ] || block "root is not the repository top level (root $CANON, top level $TOP)."
 

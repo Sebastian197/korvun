@@ -436,6 +436,15 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 				        typeof(policy_digest), policy_digest, typeof(decision_principal_id), decision_principal_id,
 				        typeof(decision), decision, typeof(decision_at), decision_at
 				   FROM approval_tombstones WHERE approval_digest = ?`, sealed.Digest()), originV11Plus)
+			if errors.Is(ferr, sql.ErrNoRows) {
+				// CLOSED GUARD (R13 diff pass, P3-6): the UNIQUE index
+				// reported this story's digest in use, yet no row carries
+				// it — an index that lies about the table. Reachable only
+				// by a hand-edited index page, never by SQL; no row was
+				// read, so it is NOT narrated as a contract failure and
+				// carries no Stored fault: index corruption, named.
+				return fmt.Errorf("action/sqlite: tombstone for %q: the UNIQUE index reported the digest %s in use, yet no row carries it — index corruption, adjudicate by hand (docs/operations/tombstone-manual-repair.md): %w", a.ApprovalID, sealed.Digest(), ferr)
+			}
 			if ferr != nil {
 				// The row this story's digest selects fails the contract
 				// — a foreign row whose digest is not its own (P2-7), or

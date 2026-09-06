@@ -140,6 +140,11 @@ and proposes, never tags.
 - [ ] **PASADA MANUAL DE CHANO sobre la app empaquetada (bug bash) — sin su
       visto bueno no hay tag.**
 - [ ] **Simulacro de instalación limpia en cada minor.**
+- [ ] **El tag apunta al commit MARCADOR (gate R13, D9):** `git tag vX.Y.Z <sha
+      del marcador>` — el commit puro `.claude/adversary/last-verdict.md` cuya
+      primera línea nombra el commit de código auditado. Un tag sobre el commit
+      de código bloquea en la puerta 2 al empujarlo (NOBLOB u OLDSHA): el check
+      juzga el commit al que el tag apunta, pelado.
 
 - **PUBLISHED: `v0.2.0` (2026-07-18).**
   <https://github.com/Sebastian197/korvun/releases/tag/v0.2.0> — signed release + SBOM

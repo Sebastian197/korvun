@@ -225,6 +225,11 @@ check_probe NODIR 2 "root is not a directory" "$TMP/does-not-exist" "$J_POK"
 NR="$TMP/notarepo"; mkdir -p "$NR"
 out=$(cd "$TMP" && GIT_CEILING_DIRECTORIES="$(cd "$TMP" && pwd -P)" bash "$CHECK" "$NR" "$J_POK" 2>&1); code=$?
 if [ "$code" -ne 2 ] || ! printf '%s' "$out" | grep -qF "git cannot name a top level for"; then fail "check-direct NOTAREPO: expected 2 + \"git cannot name a top level for\", got $code" "$out"; else pass "check-direct NOTAREPO (exit 2)"; fi
+# UNSEARCHABLE: an existing directory without search permission falls to NOTAREPO's reason (the paper's §4); as uid 0 it cannot be built — a FAILURE named, never a skip.
+UNS="$TMP/unsearchable"; mkdir -p "$UNS"; chmod 000 "$UNS"
+if [ "$(id -u)" = 0 ]; then fail "check-direct UNSEARCHABLE: cannot be built as uid 0 (root enters any directory) — run the probe as a regular user" ""
+else check_probe UNSEARCHABLE 2 "git cannot name a top level for" "$UNS" "$J_POK"; fi
+chmod 755 "$UNS"
 check_probe WRONGROOT 2 "root is not the repository top level" "$POK/scripts" "$J_POK"
 ln -s "$POK" "$TMP/rootlink"
 check_probe SYMLINKROOT 0 "" "$TMP/rootlink" "$J_POK"
@@ -280,8 +285,22 @@ door2 NOTBLOB-GITLINK "$GITLINK" blocked "$(newbare gitlink)" probe "not a regul
 door2 NONHEAD-REF "$CHAIN" blocked "$(newbare nonhead)" "$C2_CH:refs/heads/probe" "records $C0_CH"
 door1 NONHEAD-REF-head-is-marker "$CHAIN" 0 'git push origin probe'
 MB=$(newbare multiref)
+# The stdin line ORDER is CAPTURED (a tee wrapper in front of the real hook), never assumed: the
+# shape m-n7j needs is "the unauthorized ref LAST"; if git handed `probe` first, the refspecs are
+# swapped and the push re-captured (the paper's declared consequence).
+rm -f "$CHAIN/.git/hooks/pre-push"
+printf '#!/bin/bash\ntee "%s" | "%s" "$@"\n' "$TMP/multiref.stdin" "$CHAIN/.githooks/pre-push" > "$CHAIN/.git/hooks/pre-push"; chmod +x "$CHAIN/.git/hooks/pre-push"
 out=$(git -C "$CHAIN" push -q "$MB" "$M_CH:refs/heads/ok" "$C2_CH:refs/heads/probe" 2>&1); code=$?
-if [ "$code" -ne 1 ] || ! printf '%s' "$out" | grep -qF "records $C0_CH" || ! printf '%s' "$out" | grep -qF "refs/heads/probe"; then fail "door 2 MULTIREF: expected BLOCKED naming refs/heads/probe with OLDSHA's reason, got $code" "$out"; else pass "door 2 MULTIREF blocked, the failing ref named"; fi
+ORDER=$(cut -d' ' -f3 "$TMP/multiref.stdin" | tr '\n' ' ')
+echo "MULTIREF stdin order captured: $ORDER"
+if [ "$(cut -d' ' -f3 "$TMP/multiref.stdin" | head -1)" != "refs/heads/ok" ]; then
+  echo "note  MULTIREF: git handed the unauthorized ref FIRST — refspecs swapped and re-captured"
+  MB=$(newbare multiref2)
+  out=$(git -C "$CHAIN" push -q "$MB" "$C2_CH:refs/heads/probe" "$M_CH:refs/heads/ok" 2>&1); code=$?
+  echo "MULTIREF stdin order re-captured: $(cut -d' ' -f3 "$TMP/multiref.stdin" | tr '\n' ' ')"
+fi
+rm -f "$CHAIN/.git/hooks/pre-push"; ln -sf ../../.githooks/pre-push "$CHAIN/.git/hooks/pre-push"
+if [ "$code" -ne 1 ] || ! printf '%s' "$out" | grep -qF "records $C0_CH" || ! printf '%s' "$out" | grep -qF "refs/heads/probe"; then fail "door 2 MULTIREF: expected BLOCKED naming refs/heads/probe with OLDSHA's reason, got $code" "$out"; else pass "door 2 MULTIREF blocked, the failing ref named (the authorized ref judged first)"; fi
 DB=$(newbare delete); git -C "$DB" fetch -q "$POK" probe:probe
 door2 DELETE "$POK" blocked "$DB" ":refs/heads/probe" "deleting a remote ref"
 UB=$(newbare uptodate); git -C "$UB" fetch -q "$POK" probe:probe

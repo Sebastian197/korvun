@@ -81,22 +81,42 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read the document: %v", err)
 	}
+	// BY STATEMENT, not by line: a statement inside a fence runs from its
+	// first line to the line ending in `;` (the shell's continuation
+	// prompt `...>` joins them), so a WHERE clause on a continuation line
+	// is judged with the statement it belongs to.
 	interpolated := regexp.MustCompile(`'apr_[^']*'`)
-	inFence, sqlLines := false, 0
+	inFence, sqlStatements := false, 0
+	var stmt strings.Builder
+	stmtStart := 0
 	for n, line := range strings.Split(string(doc), "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "```") {
 			inFence = !inFence
+			stmt.Reset()
 			continue
 		}
-		if !inFence || !strings.Contains(line, "approval_tombstones") || strings.Contains(line, ".param") {
+		if !inFence || strings.Contains(line, ".param") || strings.Contains(line, ".backup") || strings.Contains(line, ".dump") {
 			continue
 		}
-		sqlLines++
-		if interpolated.MatchString(line) || !strings.Contains(line, "@apr") && strings.Contains(line, "WHERE") {
-			t.Fatalf("AUDIT R13-G5b doc guard, line %d: a SQL statement over approval_tombstones must bind @apr, never interpolate an id: %q", n+1, line)
+		if stmt.Len() == 0 {
+			stmtStart = n + 1
+		}
+		stmt.WriteString(line)
+		stmt.WriteString("\n")
+		if !strings.HasSuffix(strings.TrimSpace(line), ";") {
+			continue
+		}
+		s := stmt.String()
+		stmt.Reset()
+		if !strings.Contains(s, "approval_tombstones") {
+			continue
+		}
+		sqlStatements++
+		if interpolated.MatchString(s) || strings.Contains(s, "WHERE") && !strings.Contains(s, "@apr") {
+			t.Fatalf("AUDIT R13-G5b doc guard, statement at line %d: a SQL statement over approval_tombstones must bind @apr, never interpolate an id: %q", stmtStart, s)
 		}
 	}
-	if sqlLines < 3 {
-		t.Fatalf("the guard must see the document's SQL statement lines (found %d) — the document moved or the fences changed", sqlLines)
+	if sqlStatements < 3 {
+		t.Fatalf("the guard must see the document's SQL statements (found %d) — the document moved or the fences changed", sqlStatements)
 	}
 }

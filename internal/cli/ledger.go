@@ -13,8 +13,13 @@
 //	key window, link, custody), applied link by link.
 //
 // Read-only, like verify: plain opener, nothing written. Honest limit,
-// documented: truncation of the chain's TAIL leaves no hole to detect —
-// the ledger is tamper-evident, not tamper-proof (§23 honesty sentence).
+// documented (SECURITY.md, R13 D11): any truncation from the TAIL of a
+// partition — the last receipt, any suffix, or the whole partition (an
+// empty partition reports "0 receipts, chain intact") — is INDETECTABLE
+// without an external anchor of the last sealed hash; internal gaps and
+// alterations made without the resident key are detected and named.
+// The ledger is tamper-evident, not tamper-proof (§23 honesty sentence);
+// the tail anchor is filed to v0.15.1.
 package cli
 
 import (
