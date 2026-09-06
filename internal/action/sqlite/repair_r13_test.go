@@ -70,11 +70,17 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 	}
 }
 
-// The doc guard BY SITE: every SQL statement line of the document (a
-// line inside a code fence that carries `approval_tombstones`) binds
-// the id (`@apr`) and never interpolates one (`'apr_…'`). The `.param`
-// lines are exempt — they are the ONE place an id is typed, and the
-// document says "retype after visual inspection" governs them too.
+// The doc guard BY STATEMENT: every SQL statement inside a code fence
+// of the document that names `approval_tombstones` — a shell-prompt
+// statement joined across its `...>` continuation lines until `;`, an
+// unterminated one judged at the fence close, or the SQL argument of a
+// `sqlite3 "<db>" "…"` one-liner — binds the id (`@apr`) and never
+// interpolates one (`'apr_…'` or `"apr_…"`). EXEMPT, by site: the
+// dot-command lines (`sqlite> .param …`, and the `".backup`/`".dump`
+// invocations — `.dump approval_tombstones` is a dot-command, not a
+// statement) — they are the ONE place an id is typed, and the document
+// says "retype after visual inspection" governs them too — and the bare
+// `sqlite3 "<profile>/korvun.db"` invocation.
 func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	t.Parallel()
 	doc, err := os.ReadFile(filepath.Clean(repairDocPath))
@@ -105,10 +111,14 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		}
 	}
 	// Exempt BY SITE: a dot-command — the shell prompt followed by a dot
-	// (`sqlite> .param …`) or a bare `.backup`/`.dump` invocation — and the
-	// shell invocation line (`sqlite3 "<profile>/korvun.db"`). The
-	// CONTINUATION prompt (`...>`) is NOT a dot-command: it starts with
-	// a dot too, and the third diff pass caught the guard skipping every
+	// (`sqlite> .param …`) or a bare dot-command — and a shell invocation
+	// line that carries NO SQL: the bare `sqlite3 "<profile>/korvun.db"`
+	// (one quoted argument) or one whose quoted argument is a dot-command
+	// (`".backup …"`, `".dump …"`). A `sqlite3 "<db>" "SELECT …"` one-liner
+	// carries SQL as its second quoted argument and IS judged (the fourth
+	// diff pass caught the prefix-only exemption as a hole). The
+	// CONTINUATION prompt (`...>`) is NOT a dot-command: it starts with a
+	// dot too, and the third diff pass caught the guard skipping every
 	// continuation line — the WHERE of a two-line statement — by that
 	// resemblance.
 	isExemptSite := func(line string) bool {
@@ -116,7 +126,14 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		if strings.HasPrefix(trimmed, "...>") {
 			return false
 		}
-		return strings.HasPrefix(trimmed, "sqlite> .") || strings.HasPrefix(trimmed, ".") || strings.HasPrefix(trimmed, "sqlite3 ")
+		if strings.HasPrefix(trimmed, "sqlite> .") || strings.HasPrefix(trimmed, ".") {
+			return true
+		}
+		if strings.HasPrefix(trimmed, "sqlite3 ") {
+			quotes := strings.Count(trimmed, `"`)
+			return quotes <= 2 || strings.Contains(trimmed, `".`)
+		}
+		return false
 	}
 	sqlText := func(line string) string {
 		trimmed := strings.TrimSpace(line)

@@ -237,13 +237,16 @@ chmod 755 "$UNS"
 # GITTRACE: a tracing environment writes to git's stderr; a successful git must still name the top level — positive control.
 out=$(GIT_TRACE=1 bash "$CHECK" "$POK" "$J_POK" 2>&1); code=$?
 if [ "$code" -ne 0 ]; then fail "check-direct GITTRACE: expected 0 under GIT_TRACE=1, got $code" "$out"; else pass "check-direct GITTRACE (exit 0 under GIT_TRACE=1)"; fi
-# GRAFTENV: a graft file handed through the environment rewrites K's parent to P′ (a code-only commit K's marker names);
-# the check drops GIT_GRAFT_FILE, so K's REAL parent (C0) is judged → the SHA wall blocks. Whether this git honors
-# GIT_GRAFT_FILE at all is captured by the mutant (m-graft: the drop removed → GRAFTENV passes if honored).
+# GRAFTENV: a graft file handed through the environment rewrites K's parent to P′ — a NEVER-PUSHED commit whose tree
+# is exactly K's tree WITHOUT the marker (built from K's code change, so that under the graft diff-tree P′ K lists the
+# marker ALONE and every later wall passes: the dangerous branch — the gate authorizing K, whose real parent is C0 —
+# is forced and observed under m-graft, the fourth pass's P2-A). The check drops GIT_GRAFT_FILE, so K's REAL parent
+# (C0) is judged → the SHA wall blocks "records P′". Whether this git honors GIT_GRAFT_FILE is captured below.
 GR=$(mkfix graftenv); C0_GR=$(code "$GR" c0)
-P_GR=$(git -C "$GR" "${GITENV[@]}" commit-tree "$(git -C "$GR" rev-parse HEAD^{tree})" -m "code-only, never pushed")
-mkdir -p "$GR/.claude/adversary"; marker_text "$P_GR" > "$GR/$MARKER"; printf 'code k\n' >> "$GR/code.txt"
-git -C "$GR" add -f "$MARKER" code.txt; gcommit "$GR" -m "k: code + marker naming P'"; K_GR=$(git -C "$GR" rev-parse HEAD)
+printf 'code k\n' >> "$GR/code.txt"; git -C "$GR" add code.txt
+P_GR=$(git -C "$GR" "${GITENV[@]}" commit-tree "$(git -C "$GR" write-tree)" -m "K's code without the marker, never pushed")
+mkdir -p "$GR/.claude/adversary"; marker_text "$P_GR" > "$GR/$MARKER"
+git -C "$GR" add -f "$MARKER"; gcommit "$GR" -m "k: code + marker naming P'"; K_GR=$(git -C "$GR" rev-parse HEAD)
 printf '%s %s\n' "$K_GR" "$P_GR" > "$TMP/grafts"
 out=$(GIT_GRAFT_FILE="$TMP/grafts" bash "$CHECK" "$GR" "$K_GR" 2>&1); code=$?
 if [ "$code" -ne 2 ] || ! printf '%s' "$out" | grep -qF "records $P_GR"; then fail "check-direct GRAFTENV: expected 2 + \"records $P_GR\" (the real parent judged), got $code" "$out"; else pass "check-direct GRAFTENV (exit 2, the caller's GIT_GRAFT_FILE dropped)"; fi
@@ -252,6 +255,16 @@ echo "GRAFTENV captured: without the drop, rev-list --parents under GIT_GRAFT_FI
 OTHER=$(parentok envdir-other)
 out=$(GIT_DIR="$OTHER/.git" bash "$CHECK" "$POK" "$J_POK" 2>&1); code=$?
 if [ "$code" -ne 0 ]; then fail "check-direct ENVDIR: expected 0 with GIT_DIR pointing elsewhere, got $code" "$out"; else pass "check-direct ENVDIR (exit 0, the caller's GIT_DIR dropped)"; fi
+# WORKTREE: a LINKED worktree of the PARENTOK repository (its .git is a FILE; git exports an absolute GIT_DIR to the
+# hook there — captured in the canto). Check-direct with that GIT_DIR exported → 0 (the check drops it and rediscovers
+# through the .git file); door 2 from the worktree → allowed (the hook installed in the main repository's .git/hooks).
+WT="$TMP/parentok-wt"; git -C "$POK" worktree add -q "$WT" -b wtb
+# The fixtures keep their scripts UNTRACKED (the real repository tracks them), so the worktree gets its own copy —
+# the check the pre-push runs is the WORKTREE's copy ("an edited check decides", the check's header).
+mkdir -p "$WT/scripts"; cp "$CHECK" "$WT/scripts/"
+out=$(GIT_DIR="$POK/.git/worktrees/parentok-wt" bash "$CHECK" "$WT" "$J_POK" 2>&1); code=$?
+if [ "$code" -ne 0 ]; then fail "check-direct WORKTREE: expected 0 from a linked worktree with GIT_DIR exported, got $code" "$out"; else pass "check-direct WORKTREE (exit 0, the worktree's .git file rediscovered)"; fi
+door2 WORKTREE "$WT" allowed "$(newbare worktree)" "wtb:refs/heads/probe"
 check_probe WRONGROOT 2 "root is not the repository top level" "$POK/scripts" "$J_POK"
 ln -s "$POK" "$TMP/rootlink"
 check_probe SYMLINKROOT 0 "" "$TMP/rootlink" "$J_POK"
