@@ -13,16 +13,16 @@
 // with its raw-SQL sabotage and both verifiers' exit 0, lives in the
 // R14 canto; this pin is the durable half so the capture cannot decay.
 //
-// Its conforming probing mutation, executed and recorded in the canto
-// (M7): delete the forger's key registration and leave the re-sign
-// loop intact — the pin goes RED before either command runs, at the
-// active-key probe below ("1 active keys in the registry, want 2"),
-// because its green DEPENDS on the key being self-registered. That is
-// the mutation that proves what this test is named for, and the red it
-// produces is a precondition red, not a ladder name. Beside it (M6): invert the
-// key-lookup arm of the ladder
-// (`internal/cli/receipt.go`, the `key_unknown` branch) so a FOUND key
-// fails — the PIN'S OWN assertion goes RED with that exact name. The
+// Its CONFORMING probing mutation (M6, so adjudicated in D10): invert
+// the key-lookup arm of the ladder (`internal/cli/receipt.go`, the
+// `key_unknown` branch) so a FOUND key fails — the PIN'S OWN assertion
+// goes RED with that exact name, which is the shape this pin will take
+// the day the external anchor lands. Beside it, its DEPENDENCE
+// mutation (M7): delete the forger's key registration and leave the
+// re-sign loop intact — the pin goes RED before either command runs,
+// at the active-key probe below ("1 active keys in the registry, want
+// 2"), a precondition red and not a ladder name, which is the executed
+// proof that its green depends on the key being self-registered. The
 // first form of this test carried an honest-chain precondition, and
 // the mutation reddened THAT line instead, proving nothing; the
 // precondition is gone for exactly that reason. Its separation half

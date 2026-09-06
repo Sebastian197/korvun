@@ -10,10 +10,13 @@
 // construction, and the chain — monotonic sequence per partition, each
 // receipt carrying its predecessor's hash from the documented genesis
 // link — makes an out-of-band EDIT detectable unless the editor also
-// re-signs and re-links with a key registered in the same file. A
-// DELETION from the TAIL needs no such work and is not detectable at
-// all: what survives is still a chain from the genesis link. Both were
-// captured by binary in R14; SECURITY.md carries the honest scope. Tamper-evident, never
+// re-signs and re-links with a key registered in the same file. What
+// needs no such work at all, and is not detectable: any removal from
+// the TAIL of the walked partition — a DELETE, or an UPDATE that moves
+// the last receipt to another partition, since `ledger check` walks
+// one partition at a time (`internal/cli/ledger.go`). What survives is
+// still a chain from the genesis link. Captured in R14; SECURITY.md
+// carries the honest scope. Tamper-evident, never
 // immutable: the operator controls storage and keys (§19.3). Receipts
 // are EXEMPT from the E1 actions prune (the sealed exemption): the
 // evidence outlives operational pruning; growth stays one bounded row

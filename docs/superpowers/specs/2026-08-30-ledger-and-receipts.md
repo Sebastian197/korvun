@@ -202,8 +202,14 @@ small piece inside this stage when ordering allows.
 - **FR-VER-2** `korvun ledger check --config <path>`: the whole chain —
   every receipt re-verified, sequence continuity, gap/tamper NAMED at
   first break; summary line with the receipt count. [amended
-  2026-09-06, R14: partitions, keys and oldest/newest are NOT
-  implemented — open requirement, filed to v0.15.1.] Brief WAL-safe access, the E2 CLI discipline.
+  2026-09-06, R14, twice. (1) partitions, keys and oldest/newest are
+  NOT implemented — open requirement, filed to v0.15.1. (2) "the whole
+  chain … gap/tamper NAMED at first break" is the operation's SHAPE,
+  not a guarantee of coverage: the command walks ONE partition, and two
+  alterations inside it are not named at all — a cut from the TAIL
+  leaves no hole, and a chain re-signed with a key the attacker
+  registered in the same profile passes every arm. Both captured in
+  `docs/cantos/R14.md` §3.1-§3.2; SECURITY.md carries the scope.] Brief WAL-safe access, the E2 CLI discipline.
 - **FR-VER-3** Backup/restore verifiable (blueprint mandatory test 3):
   `ledger check` over a file-level backup copy verifies identically —
   the chain carries its own evidence; the test restores a backup and
