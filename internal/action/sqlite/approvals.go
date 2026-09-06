@@ -447,10 +447,14 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 				// STORE's index is the corrupt evidence and a human
 				// adjudicates — and NEVER the identity of absence: the
 				// driver's sql.ErrNoRows is not wrapped, so no caller can
-				// read this as "no tombstone".
+				// read this as "no tombstone". The INSERT's own error IS
+				// carried as the Cause (third diff pass, P3-1): which
+				// constraint fired, or the forged text, is the one primary
+				// fact the adjudication needs, and it is never ErrNoRows.
 				return fmt.Errorf("action/sqlite: tombstone for %q: %w", a.ApprovalID, &TombstoneFault{
 					ApprovalID: a.ApprovalID, Field: "approval_digest", Stored: true,
-					Detail: "index corruption: phantom collision — the INSERT reported a UNIQUE collision on this digest, yet no row carries it"})
+					Detail: "index corruption: phantom collision — the INSERT reported a UNIQUE collision, yet no row carries this approval id or this digest",
+					Cause:  err})
 			}
 			if ferr != nil {
 				// The row this story's digest selects fails the contract

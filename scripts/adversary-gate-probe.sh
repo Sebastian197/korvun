@@ -237,6 +237,17 @@ chmod 755 "$UNS"
 # GITTRACE: a tracing environment writes to git's stderr; a successful git must still name the top level — positive control.
 out=$(GIT_TRACE=1 bash "$CHECK" "$POK" "$J_POK" 2>&1); code=$?
 if [ "$code" -ne 0 ]; then fail "check-direct GITTRACE: expected 0 under GIT_TRACE=1, got $code" "$out"; else pass "check-direct GITTRACE (exit 0 under GIT_TRACE=1)"; fi
+# GRAFTENV: a graft file handed through the environment rewrites K's parent to P′ (a code-only commit K's marker names);
+# the check drops GIT_GRAFT_FILE, so K's REAL parent (C0) is judged → the SHA wall blocks. Whether this git honors
+# GIT_GRAFT_FILE at all is captured by the mutant (m-graft: the drop removed → GRAFTENV passes if honored).
+GR=$(mkfix graftenv); C0_GR=$(code "$GR" c0)
+P_GR=$(git -C "$GR" "${GITENV[@]}" commit-tree "$(git -C "$GR" rev-parse HEAD^{tree})" -m "code-only, never pushed")
+mkdir -p "$GR/.claude/adversary"; marker_text "$P_GR" > "$GR/$MARKER"; printf 'code k\n' >> "$GR/code.txt"
+git -C "$GR" add -f "$MARKER" code.txt; gcommit "$GR" -m "k: code + marker naming P'"; K_GR=$(git -C "$GR" rev-parse HEAD)
+printf '%s %s\n' "$K_GR" "$P_GR" > "$TMP/grafts"
+out=$(GIT_GRAFT_FILE="$TMP/grafts" bash "$CHECK" "$GR" "$K_GR" 2>&1); code=$?
+if [ "$code" -ne 2 ] || ! printf '%s' "$out" | grep -qF "records $P_GR"; then fail "check-direct GRAFTENV: expected 2 + \"records $P_GR\" (the real parent judged), got $code" "$out"; else pass "check-direct GRAFTENV (exit 2, the caller's GIT_GRAFT_FILE dropped)"; fi
+echo "GRAFTENV captured: without the drop, rev-list --parents under GIT_GRAFT_FILE reads: $(GIT_GRAFT_FILE="$TMP/grafts" git -C "$GR" rev-list --parents -n 1 "$K_GR" 2>/dev/null)"
 # ENVDIR: GIT_DIR pointing at ANOTHER repository must not redirect the judgement — the check judges <root>, positive control.
 OTHER=$(parentok envdir-other)
 out=$(GIT_DIR="$OTHER/.git" bash "$CHECK" "$POK" "$J_POK" 2>&1); code=$?

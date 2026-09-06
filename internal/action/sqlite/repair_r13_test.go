@@ -85,7 +85,11 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	// first line to the line ending in `;` (the shell's continuation
 	// prompt `...>` joins them), so a WHERE clause on a continuation line
 	// is judged with the statement it belongs to.
-	interpolated := regexp.MustCompile(`'apr_[^']*'`)
+	// An interpolated id in either SQL quoting ('apr_…' or "apr_…" — SQLite
+	// reads a double-quoted string as a literal when no such identifier
+	// exists); WHERE matched case-insensitively.
+	interpolated := regexp.MustCompile(`['"]apr_[^'"]*['"]`)
+	whereClause := regexp.MustCompile(`(?i)\bwhere\b`)
 	inFence, sqlStatements := false, 0
 	var stmt strings.Builder
 	stmtStart := 0
@@ -96,16 +100,28 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			return
 		}
 		sqlStatements++
-		if interpolated.MatchString(s) || strings.Contains(s, "WHERE") && !strings.Contains(s, "@apr") {
+		if interpolated.MatchString(s) || whereClause.MatchString(s) && !strings.Contains(s, "@apr") {
 			t.Fatalf("AUDIT R13-G5b doc guard, statement at line %d: a SQL statement over approval_tombstones must bind @apr, never interpolate an id: %q", stmtStart, s)
 		}
 	}
-	// A dot-command line is exempt BY SITE — the shell prompt followed by
-	// a dot (`sqlite> .param …`) or a bare `.backup`/`.dump` invocation —
-	// never by a substring anywhere on the line.
-	isDotCommand := func(line string) bool {
+	// Exempt BY SITE: a dot-command — the shell prompt followed by a dot
+	// (`sqlite> .param …`) or a bare `.backup`/`.dump` invocation — and the
+	// shell invocation line (`sqlite3 "<profile>/korvun.db"`). The
+	// CONTINUATION prompt (`...>`) is NOT a dot-command: it starts with
+	// a dot too, and the third diff pass caught the guard skipping every
+	// continuation line — the WHERE of a two-line statement — by that
+	// resemblance.
+	isExemptSite := func(line string) bool {
 		trimmed := strings.TrimSpace(line)
-		return strings.HasPrefix(trimmed, "sqlite> .") || strings.HasPrefix(trimmed, ".")
+		if strings.HasPrefix(trimmed, "...>") {
+			return false
+		}
+		return strings.HasPrefix(trimmed, "sqlite> .") || strings.HasPrefix(trimmed, ".") || strings.HasPrefix(trimmed, "sqlite3 ")
+	}
+	sqlText := func(line string) string {
+		trimmed := strings.TrimSpace(line)
+		trimmed = strings.TrimPrefix(trimmed, "sqlite> ")
+		return strings.TrimPrefix(trimmed, "...>")
 	}
 	for n, line := range strings.Split(string(doc), "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), "```") {
@@ -117,13 +133,13 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 			inFence = !inFence
 			continue
 		}
-		if !inFence || isDotCommand(line) || strings.Contains(line, `".backup`) || strings.Contains(line, `".dump`) {
+		if !inFence || isExemptSite(line) {
 			continue
 		}
 		if stmt.Len() == 0 {
 			stmtStart = n + 1
 		}
-		stmt.WriteString(line)
+		stmt.WriteString(sqlText(line))
 		stmt.WriteString("\n")
 		if strings.HasSuffix(strings.TrimSpace(line), ";") {
 			judge()

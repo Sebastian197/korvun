@@ -699,9 +699,15 @@ func TestTombstoneTx_phantomCollisionIsNamedAsIndexCorruption(t *testing.T) {
 	defer func() { _ = tx.Rollback() }()
 	err = store.tombstoneTx(ctx, tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
 	mustFault(t, "AUDIT R13 phantom collision", err, "approval_digest",
-		"index corruption: phantom collision — the INSERT reported a UNIQUE collision on this digest, yet no row carries it", true)
+		"index corruption: phantom collision — the INSERT reported a UNIQUE collision, yet no row carries this approval id or this digest", true)
 	if errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("index corruption must never carry the identity of absence: %v", err)
+	}
+	// The INSERT's own error rides as the Cause — the constraint that
+	// fired, or here the forged text — the primary fact the adjudication
+	// needs (never discarded).
+	if !strings.Contains(err.Error(), "forged by the auditor") {
+		t.Fatalf("the INSERT's error must ride out as the fault's cause: %v", err)
 	}
 	if !strings.Contains(err.Error(), "tombstone-manual-repair.md") {
 		t.Fatalf("a human adjudicates: the repair pointer rides out: %v", err)

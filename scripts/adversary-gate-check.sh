@@ -86,7 +86,13 @@ MARKER=".claude/adversary/last-verdict.md"
 # these the probe asserts only the replace switches in its own
 # environment (GIT_NO_REPLACE_OBJECTS unset, core.useReplaceRefs not
 # false), the rest declared.
-unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_INDEX_FILE GIT_NAMESPACE
+# GIT_GRAFT_FILE is the ENVIRONMENT form of the graft hole declared
+# below (a graft rewrites parents like a replace ref does): dropped
+# (fixture GRAFTENV, mutant m-graft). Declared consequence of the
+# drop: an environment-only layout (GIT_DIR + GIT_WORK_TREE with no
+# .git in the tree) is refused "git cannot name a top level" — a false
+# block, fail-closed, outside this check's contract.
+unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_INDEX_FILE GIT_NAMESPACE GIT_GRAFT_FILE
 
 block() { echo "BLOCKED by adversary gate: $1" >&2; exit 2; }
 
