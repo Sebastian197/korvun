@@ -82,7 +82,11 @@
 # no mtime, and the SHA binding above is what a fresh clone or worktree
 # could not fake.
 set -u
-LC_ALL=C
+# Exported (the seventh pass): bash's [[ =~ ]] needs it for a byte-exact
+# hex class, and git's own messages — which the reasons quote and the
+# probe reads ("Permission denied") — must not depend on the runner's
+# locale.
+export LC_ALL=C
 MARKER=".claude/adversary/last-verdict.md"
 # The repository judged is the one <root> names, never one the caller's
 # environment points git at: the object-directory and work-tree
@@ -127,8 +131,8 @@ CANON=$(unset CDPATH; cd -- "$ROOT" >/dev/null 2>&1 && pwd -P)
 # stdout only into TOP (a tracing environment writes to stderr and must
 # never become the "top level"); git's own words are fetched for the
 # reason only on the failure path.
-if ! TOP=$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null </dev/null); then
-  ERR=$(git -C "$ROOT" rev-parse --show-toplevel 2>&1 >/dev/null </dev/null)
+if ! TOP=$(git --no-replace-objects -C "$ROOT" rev-parse --show-toplevel 2>/dev/null </dev/null); then
+  ERR=$(git --no-replace-objects -C "$ROOT" rev-parse --show-toplevel 2>&1 >/dev/null </dev/null)
   block "git cannot name a top level for $ROOT: $ERR"
 fi
 [ "$CANON" = "$TOP" ] || block "root is not the repository top level (root $CANON, top level $TOP)."

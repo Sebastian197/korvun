@@ -75,15 +75,21 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 // its `...>` continuation lines until `;` (an unterminated one judged
 // where the prompt lines stop — fences, indentation or `~~~` play no
 // part: the SITE is the prompt), or the SQL argument of a `sqlite3
-// "<db>" "…"` one-liner — binds the id (`@apr`, outside SQL comments)
-// and never interpolates one (`'apr_…'` or `"apr_…"`). EXEMPT, by site: the
+// "<db>" "…"` one-liner — binds the id (`@apr`, outside SQL comments of
+// either form, `--` or `/* */`, stripped by a token scanner that never
+// enters a string literal) and never interpolates one (`'apr_…'` or
+// `"apr_…"`). Those three sites are the ONLY channels the document
+// feeds SQL through: a heredoc, a pipe into sqlite3 or a redirected
+// file FAILS the guard by name (the guard grows before the document
+// may use one). EXEMPT, by site: the
 // dot-command lines (`sqlite> .param …`, and a `sqlite3 …` invocation
 // whose arguments after the path are all dot-commands — `.dump
 // approval_tombstones` is a dot-command, not a statement) — they are
 // the ONE place an id is typed, and the document says "retype after
 // visual inspection" governs them too — and the bare
 // `sqlite3 "<profile>/korvun.db"` invocation (no argument after the
-// path). The arguments are tokenized as shell words, never counted.
+// path). The arguments are tokenized as shell words, never counted, and
+// the argument list ends at a shell redirection or pipe.
 func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	t.Parallel()
 	doc, err := os.ReadFile(filepath.Clean(repairDocPath))
@@ -99,14 +105,49 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 	// exists); WHERE matched case-insensitively.
 	interpolated := regexp.MustCompile(`['"]apr_[^'"]*['"]`)
 	whereClause := regexp.MustCompile(`(?i)\bwhere\b`)
-	// SQL comments are stripped before judging: a `-- @apr` in a comment
-	// is not a bind (the sixth pass).
-	sqlComment := regexp.MustCompile(`--[^\n]*`)
+	// SQL comments are stripped before judging — BOTH forms (`-- …` and
+	// `/* … */`) and ONLY outside string literals (the seventh pass: a
+	// text-level `--` strip entered a literal such as 'apr_pasted--x' and
+	// hid it; a `/* @apr */` satisfied the bind). A scanner by token,
+	// not a regexp.
+	stripSQLComments := func(s string) string {
+		var out strings.Builder
+		quote := byte(0)
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			switch {
+			case quote != 0:
+				out.WriteByte(c)
+				if c == quote {
+					quote = 0
+				}
+			case c == '\'' || c == '"':
+				quote = c
+				out.WriteByte(c)
+			case c == '-' && i+1 < len(s) && s[i+1] == '-':
+				for i < len(s) && s[i] != '\n' {
+					i++
+				}
+				out.WriteByte('\n')
+			case c == '/' && i+1 < len(s) && s[i+1] == '*':
+				end := strings.Index(s[i+2:], "*/")
+				if end < 0 {
+					i = len(s)
+				} else {
+					i += 2 + end + 1
+				}
+				out.WriteByte(' ')
+			default:
+				out.WriteByte(c)
+			}
+		}
+		return out.String()
+	}
 	sqlStatements := 0
 	var stmt strings.Builder
 	stmtStart := 0
 	judge := func() {
-		s := sqlComment.ReplaceAllString(stmt.String(), "")
+		s := stripSQLComments(stmt.String())
 		stmt.Reset()
 		if !strings.Contains(s, "approval_tombstones") {
 			return
@@ -166,7 +207,13 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		return words
 	}
 	// A `sqlite3 …` invocation is exempt only when NO argument after the
-	// database path is SQL: every further argument is a dot-command.
+	// database path is SQL: every further argument is a dot-command. The
+	// argument list ENDS at a shell redirection or pipe (`>`, `>>`, `<`,
+	// `2>`, `|`): what follows is the shell's, not sqlite3's (the seventh
+	// pass: `> quarantine-tombstones.sql` was being read as SQL).
+	isRedirection := func(w string) bool {
+		return strings.HasPrefix(w, ">") || strings.HasPrefix(w, "<") || strings.HasPrefix(w, "|") || strings.HasPrefix(w, "2>")
+	}
 	invocationSQL := func(line string) (sql string, exempt bool) {
 		words := shellWords(strings.TrimSpace(line))
 		if len(words) < 2 {
@@ -174,6 +221,9 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		}
 		var parts []string
 		for _, w := range words[2:] {
+			if isRedirection(w) {
+				break
+			}
 			if strings.HasPrefix(w, ".") {
 				continue
 			}
@@ -189,7 +239,7 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		if strings.HasPrefix(trimmed, "...>") {
 			return false
 		}
-		if strings.HasPrefix(trimmed, "sqlite> .") || strings.HasPrefix(trimmed, ".") {
+		if strings.HasPrefix(trimmed, "sqlite> .") {
 			return true
 		}
 		if strings.HasPrefix(trimmed, "sqlite3 ") {
@@ -198,6 +248,12 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		}
 		return false
 	}
+	// The document feeds SQL to the shell ONLY through the three sites
+	// above (a prompt statement, a continuation, a one-liner argument).
+	// A heredoc, a pipe into sqlite3 or a redirected file would be SQL
+	// the sites never see — so any such line FAILS by name (the seventh
+	// pass, P3-1): if the document ever needs one, the guard grows first.
+	otherSQLChannel := regexp.MustCompile(`<<|\|\s*sqlite3\b|sqlite3\b[^\n]*\s<\s`)
 	sqlText := func(line string) string {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "sqlite3 ") {
@@ -218,6 +274,9 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 		return strings.HasPrefix(trimmed, "sqlite> ") || strings.HasPrefix(trimmed, "...>") || strings.HasPrefix(trimmed, "sqlite3 ")
 	}
 	for n, line := range strings.Split(string(doc), "\n") {
+		if otherSQLChannel.MatchString(line) {
+			t.Fatalf("AUDIT R13-G5b doc guard, line %d: SQL reaching sqlite3 through a heredoc, a pipe or a redirected file is a channel this guard does not judge — grow the guard before the document uses it: %q", n+1, line)
+		}
 		if !isSite(line) {
 			if stmt.Len() > 0 {
 				judge()
