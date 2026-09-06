@@ -430,20 +430,29 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 			// name it — the fault carries THAT row's approval id and
 			// Field approval_digest (adversary train pass, P2-7).
 			_, _, ferr := scanTombstone(tx.QueryRowContext(ctx,
-				`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
-				        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
-				        decision, decision_at
-				   FROM approval_tombstones WHERE approval_digest = ?`, sealed.Digest()))
+				`SELECT typeof(approval_digest), approval_digest, typeof(approval_id), approval_id,
+				        typeof(action_id), action_id, typeof(action_digest), action_digest,
+				        typeof(preview_digest), preview_digest, typeof(policy_version), CAST(policy_version AS TEXT),
+				        typeof(policy_digest), policy_digest, typeof(decision_principal_id), decision_principal_id,
+				        typeof(decision), decision, typeof(decision_at), decision_at
+				   FROM approval_tombstones WHERE approval_digest = ?`, sealed.Digest()), originV11Plus)
 			if ferr != nil {
-				return fmt.Errorf("action/sqlite: tombstone for %q: its sealed digest %s already belongs to another row: %w", a.ApprovalID, sealed.Digest(), ferr)
+				// The row this story's digest selects fails the contract
+				// — a foreign row whose digest is not its own (P2-7), or
+				// THIS story's row whose key column carries a BLOB (R13:
+				// scanTombstone judges the class first, Field approval_id,
+				// "storage class blob"). The fault names the row itself;
+				// this wrapper never says "belongs to another row".
+				return fmt.Errorf("action/sqlite: tombstone for %q: the row this story's digest selects fails the contract: %w", a.ApprovalID, ferr)
 			}
-			// REACHABLE (adversary P3-1): the row by the digest passes the
-			// contract and re-derives THIS story — so it IS this story,
-			// yet `WHERE approval_id = ?` did not find it. The key column
-			// no longer compares equal to its own text: a storage class
-			// change (a BLOB where TEXT is expected, which SQLite's =
-			// and the PK index do not equate). Corruption of the stored
-			// key, named as such — typed, Stored, the repair pointer.
+			// CLOSED GUARD since R13 ("index corruption", unreachable after
+			// typeof): the row by the digest passes the contract — every
+			// column in its class, the key TEXT — and re-derives THIS
+			// story, yet `WHERE approval_id = ?` did not find it. Before
+			// R13 this arm was the BLOB-key path (adversary P3-1); now the
+			// class wall above names that shape first, and only an index
+			// that lies about a TEXT key could land here. Named as stored
+			// key corruption — typed, Stored, the repair pointer.
 			return fmt.Errorf("action/sqlite: tombstone for %q: %w", a.ApprovalID, &TombstoneFault{
 				ApprovalID: a.ApprovalID, Field: "approval_id", Stored: true,
 				Detail: "a stored row carries this story's digest and re-derives it, but is not addressable by its approval id — the key column's storage class is not TEXT"})
@@ -521,36 +530,51 @@ func projectSealedTombstone(sealed action.Approval, at time.Time) [10]string {
 func (s *Store) tombstoneStoredRowTx(ctx context.Context, tx *sql.Tx, approvalID string) (string, action.Approval, sql.NullString, error) {
 	var r rawTombstone
 	err := tx.QueryRowContext(ctx,
-		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
-		        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
-		        decision, decision_at
+		`SELECT typeof(approval_digest), approval_digest, typeof(approval_id), approval_id,
+		        typeof(action_id), action_id, typeof(action_digest), action_digest,
+		        typeof(preview_digest), preview_digest, typeof(policy_version), CAST(policy_version AS TEXT),
+		        typeof(policy_digest), policy_digest, typeof(decision_principal_id), decision_principal_id,
+		        typeof(decision), decision, typeof(decision_at), decision_at
 		   FROM approval_tombstones WHERE approval_id = ?`, approvalID).
-		Scan(&r.digest, &r.approvalID, &r.actionID, &r.actionDigest, &r.previewDigest,
-			&r.policyVersion, &r.policyDigest, &r.principal, &r.decision, &r.decisionAt)
+		Scan(rawTombstoneTargets(&r)...)
 	if err != nil {
 		return "", action.Approval{}, sql.NullString{}, err
 	}
-	a, _, fault := judgeStoredTombstone(r)
+	a, _, fault := judgeStoredTombstone(r, originV11Plus)
 	if fault != nil {
 		return "", action.Approval{}, sql.NullString{}, fault
 	}
-	return r.digest.String, a, r.decisionAt, nil
+	return r.digest.value.String, a, r.decisionAt.value, nil
 }
 
-// scanTombstone scans one tombstone row AS RAW TEXT and judges it
-// with THE one contract (R12-X2): present-but-empty or type-corrupt
-// bytes read back are the typed corruption through errors.As —
-// never a silent zero time, never a naked driver error; present is
-// false only for a real stored NULL.
-func scanTombstone(row *sql.Row) (action.Approval, bool, error) {
+// rawTombstoneTargets is the Scan destination list of a v11+ SELECT
+// written in the canonical pair order (class, value per column):
+// approval_digest, approval_id, action_id, action_digest,
+// preview_digest, policy_version, policy_digest,
+// decision_principal_id, decision, decision_at.
+func rawTombstoneTargets(r *rawTombstone) []any {
+	return []any{
+		&r.digest.class, &r.digest.value, &r.approvalID.class, &r.approvalID.value,
+		&r.actionID.class, &r.actionID.value, &r.actionDigest.class, &r.actionDigest.value,
+		&r.previewDigest.class, &r.previewDigest.value, &r.policyVersion.class, &r.policyVersion.value,
+		&r.policyDigest.class, &r.policyDigest.value, &r.principal.class, &r.principal.value,
+		&r.decision.class, &r.decision.value, &r.decisionAt.class, &r.decisionAt.value,
+	}
+}
+
+// scanTombstone scans one tombstone row AS STORED (each column with
+// its class witness) and judges it with THE one contract (R12-X2) under
+// the origin ITS caller declares: present-but-empty, NULL or
+// type-corrupt bytes read back are the typed corruption through
+// errors.As — never a silent zero time, never a naked driver error;
+// present is false only for a real stored NULL in decision_at.
+func scanTombstone(row *sql.Row, origin tombstoneOrigin) (action.Approval, bool, error) {
 	var r rawTombstone
-	err := row.Scan(&r.digest, &r.approvalID, &r.actionID, &r.actionDigest,
-		&r.previewDigest, &r.policyVersion, &r.policyDigest,
-		&r.principal, &r.decision, &r.decisionAt)
+	err := row.Scan(rawTombstoneTargets(&r)...)
 	if err != nil {
 		return action.Approval{}, false, err
 	}
-	a, present, fault := judgeStoredTombstone(r)
+	a, present, fault := judgeStoredTombstone(r, origin)
 	if fault != nil {
 		return action.Approval{}, false, fault
 	}
@@ -562,11 +586,13 @@ func scanTombstone(row *sql.Row) (action.Approval, bool, error) {
 // ErrNotFound when no decided close ever wrote one.
 func (s *Store) ApprovalTombstone(ctx context.Context, actionID string) (action.Approval, bool, error) {
 	a, present, err := scanTombstone(s.db.QueryRowContext(ctx,
-		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
-		        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
-		        decision, decision_at
+		`SELECT typeof(approval_digest), approval_digest, typeof(approval_id), approval_id,
+		        typeof(action_id), action_id, typeof(action_digest), action_digest,
+		        typeof(preview_digest), preview_digest, typeof(policy_version), CAST(policy_version AS TEXT),
+		        typeof(policy_digest), policy_digest, typeof(decision_principal_id), decision_principal_id,
+		        typeof(decision), decision, typeof(decision_at), decision_at
 		   FROM approval_tombstones WHERE action_id = ?
-		   ORDER BY decision_at DESC LIMIT 1`, actionID))
+		   ORDER BY decision_at DESC LIMIT 1`, actionID), originV11Plus)
 	if errors.Is(err, sql.ErrNoRows) {
 		return action.Approval{}, false, fmt.Errorf("action/sqlite: tombstone of %q: %w", actionID, ErrNotFound)
 	}
@@ -581,10 +607,12 @@ func (s *Store) ApprovalTombstone(ctx context.Context, actionID string) (action.
 // reconstructs ITS story even when an action_id was reused.
 func (s *Store) ApprovalTombstoneByDigest(ctx context.Context, digest string) (action.Approval, bool, error) {
 	a, present, err := scanTombstone(s.db.QueryRowContext(ctx,
-		`SELECT approval_digest, approval_id, action_id, action_digest, preview_digest,
-		        CAST(policy_version AS TEXT), policy_digest, decision_principal_id,
-		        decision, decision_at
-		   FROM approval_tombstones WHERE approval_digest = ?`, digest))
+		`SELECT typeof(approval_digest), approval_digest, typeof(approval_id), approval_id,
+		        typeof(action_id), action_id, typeof(action_digest), action_digest,
+		        typeof(preview_digest), preview_digest, typeof(policy_version), CAST(policy_version AS TEXT),
+		        typeof(policy_digest), policy_digest, typeof(decision_principal_id), decision_principal_id,
+		        typeof(decision), decision, typeof(decision_at), decision_at
+		   FROM approval_tombstones WHERE approval_digest = ?`, digest), originV11Plus)
 	if errors.Is(err, sql.ErrNoRows) {
 		return action.Approval{}, false, fmt.Errorf("action/sqlite: tombstone with digest %q: %w", digest, ErrNotFound)
 	}

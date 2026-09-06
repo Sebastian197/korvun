@@ -24,6 +24,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -184,8 +185,10 @@ func TestMigrationV12_typeCorruptPolicyVersionIsFaultTyped(t *testing.T) {
 	path := buildV11LegacyFile(t, row)
 	_, err := Open(path)
 	var fault *TombstoneFault
-	if err == nil || !errors.As(err, &fault) || fault.Field != "policy_version" {
-		t.Fatalf("AUDIT R12-A6: a non-integer policy_version is typed corruption naming the column: %v", err)
+	// R13: the CLASS is what condemns 'abc' — the Detail names it
+	// (an exact equality; R12's "non-integer bytes" left the taxonomy).
+	if err == nil || !errors.As(err, &fault) || fault.Field != "policy_version" || fault.Detail != "storage class text" {
+		t.Fatalf("AUDIT R12-A6: a non-integer policy_version is typed corruption naming the column and its class: %v", err)
 	}
 }
 
@@ -210,8 +213,8 @@ func TestTombstoneReader_typeCorruptPolicyVersionIsFaultTyped(t *testing.T) {
 	}
 	_, _, err := store.ApprovalTombstone(context.Background(), "act_r12_rtype")
 	var fault *TombstoneFault
-	if err == nil || !errors.As(err, &fault) || fault.Field != "policy_version" {
-		t.Fatalf("AUDIT R12-A13: the reader judges the policy_version TYPE through the ONE contract, Field fixed: %v", err)
+	if err == nil || !errors.As(err, &fault) || fault.Field != "policy_version" || fault.Detail != "storage class text" {
+		t.Fatalf("AUDIT R12-A13: the reader judges the policy_version CLASS through the ONE contract, Field and Detail fixed: %v", err)
 	}
 }
 
@@ -334,8 +337,8 @@ func TestTombstoneIdempotence_typeCorruptExistingRowIsFaultTyped(t *testing.T) {
 	defer func() { _ = tx.Rollback() }()
 	err = store.tombstoneTx(context.Background(), tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
 	var fault *TombstoneFault
-	if err == nil || !errors.As(err, &fault) || fault.Field != "policy_version" {
-		t.Fatalf("AUDIT R12-H1(a): the existing row's policy_version type is judged by the ONE contract, Field fixed: %v", err)
+	if err == nil || !errors.As(err, &fault) || fault.Field != "policy_version" || fault.Detail != "storage class text" {
+		t.Fatalf("AUDIT R12-H1(a): the existing row's policy_version class is judged by the ONE contract, Field and Detail fixed: %v", err)
 	}
 	if strings.Contains(err.Error(), "Scan error") {
 		t.Fatalf("a naked driver scan error is the class X6 killed: %v", err)
@@ -703,8 +706,12 @@ func TestTombstoneTx_digestCollisionNamesTheForeignRow(t *testing.T) {
 	defer func() { _ = tx.Rollback() }()
 	err = store.tombstoneTx(ctx, tx, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
 	var fault *TombstoneFault
-	if err == nil || !errors.As(err, &fault) || fault.ApprovalID != b.ApprovalID || fault.Field != "approval_digest" || !fault.Stored {
-		t.Fatalf("AUDIT P2-7: the foreign row must be named by ITS id at approval_digest, stored: %v", err)
+	// R13 elevation (the paper's letter table, m-n1f): the exact Detail
+	// — B's stored digest (A's) does not re-derive from B's preimage.
+	wantDetail := fmt.Sprintf("stored %q does not re-derive from the preimage (%s)", a.Digest(), b.Digest())
+	if err == nil || !errors.As(err, &fault) || fault.ApprovalID != b.ApprovalID || fault.Field != "approval_digest" || !fault.Stored ||
+		fault.Detail != wantDetail {
+		t.Fatalf("AUDIT P2-7: the foreign row must be named by ITS id at approval_digest, stored, with the contrast's exact Detail: %v", err)
 	}
 	if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "cannot be judged") {
 		t.Fatalf("a foreign digest is not an unreadable row: %v", err)
@@ -752,11 +759,18 @@ func TestTombstoneTx_blobKeyIsNamedAsStoredKeyCorruption(t *testing.T) {
 	defer func() { _ = tx2.Rollback() }()
 	err = store.tombstoneTx(ctx, tx2, a, a.DecisionPrincipalID, a.Decision, a.DecisionAt)
 	var fault *TombstoneFault
-	if err == nil || !errors.As(err, &fault) || fault.Field != "approval_id" || !fault.Stored || fault.ApprovalID != a.ApprovalID {
-		t.Fatalf("AUDIT P3-1: the BLOB key is stored corruption of approval_id, typed: %v", err)
+	// R13 (the paper's G4 P3-1 reclassification): with typeof in
+	// scanTombstone the by-digest re-read faults FIRST — Field
+	// approval_id, Detail EXACTLY "storage class blob" (an equality:
+	// the old closed arm's text shares the substring "storage class"),
+	// Stored; the wrapper never says the row "belongs to another row".
+	if err == nil || !errors.As(err, &fault) || fault.Field != "approval_id" || !fault.Stored || fault.ApprovalID != a.ApprovalID ||
+		fault.Detail != "storage class blob" {
+		t.Fatalf("AUDIT P3-1: the BLOB key is stored corruption of approval_id, typed, its class named: %v", err)
 	}
-	if strings.Contains(err.Error(), "foreign story") || !strings.Contains(err.Error(), "tombstone-manual-repair.md") {
-		t.Fatalf("named as key corruption with the repair pointer, not as another story: %v", err)
+	if strings.Contains(err.Error(), "foreign story") || strings.Contains(err.Error(), "another row") ||
+		!strings.Contains(err.Error(), "tombstone-manual-repair.md") {
+		t.Fatalf("named as key corruption with the repair pointer, never as another story or another row: %v", err)
 	}
 	var n int
 	if err := tx2.QueryRowContext(ctx, `SELECT COUNT(*) FROM approval_tombstones`).Scan(&n); err != nil || n != 1 {
