@@ -9,8 +9,9 @@
 // profile the config names: a receipt deleted from inside the chain is
 // denounced by its hole, an edited one by its hash. What no test here
 // can catch — a tail cut, a chain re-signed with a self-registered
-// key, a redirected profile — is SECURITY.md's honest scope, captured
-// by execution in the R14 canto. Read-only. Approved-red contract.
+// key, a redirected profile, and a row whose lookup column changed
+// storage class — is SECURITY.md's honest scope of FOUR, the first
+// three captured by execution in the R14 canto. Read-only. Approved-red contract.
 
 package cli
 
@@ -68,7 +69,11 @@ func TestLedgerCheck_deletedReceiptDenouncedByItsHole(t *testing.T) {
 		t.Fatalf("a hole in the chain must fail the check: %d %q %q", code, stdout, stderr)
 	}
 	out := stdout + stderr
-	if !strings.Contains(out, "chain_seq_gap") || !strings.Contains(out, "1") {
+	// D7 (R14): "1" alone matched any digit anywhere in the output — a
+	// vacuous half. The hole's position and the receipt that follows it
+	// are the content of the denunciation, so both are demanded here.
+	if !strings.Contains(out, "FAIL chain_seq_gap: position 1 is missing (next receipt ") ||
+		!strings.Contains(out, " sits at seq 2)") {
 		t.Fatalf("the hole is denounced naming the missing seq: %q", out)
 	}
 }
@@ -205,7 +210,9 @@ func TestLedgerCheck_backupRestoresVerifiable(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("the restored chain must verify identically: %d %q %q", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "3 receipts") && !strings.Contains(stdout, "chain intact") {
+	// D7 (R14): this was an OR — either half satisfied it. The restored
+	// verdict is ONE line and it is demanded whole.
+	if !strings.Contains(stdout, "ledger main: 3 receipts, chain intact") {
 		t.Fatalf("restored verdict: %q", stdout)
 	}
 	statesAfter := chainStates(t, restoredCfg, restoredDB)
@@ -270,7 +277,10 @@ func TestLedgerCheck_reorderedChainDenounced(t *testing.T) {
 		t.Fatalf("a reordered chain must fail the check: %d %q %q", code, stdout, stderr)
 	}
 	out := stdout + stderr
-	if !strings.Contains(out, "hash_mismatch") && !strings.Contains(out, "chain_link_broken") {
+	// D7 (R14): this was an either/or, and an either/or hides which of
+	// the two arms is reachable. The reorder is denounced by ONE named
+	// check and that name is demanded.
+	if !strings.Contains(out, "hash_mismatch") {
 		t.Fatalf("the reorder is denounced at its first broken link: %q", out)
 	}
 }
