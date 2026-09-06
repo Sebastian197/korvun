@@ -854,7 +854,7 @@ El ledger no se enviará automáticamente al transcript ni al feed general.
 - Escrituras transaccionales.
 - Orden estable por acción y transacción.
 - Hash encadenado por partición.
-- Detección de huecos y alteraciones DENTRO del perfil que la configuración nombra (R14: no de un truncado de cola, ni de una cadena re-firmada con clave propia, ni de un perfil redirigido, ni de una fila cuya columna de búsqueda cambió de clase de almacenamiento — las CUATRO de SECURITY.md).)
+- Detección de huecos y alteraciones DENTRO del perfil que la configuración nombra (R14: no de un truncado de cola, ni de una cadena re-firmada con clave propia, ni de un perfil redirigido, ni de una fila cuya columna de búsqueda cambió de clase de almacenamiento — las CUATRO de SECURITY.md).
 - Backups y restauración verificables.
 - Retención configurable por tenant.
 - Cifrado de parámetros protegidos.

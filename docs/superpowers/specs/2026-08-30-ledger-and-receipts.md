@@ -230,7 +230,7 @@ small piece inside this stage when ordering allows.
   same transaction, or the attempt fails CLOSED with the visible error.
   [amended 2026-09-06, R14: the original clause "an unreceipted effect
   cannot exist" is over-broad and the repository's own erratum says so
-  (`docs/releases/v0.14.0.md:119-123`, `v0.14.1`). Atomicity holds
+  (`docs/releases/v0.14.0.md:121-125`, `v0.14.1`). Atomicity holds
   INSIDE the store; an EXTERNAL effect completed just before a failed
   terminal close is a real, documented window until stage 6's
   reconciliation.]
@@ -359,7 +359,7 @@ scenarios are green and mapped to executable tests:
 
 | Scenario | Test(s) | Where |
 |---|---|---|
-| AS-1 tampering detected (edit / delete / reorder) | `TestLedgerCheck_editedReceiptNamedAtItsLink`, `TestLedgerCheck_deletedReceiptDenouncedByItsHole`, `TestLedgerCheck_reorderedChainDenounced`, `TestLedgerCheck_duplicateSeqDenounced`, `TestReceiptVerify_namesEveryFailure` | `internal/cli/ledger_test.go`, `receipt_test.go` |
+| AS-1 tampering detected (edit / delete / reorder) — SCOPED 2026-09-06, R14: within ONE partition and against the profile's own registry; a TAIL cut and a chain re-signed with a self-registered key are NOT covered (see AS-1's amendment and SECURITY.md) | `TestLedgerCheck_editedReceiptNamedAtItsLink`, `TestLedgerCheck_deletedReceiptDenouncedByItsHole`, `TestLedgerCheck_reorderedChainDenounced`, `TestLedgerCheck_duplicateSeqDenounced`, `TestReceiptVerify_namesEveryFailure` | `internal/cli/ledger_test.go`, `receipt_test.go` |
 | AS-2 rotation preserves history (+ post-retirement forgery fails) | `TestReceiptRotateKey_historicalReceiptsStillVerify`, key-window case of `TestReceiptVerify_namesEveryFailure` | `internal/cli/rotatekey_test.go`, `receipt_test.go` |
 | AS-3 backup/restore verifiable | `TestLedgerCheck_backupRestoresVerifiable` | `internal/cli/ledger_test.go` |
 | AS-4 no secrets on shared surfaces (negative sweep) | `TestSurfaces_noReceiptMaterialLeaks` (slog + bus/SSE source, real sealed store, real key material), `TestLedger_rawResultNeverTouchesTheDisk` (NC-3 byte-scan) | `internal/brain/agent_surfaces_test.go`, `internal/app/app_ledger_test.go` |
