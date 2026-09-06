@@ -94,7 +94,8 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 //     skipped; outside a fence, backticks open and close inline code
 //     spans and a span may continue onto the NEXT line only — a span
 //     still open at the end of its second line, open when a fence
-//     starts, or open at the end of the document FAILS by name (an
+//     starts, open when a PROMPT line falls inside it, or open at the
+//     end of the document FAILS by name (an
 //     unbalanced backtick would otherwise invert what is span and what
 //     is prose for every line after it), and its two halves are JOINED
 //     into one command, as the reader sees it; inside a fence there
@@ -109,9 +110,16 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 //     it sits and whatever the span state; `S=sqlite3` on one line and
 //     `$S …` on the next is refused at the `$`).
 //   - THE PAYLOAD, on every such line whatever it is: an interpolated
-//     id anywhere in its RAW text, or a WHERE over the tombstones
-//     without the bind in its comment-stripped, literal-blanked text,
-//     FAILS by name. This check asks nothing about the command word —
+//     id anywhere in its RAW text — the `apr_` prefix is a production
+//     invariant, not a habit of this document: `NewApprovalID` in
+//     `internal/action/approval.go` returns `"apr_"` and sixteen random
+//     bytes in hex — or a WHERE over the tombstones without the bind
+//     (the NAME read with the literals kept, so a quoted identifier
+//     counts; the WHERE and the bind read blanked, so neither a literal
+//     nor a comment can carry them), FAILS by name. Its COST, declared:
+//     this document can no longer quote an `apr_` id ANYWHERE — not in
+//     prose, not in a captured output block, not in a SQL comment —
+//     except at the two exempt typing sites. This check asks nothing about the command word —
 //     it is the guarantee itself, and it stands whether the line names
 //     `sqlite3`, `sq{l..l}ite3`, `/usr/bin/sq?ite3`, a name bound by
 //     `hash -p` or `alias`, or nothing at all. The command judgment
@@ -130,9 +138,11 @@ func TestRepairDoc_paramBindsAQuotedIdExactly(t *testing.T) {
 //   - The LEXER reads a command line as bash would read its quotes:
 //     quotes removed, their content kept; unquoted whitespace is an
 //     ARGUMENT boundary (sqlite3 runs each argument as its own SQL).
-//     It REFUSES by name, outside single quotes: `$` (a shell
-//     expansion), a backtick (a command substitution), a backslash (an
-//     escape or a continuation), and, outside all quotes: `<` (an input
+//     It REFUSES by name, outside single quotes: a backtick (a command
+//     substitution) and a backslash (an escape or a continuation) —
+//     a `$` never reaches it, the line-level wall above having refused
+//     the line first, so the lexer carries no dead branch for one —
+//     and, outside all quotes: `<` (an input
 //     redirection or a heredoc), `|` (a pipe), and any of `{ } [ ] * ?
 //     ~ & !` (a brace, a glob, a tilde, a background or a history
 //     expansion); an unterminated shell quote; and the `-init`/`--init`
@@ -216,8 +226,6 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 				} else {
 					out.WriteByte(c)
 				}
-			case c == '$':
-				note("a shell expansion")
 			case c == '`':
 				note("a command substitution")
 			case c == '\\':
@@ -408,7 +416,12 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 				t.Fatalf("AUDIT R13-G5b doc guard, line %d: an interpolated id — bind it with @apr, never paste it: %q", n+1, trimmed)
 			}
 			if payload := scan(trimmed, true); whereClause.MatchString(payload) && !bindToken.MatchString(payload) {
-				lower := strings.ToLower(payload)
+				// The NAME is looked for with the literals KEPT (a quoted
+				// identifier is a name, not a value — the seventeenth
+				// pass: `"approval_tombstones"` had been blanked away);
+				// the WHERE and the bind are looked for blanked, so
+				// neither a literal nor a comment can carry them.
+				lower := strings.ToLower(scan(trimmed, false))
 				if strings.Contains(lower, "approval_tombstones") || strings.Contains(lower, "approval_id") {
 					t.Fatalf("AUDIT R13-G5b doc guard, line %d: a WHERE over the tombstones must bind @apr as a whole token outside literals and comments: %q", n+1, trimmed)
 				}
@@ -480,6 +493,9 @@ func TestRepairDoc_sqlStatementsBindTheIdNeverInterpolate(t *testing.T) {
 				}
 			}
 			continue
+		}
+		if inSpan {
+			t.Fatalf("AUDIT R13-G5b doc guard, line %d: a prompt line falls inside an inline code span opened on line %d — an unbalanced backtick would make one command out of lines the reader never sees together: %q", n+1, spanOpenedAt+1, trimmed)
 		}
 		text := strings.TrimPrefix(strings.TrimPrefix(trimmed, "sqlite> "), "...>")
 		if strings.HasPrefix(strings.TrimSpace(text), ".") {

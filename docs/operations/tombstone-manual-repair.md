@@ -129,7 +129,7 @@ full-table scan verifier that judges every row is filed to v0.15.1.
    migrates; run the server boot to lift the schema" — captured from
    the binary). So:
 
-   1. re-run the boot (`korvun serve --config <config>`; the migration
+   1. re-run the boot (`korvun serve --config "<config>"`; the migration
       must converge — a boot that halts again names the next row);
    2. then verify the surviving evidence:
 
