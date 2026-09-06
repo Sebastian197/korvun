@@ -42,8 +42,16 @@
 #   (`GIT_CONFIG_GLOBAL=<file>`, a swapped `HOME`, `.git/config`
 #   edited with the Edit tool). The ways to DISARM the pre-push door
 #   with no git word: `rm .git/hooks/pre-push`, `chmod -x` on it, or
-#   editing scripts/adversary-gate-check.sh outside Bash. And the
-#   freshness gap of a fresh clone or worktree (see the check script).
+#   editing scripts/adversary-gate-check.sh outside Bash. (The old
+#   "freshness gap of a fresh clone or worktree" is DEAD since R13: the
+#   marker is a committed blob naming the audited commit's sha — it
+#   travels with history and no clock is judged.)
+#   THIS DOOR JUDGES HEAD of CLAUDE_PROJECT_DIR — never a worktree's,
+#   never the sha the command names: a WIP HEAD over an authorized
+#   commit pushed by sha is blocked here (a false positive, accepted:
+#   commit the marker on the tip), and a HEAD that is the marker commit
+#   while the command pushes another sha is NOT caught here — git's own
+#   pre-push (door 2) judges every pushed sha and catches it.
 # The probe script scripts/adversary-gate-probe.sh runs the shapes
 # through this hook AND through the pre-push door on every `make
 # quality` and, in CI, on the Linux and macOS runners.
@@ -107,13 +115,25 @@ fi
 if ! matches "$PUSH_RE"; then
   exit 0
 fi
-ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+# R13-G7 door 1: the repository to judge is CLAUDE_PROJECT_DIR — unset
+# OR empty → BLOCKED "no project dir" (the old `pwd` fallback would have
+# judged whatever directory the session sat in). Placed AFTER the
+# push-shape match on purpose: a no-push command with the variable unset
+# is still allowed. Door 1 judges HEAD of that repository: its false
+# positive (a WIP HEAD over an authorized commit pushed by sha) and the
+# door-2 truth (HEAD is irrelevant there) are declared in the check's
+# header.
+if [ -z "${CLAUDE_PROJECT_DIR:-}" ]; then
+  echo "BLOCKED by adversary gate: no project dir — CLAUDE_PROJECT_DIR is unset or empty, so the repository to judge cannot be named; the push fails closed." >&2
+  exit 2
+fi
+ROOT="$CLAUDE_PROJECT_DIR"
 CHECK="$ROOT/scripts/adversary-gate-check.sh"
 if [ ! -x "$CHECK" ]; then
   echo "BLOCKED by adversary gate: $CHECK is missing or not executable — the decision script is gone, so the push fails closed." >&2
   exit 2
 fi
-"$CHECK" "$ROOT"
+"$CHECK" "$ROOT" HEAD
 STATUS=$?
 if [ "$STATUS" -ne 0 ]; then
   exit 2

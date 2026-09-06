@@ -210,11 +210,13 @@ fuzz-smoke:
 # scripts/adversary-gate-check.sh; git's pre-push hook (.githooks/pre-push)
 # is the door git fires from THIS checkout whatever the shell form, and the
 # session hook the first line. Neither is a security boundary: the hatches
-# and gaps are declared in each file's header (B5, the SHA binding, is
-# filed to the next train). `install-hooks` symlinks the pre-push under
-# .git/hooks — no core.hooksPath, so graphify's own post-commit keeps
-# working. `hook-probe` runs the probe table through BOTH doors against
-# real git fixtures (a few seconds).
+# and gaps are declared in each file's header. Since R13 the decision is
+# the SHA binding (B5 landed): a committed marker whose first line names
+# the audited commit, judged by object id — no mtime, no clock.
+# `install-hooks` symlinks the pre-push under .git/hooks — no
+# core.hooksPath, so graphify's own post-commit keeps working.
+# `hook-probe` runs the probe table (check-direct, door 1, door 2) against
+# real git fixtures and real pushes into bare remotes (under a minute).
 install-hooks:
 	@mkdir -p .git/hooks
 	@chmod +x .githooks/pre-push scripts/adversary-gate-check.sh scripts/adversary-gate-probe.sh

@@ -1,28 +1,69 @@
 #!/bin/bash
-# .githooks/pre-push — git's own push door (R12-H8, B2).
+# .githooks/pre-push — git's own push door (R12-H8 B2; R13-G7 door 2).
 #
 # Git runs this hook for every `git push` from THIS checkout, whatever
 # shell form invoked it (keywords, wrappers, backslashes, absolute
-# paths: none of the shapes that fool a command regex exist here).
-# What it does NOT stop, declared: `git send-pack` (the plumbing
-# pushes without running pre-push at all — the session hook gates
-# that word, nothing else does); `--no-verify` and a moved
-# `core.hooksPath` (git's own escape hatches — the session hook blocks
-# their spellings, nothing blocks them from another terminal or from a
-# config file written elsewhere);
-# removing or un-executing this hook (git silently skips a hook that
-# is not executable); and the freshness gap of a fresh clone or
-# worktree, where the tracked verdict's mtime is reset (see the check
-# script's header; B5, the SHA binding, is filed to the next train).
-# Install with `make install-hooks` (a symlink under .git/hooks; the
-# repo sets no core.hooksPath so graphify's post-commit keeps working).
+# paths: none of the shapes that fool a command regex exist here), and
+# hands it on stdin one line per ref to be updated:
+#   <local ref> <local sha> <remote ref> <remote sha>
+# EVERY pushed local sha is judged by the ONE decision,
+# scripts/adversary-gate-check.sh, in stdin ORDER, stopping at the FIRST
+# failing ref, which is named — later refs are not judged. Door 2 never
+# looks at HEAD: the sha git is about to send is what is judged (a WIP
+# HEAD over an authorized commit pushed by sha passes here and blocks at
+# door 1 — door 1's false positive; a HEAD that is the marker commit
+# while the command pushes another sha blocks here — door 2 catches the
+# false pass).
 #
-# The decision itself lives in ONE place: scripts/adversary-gate-check.sh.
-# A missing or non-executable check script blocks the push (fail closed).
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+# Walls of this door, before the check: the checkout's top level must
+# be nameable by `git rev-parse --show-toplevel` (a push from a bare
+# repository is blocked "no top level for the pushing repository" — no
+# fallback to `pwd`); the check script must exist and be executable
+# (fail closed); a zero local sha is a ref DELETION and is gated always
+# (no remote ref can be deleted from this checkout except through the
+# hatches below); EMPTY stdin — git handed the hook no ref to judge (an
+# up-to-date push) — is blocked by the house law, named. The check is
+# invoked with </dev/null so it can never eat the remaining stdin lines.
+#
+# What it does NOT stop, declared: `git send-pack` (the plumbing pushes
+# without running pre-push at all — the session hook gates that word,
+# nothing else does); `--no-verify` and a moved `core.hooksPath` (git's
+# own escape hatches — the session hook blocks their spellings, nothing
+# blocks them from another terminal or from a config file written
+# elsewhere); removing or un-executing this hook (git silently skips a
+# hook that is not executable). After a red rehearsal, a fix commit on
+# top of the marker commit plus a NEW pure marker commit naming the fix
+# is a fast-forward chain the wire passes (declared); an amended marker
+# force-pushed is an OPTION, not the consequence (this door judges the
+# local sha, never the fast-forward status). Install with
+# `make install-hooks` (a symlink under .git/hooks; the repo sets no
+# core.hooksPath so graphify's post-commit keeps working).
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null </dev/null)
+if [ -z "$ROOT" ]; then
+  echo "BLOCKED by adversary gate: no top level for the pushing repository — git cannot name the checkout this push comes from (a bare repository?), so nothing is authorized." >&2
+  exit 2
+fi
 CHECK="$ROOT/scripts/adversary-gate-check.sh"
 if [ ! -x "$CHECK" ]; then
   echo "BLOCKED by adversary gate: $CHECK is missing or not executable — nothing is authorized." >&2
   exit 2
 fi
-exec "$CHECK" "$ROOT"
+ZERO=0000000000000000000000000000000000000000
+judged=0
+while read -r LREF LSHA RREF RSHA; do
+  [ -n "$LREF" ] || continue
+  judged=$((judged + 1))
+  if [ "$LSHA" = "$ZERO" ]; then
+    echo "BLOCKED by adversary gate: deleting a remote ref is gated always ($RREF) — no remote ref is deleted from this checkout." >&2
+    exit 2
+  fi
+  if ! "$CHECK" "$ROOT" "$LSHA" </dev/null; then
+    echo "BLOCKED by adversary gate: ref $RREF (local $LREF at $LSHA) is not authorized — see the reason above; later refs were not judged." >&2
+    exit 2
+  fi
+done
+if [ "$judged" -eq 0 ]; then
+  echo "BLOCKED by adversary gate: git handed the hook no ref to judge (an up-to-date push, or every ref rejected) — the house law gates every push, so nothing is authorized." >&2
+  exit 2
+fi
+exit 0
