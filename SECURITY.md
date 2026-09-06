@@ -135,7 +135,14 @@ recovery rows closed by BINARIES BEFORE that consolidation carry no
 receipt — a declared historical fact, never rewritten.
 The signing key lives on the same machine as the store, so an attacker
 with full control of the profile can rewrite history with the resident
-key, and truncation of the chain's tail leaves no hole to detect. What
+key; and any truncation from the TAIL of a partition — the last
+receipt, any suffix, or the whole partition (an empty partition
+reports "0 receipts, chain intact": a reading of `korvun ledger
+check`, captured from the built binary in the R13 canto) — is
+INDETECTABLE by the verifier without an external anchor of the last
+sealed hash, because a shortened chain leaves no hole to detect;
+internal gaps and alterations made WITHOUT the resident key are
+detected and named. The tail anchor is filed to v0.15.1. What
 the design guarantees — for the SEALED RECEIPT CHAIN (signature +
 hash chain) specifically — is that any out-of-band edit, deletion or
 reordering of receipts made without the active key, or with a retired
@@ -161,7 +168,9 @@ neither is reachable through Korvun's own surfaces.
   positive: the verifier refuses to guess which life a by-action row
   belongs to).
 - **Unattributable corruption is indistinguishable from absence.** A
-  tombstone whose stored digest was mutated can no longer be matched
+  tombstone whose stored digest was mutated — or whose digest column
+  changed STORAGE CLASS (a BLOB where TEXT is stored: the indexed
+  lookup no longer selects the row) — can no longer be matched
   to the receipt that sealed the original digest; the verifier
   reports the honest ambiguous note — "no tombstone with the sealed
   digest exists; legacy history, deletion, or a coherent rewrite are

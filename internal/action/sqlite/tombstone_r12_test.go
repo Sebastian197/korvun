@@ -13,9 +13,12 @@
 // FaultCorrupt through errors.As, never a silent zero or a naked
 // driver error; present=false only for a real stored NULL.
 // Evidence level of THIS file: in-process suite. (The X1 acceptance
-// was ALSO exercised by OS-process binary in the R12 gate — that
-// evidence lives in the round's canto with its captured output, not
-// in this tree; the label here claims only what this file runs.)
+// was ALSO exercised by two OS-process binaries — the c60c0fa binary's
+// boot sweep writing the clock tombstone into a v11 profile, the
+// current binary's boot migrating it to v12 clean — whose captured
+// output lives in docs/cantos/R13.md under "X1 re-run (two OS
+// processes)"; the R12 canto never carried it, a false letrero cured
+// by R13-G6a. The label here claims only what this file runs.)
 // Reproduction-first contract.
 
 package sqlite
