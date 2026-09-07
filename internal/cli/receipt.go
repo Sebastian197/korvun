@@ -36,8 +36,11 @@
 //	tombstone_read_failed      — that evidence cannot be read, said by
 //	                             name and never disguised as old history
 //
-// Verification is READ-ONLY: it opens the store plainly (no sealer, no
-// key generation) and records nothing.
+// Verification is READ-ONLY in the sense `OpenReadOnly` defines and no
+// wider: no sealer, no key generation, no schema migration, and a
+// connection that refuses every statement it issues. It is not a claim
+// that the file on disk is untouched — that godoc carries what the
+// open itself writes (R14).
 package cli
 
 import (

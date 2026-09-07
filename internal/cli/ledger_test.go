@@ -158,8 +158,11 @@ func TestLedgerCheck_emptyPartitionIsHonestlyEmpty(t *testing.T) {
 
 func TestLedgerCheck_missingStoreFailsHonestWithoutCreatingIt(t *testing.T) {
 	t.Parallel()
-	// R1: a consult over a profile with no store fails honest and
-	// leaves NO files behind (the old door silently created the db).
+	// R1: a consult over a profile with no store fails honest and does
+	// not create the store at that path (the old door silently created
+	// the db). The assert below stats THAT path and nothing else — it is
+	// not a "leaves no files behind" pin, and R14 scoped the comment
+	// that used to say so.
 	cfgPath, dbPath := intentTestConfig(t)
 	code, _, stderr := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
 	if code != 1 {

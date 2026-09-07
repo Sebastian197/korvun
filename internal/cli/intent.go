@@ -74,9 +74,9 @@ func openOperatorStore(configPath string) (*actionsqlite.Store, error) {
 // (Etapa 4 FR-VER): the operator's mutating acts leave SIGNED receipts,
 // sealed with the same key the server boot uses (generated idempotently
 // if the profile is fresh — the boot's own semantics). Read-only verbs
-// keep the plain opener: verification must change no CONTENT and read
-// no key material. It is not a claim that nothing reaches the disk —
-// see `OpenReadOnly`'s godoc for what the door does create (R14).
+// keep the plain opener: verification issues no write and reads no key
+// material. It is not a claim that nothing reaches the disk — see
+// `OpenReadOnly`'s godoc for what the open itself writes (R14).
 // C4: the acts go through the THIRD door — writing, but no recovery,
 // no prune, and never a migration of an existing store; a CLI beside a
 // live server must not close the server's in-flight work.

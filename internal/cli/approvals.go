@@ -4,10 +4,10 @@
 // The operator's approvals inbox — Etapa 5, lote 4 (spec FR-CLI,
 // sealed NC-1b): `korvun approvals list|show` consult through the
 // consolidation's READ-ONLY door (the audit's lesson applied to the
-// new surface from birth — a consult never migrates, never recovers,
-// never migrates the store's CONTENT, and its connection refuses every
-// write — it is not a claim that no file appears on disk: a WAL store's
-// sidecars are created by the open, R14);
+// new surface from birth — a consult never migrates the schema, never
+// recovers, and its connection refuses every statement it issues; it
+// is NOT a claim that the file on disk is untouched, and
+// `OpenReadOnly`'s godoc carries what the open does write, R14);
 // `approve|reject` are mutating operator acts through the sealed
 // store (the rotate-key mold), each leaving its E4 ink. approve fires
 // the lote-3 deferred execution — the claim, the digest belt, the one

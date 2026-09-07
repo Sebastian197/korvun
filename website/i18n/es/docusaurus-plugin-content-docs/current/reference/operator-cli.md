@@ -188,9 +188,11 @@ korvun approvals list --config korvun.json
 ```
 
 Cada solicitud con su estado y su caducidad — las consultas van por la
-puerta de solo lectura (sin migración, sin recovery, ningún contenido
-del store cambia — los sidecars de un store WAL los crea la propia
-apertura, y las notas de seguridad del proyecto llevan ese alcance).
+puerta de solo lectura: sin migración de esquema, sin recovery, y una
+conexión que rechaza cada sentencia que emite. No es una promesa de que
+el fichero en disco quede intacto — la propia apertura crea los
+sidecars de un store WAL, y reescribe la cabecera de journal de un
+store dejado en otro modo.
 
 ```sh
 korvun approvals show --config korvun.json apr_…

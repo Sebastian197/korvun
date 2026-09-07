@@ -1382,8 +1382,16 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 // Verified by execution (R14, the eleventh diff pass): before the
 // open the directory held only korvun.db; during it, korvun.db,
 // korvun.db-shm and korvun.db-wal; after Close, only korvun.db.
-// What the door guarantees is the CONTENT of the store, not the
-// absence of a file on disk. The refusal of an absent path is a CHECK,
+// Nor is "the CONTENT of the store" a safe absolute, and R14's
+// thirteenth diff pass killed that one too: on a store that is NOT
+// already in WAL, the same journal_mode pragma rewrites the database
+// header before the seal. Executed — sha256 of the file before and
+// after a read-only open: equal for a WAL store, DIFFERENT for one
+// left in `journal_mode=delete`. What this door guarantees is that
+// every statement issued THROUGH it is refused by SQLite once the
+// connection is sealed. It does not guarantee that the file's bytes
+// are untouched, and the read-only DSN that would make it so is filed
+// to v0.15.1. The refusal of an absent path is a CHECK,
 // not a read-only mode: the DSN carries no `mode=ro`, so the driver's
 // own flags are READWRITE|CREATE and a path removed between the
 // `os.Stat` and the first connection IS created, empty — verified by
