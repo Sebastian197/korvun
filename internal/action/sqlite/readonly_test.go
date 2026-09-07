@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // The read-only door — consolidation R1 (external audit, CRITICAL):
-// verification and consultation must NEVER mutate the store. The old
+// verification and consultation must NEVER mutate the store's ROWS or
+// its schema. R14 scoped the wider reading by execution: the open
+// itself creates a WAL store's sidecars and rewrites the journal
+// header of a store left in another mode — see `OpenReadOnly`'s
+// godoc. The old
 // single door (Open) ran migrations, the crash-recovery pass and the
 // retention prune on EVERY open — so a `korvun receipt verify` while
 // the server had an action IN FLIGHT closed it as crash_recovered
