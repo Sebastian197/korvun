@@ -1371,8 +1371,8 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 // R1 door born from the 2026-08-31 external audit (the cross-check
 // law, point 3: a "does not write" pin covers the WHOLE door). It runs
 // NO bootstrap, NO migration, NO crash recovery and NO retention
-// prune; it never creates the STORE (an absent path is refused by
-// name, before any driver call) and it locks the connection itself
+// prune; an absent path is refused BY NAME before any driver call, and
+// it locks the connection itself
 // with PRAGMA query_only so every write — domain path or hand-written
 // SQL — dies at the SQLite level. It is NOT a claim that nothing
 // reaches the disk: the DSN's journal_mode(WAL) pragma runs on the
@@ -1383,7 +1383,13 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 // open the directory held only korvun.db; during it, korvun.db,
 // korvun.db-shm and korvun.db-wal; after Close, only korvun.db.
 // What the door guarantees is the CONTENT of the store, not the
-// absence of a sidecar. WAL-compatible in every state: the
+// absence of a file on disk. The refusal of an absent path is a CHECK,
+// not a read-only mode: the DSN carries no `mode=ro`, so the driver's
+// own flags are READWRITE|CREATE and a path removed between the
+// `os.Stat` and the first connection IS created, empty — verified by
+// execution (R14, the twelfth diff pass: `sql.Open` on the same DSN
+// over an absent path left the file on disk, and it survived Close).
+// Closing that window needs a read-only DSN, filed to v0.15.1. WAL-compatible in every state: the
 // file opens through the normal VFS path (a live writer's readers do
 // not block it), only the connection is sealed. A schema OLDER than
 // this binary's current version is REFUSED by name, never migrated —

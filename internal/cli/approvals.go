@@ -5,7 +5,9 @@
 // sealed NC-1b): `korvun approvals list|show` consult through the
 // consolidation's READ-ONLY door (the audit's lesson applied to the
 // new surface from birth — a consult never migrates, never recovers,
-// never creates files, and its connection refuses every write);
+// never migrates the store's CONTENT, and its connection refuses every
+// write — it is not a claim that no file appears on disk: a WAL store's
+// sidecars are created by the open, R14);
 // `approve|reject` are mutating operator acts through the sealed
 // store (the rotate-key mold), each leaving its E4 ink. approve fires
 // the lote-3 deferred execution — the claim, the digest belt, the one

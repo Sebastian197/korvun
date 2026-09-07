@@ -527,7 +527,7 @@ explicit decision.
 > the v0.14.0 line "an unreceipted effect cannot exist" is over-broad —
 > atomicity holds INSIDE the store; an external effect completed just
 > before a failed terminal close is a documented window until stage 6,
-> `docs/releases/v0.14.0.md:124-128`]; genesis-linked hash chain,
+> `docs/releases/v0.14.0.md:127-131`]; genesis-linked hash chain,
 > race-hammered, prune-exempt),
 > the live result digest (NC-3: raw results never touch the disk), and
 > the operator's verifier (receipt verify naming each failure the

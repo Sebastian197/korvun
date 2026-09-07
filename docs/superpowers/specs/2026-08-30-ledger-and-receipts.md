@@ -249,7 +249,7 @@ small piece inside this stage when ordering allows.
   same transaction, or the attempt fails CLOSED with the visible error.
   [amended 2026-09-06, R14: the original clause "an unreceipted effect
   cannot exist" is over-broad and the repository's own erratum says so
-  (`docs/releases/v0.14.0.md:124-128`, `v0.14.1`). Atomicity holds
+  (`docs/releases/v0.14.0.md:127-131`, `v0.14.1`). Atomicity holds
   INSIDE the store; an EXTERNAL effect completed just before a failed
   terminal close is a real, documented window until stage 6's
   reconciliation.]

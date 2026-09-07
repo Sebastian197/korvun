@@ -140,7 +140,9 @@ func TestLedgerCheck_duplicateSeqDenounced(t *testing.T) {
 func TestLedgerCheck_emptyPartitionIsHonestlyEmpty(t *testing.T) {
 	t.Parallel()
 	// The store must EXIST (a mutating act creates it); the R1 read-only
-	// door never creates files — adjusted under the consolidation
+	// door never creates the STORE when its path is absent AT THE CHECK
+	// (not a general "creates no file": R14 scoped that) — adjusted
+	// under the consolidation
 	// mandate when the door changed.
 	cfgPath, dbPath := intentTestConfig(t)
 	store, err := actionsqlite.Open(dbPath)

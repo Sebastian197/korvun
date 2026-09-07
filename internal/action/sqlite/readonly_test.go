@@ -98,7 +98,7 @@ func TestOpenReadOnly_neverMigratesAnOldProfile(t *testing.T) {
 func TestOpenReadOnly_missingFileFailsHonest(t *testing.T) {
 	t.Parallel()
 	if _, err := OpenReadOnly(t.TempDir() + "/nope.db"); err == nil {
-		t.Fatal("a missing store must fail honest — the RO door never creates files")
+		t.Fatal("a missing store must fail honest — the RO door refuses an absent path by name instead of creating it")
 	}
 }
 

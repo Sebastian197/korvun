@@ -178,7 +178,9 @@ korvun approvals list --config korvun.json
 ```
 
 Every request with its status and expiry — consults go through the
-read-only door (no migration, no recovery, nothing written).
+read-only door (no migration, no recovery, no content of the store
+changed — a WAL store's sidecars are created by the open itself, and
+the project's security notes carry that scope).
 
 ```sh
 korvun approvals show --config korvun.json apr_…
