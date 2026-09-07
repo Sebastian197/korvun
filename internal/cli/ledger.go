@@ -12,8 +12,9 @@
 //	plus every per-receipt check of `receipt verify` (hash, signature,
 //	key window, link, custody), applied link by link.
 //
-// Read-only, like verify: the plain opener, whose connection refuses
-// every statement it issues. Not a claim about the file's bytes —
+// Read-only, like verify: the plain opener, whose sealed connection
+// refuses every WRITE at the SQLite level. Not a claim about the
+// file's bytes —
 // `OpenReadOnly`'s godoc carries what the open itself writes (R14).
 // Honest limit,
 // documented (SECURITY.md; R13 D11 and R14): this command proves that

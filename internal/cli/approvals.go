@@ -5,7 +5,8 @@
 // sealed NC-1b): `korvun approvals list|show` consult through the
 // consolidation's READ-ONLY door (the audit's lesson applied to the
 // new surface from birth — a consult never migrates the schema, never
-// recovers, and its connection refuses every statement it issues; it
+// recovers, and its sealed connection refuses every WRITE at the
+// SQLite level; it
 // is NOT a claim that the file on disk is untouched, and
 // `OpenReadOnly`'s godoc carries what the open does write, R14);
 // `approve|reject` are mutating operator acts through the sealed

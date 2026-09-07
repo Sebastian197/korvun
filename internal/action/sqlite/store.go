@@ -1388,10 +1388,16 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 // header before the seal. Executed — sha256 of the file before and
 // after a read-only open: equal for a WAL store, DIFFERENT for one
 // left in `journal_mode=delete`. What this door guarantees is that
-// every statement issued THROUGH it is refused by SQLite once the
-// connection is sealed. It does not guarantee that the file's bytes
-// are untouched, and the read-only DSN that would make it so is filed
-// to v0.15.1. The refusal of an absent path is a CHECK,
+// every WRITE issued through the sealed connection dies at the SQLite
+// level — reads are what it exists for, and a draft that said "every
+// statement" was refuted by this function's own body a few lines
+// below, which reads the schema version through that same connection.
+// The seal is a per-connection pragma, not a driver mode:
+// SetMaxOpenConns(1) bounds concurrency, not the identity of the
+// physical connection, and nothing re-applies the pragma to a
+// replacement one. It does not guarantee that the file's bytes are
+// untouched. The read-only DSN that would carry both properties in the
+// driver itself is filed to v0.15.1. The refusal of an absent path is a CHECK,
 // not a read-only mode: the DSN carries no `mode=ro`, so the driver's
 // own flags are READWRITE|CREATE and a path removed between the
 // `os.Stat` and the first connection IS created, empty — verified by

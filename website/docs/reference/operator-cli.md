@@ -178,9 +178,9 @@ korvun approvals list --config korvun.json
 ```
 
 Every request with its status and expiry — consults go through the
-read-only door: no schema migration, no crash recovery, and a
-connection that refuses every statement it issues. It is not a promise
-that the file on disk is untouched — the open itself creates a WAL
+read-only door: no schema migration, no crash recovery, and a sealed
+connection that refuses every write at the SQLite level. It is not a
+promise that the file on disk is untouched — the open itself creates a WAL
 store's sidecars, and rewrites the journal header of a store left in
 another mode.
 
