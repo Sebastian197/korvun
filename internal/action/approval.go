@@ -289,7 +289,9 @@ func ValidatePreviewBinding(a Approval, p ActionPreview) error {
 // EffectiveStatusAt reports the status the CLOCK gives the approval at
 // the injected instant (C6): a PENDING request past its window is
 // EXPIRED for every consult, even though the row itself closes only at
-// the next mutating touch (the E2 mold — read-only doors never write).
+// the next mutating touch (the E2 mold: a read-only door never writes
+// the ROW — it is not a claim about the file on disk, which
+// `actionsqlite.OpenReadOnly`'s godoc scopes, R14).
 // Same half-open window as ApprovalConsumableAt: the expiry instant is
 // OUT.
 func (a Approval) EffectiveStatusAt(now time.Time) ApprovalStatus {

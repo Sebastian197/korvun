@@ -390,8 +390,9 @@ explicit decision.
 >   `OUTCOME_UNKNOWN` (woken as terminal, named marker), never a
 >   FAILED lie; SECURITY.md/README promises re-worded; E6 scope
 >   declared.
-> - **C6** `e4830d8` — expiry reaches list/show (RO door still never
->   writes); prune knows REJECTED/OUTCOME_UNKNOWN with the evidence
+> - **C6** `e4830d8` — expiry reaches list/show (RO door still writes no
+>   ROW; scoped 2026-09-07, R14 — the open itself does write to disk);
+>   prune knows REJECTED/OUTCOME_UNKNOWN with the evidence
 >   exemption pinned; params capped 64 KiB at birth.
 > - **C7** `eafb1d8` — over-promising comments aligned to real
 >   guarantees.

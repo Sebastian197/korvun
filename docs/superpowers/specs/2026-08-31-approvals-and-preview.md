@@ -632,7 +632,8 @@ auditor's own scenario) in its own commit:
   terminal) with its named marker — never a FAILED lie.
   Idempotency/reconciliation stay E6, declared in SECURITY.md.
 - **C6 (P2).** Expiry reaches list/show (`EffectiveStatusAt`, the
-  read-only door still never writes); the prune knows REJECTED and
+  read-only door still writes no ROW — amended 2026-09-07, R14: not a
+  claim about the file on disk, which `OpenReadOnly`'s godoc scopes); the prune knows REJECTED and
   OUTCOME_UNKNOWN with the evidence exemption pinned; params capped
   at 64 KiB at birth.
 - **C7.** Over-promising comments aligned to real guarantees (the

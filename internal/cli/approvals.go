@@ -90,7 +90,9 @@ func (c *cli) approvalsList(args []string) int {
 			}
 			// C6: the consult shows the CLOCK's truth — a PENDING row
 			// past its window lists as EXPIRED (the row itself closes
-			// at the next mutating touch; this door never writes).
+			// at the next mutating touch; this door writes no ROW —
+			// see OpenReadOnly's godoc for what the open itself
+			// writes to disk, R14).
 			_, _ = fmt.Fprintf(c.stdout, "%-38s %-9s %-22s %s\n",
 				a.ApprovalID, a.EffectiveStatusAt(time.Now().UTC()), a.RiskSummary, expiry)
 			total++
