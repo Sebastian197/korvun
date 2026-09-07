@@ -1,63 +1,76 @@
-VETO LEVANTADO 155678dddf30ed9b9c231ec241447ec62e53135e
+VETO LEVANTADO b22468728102ce945fc75f8d185e08cf240feecb
 
-Round: R13, the judge by columns + the repair procedure + the push gate
-(diff 49746b3..155678d, twenty-two commits: four of the train, eighteen
-cures).
+Round: R14, the truth of the ledger — a train with NO production code
+(diff 49b7974..b224687, twenty-eight commits).
 
-HOW THIS VERDICT WAS REACHED, exactly, because the wire does not read
-past the first line and a reader deserves the truth in the body:
+The R13 verdict this file carried until now is preserved verbatim in
+git at `49b7974:.claude/adversary/last-verdict.md`; read it with
+`git show 49b7974:.claude/adversary/last-verdict.md`. AMENDMENT to it,
+dated 2026-09-07: its sentence "P3-4, P3-6, P3-7 ... each with its
+probing mutation executed and recorded" is wrong. The ledger
+(`docs/cantos/R13.md`, the eighteenth pass's own paragraph) records TWO
+mutations, m-a21c and m-a21d, for P3-4 and P3-7, and says so in its own
+words — "Both elevations carry their probing mutation, executed". P3-6
+was a godoc scope-down with NO mutation; its other half is FILED in
+R13's §8, under R13's own label, the entry beginning "FILED, not cured
+(the eighteenth pass, P3-6's other half)". The marker said "each" over
+three findings where the ledger records two mutations over two. Before
+this sentence was written, `git show` was run against that object and
+its md5 compared with the file on disk: c91709589933bbc610f808839448ad1b
+both times.
 
-- Eighteen adversary passes ran over the COMPLETE diff. Seventeen ended
-  VETO MANTENIDO and each was cured, its findings' reproductions taken
-  verbatim as the acceptance criterion (Rule 1). The eighteenth also
-  ended VETO MANTENIDO on one P2 and seven P3.
-- The EIGHTEENTH pass was the first asked to judge the CONTRACT rather
-  than the code: guarantee by guarantee, the paper's G1-G7 against what
-  the train delivers, hunting the P1 class "delivered at an evidence
-  level weaker than the paper demands". Its answer: NO P1. G1-G4
-  in-process where the paper says in-process; G5 with the real sqlite3
-  and the CI skip forbidden by name; G6 by a BUILT BINARY in a separate
-  OS process for `korvun ledger check` and `korvun receipt verify`,
-  with the boot's in-process `Open` labelled as such; G7's GNU
-  rehearsal declared PENDING by the paper and post-push by the canto,
-  never sold as done.
-- The director's mandate of 2026-09-06 closed the internal cycle on
-  that answer: the eighteenth is the last pass; a P1 of contract would
-  have earned a cure and ONE scoped re-pass; anything else is folded
-  and closed, and a finding of the doc guard that is not a contract P1
-  goes to the canto's §8, never to a new pass. This marker records the
-  director's adjudication, not an adversary's clean bill.
-- The eighteenth pass's own findings, and where they went: its P2 (a
-  SQL comment on a prompt line was a blind channel, so the guard's
-  declared cost was false) was CURED by widening the wire — every
-  prompt line is judged on its raw text, the exempt typing site
-  narrowed to the `sqlite> ` prompt, four new document mutations
-  captured red. Its P3-1, P3-2, P3-3 (stale letreros in the canto's §6
-  (g), the paper's G5b row and the check's header) were made true. Its
-  P3-4, P3-6, P3-7 (a guard by substring where the type was available;
-  a godoc promising the LATEST decision over a non-monotonic ordering;
-  a sanity assert taking "some error") were cured by type and by name,
-  each with its probing mutation executed and recorded. Its P3-5 (a
-  fail-closed false red on prose) is FILED in §8 with its reasoning.
-- Standing residuals, all in docs/cantos/R13.md §8: the lookup column
-  is asserted AS absence; pgrep's window is not closable and is not
-  exercised on Windows; the marker's NUL bytes are "not captured, not a
-  claim"; legacy grafts and SHA-256 repositories are out of the gate's
-  scope; Windows is outside the CI probe step and that step is
-  post-push evidence; `ApprovalTombstone` orders `decision_at DESC`
-  over RFC3339Nano, which elides trailing zeros, so it is not
-  necessarily the latest decision — captured by execution, no
-  production caller today, filed rather than fixed under scope control.
+HOW THIS VERDICT WAS REACHED, because the wire reads only the first
+line and a reader deserves the rest:
 
-WHAT THIS MARKER MEANS AT THE WIRE: a marker whose first line names its
-direct sole parent was committed. Nothing more. The parent it names,
-155678d, carries the fold of the eighteenth pass; it was written after
-that pass and is therefore not itself audited by one — the sequencing
-in §9 requires the canto to close before this file, and this file to
-change nothing else.
-
-The whole ledger — every guarantee, the test that breaks it, the
-mutation executed and its captured red, the evidence level of each —
-is committed at docs/cantos/R13.md: a hundred and nine document
-mutations, thirty-four domain mutations, fifty-two executed gate
-mutants with four declared inapplicable, and the G7 probe's 118 checks.
+- NINETEEN adversary passes ran over the COMPLETE diff. Eighteen ended
+  VETO MANTENIDO. The nineteenth found no P1 and no P2 — nothing false
+  in the code, the godocs, the specs or the public copy — and its four
+  P3s were folded in the commit this marker names.
+- R14 discovered by EXECUTION that Korvun's central public claim was
+  false in three ways: a tail cut leaves no hole; an attacker who can
+  write the store registers a key of his own, re-signs every receipt
+  and re-links the chain, and both verifiers exit 0; a redirected
+  config judges another book. Five captures by the BUILT BINARY in a
+  separate OS process, and the truth was corrected across the public
+  surfaces before it was propagated.
+- THREE more absolutes died by execution during the cure loop, each
+  one a sentence this train had shipped: `OpenReadOnly` creates a WAL
+  store's sidecars; on a store not already in WAL it rewrites the
+  journal header (sha256 before and after: equal for WAL, DIFFERENT for
+  `journal_mode=delete`); and the same DSN over an absent path creates
+  the file, which survives Close. Every one is scoped now, in the
+  godoc, in both website locales and in the release notes.
+- THE PIN: `TestLedgerCheck_chainReSignedWithASelfRegisteredKeyIsNOTDetected`
+  fixes the forgery blind spot so the capture cannot decay. Its
+  conforming mutation is M6 (the ladder's key-lookup arm inverted → the
+  pin's own assertion RED with `key_unknown`); M7 (the forger's
+  registration deleted) proves its green depends on the sabotage
+  landing; M4 separates it from the sequence walk. FIVE inherited
+  asserts were ELEVATED — three by the director's D7, two because this
+  train's own cures reached inside their bodies — each with its own
+  executed mutation: M8, M9, M10, M11+M12, M13. M10 and M11 are
+  declared NON-discriminating, with the reason, rather than sold as
+  proofs they are not.
+- WHAT THE CURES THEMSELVES BROKE, and the argument for D4: a letrero
+  minted by a cure appeared in almost every round — a cardinal on the
+  website, a quantifier in the release notes, a count in §8, a false
+  claim about which failures the verifier prints, a false consequence
+  about partitions, an absolute about the store's CONTENT, another
+  about "every statement" — each caught by the pass AFTER the cure that
+  made it. Nine line citations rotted, every one of them moved by an
+  edit this train made. A sweep by hand does not converge; the CI guard
+  for the letrero class is filed.
+- Standing residuals, all in `docs/cantos/R14.md` §5 and §8: the
+  external anchor family filed to v0.15.1 (the last sealed hash, a
+  verification key outside the profile, "at most one active key" in the
+  TABLE, the verifier asking WHICH key is authoritative, an anchor of
+  STORE IDENTITY, and a read-only DSN); the TAIL pin with its whole
+  M-analysis; L5's rule, that every cited execution leave a versioned
+  artifact — this train's own binary captures are unreproducible from
+  git and say so; the rename of `TestReceiptVerify_namesEveryFailure`;
+  `--partition`, a public flag documented nowhere; and one SQLITE_BUSY
+  seen once under a mutated run, not reproduced, filed OPEN rather than
+  narrated away.
+- The PUBLISHED v0.14.0 release body on GitHub still carries the old
+  wording and must receive this one — Chano's act, scheduled for the
+  day of the v0.15.0 tag.
