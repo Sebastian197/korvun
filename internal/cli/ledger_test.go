@@ -165,8 +165,12 @@ func TestLedgerCheck_missingStoreFailsHonestWithoutCreatingIt(t *testing.T) {
 	// that used to say so.
 	cfgPath, dbPath := intentTestConfig(t)
 	code, _, stderr := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
-	if code != 1 {
-		t.Fatalf("a missing store must fail the consult: %d %q", code, stderr)
+	// R14, the sixteenth diff pass: exit 1 alone was satisfied by ANY
+	// exit-1 path — a config parse failure would have passed it. The
+	// refusal is named: the read-only door's own, over an absent path.
+	if code != 1 || !strings.Contains(stderr, "action/sqlite: read-only open") ||
+		!strings.Contains(stderr, "no such file or directory") {
+		t.Fatalf("a missing store must be refused BY NAME by the read-only door: %d %q", code, stderr)
 	}
 	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
 		t.Fatalf("the read-only door must not create the store: %v", err)
