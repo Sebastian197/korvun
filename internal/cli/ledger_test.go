@@ -151,7 +151,10 @@ func TestLedgerCheck_emptyPartitionIsHonestlyEmpty(t *testing.T) {
 	}
 	_ = store.Close()
 	code, stdout, _ := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
-	if code != 0 || !strings.Contains(stdout, "0 receipts") {
+	// R14, the seventeenth diff pass: "0 receipts" alone survived a
+	// mutation of the partition prefix. The verdict is ONE line and it
+	// is demanded whole, as its sibling over the restored backup is.
+	if code != 0 || !strings.Contains(stdout, "ledger main: 0 receipts, chain intact") {
 		t.Fatalf("an empty EXISTING ledger checks green saying so: %d %q", code, stdout)
 	}
 }
@@ -167,9 +170,11 @@ func TestLedgerCheck_missingStoreFailsHonestWithoutCreatingIt(t *testing.T) {
 	code, _, stderr := runIntentCLI(t, "ledger", "check", "--config", cfgPath)
 	// R14, the sixteenth diff pass: exit 1 alone was satisfied by ANY
 	// exit-1 path — a config parse failure would have passed it. The
-	// refusal is named: the read-only door's own, over an absent path.
-	if code != 1 || !strings.Contains(stderr, "action/sqlite: read-only open") ||
-		!strings.Contains(stderr, "no such file or directory") {
+	// refusal is named by KORVUN's own wrapper, never by the host OS's
+	// ENOENT text: this package runs on windows-latest too, and the
+	// seventeenth pass caught a draft pinning "no such file or
+	// directory".
+	if code != 1 || !strings.Contains(stderr, "action/sqlite: read-only open") {
 		t.Fatalf("a missing store must be refused BY NAME by the read-only door: %d %q", code, stderr)
 	}
 	if _, err := os.Stat(dbPath); !os.IsNotExist(err) {
