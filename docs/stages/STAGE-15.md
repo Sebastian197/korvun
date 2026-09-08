@@ -71,7 +71,8 @@ Triggered by a pushed SemVer tag, it produces a GitHub Release with:
 - **Per-release SBOM** — SPDX JSON via Syft, one per archive.
 - **ldflags** — `-s -w -X main.version=v{{ .Version }}` (the `v` prefix is added
   back because GoReleaser's `{{ .Version }}` strips it — see the `/review` finding).
-- GoReleaser distribution pinned `~> v2`.
+- GoReleaser distribution pinned `~> v2`. **[Superseded 2026-09-08: pinned to
+  the exact `2.18.0`; see the hygiene batch of that date.]**
 
 ### The release CI workflow — `.github/workflows/release.yml`
 
@@ -79,7 +80,19 @@ Triggered by a pushed SemVer tag, it produces a GitHub Release with:
 `fetch-depth: 0` (the changelog needs full history), Syft installed before
 GoReleaser, then the GoReleaser run. **Tags are pushed by hand** (a tag pushed
 from inside an Action does not retrigger workflows, and the SemVer bump is a
-deliberate decision). Actions pinned to verified full SHAs:
+deliberate decision).
+
+> **Superseded 2026-09-08.** The list below records what Stage 15 shipped. It
+> has THREE bullets and NONE of them still describes `release.yml` — an earlier
+> version of this note said "three of its four lines", which invented a fourth
+> line and implied one was still current. The goreleaser
+> action is `f06c13b6…` (v7.2.3), download-syft is `3ad72834…` (v0.24.2), and
+> checkout/setup-go carry full SHAs commented with immutable patch tags
+> (v7.0.1, v7.0.0) rather than `@v6`. The note precedes the list on purpose —
+> an erratum below a false sentence is not enough when the sentence can be
+> read on its own.
+
+Actions pinned to verified full SHAs:
 
 - `goreleaser/goreleaser-action@ec59f474b9834571250b370d4735c50f8e2d1e29` (v7.0.0)
 - `anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610`

@@ -80,6 +80,44 @@ jobs:
       # pkg-config. xvfb is for the §1g GUI smoke (the only honest hosted one).
       - name: OS deps (Linux — GTK/WebKitGTK + xvfb)
         if: runner.os == 'Linux'
+        # Supply-chain posture, DECLARED EXCEPTION (hygiene batch,
+        # 2026-09-08): these packages are NOT pinned. What separates them
+        # from the test-only sqlite3 of quality.yml is REACH, stated
+        # without a superlative: libgtk-3-dev and libwebkit2gtk-4.1-dev
+        # are what the published linux_amd64 desktop artifact links
+        # against (the `webkit2_41` build tag exists for exactly that
+        # pkg-config dependency), so a tampered package here reaches
+        # bytes users download, while sqlite3 reaches only a test run.
+        # A first draft called this "the widest exposure in this
+        # repository's CI"; that was false and is deleted rather than
+        # softened — release.yml's goreleaser resolved a floating range
+        # to build, sign and SBOM six published targets, which is wider,
+        # and it is pinned in this same batch. One unpinned artifact-
+        # linking dependency is not a ranking claim over the whole CI.
+        #
+        # Why unpinned anyway: apt versions are a property of the
+        # ubuntu-latest image, these are -dev packages whose exact
+        # version tracks the image's own GTK/WebKit stack, and pinning
+        # them to a version the image does not carry does not fail
+        # loudly — it fails the BUILD, on a release run, at tag time.
+        # The mitigation is the distribution's own signed-repository
+        # chain, and that is ALL of it. An earlier draft of this comment
+        # added "plus the pinned runner image": there is no pinned
+        # runner image in this repository — every job runs on a floating
+        # `*-latest` label, which is the opposite of a pin, and the
+        # `libwebkit2gtk` note in THIS step's own header comment already
+        # records that the image moved from webkit 4.0 to 4.1 under us.
+        # (Three drafts died here: a line distance that was wrong, a
+        # corrected distance that the cure in this same commit
+        # invalidated by adding lines above it, and an anchor that said
+        # "the step above" when the comment belongs to this step. No
+        # number and no direction — the comment is named where it is.)
+        #
+        # NOT accepted as sufficient. The real cure is a build in a
+        # pinned container image (digest-addressed) so the whole
+        # toolchain is anchored, and that is FILED — it is a change to
+        # how the desktop is built, not a flag on this line, and it
+        # does not belong in a hygiene batch.
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config xvfb
@@ -250,7 +288,7 @@ jobs:
       # release is touched.
       - name: Upload workflow artifact (dry-run only)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-${{ matrix.family }}
           path: cmd/korvun-desktop/build/bin/korvun-desktop_*
@@ -290,7 +328,7 @@ jobs:
 
       - name: Download desktop artifacts (dry-run only)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: desktop-*
           merge-multiple: true
@@ -367,7 +405,7 @@ jobs:
 
       - name: Persist signed manifest (dry-run only)
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-checksums-signed
           path: dist-desktop/checksums-desktop.txt*

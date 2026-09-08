@@ -222,3 +222,35 @@ runs inside the lint gate; CodeQL and OpenSSF Scorecard run in CI (badges in
 the README). Reports about any invariant above failing — a secret in a log,
 private data reaching an untrusted sink, a non-loopback unauthenticated
 bind — are in scope and very welcome.
+
+### A known weakness in the chain that builds what you download (2026-09-08)
+
+Stated here rather than only in an internal note, because it describes the
+machinery that produces the binaries and the signatures on this page.
+
+The release pipeline installs GoReleaser through `goreleaser/goreleaser-action`,
+which is pinned by full commit SHA, and since 2026-09-08 the GoReleaser BINARY is
+pinned to an exact version (`2.18.0`, the version that produced the last green
+release, read from that run's log). The action verifies what it downloads — the
+archive's checksum, and a cosign signature over the checksum manifest — but
+**that verification is conditional, not unconditional**: reading the action's own
+source at its pinned commit, both checks emit a warning and RETURN when
+`checksums.txt` or the sigstore bundle cannot be fetched, and the cosign half is
+skipped entirely when `cosign` is not on PATH.
+
+The consequence, said plainly: a party who can make those two fetches fail —
+without having to forge anything — gets an UNVERIFIED GoReleaser binary
+installed, a yellow warning in the log, and a green job. That binary then builds,
+packages, signs the checksum manifest and emits the SBOMs for the six published
+targets. It fails OPEN.
+
+What bounds it today: the exact version pin (the URL is fixed, so a substitution
+needs control of the release asset itself, not of a version range), the SHA pin
+on the action, and the fact that the keyless cosign signature over OUR artifacts
+is produced by the workflow's own OIDC identity and is verifiable by anyone
+following "Release signing and verification" above.
+
+What does NOT bound it: anything in this repository verifying the GoReleaser
+binary itself. **Filed with declared priority for v0.15.1** — ahead of cosmetic
+work — to verify the downloaded tool ourselves against a checksum we pin, so the
+chain fails CLOSED.

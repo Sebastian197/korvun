@@ -81,7 +81,16 @@ A push to master is NEVER bundled as a conditional step inside another
 task's prompt. It always gets its own prompt, issued after the copilot
 verifies the full-green rehearsal at source.
 
-## The paper's ceiling — a train without production code (2026-09-06) — CRITICAL
+## The paper's ceiling — REVOKED 2026-09-08 — CRITICAL
+
+> **REVOKED by the director on 2026-09-08.** The cap on paper passes is
+> lifted: a pre-test paper now iterates until the adversary lifts its
+> veto, with no round limit, and every pass declares what it found that
+> the pass before it did not see. Everything the section below says
+> about EVIDENCE stands and is not weakened by the revocation — a
+> capture is still a capture, a probing mutation is still a probing
+> mutation, and a sentence known to be false is still never shipped.
+> The text below is preserved for the reasoning it records.
 
 Born from R14: a documentary train whose pre-test paper took FIVE
 adversarial passes while the train writes no production code at all.
@@ -108,6 +117,41 @@ discipline in another surface: every new step is born pinned OR with
 its exception written in the same commit, and a Scorecard alert opened
 by our own commit is debt of the same train.
 
+## The delivery shape (2026-09-08) — CRITICAL
+
+`master` is PROTECTED. There is no direct push: a train travels on its
+OWN branch, gets the full `ensayo` rehearsal BEFORE the pull request is
+opened, then goes to a PR against `master` carrying the adversary's
+verdict and the external Codex report in its body, waits for the
+required checks, and the MERGE is the director's act — never ours.
+
+If a required check never reports on the PR and blocks it forever, the
+train STOPS and the director is told the check's exact name. The list is
+corrected; the gate is not bypassed.
+
+## The external Codex gate (2026-09-08) — CRITICAL
+
+The external review admits ZERO P1 and ZERO P2 within the implemented
+train before it may advance. A returned P1 or P2 is cured and the review
+repeats, with no round limit. P3 findings are adjudicated one by one. A
+future filing may defer work; it may NOT leave a known false public
+claim alive.
+
+## Comments carry no relative positions (2026-09-08) — CRITICAL
+
+Born from three deaths of one sentence in a single commit: "the comment
+eight lines above" → "the real distance is 24" (invalidated by another
+cure of the SAME commit, which added lines above the target) → "the
+comment on the step above" (false: it was that step's own header).
+
+A comment, a godoc or a document NEVER locates another sentence by a
+RELATIVE claim — no line distances, no "above"/"below", no "N lines
+earlier". Those rot on the next edit, and they rot silently, because
+nothing recomputes them. Name the thing itself: the file, the symbol,
+the quoted phrase, the anchor. A line NUMBER may be cited only when it
+is re-derived against the final commit, and a quoted phrase is preferred
+because it survives its own cure.
+
 ## Diagnosis discipline (2026-08-09) — CRITICAL
 
 A diagnosis is stated ONLY with primary evidence in hand (raw logs,
@@ -128,7 +172,22 @@ fakes does not close a model-dependent criterion.
 
 A green rehearsal EXPIRES: stdlib and dependency advisories land between
 runs. Before every batch rehearsal (the push to `ensayo`), run
-`govulncheck ./...` locally with the pinned version. New reachable
+`govulncheck` over the PRUNED package list that `quality.yml` builds —
+NOT `./...` (corrected 2026-09-08, director's adjudication). The reason
+is a documented failure mode, not a preference: ONE stray `.go` file
+under `node_modules` aborts `go list ./...` entirely, the list comes
+back EMPTY, and every tool then "passes" over nothing and exits green
+(the 2026-08-01 incident, `Makefile:8-15`). A scanner that fails OPEN is
+worse than no scanner. The CI form is:
+
+```
+GO_PKGS=$(go list -e -f "{{if not .Error}}{{.ImportPath}}{{end}}" \
+  $(find . \( -name node_modules -o -name .git \) -prune -o -type f -name "*.go" -print \
+    | sed "s|/[^/]*$||" | sort -u) | grep -v "^$")
+govulncheck $GO_PKGS
+```
+
+Run it with the pinned version. New reachable
 advisories are remedied at the source — bump the Go toolchain to the
 patch that fixes them, or the dependency to its fixed version — never by
 silencing the scanner or excluding a finding. Only then push the

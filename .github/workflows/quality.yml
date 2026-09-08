@@ -68,6 +68,57 @@ jobs:
       # only the fallback (its formula is keg-only, hence the PATH line).
       # Windows: the Chocolatey package (its tools zip; every exe in a
       # package gets a shim on PATH — chocolatey/docs, create-cli-package).
+      # Supply-chain posture of this step, declared per manager (hygiene
+      # batch, 2026-09-08 — Scorecard Pinned-Dependencies). Every claim
+      # here is scoped to what the flag or the command actually does;
+      # the first draft of this block shipped three sentences wider
+      # than their wire and the adversary pass caught all three.
+      #
+      # Windows/choco: PINNED to an exact --version, the same form
+      #   release-desktop.yml already uses. The version was verified at
+      #   source on 2026-09-08 against the Chocolatey API
+      #   (community.chocolatey.org/api/v2, FindPackagesById), not from
+      #   memory; the web page answers 403 to non-browser clients.
+      #   --require-checksums is passed too, and what it does is
+      #   narrower than "the package is checksum-verified": it forces
+      #   the package's install script to verify the checksum of what
+      #   it DOWNLOADS. It does not anchor the .nupkg itself to a hash
+      #   — the --version does the anchoring, by version and not by
+      #   bytes.
+      #
+      # Linux/apt and macOS/brew: NOT pinned, a DECLARED EXCEPTION.
+      #   apt's available version is a property of the runner image, so
+      #   an exact pin goes red on the image refreshes that change the
+      #   sqlite3 package (not on every refresh — the first draft said
+      #   "every", which is not true). brew has no version pin on the
+      #   install line from homebrew/core; `brew extract --version=`
+      #   plus a private tap IS a supported route to a pinned formula
+      #   (the first draft of this comment claimed no such route
+      #   exists, which is false — `man brew` documents it), and it is
+      #   declined here for cost: a tap to maintain for a test-only
+      #   tool.
+      #
+      # The MITIGATION for those two, stated for what it is: the
+      # post-install verification below. It proves a working `sqlite3`
+      # is on PATH and prints the version CI used, so a silent install
+      # failure fails the step here rather than inside a test. It does
+      # NOT pin the supply chain and is not claimed to.
+      #
+      # Blast radius of that accepted risk, stated without a false
+      # floor: sqlite3 is a TEST-ONLY tool and no release artifact
+      # links it (the published binaries use modernc.org/sqlite, pure
+      # Go, no cgo). That bounds the ARTIFACT exposure and no more — a
+      # tampered tool on the runner still reaches the checkout, the
+      # job's token, and any cache the job shares. This step is
+      # revisited if it ever installs something that does enter an
+      # artifact.
+      #
+      # NOT covered by this block, filed rather than silently omitted:
+      # release-desktop.yml's `apt-get install libgtk-3-dev
+      # libwebkit2gtk-4.1-dev build-essential pkg-config xvfb` is also
+      # unpinned, and unlike sqlite3 those libraries DO link into the
+      # published linux_amd64 desktop artifact. That is a wider
+      # exposure than this step's and it gets its own adjudication.
       - name: Ensure sqlite3 (the repair-procedure test runs the real shell)
         shell: bash
         run: |
@@ -79,7 +130,7 @@ jobs:
                        echo "$(brew --prefix sqlite)/bin" >> "$GITHUB_PATH"
                        export PATH="$(brew --prefix sqlite)/bin:$PATH"
                      fi ;;
-            Windows) choco install sqlite --no-progress -y ;;
+            Windows) choco install sqlite --version=3.53.4 --require-checksums --no-progress -y ;;
             *)       echo "unknown RUNNER_OS=$RUNNER_OS"; exit 1 ;;
           esac
           command -v sqlite3
