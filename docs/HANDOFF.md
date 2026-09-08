@@ -494,8 +494,16 @@ explicit decision.
 > 6. **image-size HIGH alerts (2, DoS) — NO CURE PUBLISHED (verified
 >    2026-09-01)**: 2.0.2 is the latest npm release; the advisories mark
 >    <=2.0.2 with first_patched null. Build-time transitive of
->    Docusaurus (own-repo images only; not in the binary or the served
->    static site) — LOW real risk, stated honestly. Watch weekly with
+>    Docusaurus. **CORRECTED 2026-09-08: "own-repo images only" was
+>    false and this document already knew it** — the 2026-08-22
+>    reclassification (recorded further down in this same file) annulled
+>    it: with the site's PR workflow, a PR from an external fork can
+>    carry a crafted image that the toolchain processes at build time,
+>    and `image-size` sniffs magic bytes, so the extension filters
+>    nothing. What bounds the risk are `website-pr.yml`'s controls (a
+>    read-only token, `timeout-minutes: 15`, the approval gate for
+>    first-time contributors), not where the images come from. Still no
+>    published patch. Watch weekly with
 >    the Scorecard sweep; pin the fix the day it publishes; Chano may
 >    dismiss the alerts with reason meanwhile.
 > 7. **FILED 2026-09-01: the timing-observability family sweep** —
@@ -648,7 +656,11 @@ explicit decision.
 > Ningún producto de seguridad se declara seguro por autoevaluación.
 >
 > **Scorecard (2026-08-30):** las palancas técnicas ejecutadas (todo
-> pineado por SHA, choco con versión, advisories alcanzables bumpeados,
+> pineado por SHA, choco con versión **en `release-desktop.yml`** —
+> corregido 2026-09-08: el otro sitio de choco del repo, el `sqlite3`
+> de `quality.yml`, seguía flotante hasta el lote de higiene de esa
+> fecha, así que la palanca estaba a medias y esta línea la daba por
+> entera—, advisories alcanzables bumpeados,
 > fuzzing ya computa, Best-Practices en InProgress). Lo estructural por
 > mantenedor único — **Code-Review 0 y Contributors 0 — no se persigue**:
 > serían puntos comprados con ceremonia vacía, no con seguridad real.
@@ -668,8 +680,14 @@ explicit decision.
 > referencia por TAG (su propio README) y Scorecard no lo exceptúa del
 > pin por hash (verificado en su código) — habría comprado un punto
 > vendiendo otro. Pinned-Dependencies 9→10: el hint exacto era
-> chocoCommand sin `--require-checksums` (release-desktop.yml:100-101;
-> el matcher verificado en shell_download_validate.go) — añadido.
+> chocoCommand sin `--require-checksums` (entonces
+> `release-desktop.yml:100-101`; hoy `:138-139` — desplazadas 38 líneas
+> por el bloque de comentario del lote de higiene del 2026-09-08. Dos
+> intentos de reparación anteriores escribieron `:137-138`, que apunta a
+> una línea de comentario y deja fuera el segundo comando; el matcher verificado en
+> shell_download_validate.go) — añadido. **Y «el hint exacto» era
+> falso:** había un SEGUNDO `choco install` sin `--require-checksums`,
+> el `sqlite3` de `quality.yml`, flotante hasta ese mismo lote.
 > AMBAS palancas computan EN EL PRÓXIMO TAG (los workflows de release
 > solo corren en tags): el score sube al publicar v0.13.0, no antes.
 > CALENDARIO: Maintained (0→) se cura solo a mediados de septiembre
@@ -1710,7 +1728,10 @@ explicit decision.
 >   canonical brand-gradient K tile, per-VIEW gradient scan law, live
 >   system-theme listener, @vitest/coverage-v8 4.1.9).
 > - `6190f86` ci(frontend): chrome coverage in the job log + Playwright
->   browser cache (actions/cache@v6, verified at source).
+>   browser cache (actions/cache@v6, verified at source — **as of 2026-09-08 the
+pin is the full SHA `55cc8345…` labelled `# v6.1.0`. Whether the repository ever
+referenced `actions/cache@v6` as a ref is not established here; what this line
+should not be read as is a description of today's wire**).
 > - `99f9fe2` shell.Status.TokenEnv (env-var NAME only) + the harness
 >   /__test/ control surface: REAL Desktop bindings over HTTP, scripted
 >   channel injection into the real pipeline, toggleable fake model,
@@ -1978,7 +1999,9 @@ explicit decision.
 > (×6 `CGO_ENABLED=0` binaries + SHA256 `checksums.txt` + `.tar.gz`/`.zip` archives
 > with binary+LICENSE+README + git Conventional-Commits changelog + per-release SBOM
 > via Syft + ldflags `-X main.version=v{{.Version}}`); a tag-triggered
-> `release.yml` (pinned SHAs: goreleaser `ec59f47`/v7.0.0, syft `e22c389`/v0.24.0;
+> `release.yml` (pinned SHAs AT THE TIME: goreleaser `ec59f47`/v7.0.0, syft
+> `e22c389`/v0.24.0 — both superseded; 2026-09-08 they are `f06c13b6`/v7.2.3 and
+> `3ad72834`/v0.24.2, and the goreleaser DISTRIBUTION is pinned to `2.18.0`;
 > tags pushed by hand); `--version` via a TDD'd `internal/buildinfo.Format` helper
 > (100%) — the ONLY production-code touch, short-circuiting before any config load;
 > example `configs/edge.json` (Pi, local, private, storage on) + `configs/cloud.json`
@@ -2039,7 +2062,12 @@ explicit decision.
 > - **Signed-Releases / CI-Tests (-1) — AUTO-POPULATE:** Signed-Releases fills at
 >   `v0.1.0` (cosign keyless already proven); CI-Tests fills as PRs appear.
 > - **Pinned-Dependencies (6/Medium) — CONSCIOUS:** `actions/checkout` +
->   `actions/setup-go` pinned by `@v6` tag (GitHub-owned, repo convention). Left
+>   `actions/setup-go` pinned by `@v6` tag (GitHub-owned, repo convention)
+>   — **CORRECTED 2026-09-08: no longer so.** The thirteen `checkout`
+>   sites carry a full SHA labelled `# v7.0.1` and the six `setup-go`
+>   sites a full SHA labelled `# v7.0.0`; the "leave it as-is" decision
+>   stopped describing the tree, and this line presented it as current.
+>   Left
 >   as-is; not prioritized.
 > - **PASSED (10):** Security-Policy, License, Vulnerabilities, Dangerous-Workflow,
 >   Binary-Artifacts, Packaging, Dependency-Update-Tool.

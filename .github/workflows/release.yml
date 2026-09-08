@@ -77,7 +77,47 @@ jobs:
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
-          version: '~> v2'
+          # PINNED (hygiene batch, 2026-09-08). This is the tool that
+          # builds, packages, signs the checksum manifest and emits the
+          # SBOMs for the six published headless targets, so it gets the
+          # exact-version treatment the cosign BINARY already has one
+          # step above (`cosign-release: v2.6.3`).
+          #
+          # A first draft of this comment said "cosign and syft already
+          # have, three steps above". Both halves were false and are
+          # corrected rather than softened: the Install Syft step above
+          # carries NO `with:` block at all, so the syft BINARY version
+          # is not declared anywhere in this workflow — only the ACTION
+          # is SHA-pinned — and cosign is ONE step above, not three.
+          # Pinning the syft binary is FILED; it is a different step
+          # and a different decision.
+          #
+          # 2.18.0 is the version that produced the last green release,
+          # READ FROM ITS LOG and not from memory: run 33427617674
+          # (2026-08-31, tag v0.14.1, conclusion success) logged
+          # "Downloading https://github.com/goreleaser/goreleaser/releases/download/v2.18.0/goreleaser_Linux_x86_64.tar.gz"
+          # and then ran /opt/hostedtoolcache/goreleaser-action/2.18.0/x64/goreleaser.
+          #
+          # Two things this pin does NOT claim. (1) It reproduces the
+          # BINARY of that run, not the whole step: the action itself
+          # moved from v7.0.0 (ec59f47) to v7.2.3 in 7bc1972 after that
+          # release, so the step is not byte-identical to the green one.
+          # (2) The action's checksum and cosign verification of what it
+          # downloads is conditional, not unconditional — both skip with
+          # a warning if checksums.txt or the sigstore bundle cannot be
+          # fetched, and the cosign half skips entirely if cosign is not
+          # on PATH (it is here: the installer step runs above).
+          #
+          # What the exact pin DOES buy, beyond freezing the version:
+          # with a valid semver the action's VERSION RESOLUTION builds
+          # the tag and returns without a network call (the download of
+          # the binary itself still happens, from github.com), while a
+          # RANGE ('~> v2') first downloads
+          # https://goreleaser.com/releases.json and picks with
+          # semver.maxSatisfying — delegating, at run time, the choice of
+          # which binary signs our release to a host that is not
+          # github.com. Read in src/github.ts at the pinned SHA.
+          version: '2.18.0'
           args: ${{ github.event_name == 'workflow_dispatch' && 'release --snapshot --clean' || 'release --clean' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

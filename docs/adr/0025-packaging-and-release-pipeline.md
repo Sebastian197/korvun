@@ -83,6 +83,17 @@ external consumer by flipping visibility and adding the trust layer.
   pinned to `~> v2`. `actions/checkout` / `actions/setup-go` stay on the repo's
   existing `@v6` major-tag convention (already in `quality.yml`).
 
+  > **AMENDED 2026-09-08 (hygiene batch).** Three of the sentences above no
+  > longer describe `release.yml`. The GoReleaser DISTRIBUTION is no longer
+  > `~> v2`: it is pinned to the exact `2.18.0`, the version the last green
+  > release (v0.14.1) resolved and ran. The action is no longer
+  > `ec59f474…`/v7.0.0: Dependabot moved it to
+  > `f06c13b6b1a9625abc9e6e439d9c05a8f2190e94` (v7.2.3) in `7bc1972`. And
+  > `actions/checkout` / `actions/setup-go` are no longer on `@v6`: every
+  > site carries a full SHA with an immutable patch-tag comment (v7.0.1 and
+  > v7.0.0 respectively). The DECISION this ADR records stands; only these
+  > version facts moved.
+
 ## Decision
 
 Ship a **GoReleaser release pipeline triggered by a SemVer git tag** that produces
@@ -254,7 +265,9 @@ This is almost entirely build-time / CI / docs. The single production-code touch
 thin. The pipeline is validated locally with `goreleaser release --snapshot
 --clean` (builds all artifacts without publishing) and a CI dry-run before the
 first real `vX.Y.Z` tag. The `goreleaser-action` is pinned to the verified SHA
-`ec59f474b9834571250b370d4735c50f8e2d1e29` (`# v7.0.0`). `make quality` stays
+`ec59f474b9834571250b370d4735c50f8e2d1e29` (`# v7.0.0`) — SUPERSEDED
+2026-09-08, see the amendment above: the pin is now `f06c13b6…` (v7.2.3) and
+the distribution is `2.18.0`. `make quality` stays
 green with `-race`; cross-compile ×6 unchanged; **`go.mod` stays at 3 direct
 deps**. Blast radius is build-time/CI/docs + the additive `--version`; fully
 reversible (delete `.goreleaser.yaml` + the workflow + the helper/flag → status

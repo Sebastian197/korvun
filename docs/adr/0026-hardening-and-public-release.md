@@ -60,6 +60,10 @@ pushes the tag.
     **v4.1.1 = `0f67c3f4856b2e3261c31976d6725780e5e4c373`**
   - `goreleaser/goreleaser-action` and `anchore/sbom-action/download-syft` stay on
     the Stage 15 pins; `actions/checkout` / `actions/setup-go` stay on `@v6`.
+    **AMENDED 2026-09-08 (hygiene batch):** none of those three still holds —
+    the goreleaser action is at `f06c13b6…` (v7.2.3) with the distribution
+    pinned to `2.18.0`, download-syft is at `3ad72834…` (v0.24.2), and
+    checkout/setup-go carry full SHAs with immutable patch tags, not `@v6`.
 - **systemd hardening directives** for a network service are standard
   (`ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `PrivateDevices`,
   `ProtectKernel*`, `NoNewPrivileges`, `SystemCallFilter=@system-service`,

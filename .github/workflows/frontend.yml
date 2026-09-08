@@ -116,7 +116,7 @@ jobs:
       # @playwright/test version (6a review rider): on a hit the install
       # step below skips the ~100 MB Chromium download and only installs
       # the OS deps. actions/cache v6.1.0 verified at source 2026-07-25.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('cmd/korvun-desktop/frontend/package-lock.json') }}
