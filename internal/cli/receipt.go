@@ -24,6 +24,9 @@
 //	chain_link_broken          — the previous hash does not match the
 //	                             predecessor (or the genesis link)
 //	custody_mismatch           — the receipt and its action row disagree
+//	action_evidence_incomplete — the action row and its decision row do
+//	                             not survive together, which retention's
+//	cascade never produces
 //
 // and, when the receipt seals an approval digest, the arms that judge
 // the approval and tombstone evidence behind it:
@@ -202,6 +205,51 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 	// rows gone is retention (the tombstone carries the story); the
 	// action alone remaining makes the absence a failure.
 	if r.SchemaVersion >= 2 && r.ApprovalDigest != "" {
+		// R15-P1A (Codex's fourteenth pass): the tombstone is judged
+		// WHENEVER a row carries the sealed digest — never only after
+		// retention took the approval AND the action row. The arms
+		// below used to hang inside the both-rows-absent branch, so
+		// forged evidence coexisting with a live approval was never
+		// read and the verifier printed OK. The evidence is the same
+		// evidence; its judgement no longer depends on whether the
+		// story it seals was pruned. What absence MEANS still does
+		// depend on that, and is decided in the approval-row fork.
+		// R7-Y2: the natural lookup is the APPROVAL's own sealed
+		// identity — each receipt reconstructs ITS story even when an
+		// action_id was reused after the prune.
+		tomb, tombAtPresent, terr := store.ApprovalTombstoneByDigest(ctx, r.ApprovalDigest)
+		tombstoneProven := false
+		switch {
+		case terr == nil && tomb.ActionID != r.ActionID:
+			// R8-Z2 binding: the preimage proves the digest but points
+			// at ANOTHER action — a mutated tombstone.
+			fail("tombstone_action_mismatch", "the tombstone for the sealed digest points at %s but the receipt belongs to %s — the evidence was re-pointed", tomb.ActionID, r.ActionID)
+		case terr == nil && tomb.Digest() != r.ApprovalDigest:
+			// Closed guard: the row was SELECTed BY this digest and the
+			// reader's contract re-derives it from the preimage before
+			// returning, so this is unreachable by construction (R12
+			// killed the old either/or arm for exactly that reason).
+			// It is kept as a NAMED failure and never as silence: an
+			// unreachable arm that degrades quietly is how a verifier
+			// learns to lie.
+			fail("tombstone_corrupt", "the tombstone selected by the sealed digest re-derives %s: the reader's own contract was bypassed", tomb.Digest())
+		case terr == nil:
+			tombstoneProven = true
+		case errors.Is(terr, actionsqlite.ErrNotFound):
+			// R11: absence proves nothing — legacy history, deletion or
+			// a coherent rewrite are indistinguishable to this
+			// verifier. What it means HERE is said in the fork below,
+			// where the surrounding rows are known.
+		default:
+			// R12-A11: a typed fault means the bytes WERE read and
+			// are corrupt — saying "cannot read" would be a lie.
+			var fault *actionsqlite.TombstoneFault
+			if errors.As(terr, &fault) {
+				fail("tombstone_corrupt", "the tombstone selected by the sealed digest is corrupt at %s: %v", fault.Field, terr)
+			} else {
+				fail("tombstone_read_failed", "cannot read the tombstone evidence for %s: %v — never disguised as old history", r.ActionID, terr)
+			}
+		}
 		switch consumed, _, err := store.GetApprovalByAction(ctx, r.ActionID); {
 		case errors.Is(err, actionsqlite.ErrNotFound):
 			// R4-F4 (ADR-0046): retention CASCADES the approval with its
@@ -209,33 +257,23 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 			// action_row_absent mold: the digest-sealed receipt is the
 			// surviving evidence). The action still PRESENT with the
 			// approval gone is sabotage: a cascade cannot do that.
-			if _, aerr := store.Get(ctx, r.ActionID); errors.Is(aerr, actionsqlite.ErrNotFound) {
-				// R6-X2: reconstruct and PROVE the history from the
-				// tombstone preimage — who decided what, when, under
-				// which law — re-deriving the sealed digest. A
-				// sabotaged tombstone is a FAIL; a missing one degrades
-				// to the ambiguous note below (R11: absence proves
-				// nothing — legacy history, deletion, or a coherent
-				// rewrite are indistinguishable to this verifier).
-				// R7-Y2: the natural lookup is the APPROVAL's own
-				// sealed identity — each receipt reconstructs ITS story
-				// even when an action_id was reused after the prune.
-				// R7-Y3: only ErrNotFound degrades to the ambiguous
-				// note; any other read error FAILS by name.
-				tomb, tombAtPresent, terr := store.ApprovalTombstoneByDigest(ctx, r.ApprovalDigest)
+			// R15: the question is whether the ACTION ROW is gone, and
+			// `Get`'s ErrNotFound cannot answer it — it is a JOIN with
+			// action_decisions, so it also fires when only the decision
+			// row is missing. Asked directly, of the actions table.
+			actionRow, _, perr := store.ActionRowsPresent(ctx, r.ActionID)
+			if perr != nil {
+				fail("approval_mismatch", "the approval row for %s is gone and the action row's presence cannot be established: %v", r.ActionID, perr)
+				break
+			}
+			if !actionRow {
+				// R6-X2: with both rows pruned the tombstone is the only
+				// story left — a PROVEN one is reconstructed out loud,
+				// its absence gets the ambiguous note, and a sabotaged
+				// one already failed by name above.
 				switch {
-				case terr == nil && tomb.Digest() == r.ApprovalDigest && tomb.ActionID != r.ActionID:
-					// R8-Z2 binding: the preimage proves the digest but
-					// points at ANOTHER action — a mutated tombstone.
-					fail("tombstone_action_mismatch", "the tombstone for the sealed digest points at %s but the receipt belongs to %s — the evidence was re-pointed", tomb.ActionID, r.ActionID)
-				case terr == nil && tomb.Digest() == r.ApprovalDigest:
+				case tombstoneProven:
 					notes = append(notes, reconstructionNote(tomb, tombAtPresent))
-				// R12: the old "re-derives another digest" arm died as
-				// UNREACHABLE by construction — a row selected by the
-				// sealed digest either passes the one contract (and then
-				// re-derives exactly that digest) or comes back as the
-				// typed corruption below. Keeping it would be an
-				// either/or hiding an impossible class.
 				case errors.Is(terr, actionsqlite.ErrNotFound):
 					// R11: the by-action integrity arm DIED with its false
 					// positive and its false negative (direction decision;
@@ -243,15 +281,6 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 					// provenance). Absence gets the epistemological truth,
 					// verbatim — never a certainty this verifier cannot have.
 					notes = append(notes, "approval_row_absent: no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable (the digest-sealed receipt is the surviving evidence)")
-				default:
-					// R12-A11: a typed fault means the bytes WERE read and
-					// are corrupt — saying "cannot read" would be a lie.
-					var fault *actionsqlite.TombstoneFault
-					if errors.As(terr, &fault) {
-						fail("tombstone_corrupt", "the tombstone selected by the sealed digest is corrupt at %s: %v", fault.Field, terr)
-					} else {
-						fail("tombstone_read_failed", "cannot read the tombstone evidence for %s: %v — never disguised as old history", r.ActionID, terr)
-					}
 				}
 				break
 			}
@@ -268,10 +297,37 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 	// 7. Coherence with the action row — WHEN it still exists. The E1
 	// retention prune legitimately removes action rows while receipts
 	// stay (the sealed exemption): absence degrades to a named note.
+	//
+	// R15: `Store.Get` is a JOIN of `actions` with `action_decisions`,
+	// so ONE ErrNotFound covered two different worlds and this check
+	// read it as the first of them. Retention's cascade removes BOTH
+	// rows; either one surviving alone is evidence no cascade can
+	// produce, and treating it as an absence printed a note claiming a
+	// prune that never happened AND returned early, silently skipping
+	// the custody comparisons below. The two questions are now asked
+	// separately and each world has its own name.
+	actionRow, decisionRow, perr := store.ActionRowsPresent(ctx, r.ActionID)
+	switch {
+	case perr != nil:
+		fail("custody_mismatch", "the presence of the action row for %q cannot be established: %v", r.ActionID, perr)
+		return failures, notes
+	case !actionRow && !decisionRow:
+		// The cascade's own shape: both rows gone together.
+		notes = append(notes, "action_row_absent: the action row for "+r.ActionID+" and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence")
+		return failures, notes
+	case !actionRow:
+		fail("action_evidence_incomplete", "the action row for %q is gone but its decision row remains — retention removes both together, so this is evidence no cascade can produce", r.ActionID)
+		return failures, notes
+	case !decisionRow:
+		fail("action_evidence_incomplete", "the action row for %q is present but its decision row is gone — retention removes both together, so this is evidence no cascade can produce", r.ActionID)
+		return failures, notes
+	}
 	rec, err := store.Get(ctx, r.ActionID)
 	switch {
 	case errors.Is(err, actionsqlite.ErrNotFound):
-		notes = append(notes, "action_row_absent: row "+r.ActionID+" is gone (retention prunes action rows; the digest-sealed receipt is the surviving evidence)")
+		// Both rows were present a moment ago; a not-found here is the
+		// TOCTOU window, not an absence this command can attest.
+		fail("custody_mismatch", "the action row for %q vanished between the presence check and the read", r.ActionID)
 		return failures, notes
 	case err != nil:
 		fail("custody_mismatch", "action row %q is unreadable: %v", r.ActionID, err)

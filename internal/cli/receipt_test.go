@@ -345,14 +345,32 @@ func TestReceiptVerify_prunedActionRowIsANamedNoteNotALie(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath, receiptID, actionID := operatorReceipt(t)
 	// The retention reality: the action row leaves; the receipt stays.
-	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)")
+	//
+	// R15: this DSN carries `foreign_keys(on)` and the fixture would be
+	// UNFAITHFUL without it. `action_decisions.action_id REFERENCES
+	// actions(action_id) ON DELETE CASCADE` (store.go's schema), and the
+	// store's own DSN enables foreign keys, so the real prune removes
+	// the decision row WITH the action row. An earlier version of this
+	// fixture opened with `busy_timeout` alone — foreign keys default to
+	// OFF in SQLite — so the DELETE left an ORPHAN decision row and this
+	// mold was asserting a shape retention cannot produce. That is why
+	// it stayed green over the fail-open R15 cures: the state it pinned
+	// was not the state it named.
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)")
 	if err != nil {
 		t.Fatalf("open raw: %v", err)
 	}
 	if _, err := db.Exec(`DELETE FROM actions WHERE action_id = ?`, actionID); err != nil {
 		t.Fatalf("prune the row: %v", err)
 	}
+	var orphans int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM action_decisions WHERE action_id = ?`, actionID).Scan(&orphans); err != nil {
+		t.Fatalf("count the cascaded decision row: %v", err)
+	}
 	_ = db.Close()
+	if orphans != 0 {
+		t.Fatalf("the fixture must reproduce the CASCADE, not an orphan: %d decision row(s) survived", orphans)
+	}
 	code, stdout, stderr := runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
 	if code != 0 {
 		t.Fatalf("a pruned action row must NOT fail the verify (the receipt IS the surviving evidence): %d %q %q", code, stdout, stderr)

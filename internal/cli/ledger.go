@@ -116,7 +116,15 @@ func (c *cli) ledgerCheck(args []string) int {
 		noted += len(notes)
 	}
 	if noted > 0 {
-		_, _ = fmt.Fprintf(c.stdout, "ledger %s: NOTE %d receipt(s) with their action row pruned by retention — digest-sealed evidence stands\n", *partition, noted)
+		// R15 (director's ruling, 2026-09-08): this line said "%d
+		// receipt(s) with their action row pruned by retention". Three
+		// things were false at once. It counts NOTES, not receipts, and
+		// one receipt can emit two. The notes it counts include the
+		// approval reconstruction and the ambiguous-absence note, which
+		// are not about an action row. And after R15's JOIN finding it
+		// cannot claim retention as the cause at all. It now reports
+		// what it actually has.
+		_, _ = fmt.Fprintf(c.stdout, "ledger %s: NOTE %d degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\n", *partition, noted)
 	}
 	_, _ = fmt.Fprintf(c.stdout, "ledger %s: %d receipts, chain intact\n", *partition, len(receipts))
 	return 0
