@@ -1,52 +1,49 @@
-VETO LEVANTADO ee43f6b45c6a378cb516f7e0aea23992b24b0640
+VETO LEVANTADO 2b0edc80ed3c000ab7e21ea96250ee1e0256fc92
 
-Round: the hygiene batch of 2026-09-08 — a supply-chain train with NO
-production Go code (sixteen files: two Go module lines, two npm
-manifests, five workflows, the operating rules, SECURITY.md, three
-historical documents, the handoff and this train's canto).
+Round: R15 — the tombstone judged whenever it is addressable, and the
+JOIN that failed open. Two changes of logic in the receipt verifier, two
+corrections of message, four new molds and three executed mutations.
 
-READ THE NEXT PARAGRAPH BEFORE READING THE FIRST LINE AS AN AUDIT
-RESULT. The wire that reads this file reads only its first line, and its
-own check script says what that line means: "a marker whose FIRST LINE
-names the direct sole parent was committed", never "audited". Here is
-what it does not say.
+Rebased onto the hygiene batch on 2026-09-08, so this marker names the
+code commit's SHA AFTER that rebase. The two trains both touched this
+file; hygiene's marker did its job and lives in the history of master.
+
+READ THIS BEFORE READING THE FIRST LINE AS AN AUDIT RESULT. The wire
+reads only the first line, and the check script says what that line
+means: "a marker whose FIRST LINE names the direct sole parent was
+committed", never "audited".
 
 **The veto was lifted by the DIRECTOR, on 2026-09-08, not by the
-adversary.** The seventh adversarial pass over this train returned VETO
-MANTENIDO with two P1, four P2 and four P3. Both P1 were cured before
-this commit — one of them was a section this canto claimed to have
-rewritten and had not, because a script of mine failed halfway and I did
-not verify it landed; the other was a line citation that two successive
-"repairs" left pointing at the wrong pair of lines in the wire. An
-eighth pass was NOT run: the director ordered delivery today and ruled
-that whatever it would have returned is FILED WITHOUT DETAIL. That
-filing is this paragraph, and it is the honest name of what happened.
+adversary.** Seven adversarial passes ran over this train's paper and
+every one returned VETO MANTENIDO. The seventh returned five P1. One of
+them — the JOIN fail-open — the director ruled INTO this train and it is
+cured here, with its molds and its mutations. Everything else the pass
+found is FILED with its reproduction, letreros and arithmetic included,
+by his order of the same day. No eighth pass ran.
 
-What the train does carry, and what a reader of this marker can check:
+What a reader can check for himself:
 
-- SEVEN adversarial passes ran over the batch. Every one returned VETO
-  MANTENIDO, and each declared what it found that the pass before it did
-  not see: the canto records all seven and names its own defects rather
-  than only the tree's.
-- The class the passes kept finding was mine, not the wire's: sentences
-  wider than their evidence, closed enumerations short by one, and
-  documentary counts that rotted under the very cures that corrected the
-  previous count. The wire's own changes — the version bumps, the pins,
-  the labels — were verified early and stayed stable.
-- The four gates ran green over the FINAL tree: `make quality`,
-  `make website-check` (24 e2e), `govulncheck` over the pruned package
-  list (41 packages, the form this batch writes into the rules) and
-  `actionlint` v1.7.12. All exit 0.
-- Two dry-runs — `release.yml` and `release-desktop.yml`, both dispatched
-  with `dry_run=true` — are preconditions of the MERGE, not of this
-  push, and had not run when this marker was written.
-- One weakness this batch found and could not close is published rather
-  than buried: the `goreleaser-action`'s checksum and cosign
-  verification skips with a warning when its fetch fails, so a blocked
-  fetch yields an unverified binary and a green job. It is written into
-  SECURITY.md's supply-chain section, and the cure is filed with
-  declared priority for v0.15.1.
+- The GUARANTEE survived all seven passes untouched. What failed, every
+  time, was the prose around it: the letreros, the tables, the counts,
+  the citations. Each pass pushed the same defect one layer closer to the
+  wire — states, mechanisms, effects, whether the mechanism was WIRED at
+  all, and finally whether the row the code calls "the action row" is one
+  row. That last one is why this train has a second cure.
+- The fail-open was real and cheap to reach: two DELETEs of CHILD rows,
+  no foreign-key override, turned exit 1 into exit 0 with two notes
+  narrating a retention prune that never happened. It now fails with both
+  names.
+- Four molds assert the exact NAME and the exact TEXT of each outcome.
+  The text half exists because this train caught itself: the wording of
+  two notes was rewritten mid-train and the whole suite stayed green.
+- An inherited mold was pinning a state production cannot produce — it
+  deleted the action row with foreign keys OFF, leaving an orphan
+  decision row the cascade never leaves. That is why it stayed green over
+  the fail-open. Its fixture is now faithful; its assertions are
+  unchanged.
+- `make quality` green over the whole suite on the commit this marker
+  names.
 
-STATE: IMPLEMENTED. Not VERIFIED — that word belongs to the gate, and
-the two dry-runs and the `ensayo` have not run. Not ACCEPTED — that word
-belongs to the director, and the merge is his act.
+STATE: IMPLEMENTED. Not VERIFIED — the required checks are the gate's
+word. Not ACCEPTED — that word is the director's, and the merge is his
+act.
