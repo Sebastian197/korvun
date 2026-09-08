@@ -1,49 +1,37 @@
-VETO LEVANTADO 2b0edc80ed3c000ab7e21ea96250ee1e0256fc92
+VETO LEVANTADO 7c219028755b7f0c33407d570ade7f78dc034c0e
 
-Round: R15 — the tombstone judged whenever it is addressable, and the
-JOIN that failed open. Two changes of logic in the receipt verifier, two
-corrections of message, four new molds and three executed mutations.
+Round: the marker master lost to the squash button.
 
-Rebased onto the hygiene batch on 2026-09-08, so this marker names the
-code commit's SHA AFTER that rebase. The two trains both touched this
-file; hygiene's marker did its job and lives in the history of master.
+WHY THIS COMMIT EXISTS. The R15 and hygiene trains each carried a proper
+marker commit, and both pull requests were merged with SQUASH. A squash
+collapses the marker and the code into ONE commit, so master's tip
+changed eleven files — production code included — and the marker text
+inside it still named `2b0edc8`, the pre-squash SHA that no longer
+exists in this history. The push gate said so plainly and refused:
 
-READ THIS BEFORE READING THE FIRST LINE AS AN AUDIT RESULT. The wire
-reads only the first line, and the check script says what that line
-means: "a marker whose FIRST LINE names the direct sole parent was
-committed", never "audited".
+    the marker at 7c21902 records 2b0edc8, but the judged commit's
+    parent is f3d509f — the recording commit does not name its direct
+    parent
 
-**The veto was lifted by the DIRECTOR, on 2026-09-08, not by the
-adversary.** Seven adversarial passes ran over this train's paper and
-every one returned VETO MANTENIDO. The seventh returned five P1. One of
-them — the JOIN fail-open — the director ruled INTO this train and it is
-cured here, with its molds and its mutations. Everything else the pass
-found is FILED with its reproduction, letreros and arithmetic included,
-by his order of the same day. No eighth pass ran.
+This commit is the marker master should have had: it changes exactly one
+path and its first line names its direct parent.
 
-What a reader can check for himself:
+WHAT IT ATTESTS, and what it does not. It attests that `7c21902` — the
+tip carrying the hygiene batch (#29) and the R15 train (#30) — is the
+commit judged. It does NOT re-open either train's review: both were
+delivered under the director's order of 2026-09-08, each with its own
+marker recording that the veto was lifted by HIM and not by the
+adversary, and each of those markers is preserved in the history of its
+pull request. Nothing is claimed here that was not claimed there.
 
-- The GUARANTEE survived all seven passes untouched. What failed, every
-  time, was the prose around it: the letreros, the tables, the counts,
-  the citations. Each pass pushed the same defect one layer closer to the
-  wire — states, mechanisms, effects, whether the mechanism was WIRED at
-  all, and finally whether the row the code calls "the action row" is one
-  row. That last one is why this train has a second cure.
-- The fail-open was real and cheap to reach: two DELETEs of CHILD rows,
-  no foreign-key override, turned exit 1 into exit 0 with two notes
-  narrating a retention prune that never happened. It now fails with both
-  names.
-- Four molds assert the exact NAME and the exact TEXT of each outcome.
-  The text half exists because this train caught itself: the wording of
-  two notes was rewritten mid-train and the whole suite stayed green.
-- An inherited mold was pinning a state production cannot produce — it
-  deleted the action row with foreign keys OFF, leaving an orphan
-  decision row the cascade never leaves. That is why it stayed green over
-  the fail-open. Its fixture is now faithful; its assertions are
-  unchanged.
-- `make quality` green over the whole suite on the commit this marker
-  names.
+A NOTE FOR THE NEXT TRAIN, because this cost a release day. A marker
+commit and a squash merge are incompatible by construction: the marker's
+whole contract is "I name my direct parent", and squash rewrites the
+parent after the marker is written. Either the merge preserves the two
+commits, or the marker is created after the merge — as this one is. That
+is a process decision for the director, and it is written here rather
+than left to be rediscovered.
 
-STATE: IMPLEMENTED. Not VERIFIED — the required checks are the gate's
-word. Not ACCEPTED — that word is the director's, and the merge is his
-act.
+STATE: the tag gate is the only thing this commit unblocks. Not
+VERIFIED, not ACCEPTED: those words belong to the gate and to the
+director.
