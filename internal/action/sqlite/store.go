@@ -1297,6 +1297,31 @@ func (s *Store) noteWrite(ctx context.Context) error {
 // form — the E1 seam signature unchanged.
 
 // Get returns one stored record, envelope round-tripped verbatim.
+// ActionRowsPresent answers, separately, whether the `actions` row of
+// actionID exists and whether its `action_decisions` row exists.
+//
+// R15: `Get` is a JOIN of the two tables, so its ErrNotFound conflates
+// "the action row was pruned" with "its decision row is missing" — a
+// caller that reads that error as the first is wrong whenever it is the
+// second, and the verifier read it that way at two sites. Retention
+// removes BOTH (the cascade); one without the other is evidence no
+// cascade can produce. This read exists so the caller can name which of
+// the two it is instead of guessing.
+//
+// One statement, two EXISTS sub-selects, no rows materialised: the
+// cheapest question that distinguishes them. Query-only — it writes
+// nothing, and it is safe on the read-only door.
+func (s *Store) ActionRowsPresent(ctx context.Context, actionID string) (actionRow, decisionRow bool, err error) {
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM actions WHERE action_id = ?),
+		        EXISTS(SELECT 1 FROM action_decisions WHERE action_id = ?)`,
+		actionID, actionID,
+	).Scan(&actionRow, &decisionRow); err != nil {
+		return false, false, fmt.Errorf("action/sqlite: presence of %q: %w", actionID, err)
+	}
+	return actionRow, decisionRow, nil
+}
+
 func (s *Store) Get(ctx context.Context, actionID string) (Record, error) {
 	var (
 		rec           Record
