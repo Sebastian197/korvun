@@ -1,0 +1,192 @@
+{
+  "baseline": "c6ccd242b8539890593dfeced652a6d322fe2531",
+  "test_count": 18,
+  "mutation_count": 27,
+  "mutations": [
+    {
+      "mutation": "rename",
+      "test": "late_rename",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "unknown",
+      "test": "unknown_and_shared",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "file-count",
+      "test": "late_rename",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "path",
+      "test": "unreadable_or_lying",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "failed-job",
+      "test": "failed_website",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "duplicate",
+      "test": "missing_duplicate",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "job-sha",
+      "test": "missing_duplicate",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "step",
+      "test": "skipped_mandatory",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "custodian",
+      "test": "outsiders_cannot",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "digest",
+      "test": "evidence_custody",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "findings",
+      "test": "evidence_custody",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "governance",
+      "test": "evidence_custody",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "review-binding",
+      "test": "stale_bindings",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "review-state",
+      "test": "stale_bindings",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "public-docs",
+      "test": "unknown_and_shared",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "capture",
+      "test": "changed_capture",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "latest-run",
+      "test": "newer_cancelled",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "run-event",
+      "test": "newer_cancelled",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "page-total",
+      "test": "pagination_never",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "credential-sink",
+      "test": "credential_sink",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "final-read",
+      "test": "final_collection",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "sha-syntax",
+      "test": "cli_rejects",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "deadline",
+      "test": "deadline_prevents",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "changes-requested",
+      "test": "later_comment",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "outsider-veto",
+      "test": "outsiders_cannot",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "foreign-run",
+      "test": "foreign_pr_run",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "mutation": "duplicate-run",
+      "test": "foreign_pr_run",
+      "detected": true,
+      "exit_code": 1
+    }
+  ],
+  "source_sha256": "2d1fc92f7754b7d408052f80ebcb06c0376541d03097b83d1a54b0acce101753",
+  "file_sha256": {
+    "scripts/integration_gate.py": "2d1fc92f7754b7d408052f80ebcb06c0376541d03097b83d1a54b0acce101753",
+    "scripts/integration_gate_test.py": "caebd24418da9cb0f3cb103fb05805e201082504f5dd7186904821b455e679be",
+    "scripts/integration_gate_mutations.py": "cf5d45f8ae644721eb19210a251b34790b77f9f53c45ef1e5046ea6aaee9a953",
+    "scripts/integration-policy.json": "d1669d070730222b8721308abb15376fb26cc0c00f18e22d662a099a02fffbc6",
+    ".github/workflows/quality.yml": "b46be906024d8906d733bcaff64de2223ee62cc047dbedf45eb753fd7cd7c3c0",
+    ".github/workflows/frontend.yml": "19b21639d7d0970828a909ce5abe42d764ab8a10b8607eaf5676d2184c53a941",
+    ".github/workflows/website-pr.yml": "68b483143d5ae9c107458ecf13b58c041dae170c3def55d64c1a9741d66bc007",
+    "Makefile": "72e0089a2fd1d48a81949b8398993d987f53fa3457598f191ffcfe6debe1eec8"
+  },
+  "evidence_level": "unit tests, injected API failures, separate CLI process; no server merge validation",
+  "govulncheck": {
+    "tool": "v1.7.0",
+    "go": "go1.26.6",
+    "database_updated": "2026-09-10T14:48:42Z",
+    "result": "No vulnerabilities found."
+  },
+  "independent_review": {
+    "open_p1": 0,
+    "open_p2": 0,
+    "scope": "local reducer; final commit review recorded separately"
+  }
+}

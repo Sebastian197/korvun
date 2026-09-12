@@ -131,6 +131,32 @@ corrected; the gate is not bypassed.
 
 ## The external Codex gate (2026-09-08) — CRITICAL
 
+### Integration evidence workflow (local implementation, 2026-09-12)
+
+Read `docs/INTEGRATION.md` before preparing an integration batch. Run
+`make integration-probe`, the destructive probes in
+`scripts/integration_gate_mutations.py`, and the complete `make quality`.
+The verifier checks applicable CI runs and an authorized GitHub custodian's
+declaration bound to the exact head, base, code parent, tree, scope and report
+bytes. Keep the code producer, external reviewer, custodian and integrator
+distinct in the evidence. Custody does not authenticate the external reviewer's
+work. Never fabricate a review, marker or reviewer identity to make the gate pass.
+
+This first bootstrap delivery includes the verifier, tests and worker changes;
+`.github/workflows/integration.yml` is reserved for the second delivery.
+`korvun/integration` is not emitted or required by this first delivery. Its reviewer/origin policy is intentionally unconfigured;
+the director must name a real source before any evidence can pass. Follow the
+two-step trusted-base bootstrap in `docs/INTEGRATION.md`. Commit and push still
+require an explicit request; the director owns merge and release decisions.
+
+Re-read both classic protection and rulesets before changing settings. The
+2026-09-12 API capture found squash enabled and linear history required. GitHub
+rebase rewrites SHAs, and the existing marker checker rejects merge commits.
+Do not treat either merge method as automatically preserving marker validity.
+Resolve and rehearse candidate/merge/tag compatibility before aligning settings.
+Keep current required checks intact. Do not activate the new requirement before
+server tests cover stale base/review state and the documented revocation window.
+
 The external review admits ZERO P1 and ZERO P2 within the implemented
 train before it may advance. A returned P1 or P2 is cured and the review
 repeats, with no round limit. P3 findings are adjudicated one by one. A

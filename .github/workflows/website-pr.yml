@@ -13,11 +13,9 @@
 # the worst case to a fixed cost in CI minutes. The repo-level "require
 # approval for first-time contributors" gate is the other half.
 #
-# Branch-protection note: this check is intentionally NOT required in the
-# ruleset. A required check behind a path filter would leave every PR that
-# does not touch website/** stuck on an eternally "expected" status. Whether
-# and how to make it required (e.g. a path-agnostic gate job) is a later
-# decision for Chano.
+# This worker runs on all master PRs. The integration reducer checks it only
+# when applicable, including shared tooling changes. Keep this worker itself
+# out of required contexts; activating the reducer has separate prerequisites.
 #
 # Action pinning (house convention): full commit SHA + version comment,
 # SHAs resolved from each action's repo via the GitHub API (2026-08-22).
@@ -26,9 +24,6 @@ name: Website PR
 on:
   pull_request:
     branches: [master]
-    paths:
-      - 'website/**'
-      - '.github/workflows/website-pr.yml'
 
 permissions:
   contents: read
