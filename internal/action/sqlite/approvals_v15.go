@@ -1,0 +1,565 @@
+// Copyright 2026 Sebastián Moreno Saavedra
+// SPDX-License-Identifier: Apache-2.0
+
+// v0.15.0 — the two doors the approvals screen needs, and the typed
+// sentinels that let a caller NAME what refused.
+//
+// Why this file exists. The screen renders BY NAME: every refusal it can
+// paint has its own literal, and the one thing it may never do is degrade an
+// unknown answer into an empty list or a generic shrug. That contract is only
+// keepable if the store distinguishes what its names claim — so the belts stop
+// refusing with a bare fmt.Errorf, sql.ErrNoRows stops sharing a return with a
+// driver failure, and the claim stops answering ErrNotFound to three different
+// questions.
+//
+// Anchors: docs/superpowers/specs/2026-09-08-approvals-screen-ux.md §11
+// (FR-API-1, 19, 21, 22, 25) and §17 F rows 16-21.
+
+package sqlite
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/Sebastian197/korvun/internal/action"
+)
+
+// The typed sentinels. Every one of them answers a question a caller has to
+// be able to ask, and the reason they are types and not sentences is that a
+// mapping by strings.Contains is a finding, not an implementation (FR-API-15).
+//
+// The three that mean "you will not get the params" WRAP ErrNotFound, so every
+// caller written before this file keeps working unchanged while a new caller
+// can tell the three apart.
+var (
+	// ErrApprovalNotFound is the row that is NOT THERE. It is never a
+	// driver failure, and the difference is the whole point: an absent row
+	// is permanent and a driver failure is worth retrying.
+	ErrApprovalNotFound = fmt.Errorf("action/sqlite: approval row absent: %w", ErrNotFound)
+
+	// ErrApprovalParamsEmpty is the row that IS there with an empty
+	// parameters column — born without arguments, or purged by a close.
+	// Collapsing it into "not found" is what made `gone` and `unaccounted`
+	// indistinguishable.
+	ErrApprovalParamsEmpty = fmt.Errorf("action/sqlite: approval parameters column empty: %w", ErrNotFound)
+
+	// ErrApprovalClaimSkipped is the claim whose UPDATE affected NO rows.
+	// It says nothing about where the params ended up: the caller re-reads.
+	ErrApprovalClaimSkipped = fmt.Errorf("action/sqlite: approval claim affected no rows: %w", ErrNotFound)
+
+	// ErrApprovalInvalidated is the law that moved under a parked request.
+	// Repairable from the profile, which is why it may never share a name
+	// with corruption.
+	ErrApprovalInvalidated = errors.New("action/sqlite: the law moved under this approval")
+
+	// ErrApprovalEvidenceCorrupt is any belt or evidence parse refusing.
+	// Permanent: no profile repairs it.
+	ErrApprovalEvidenceCorrupt = errors.New("action/sqlite: the approval's stored evidence no longer verifies")
+
+	// ErrApprovalUnreadable is a DRIVER failure, and only that. It is the
+	// single transient class of this file; everything else fails closed.
+	ErrApprovalUnreadable = errors.New("action/sqlite: the approval could not be read")
+
+	// ErrApprovalParamsDigestMismatch is the stored terna and params no
+	// longer re-deriving the digest the human approved.
+	ErrApprovalParamsDigestMismatch = errors.New("action/sqlite: the stored parameters no longer re-derive the approved digest")
+
+	// ErrApprovalActionNotPending is the parked action that moved out from
+	// under a decision. Nothing was decided and nothing ran — the whole
+	// transaction rolls back — so its name says exactly that and not a word
+	// about effects.
+	ErrApprovalActionNotPending = errors.New("action/sqlite: the parked action was no longer pending")
+)
+
+// ParamsState is FR-UI-16's four values. `present` is the only one that lets
+// the screen offer the yes.
+type ParamsState string
+
+const (
+	// ParamsPresent is a readable body that re-derives the approved digest.
+	ParamsPresent ParamsState = "present"
+	// ParamsEmpty is a row parked WITHOUT arguments. It is not a purge: the
+	// digest re-derives over the empty body, which is how the two are told
+	// apart.
+	ParamsEmpty ParamsState = "empty"
+	// ParamsUnavailable is a body that could not be read at this instant.
+	ParamsUnavailable ParamsState = "unavailable"
+	// ParamsTooLarge is a body past the screen's bound.
+	ParamsTooLarge ParamsState = "too_large"
+)
+
+// approvalColumns is the row shape scanApproval expects, in its order. Named
+// once so the two doors below cannot drift from it.
+const approvalColumns = `approval_id, schema_version, action_id, action_digest, preview_digest,
+	requested_from, reason, risk_summary, policy_version, policy_digest,
+	requested_at, expires_at, status, decision_principal_id, decision,
+	decision_at, comment, decision_receipt_id`
+
+// ApprovalListRow is one row of the LIST door: the approval, the preview as
+// STORED, and the channel the preview seals.
+//
+// PreviewReadable false means the preview did not parse. The row still comes
+// out — with its identifier and its digest — because a row the operator cannot
+// read is exactly the row he most needs to see (FR-API-1).
+type ApprovalListRow struct {
+	Approval        action.Approval
+	Preview         action.ActionPreview
+	PreviewReadable bool
+	// Channel is the origin, read from the preview's sealed resources set.
+	Channel string
+	// ChannelKnown separates a channel that IS empty from one that could
+	// not be determined. Serving both as "" would treat a corrupt preview
+	// and an empty channel as the same fact.
+	ChannelKnown bool
+}
+
+// SkippedApproval is a row the list could not serve whole, named so the
+// operator learns it exists instead of losing it in silence.
+type SkippedApproval struct {
+	ApprovalID string
+	Reason     string
+}
+
+// ApprovalListing is what the LIST door answers.
+type ApprovalListing struct {
+	Rows    []ApprovalListRow
+	Skipped []SkippedApproval
+}
+
+// ListPendingApprovals is the LIST door (§17 F row 19). It reads and it does
+// NOT run the verification belt: the belt is the DETAIL's job, and running it
+// here would make a row whose story no longer verifies disappear instead of
+// being refused where the operator can read why.
+//
+// One row that cannot be scanned does NOT take the listing down. It is
+// skipped, counted and named — the old `return nil, err` let a single mutated
+// timestamp erase the healthy rows too.
+func (s *Store) ListPendingApprovals(ctx context.Context, limit int) (ApprovalListing, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+approvalColumns+`, canonical_preview
+		   FROM approvals WHERE status = ?
+		  ORDER BY requested_at DESC LIMIT ?`,
+		string(action.ApprovalPending), limit)
+	if err != nil {
+		return ApprovalListing{}, fmt.Errorf("action/sqlite: list pending approvals: %w: %w", ErrApprovalUnreadable, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out ApprovalListing
+	for rows.Next() {
+		a, rawPreview, id, err := scanApprovalAndPreview(rows)
+		if err != nil {
+			out.Skipped = append(out.Skipped, SkippedApproval{ApprovalID: id, Reason: err.Error()})
+			continue
+		}
+		row := ApprovalListRow{Approval: a}
+		if p, perr := action.ParseCanonicalPreview([]byte(rawPreview)); perr == nil {
+			row.Preview = p
+			row.PreviewReadable = true
+			row.Channel, row.ChannelKnown = channelOf(p)
+		}
+		out.Rows = append(out.Rows, row)
+	}
+	if err := rows.Err(); err != nil {
+		return ApprovalListing{}, fmt.Errorf("action/sqlite: iterate pending approvals: %w: %w", ErrApprovalUnreadable, err)
+	}
+	return out, nil
+}
+
+// channelOf reads the origin out of the preview's sealed resources set.
+//
+// The set is SORTED by the canonical form, so an index is only meaningful when
+// there is exactly one element — which is what the factory writes. Any other
+// shape is a preview an external hand rewrote: the channel is not known, and
+// saying so is not the same as saying it is empty.
+func channelOf(p action.ActionPreview) (string, bool) {
+	if len(p.Resources) != 1 {
+		return "", false
+	}
+	return p.Resources[0], true
+}
+
+// scanApprovalAndPreview scans the list's row shape. Unlike scanApproval it
+// returns the approval id even when a later column fails to parse, because a
+// row that cannot be served still has to be NAMED.
+func scanApprovalAndPreview(row scanner) (action.Approval, string, string, error) {
+	var (
+		a           action.Approval
+		status      string
+		requestedAt string
+		expiresAt   sql.NullString
+		decisionAt  sql.NullString
+		rawPreview  string
+	)
+	if err := row.Scan(&a.ApprovalID, &a.SchemaVersion, &a.ActionID, &a.ActionDigest,
+		&a.PreviewDigest, &a.RequestedFrom, &a.Reason, &a.RiskSummary,
+		&a.PolicyVersion, &a.PolicyDigest, &requestedAt, &expiresAt, &status,
+		&a.DecisionPrincipalID, &a.Decision, &decisionAt, &a.Comment,
+		&a.DecisionReceiptID, &rawPreview); err != nil {
+		return action.Approval{}, "", "", err
+	}
+	a.Status = action.ApprovalStatus(status)
+	var err error
+	if a.RequestedAt, err = time.Parse(time.RFC3339Nano, requestedAt); err != nil {
+		return a, rawPreview, a.ApprovalID, fmt.Errorf("requested_at does not parse: %w", err)
+	}
+	if a.ExpiresAt, err = parseNullTime(expiresAt); err != nil {
+		return a, rawPreview, a.ApprovalID, fmt.Errorf("expires_at does not parse: %w", err)
+	}
+	if a.DecisionAt, err = parseNullTime(decisionAt); err != nil {
+		return a, rawPreview, a.ApprovalID, fmt.Errorf("decision_at does not parse: %w", err)
+	}
+	return a, rawPreview, a.ApprovalID, nil
+}
+
+// maxDetailParamsBytes is the bound past which the screen refuses to show a
+// body whole. Beyond it the document cannot be read in one sitting, so it does
+// not offer the yes either.
+const maxDetailParamsBytes = 64 << 10
+
+// ApprovalDetailRow is the DETAIL door's answer: the state, the TERNA, the
+// params and the belts, all from ONE snapshot.
+type ApprovalDetailRow struct {
+	Approval action.Approval
+	Preview  action.ActionPreview
+	// Operation is the terna from the ACTIONS row — namespace, name and
+	// VERSION. The canonical preview stores only "ns/name", so without this
+	// the digest cannot be re-derived at all.
+	Operation   action.Operation
+	Params      []byte
+	ParamsState ParamsState
+	ActionState action.State
+}
+
+// ApprovalDetail reads one parked request in a SINGLE transaction (§17 F row
+// 20, FR-API-22).
+//
+// What the single transaction promises is CONSISTENCY, not freshness. SQLite in
+// WAL hands the transaction a snapshot taken at its first read, so a commit
+// that lands halfway is not seen — and that is exactly what is wanted: the old
+// four loose reads let a legitimate CLI rejection land between two of them, and
+// the belt then saw an emptied column beside a digest read before it and
+// painted "this is not transient, look at the book" over a CORRECT decision.
+//
+// A row whose status is not PENDING comes back whole and unjudged: the belts do
+// not run on it, because FR-API-18's precedence by state wins over any belt's
+// name and the caller is the one that applies it.
+func (s *Store) ApprovalDetail(ctx context.Context, approvalID string) (ApprovalDetailRow, error) {
+	return s.approvalDetail(ctx, approvalID, nil)
+}
+
+// ApprovalDetailUnderLaw is ApprovalDetail with the law judged over the row the
+// transaction read.
+func (s *Store) ApprovalDetailUnderLaw(ctx context.Context, approvalID string, law PolicyPin) (ApprovalDetailRow, error) {
+	return s.approvalDetail(ctx, approvalID, &law)
+}
+
+func (s *Store) approvalDetail(ctx context.Context, approvalID string, law *PolicyPin) (ApprovalDetailRow, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: begin approval detail: %w: %w", ErrApprovalUnreadable, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var (
+		rawPreview string
+		rawParams  string
+	)
+	row := tx.QueryRowContext(ctx,
+		`SELECT `+approvalColumns+`, canonical_preview, canonical_params
+		   FROM approvals WHERE approval_id = ?`, approvalID)
+	a, rawPreview, rawParams, err := scanApprovalDetail(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+	}
+	if err != nil {
+		// A column that will not parse is corruption of the evidence, not a
+		// disk that did not answer. Sending it to the transient residual is
+		// how a permanent fault gets told "retry".
+		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+	}
+
+	out := ApprovalDetailRow{Approval: a, Params: []byte(rawParams)}
+	if a.Status != action.ApprovalPending {
+		// Precedence by state (FR-API-18) belongs to the caller: a decided
+		// row is served unjudged rather than refused by a belt that would
+		// name the purge instead of the decision.
+		return out, nil
+	}
+
+	p, err := action.ParseCanonicalPreview([]byte(rawPreview))
+	if err != nil {
+		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: approval %q preview: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+	}
+	out.Preview = p
+	if err := action.ValidatePreviewBinding(a, p); err != nil {
+		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+	}
+	if err := verifyApprovalStoryTyped(ctx, tx, a, p); err != nil {
+		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+	}
+	if law != nil {
+		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+			return ApprovalDetailRow{}, fmt.Errorf(
+				"action/sqlite: approval %q was parked under law v%d %s but the current law is v%d %s (%s): %w",
+				approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, dim, ErrApprovalInvalidated)
+		}
+	}
+
+	// The terna and the params from the SAME snapshot. The join is LEFT on
+	// purpose: an inner one would turn the orphan row into "does not exist",
+	// the fail-open R15 already caught.
+	op, state, err := ternaOf(ctx, tx, a.ActionID)
+	if err != nil {
+		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+	}
+	out.Operation = op
+	out.ActionState = state
+
+	// The belt runs BEFORE the classification, so a mismatch precedes `empty`
+	// and `too_large` — FR-API-19. And it runs over the terna, not the
+	// preview: op_version is in the digest and the preview does not store it.
+	if got := action.Digest(op, rawParams); got != a.ActionDigest {
+		return ApprovalDetailRow{}, fmt.Errorf(
+			"action/sqlite: approval %q: stored parameters re-derive %s but the approved digest is %s: %w",
+			approvalID, got, a.ActionDigest, ErrApprovalParamsDigestMismatch)
+	}
+	switch {
+	case rawParams == "":
+		out.ParamsState = ParamsEmpty
+	case len(rawParams) > maxDetailParamsBytes:
+		out.ParamsState = ParamsTooLarge
+	default:
+		out.ParamsState = ParamsPresent
+	}
+	if err := tx.Commit(); err != nil {
+		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: commit approval detail: %w: %w", ErrApprovalUnreadable, err)
+	}
+	return out, nil
+}
+
+func scanApprovalDetail(row scanner) (action.Approval, string, string, error) {
+	var (
+		a           action.Approval
+		status      string
+		requestedAt string
+		expiresAt   sql.NullString
+		decisionAt  sql.NullString
+		rawPreview  string
+		rawParams   string
+	)
+	if err := row.Scan(&a.ApprovalID, &a.SchemaVersion, &a.ActionID, &a.ActionDigest,
+		&a.PreviewDigest, &a.RequestedFrom, &a.Reason, &a.RiskSummary,
+		&a.PolicyVersion, &a.PolicyDigest, &requestedAt, &expiresAt, &status,
+		&a.DecisionPrincipalID, &a.Decision, &decisionAt, &a.Comment,
+		&a.DecisionReceiptID, &rawPreview, &rawParams); err != nil {
+		return action.Approval{}, "", "", err
+	}
+	a.Status = action.ApprovalStatus(status)
+	var err error
+	if a.RequestedAt, err = time.Parse(time.RFC3339Nano, requestedAt); err != nil {
+		return action.Approval{}, "", "", fmt.Errorf("parse approval requested_at: %w", err)
+	}
+	if a.ExpiresAt, err = parseNullTime(expiresAt); err != nil {
+		return action.Approval{}, "", "", fmt.Errorf("parse approval expires_at: %w", err)
+	}
+	if a.DecisionAt, err = parseNullTime(decisionAt); err != nil {
+		return action.Approval{}, "", "", fmt.Errorf("parse approval decision_at: %w", err)
+	}
+	return a, rawPreview, rawParams, nil
+}
+
+// ternaOf brings the operation triple and the action's state through a LEFT
+// JOIN, so an approvals row whose actions row was destroyed reads as CORRUPT
+// and never as absent.
+func ternaOf(ctx context.Context, q rowQuerier, actionID string) (action.Operation, action.State, error) {
+	var (
+		ns      sql.NullString
+		name    sql.NullString
+		version sql.NullInt64
+		state   sql.NullString
+	)
+	err := q.QueryRowContext(ctx,
+		`SELECT a.op_namespace, a.op_name, a.op_version, a.state
+		   FROM actions a WHERE a.action_id = ?`, actionID).
+		Scan(&ns, &name, &version, &state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return action.Operation{}, "", fmt.Errorf("the actions row for %q is gone: %w", actionID, ErrApprovalEvidenceCorrupt)
+	}
+	if err != nil {
+		return action.Operation{}, "", fmt.Errorf("read the actions row for %q: %w: %w", actionID, ErrApprovalUnreadable, err)
+	}
+	if !ns.Valid || !name.Valid || !version.Valid {
+		return action.Operation{}, "", fmt.Errorf("the actions row for %q is incomplete: %w", actionID, ErrApprovalEvidenceCorrupt)
+	}
+	return action.Operation{
+		Namespace: ns.String, Name: name.String, Version: int(version.Int64),
+	}, action.State(state.String), nil
+}
+
+// verifyApprovalStoryTyped is verifyApprovalStory with its refusals NAMED.
+//
+// The old one wrapped the absent row and the driver failure in the same
+// return, so a DESTROYED row and a disk that did not answer left by one door
+// and the caller had to guess. Here sql.ErrNoRows is corruption — the row is
+// gone and nothing repairs it — and only a driver error is transient.
+func verifyApprovalStoryTyped(ctx context.Context, q rowQuerier, a action.Approval, p action.ActionPreview) error {
+	var (
+		effectClass, opNS, opName string
+		principal                 sql.NullString
+	)
+	err := q.QueryRowContext(ctx,
+		`SELECT effect_class, op_namespace, op_name, principal_id
+		   FROM actions WHERE action_id = ?`, a.ActionID).
+		Scan(&effectClass, &opNS, &opName, &principal)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("the actions row for %q is gone: %w", a.ActionID, ErrApprovalEvidenceCorrupt)
+	}
+	if err != nil {
+		return fmt.Errorf("read the story of %q: %w: %w", a.ActionID, ErrApprovalUnreadable, err)
+	}
+	if effectClass != string(p.EffectClass) {
+		return fmt.Errorf("preview_effect_mismatch: the preview shows %s but the action row carries %s: %w", p.EffectClass, effectClass, ErrApprovalEvidenceCorrupt)
+	}
+	if op := opNS + "/" + opName; op != p.Operation {
+		return fmt.Errorf("preview_operation_mismatch: the preview shows %s but the action row carries %s: %w", p.Operation, op, ErrApprovalEvidenceCorrupt)
+	}
+	if principal.String != p.PrincipalID {
+		return fmt.Errorf("preview_principal_mismatch: the preview shows %q but the action row carries %q: %w", p.PrincipalID, principal.String, ErrApprovalEvidenceCorrupt)
+	}
+	var (
+		outcome, rule, polDigest string
+		polVersion               int64
+	)
+	err = q.QueryRowContext(ctx,
+		`SELECT outcome, rule, policy_version, policy_digest
+		   FROM action_decisions WHERE action_id = ?`, a.ActionID).
+		Scan(&outcome, &rule, &polVersion, &polDigest)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("the decision row for %q is gone: %w", a.ActionID, ErrApprovalEvidenceCorrupt)
+	}
+	if err != nil {
+		return fmt.Errorf("read the decision of %q: %w: %w", a.ActionID, ErrApprovalUnreadable, err)
+	}
+	if outcome != a.Reason || rule != a.Reason {
+		return fmt.Errorf("decision_outcome_mismatch: the request was born from %q but the decision row says outcome %q rule %q: %w", a.Reason, outcome, rule, ErrApprovalEvidenceCorrupt)
+	}
+	if polVersion != a.PolicyVersion || polDigest != a.PolicyDigest {
+		return fmt.Errorf("decision_policy_mismatch: the request pinned law v%d %s but the decision row carries v%d %s: %w", a.PolicyVersion, a.PolicyDigest, polVersion, polDigest, ErrApprovalEvidenceCorrupt)
+	}
+	return nil
+}
+
+// Path is the file this store was opened on. The approvals moulds need it to
+// open a SECOND real connection and attack from outside the component, which
+// is what the cross-verification law asks for.
+func (s *Store) Path() string { return s.path }
+
+// ClaimApprovalParamsUnderDigest is the execution claim with the belt INSIDE
+// the claiming transaction.
+//
+// Why it exists. The old path read the operation triple with store.Get, then
+// claimed (committing the consume and emptying the column), and only THEN
+// compared the digest using the triple from that earlier read. An external
+// UPDATE of op_version in that window passed every belt and executed an
+// irreversible effect under an operation the row no longer declared — the
+// comparison judged a RECOMPUTED value while a stored one sat right there.
+//
+// Here the triple, the params and the digest all come from the row THIS
+// transaction read, and a mismatch refuses by name with nothing consumed.
+func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID string, law *PolicyPin, wantDigest string) ([]byte, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: begin claim: %w: %w", ErrApprovalUnreadable, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	a, err := s.approvalTx(ctx, tx, approvalID)
+	if errors.Is(err, ErrNotFound) {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+	}
+	if law != nil {
+		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+			return nil, fmt.Errorf(
+				"action/sqlite: approval %q was parked under law v%d %s but the current law is v%d %s (%s): %w",
+				approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, dim, ErrApprovalInvalidated)
+		}
+	}
+	var rawPreview, rawParams string
+	if err := tx.QueryRowContext(ctx,
+		`SELECT canonical_preview, canonical_params FROM approvals WHERE approval_id = ?`,
+		approvalID).Scan(&rawPreview, &rawParams); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+		}
+		return nil, fmt.Errorf("action/sqlite: claim read %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	p, err := action.ParseCanonicalPreview([]byte(rawPreview))
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q preview: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+	}
+	if err := action.ValidatePreviewBinding(a, p); err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+	}
+	if err := verifyApprovalStoryTyped(ctx, tx, a, p); err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+	}
+
+	op, _, err := ternaOf(ctx, tx, a.ActionID)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+	}
+	if got := action.Digest(op, rawParams); got != wantDigest {
+		return nil, fmt.Errorf(
+			"action/sqlite: approval %q: the row this transaction read re-derives %s but the caller approved %s: %w",
+			approvalID, got, wantDigest, ErrApprovalParamsDigestMismatch)
+	}
+	if rawParams == "" {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalParamsEmpty)
+	}
+
+	res, err := tx.ExecContext(ctx,
+		`UPDATE approvals SET canonical_params = '' WHERE approval_id = ? AND canonical_params != ''`, approvalID)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: purge claim %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		// A count that was never obtained is not a count of zero. Reading it
+		// as "already claimed" would name an outcome over a fact nobody has.
+		return nil, fmt.Errorf("action/sqlite: claim %q: rows affected unavailable: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	if n == 0 {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalClaimSkipped)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("action/sqlite: commit claim: %w: %w", ErrApprovalUnreadable, err)
+	}
+	return []byte(rawParams), nil
+}
+
+// ApprovalStatusOf reads one column and runs NO belt.
+//
+// A caller has to know whether a decide was already committed BEFORE it can
+// name what a belt refused: the same corruption is `evidence_corrupt` on a
+// pending row and `decided_evidence_corrupt` once a decision is sealed. Asking
+// GetApproval would be circular — it is the call whose refusal we are trying
+// to name.
+func (s *Store) ApprovalStatusOf(ctx context.Context, approvalID string) (action.ApprovalStatus, error) {
+	var status string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT status FROM approvals WHERE approval_id = ?`, approvalID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+	}
+	if err != nil {
+		return "", fmt.Errorf("action/sqlite: approval status %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	return action.ApprovalStatus(status), nil
+}

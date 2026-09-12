@@ -861,6 +861,10 @@ func buildFileDSN(slashed string) string {
 // calls are safe from concurrent brain workers.
 type Store struct {
 	db *sql.DB
+	// path is the file this store was opened on, kept so a test can open a
+	// SECOND real connection to the same database and attack from outside
+	// the component (the cross-verification law, §4).
+	path string
 	// capRows and pruneEvery implement the sealed retention decision: a
 	// generous automatic cap with NO config surface. Fields (not globals)
 	// so tests exercise small caps without mutable package state.
@@ -1012,7 +1016,7 @@ func open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("action/sqlite: ping %q: %w", abs, err)
 	}
-	return &Store{db: db, capRows: defaultCapRows, pruneEvery: defaultPruneEvery}, nil
+	return &Store{db: db, path: abs, capRows: defaultCapRows, pruneEvery: defaultPruneEvery}, nil
 }
 
 // RecoverPreviousLife closes every non-terminal action left behind by
@@ -1461,5 +1465,5 @@ func OpenReadOnly(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("action/sqlite: store %q is at schema v%d, this binary reads v%d — a read-only consult never migrates; run the server boot to lift the schema", abs, version, schemaVersionCurrent)
 	}
-	return &Store{db: db, capRows: defaultCapRows, pruneEvery: defaultPruneEvery, readOnly: true}, nil
+	return &Store{db: db, path: abs, capRows: defaultCapRows, pruneEvery: defaultPruneEvery, readOnly: true}, nil
 }

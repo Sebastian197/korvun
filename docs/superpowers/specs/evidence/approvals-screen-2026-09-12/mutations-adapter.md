@@ -1,0 +1,80 @@
+# Mutaciones probatorias — el almacén y el adaptador de aprobaciones (2026-09-12)
+
+Cuarenta y ocho mutaciones sobre `internal/action/sqlite` e `internal/app`, cada
+una aplicada SOLA, los dos paquetes ejecutados enteros, la mutación revertida.
+Nivel de evidencia: un almacén SQLite real; los ataques del adaptador entran por
+un `*sql.DB` segundo sobre el mismo fichero.
+
+**Cuarenta y nueve moldes, y ninguno queda sin una mutación que lo enrojezca.**
+
+| # | Qué neutraliza | Moldes que enrojece |
+|---|---|---|
+| A1 | condicion 1: el almacen de acciones deja de exigirse | `TestApprovalsGate_countsOnlyTheBrainsThatCanActuallyPark`, `1_·_no_action_store:_the_storage_block_is_gone` |
+| A2 | condicion 2: el bloque agent deja de exigirse | `TestApprovalsGate_countsOnlyTheBrainsThatCanActuallyPark`, `2_·_not_an_agent_brain:_no_agent_block` |
+| A3 | el techo deja de acotar: ni la condicion 3 ni el rango | `TestApprovalsGate_countsOnlyTheBrainsThatCanActuallyPark`, `3_·_the_ceiling_does_not_reach_write_irreversible` |
+| A4 | la clase aparcable deja de exigirse | `TestApprovalsGate_countsOnlyTheBrainsThatCanActuallyPark`, `4_·_no_tool_of_a_parkable_class_in_the_cage` |
+| A5 | condicion 5: la gobernanza deja de consultarse | `TestApprovalsGate_countsOnlyTheBrainsThatCanActuallyPark`, `5_·_governance_denies_the_only_parkable_tool` |
+| A6 | el gate apagado contesta una lista vacia | `TestApprovalsGate_offMeansOffAndNeverAnEmptyList` |
+| A7 | la caducada se pinta como ya decidida | `TestAdapter_expiredComesFromASweptRow` |
+| A8 | la ley vigente deja de viajar | `TestAdapter_invalidatedCarriesTheCurrentLawInItsOwnField` |
+| A9 | la corrupcion en la lectura se sirve como transitoria | `TestAdapter_aMutatedStoryIsEvidenceCorruptOnTheRead` |
+| A10 | la frontera del commit desaparece: nada esta sellado | `TestAdapter_theSameCorruptionAfterACommittedDecideIsDecide` |
+| A11 | el digest del operador deja de compararse | `TestAdapter_aStaleDigestIsRefusedWithoutConsumingTheApprov` |
+| A13 | el status desconocido sirve el documento | `TestAdapter_aRowDecidedBetweenTheListAndTheDetailIsAlready`, `TestAdapter_anUnknownStatusFailsClosed` |
+| A14 | brain_gone pierde su centinela | `TestAdapter_brainGoneHasItsOwnSentinel` |
+| A15 | la PENDING en el POST se manda a ya cerrada | `TestAdapter_aPendingRowAtThePostIsNotDecided` |
+| A16 | la cuenta de filas saltadas no llega al wire | `TestAdapter_theListSurfacesTheRowsItHadToSkip` |
+| A17 | la accion que ya no estaba pendiente dice no saber | `TestAdapter_theActionThatWasNoLongerPendingGetsItsName` |
+| A18 | la ley se resuelve dos veces | `TestAdapter_resolvesTheLawExactlyOnce` |
+| A19 | la senal en banda se ignora | `TestAdapter_readsTheInBandRuleAsARefusal` |
+| A20 | el recibo del rechazo no se relee | `TestAdapter_carriesTheReceiptItHadToReReadIt` |
+| A21 | el fallo de relectura del recibo dice que la ejecucion no arranco | `TestAdapter_aFailedReceiptReReadNeverSaysTheExecutionDidNo` |
+| A23 | ningun cerebro puede aparcar nunca (el control) | `TestApprovalsGate_countsOnlyTheBrainsThatCanActuallyPark`, `all_five:_the_control` |
+| S1 | la lista esconde la fila cuya previa no parsea | `TestListPendingApprovals_anUnreadablePreviewKeepsItsRow` |
+| S2 | el canal se indexa sin comprobar la longitud | `TestListPendingApprovals_anEmptyResourcesSetIsNotAChannel` |
+| S3 | el canal nunca se da por conocido | `TestListPendingApprovals_aLegitimatelyEmptyChannelIsKnown` |
+| S4 | la cota de la lista sirve una fila de mas | `TestListPendingApprovals_isBoundedAtTheLimit` |
+| S5 | una fila que no escanea tumba la lista entera | `TestListPendingApprovals_aCorruptTimeDoesNotTakeTheListDow` |
+| S6 | la fila saltada no dice por que | `TestListPendingApprovals_aCorruptTimeDoesNotTakeTheListDow` |
+| S7 | la terna sale de la previa, sin version | `TestApprovalDetail_bringsTheTernaAndTheParamsTogether` |
+| S8 | la version se fija a la constante de produccion | `TestApprovalDetail_refusesAMutatedOpVersion`, `TestClaimApprovalParamsUnderDigest_judgesTheTernaItReadIts` |
+| S10 | la fila ausente se lee como fallo de driver | `TestApprovalDetail_separatesTheMissingRowFromTheDriverFail` |
+| S11 | la columna corrupta se lee como transitoria | `TestApprovalDetail_namesEachBeltThatRefuses`, `requested_at_unparseable` |
+| S12 | la previa impaseable sale sin centinela | `TestApprovalDetail_namesEachBeltThatRefuses`, `preview_unparseable` |
+| S13 | el binding de la previa sale sin centinela | `TestApprovalDetail_namesEachBeltThatRefuses`, `preview_binding` |
+| S14 | el cinturon de historia sale sin centinela (effect_class) | `TestApprovalDetail_namesEachBeltThatRefuses`, `story:_effect_class` |
+| S15 | el cinturon de historia sale sin centinela (operacion) | `TestApprovalDetail_namesEachBeltThatRefuses`, `story:_operation` |
+| S16 | el cinturon de decision sale sin centinela (policy) | `TestApprovalDetail_namesEachBeltThatRefuses`, `story:_decision_policy` |
+| S17 | la ley movida se pliega en corrupcion | `TestApprovalDetail_theLawThatMovedHasItsOwnSentinel` |
+| S18 | la columna vacia se clasifica como present | `TestApprovalDetail_classifiesTheParamsState`, `empty:_born_without_arguments`, `TestAdapter_aRowBornWithoutArgumentsIsEmptyInA200` |
+| S19 | el claim colapsa la columna vacia en fila ausente | `TestClaimApprovalParams_tellsItsThreeRefusalsApart`, `the_row_is_there_and_the_column_is_empty` |
+| S20 | ApprovalParams colapsa la columna vacia en fila ausente | `TestApprovalParams_tellsTheMissingRowFromTheEmptyColumn` |
+| S21 | el claim vuelve a descartar el error de RowsAffected | `TestClaimApprovalParams_propagatesTheRowsAffectedError` |
+| S22 | el claim no juzga el digest de la fila que leyo | `TestClaimApprovalParamsUnderDigest_judgesTheTernaItReadIts` |
+| S23 | el rehuse de transitionTx pierde su nombre | `TestDecideApprovalUnderLaw_namesTheActionThatWasNoLongerPe` |
+| S24 | el cinturon del detalle corre despues de clasificar | `TestApprovalDetail_refusesAMutatedOpVersion`, `TestAdapter_mutatedParamsRefuseBeforeClassifying` |
+| S25 | la fila de actions ausente cae en el residual del cinturon | `TestApprovalDetail_anAbsentActionRowIsCorruptionNotAbsence` |
+| S27 | un cuerpo legible se clasifica como no disponible | `TestApprovalDetail_classifiesTheParamsState`, `present` |
+| S28 | el claim colapsa la fila ausente en columna vacia | `TestClaimApprovalParams_tellsItsThreeRefusalsApart`, `the_row_is_not_there` |
+| S29 | la lista corre el cinturon (fuera del bucle) y esconde la fila que no verifica | `TestListPendingApprovals_bringsTheRowWithoutRunningTheBelt` |
+
+## Las que hubo que rehacer, y por qué
+
+Una mutación que no enrojece es un hallazgo, pero hay que distinguir el agujero
+del molde de la mutación mal hecha. Las nueve que fallaron en la primera pasada:
+
+| # | Qué pasó | Qué era |
+|---|---|---|
+| S5, S22, A10, A20 | no compilaban (dejaban una variable sin usar) | mutación mal hecha; rehechas compilables, enrojecen |
+| S21 | ancla ambigua: el mismo literal en los dos claims | mutación mal hecha; anclada al cuerpo entero |
+| A12 | un `break` en un `case` de Go no hace nada | **inerte por construcción**; retirada — la rama la vigila A13 |
+| S9 | ataca la rama de `ternaOf` que el cinturón anterior ya defiende | **código inalcanzable por esa puerta**; sustituida por S25, que sí la recorre |
+| A4 | el caso usaba `time_now`, que **no tiene descriptor**: el molde pasaba por ausencia, no por clase | **agujero del molde**; el caso pasa a `read_file`, que es `read_external` declarado |
+| S26 | una consulta anidada dentro del bucle de filas se cuelga sobre un pool de UNA conexión | mutación mal hecha — y es el interbloqueo que R8 fichó; rehecha fuera del bucle como S29 |
+
+## Un agujero del propio banco
+
+La primera versión del banco corría **solo el paquete del fichero mutado**, así
+que una mutación del almacén que enrojece un molde del adaptador se contaba como
+muda. Corregido: cada mutación ejecuta los dos paquetes. Sin esa corrección,
+`S18` y `S24` habrían pasado por mudas siendo correctas.
