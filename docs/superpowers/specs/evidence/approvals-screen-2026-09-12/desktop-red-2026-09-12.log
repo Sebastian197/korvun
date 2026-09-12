@@ -1,0 +1,261 @@
+npm warn config init.author.email Use `--init-author-email` instead.
+npm warn config init.author.name Use `--init-author-name` instead.
+npm warn config init.license Use `--init-license` instead.
+
+ RUN  v4.1.11 /private/tmp/korvun-approvals-20260912/cmd/korvun-desktop/frontend
+
+ ❯ src/views/Approvals.test.tsx (87 tests | 87 failed) 88253ms
+     × AS-20 · V1 con «2 de 3» y cero filas 1083ms
+     × AS-19 · E4 con brains_can_park=0: literal de E4, «No hay nada aparcado» ausente 1068ms
+     × AS-18 · 409 disabled: literal de E3; «No hay nada aparcado» y «Nada puede llegar a esta lista» ausentes 1060ms
+     × AS-15 · 503 core stopped con Running=false: literal de E1, cero filas, «No hay nada aparcado» ausente 1058ms
+     × AS-59 · E1 no imprime ningún número de peticiones 1056ms
+     × AS-16 · 503 core unreachable en GET: literal de E2-GET; E1 y «No hay nada aparcado» ausentes 1072ms
+     × AS-30 · nombre desconocido: imprime «pepino» y «algo raro» crudos; no pinta lista vacía 1050ms
+     × AS-31 · fetch rechazado: literal de la última fila de E9; cero filas y «No hay nada aparcado» ausente 1051ms
+     × AS-32 · cuerpo no-JSON con 200: mismo estado que AS-31 1064ms
+     × AS-33 · 404 con cuerpo ajeno a la API: literal de «superficie no montada» 1059ms
+     × AS-93 · forbidden (401): su literal, [Ir a Inicio], y sin la frase del efecto 1062ms
+     × AS-10 · Esc en la lista: cero llamadas 1060ms
+     × AS-81 · la lista no dispara una segunda petición en 30 s 1058ms
+     × AS-82 · una respuesta tardía de la lista no pinta si ya se navegó al detalle 1056ms
+     × AS-40 · operation con U+202E: la fila de la lista pinta el escape y no el carácter 1059ms
+     × AS-43 · dos filas con la misma cola: digests enteros y el aviso de FR-UI-12 1051ms
+     × AS-44 · digest vacío y digest malformado: «digest ilegible», sin Aprobar, fuera de la colisión 1071ms
+     × AS-45 · expires_at vacío: «no caduca», sin cuenta atrás 1058ms
+     × AS-74 · fila cuyo preview no se puede leer: «SIN CLASE LEGIBLE», id y digest; no desaparece 1055ms
+     × AS-61 · OpenConfigFolder que rechaza: «No se ha podido abrir la carpeta» + la ruta 1060ms
+     × AS-1 · el digest es el primer bloque y ambos botones van después de los parámetros en el DOM 1053ms
+     × AS-3 · sin teclear: Aprobar disabled, Rechazar habilitado 1048ms
+     × AS-4 · seis correctos: «✓ coincide» y Aprobar habilitado 1062ms
+     × AS-5 · paste: campo vacío, «Pegar no arma…», Aprobar disabled 1064ms
+     × AS-6 · drop: idéntico a AS-5 1063ms
+     × AS-7 · clase write_compensatable: banda ANOMALÍA con su frase exacta y armado presente 1059ms
+     × AS-8 · clase "garabato": «CLASE DESCONOCIDA» y armado presente 1066ms
+     × AS-46 · reversibility vacío: «el registro no declara reversibilidad» y el armado sigue en una irreversible 1067ms
+     × AS-56 · irreversible y crítica: botones con idéntica caja (FR-UI-9) 1067ms
+     × AS-57 · ningún role="dialog" en ningún estado 1064ms
+     × AS-58 · ninguno de los dos botones lleva la clase del gradiente de identidad 1059ms
+     × AS-60 · la línea de Esc es la misma cadena exacta en irreversible, crítica y anomalía 1065ms
+     × AS-76 · el detalle no imprime law_version en ningún estado 1068ms
+     × AS-38 · parámetros con U+202E: el DOM contiene <U+202E> y no el carácter crudo 1059ms
+     × AS-72 · parámetros con U+200B y U+FEFF: escapes visibles, no los crudos 1062ms
+     × AS-39 · purpose con U+202E: idéntico en el bloque ORIGEN 1055ms
+     × AS-41 · parámetros con una URL: cero elementos <a> en el documento 1058ms
+     × AS-42 · detalle abierto 30 s: una sola petición del detalle 1072ms
+     × AS-35 · parameters_state unavailable: su literal, Aprobar ausente, [Reintentar] presente 1057ms
+     × AS-36 · parameters_state too_large: su literal, Aprobar ausente, la CLI nombrada 1080ms
+     × AS-64 · parameters_state empty: su literal y Aprobar ausente 1051ms
+     × AS-37 · present con parámetros vacíos: respuesta ilegible del núcleo, sin Aprobar 1046ms
+     × AS-34 · parameters_state purged: respuesta ilegible del núcleo, nunca un estado normal 1053ms
+     × AS-78 · 200 con brain_gone:true: documento entero, Rechazar habilitado, Aprobar ausente, sin estado terminal 1064ms
+     × AS-80 · fila EXPIRED ⇒ expired; fila REJECTED ⇒ already_decided: dos literales 1057ms
+     × AS-92 · params_digest_mismatch en el GET: literal de E6-ter, sin decisión, sin «Es transitorio» ni «no reconoce» 1064ms
+     × AS-98 · params_not_canonical: su literal propio, sin decisión 1053ms
+     × AS-23 · 409 invalidated en el GET: literal de E7, Rechazar presente, Aprobar ausente, «Es transitorio» ausente 1064ms
+     × AS-24 · 409 evidence_corrupt con message preview_effect_mismatch: literal de E8, cinturón impreso, sin botones 1064ms
+     × AS-47 · unavailable: su literal; «no existe» ausente 1070ms
+     × AS-90 · nombre desconocido en un GET: [Reintentar] presente 1067ms
+     × AS-9 · Esc con motivo: un POST a /reject con ese comentario y cero a /approve 1060ms
+     × AS-11 · Esc durante «Ejecutando»: cero llamadas 1066ms
+     × AS-50 · el cuerpo de todo POST a /approve tiene exactamente la clave digest con el digest servido 1067ms
+     × AS-25 · dos clics en Aprobar: un solo POST y el desenlace de esa petición, no already_decided 1065ms
+     × AS-12 · 409 digest_mismatch: literal de E6 y ningún control que apruebe 1057ms
+     × AS-13 · 409 digest_mismatch: el digest nuevo no aparece en el DOM 1074ms
+     × AS-14 · [Volver a leer] tras E6: se repite el GET y el armado queda vacío 1077ms
+     × AS-70 · el armado sobrevive a un blur de la ventana y muere al navegar a la lista 1072ms
+     × AS-21 · reloj adelantado sobre un PENDING vigente: Aprobar retirado, armado borrado, Rechazar habilitado, «caducó» ausente 1066ms
+     × AS-22 · 409 expired: literal de E5 con el instante UTC; ambos botones ausentes 1071ms
+     × AS-17 · 503 core unreachable en POST: desenlace desconocido; «Ninguna decisión ha salido de esta ventana» ausente 1055ms
+     × AS-26 · respuesta de /reject perdida: desenlace desconocido simétrico; «Rechazada» ausente 1072ms
+     × AS-94 · brain_gone en un POST: literal de E9-bis, Rechazar habilitado, Aprobar ausente 1058ms
+     × AS-89 · invalidated en un POST antes del commit: E7 con Rechazar; «La decisión quedó registrada» ausente 1064ms
+     × AS-90 · nombre desconocido en un POST: desenlace desconocido y [Reintentar] ausente 1064ms
+     × AS-69 · Esc en E5, E6, E6-bis, E7, E8 y E9: cero llamadas en los seis 1075ms
+     × AS-27 · ejecución fallida (herramienta): literal de unknown_outcome; «korvun approvals execute» ausente 1051ms
+     × AS-66 · unknown_outcome: «no llegó a salir» ausente, sea cual sea el texto del error 1068ms
+     × AS-28 · close_failed: «esta ejecución no pudo cerrar el registro» presente; las frases a secas ausentes 1058ms
+     × AS-29 · desenlace desconocido tras aprobar: «korvun approvals execute» y «no se ejecutó» ausentes 1067ms
+     × AS-77 · not_started_params_held: «korvun approvals execute» presente con su condicional; la frase del cierre ausente 1056ms
+     × AS-103-bis · not_started_params_held: sin promesa de exclusividad, con «sobre otros ejecutores esta pantalla no se pronuncia» 1075ms
+     × AS-95 · not_started_params_gone: la frase del cierre presente y condicionada; «korvun approvals execute» ausente 1052ms
+     × AS-97 · params_unaccounted: su literal; «Otra ejecución se llevó esta petición» ausente 1061ms
+     × AS-91 · los nueve desenlaces sin comando: «korvun approvals execute» ausente en todos 1050ms
+     × AS-88 · params_belt_failed: literal de E6-bis, sin [Volver a leer], sin decisión, sin «no reconoce» 1060ms
+     × AS-68 · E6-bis no reutiliza el texto de E6: «léela otra vez, entera» ausente 1065ms
+     × AS-109 (literal) · not_decided: «sigue esperando decisión» presente; «dejó de estar esperando» ausente 1070ms
+     × AS-106 (literal) · already_closed no atribuye el cierre a nadie 1066ms
+     × AS-113 (literal) · decided_evidence_corrupt: sin «korvun approvals execute», sin «restaura», con la decisión sellada 1071ms
+     × AS-111 (literal) · params_unreadable: «pudo llevárselos otra ejecución» ausente 1064ms
+     × P5 · rechazo con 200: «Rechazada.» y el recibo de la decisión 1070ms
+     × AS-48 · con aprobaciones apagadas, la entrada «Aprobaciones» sigue en el NAV 38ms
+     × AS-62 · la entrada del NAV no lleva data-unread 12ms
+     × AS-75 · la entrada «Aprobaciones» contiene un svg, entre Actividad y Ajustes 11ms
+     × AS-49 · con aprobaciones apagadas, el StatusChip global no cambia de etiqueta 10ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 87 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-20 · V1 con «2 de 3» y cero filas
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-19 · E4 con brains_can_park=0: literal de E4, «No hay nada aparcado» ausente
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-18 · 409 disabled: literal de E3; «No hay nada aparcado» y «Nada puede llegar a esta lista» ausentes
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-15 · 503 core stopped con Running=false: literal de E1, cero filas, «No hay nada aparcado» ausente
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-59 · E1 no imprime ningún número de peticiones
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-16 · 503 core unreachable en GET: literal de E2-GET; E1 y «No hay nada aparcado» ausentes
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-30 · nombre desconocido: imprime «pepino» y «algo raro» crudos; no pinta lista vacía
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-32 · cuerpo no-JSON con 200: mismo estado que AS-31
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-33 · 404 con cuerpo ajeno a la API: literal de «superficie no montada»
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-93 · forbidden (401): su literal, [Ir a Inicio], y sin la frase del efecto
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-10 · Esc en la lista: cero llamadas
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-81 · la lista no dispara una segunda petición en 30 s
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-82 · una respuesta tardía de la lista no pinta si ya se navegó al detalle
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-40 · operation con U+202E: la fila de la lista pinta el escape y no el carácter
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-43 · dos filas con la misma cola: digests enteros y el aviso de FR-UI-12
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-44 · digest vacío y digest malformado: «digest ilegible», sin Aprobar, fuera de la colisión
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-45 · expires_at vacío: «no caduca», sin cuenta atrás
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-74 · fila cuyo preview no se puede leer: «SIN CLASE LEGIBLE», id y digest; no desaparece
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-61 · OpenConfigFolder que rechaza: «No se ha podido abrir la carpeta» + la ruta
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-1 · el digest es el primer bloque y ambos botones van después de los parámetros en el DOM
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-3 · sin teclear: Aprobar disabled, Rechazar habilitado
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-4 · seis correctos: «✓ coincide» y Aprobar habilitado
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-5 · paste: campo vacío, «Pegar no arma…», Aprobar disabled
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-6 · drop: idéntico a AS-5
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-7 · clase write_compensatable: banda ANOMALÍA con su frase exacta y armado presente
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-8 · clase "garabato": «CLASE DESCONOCIDA» y armado presente
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-46 · reversibility vacío: «el registro no declara reversibilidad» y el armado sigue en una irreversible
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-56 · irreversible y crítica: botones con idéntica caja (FR-UI-9)
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-57 · ningún role="dialog" en ningún estado
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-58 · ninguno de los dos botones lleva la clase del gradiente de identidad
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-60 · la línea de Esc es la misma cadena exacta en irreversible, crítica y anomalía
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-76 · el detalle no imprime law_version en ningún estado
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-38 · parámetros con U+202E: el DOM contiene <U+202E> y no el carácter crudo
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-72 · parámetros con U+200B y U+FEFF: escapes visibles, no los crudos
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-39 · purpose con U+202E: idéntico en el bloque ORIGEN
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-41 · parámetros con una URL: cero elementos <a> en el documento
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-42 · detalle abierto 30 s: una sola petición del detalle
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-35 · parameters_state unavailable: su literal, Aprobar ausente, [Reintentar] presente
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-36 · parameters_state too_large: su literal, Aprobar ausente, la CLI nombrada
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-64 · parameters_state empty: su literal y Aprobar ausente
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-37 · present con parámetros vacíos: respuesta ilegible del núcleo, sin Aprobar
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-34 · parameters_state purged: respuesta ilegible del núcleo, nunca un estado normal
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-78 · 200 con brain_gone:true: documento entero, Rechazar habilitado, Aprobar ausente, sin estado terminal
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-80 · fila EXPIRED ⇒ expired; fila REJECTED ⇒ already_decided: dos literales
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-92 · params_digest_mismatch en el GET: literal de E6-ter, sin decisión, sin «Es transitorio» ni «no reconoce»
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-98 · params_not_canonical: su literal propio, sin decisión
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-23 · 409 invalidated en el GET: literal de E7, Rechazar presente, Aprobar ausente, «Es transitorio» ausente
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-24 · 409 evidence_corrupt con message preview_effect_mismatch: literal de E8, cinturón impreso, sin botones
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-47 · unavailable: su literal; «no existe» ausente
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-90 · nombre desconocido en un GET: [Reintentar] presente
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-9 · Esc con motivo: un POST a /reject con ese comentario y cero a /approve
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-11 · Esc durante «Ejecutando»: cero llamadas
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-50 · el cuerpo de todo POST a /approve tiene exactamente la clave digest con el digest servido
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-25 · dos clics en Aprobar: un solo POST y el desenlace de esa petición, no already_decided
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-12 · 409 digest_mismatch: literal de E6 y ningún control que apruebe
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-13 · 409 digest_mismatch: el digest nuevo no aparece en el DOM
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-14 · [Volver a leer] tras E6: se repite el GET y el armado queda vacío
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-70 · el armado sobrevive a un blur de la ventana y muere al navegar a la lista
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-21 · reloj adelantado sobre un PENDING vigente: Aprobar retirado, armado borrado, Rechazar habilitado, «caducó» ausente
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-22 · 409 expired: literal de E5 con el instante UTC; ambos botones ausentes
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-17 · 503 core unreachable en POST: desenlace desconocido; «Ninguna decisión ha salido de esta ventana» ausente
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-26 · respuesta de /reject perdida: desenlace desconocido simétrico; «Rechazada» ausente
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-94 · brain_gone en un POST: literal de E9-bis, Rechazar habilitado, Aprobar ausente
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-89 · invalidated en un POST antes del commit: E7 con Rechazar; «La decisión quedó registrada» ausente
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-90 · nombre desconocido en un POST: desenlace desconocido y [Reintentar] ausente
+ FAIL  src/views/Approvals.test.tsx > P3 · decisión > AS-69 · Esc en E5, E6, E6-bis, E7, E8 y E9: cero llamadas en los seis
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-27 · ejecución fallida (herramienta): literal de unknown_outcome; «korvun approvals execute» ausente
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-66 · unknown_outcome: «no llegó a salir» ausente, sea cual sea el texto del error
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-28 · close_failed: «esta ejecución no pudo cerrar el registro» presente; las frases a secas ausentes
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-29 · desenlace desconocido tras aprobar: «korvun approvals execute» y «no se ejecutó» ausentes
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-77 · not_started_params_held: «korvun approvals execute» presente con su condicional; la frase del cierre ausente
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-103-bis · not_started_params_held: sin promesa de exclusividad, con «sobre otros ejecutores esta pantalla no se pronuncia»
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-95 · not_started_params_gone: la frase del cierre presente y condicionada; «korvun approvals execute» ausente
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-97 · params_unaccounted: su literal; «Otra ejecución se llevó esta petición» ausente
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-91 · los nueve desenlaces sin comando: «korvun approvals execute» ausente en todos
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-88 · params_belt_failed: literal de E6-bis, sin [Volver a leer], sin decisión, sin «no reconoce»
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-68 · E6-bis no reutiliza el texto de E6: «léela otra vez, entera» ausente
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-109 (literal) · not_decided: «sigue esperando decisión» presente; «dejó de estar esperando» ausente
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-106 (literal) · already_closed no atribuye el cierre a nadie
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-113 (literal) · decided_evidence_corrupt: sin «korvun approvals execute», sin «restaura», con la decisión sellada
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > AS-111 (literal) · params_unreadable: «pudo llevárselos otra ejecución» ausente
+ FAIL  src/views/Approvals.test.tsx > P4 · desenlaces > P5 · rechazo con 200: «Rechazada.» y el recibo de la decisión
+AssertionError: expected 0 to be greater than 0
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div />[39m
+  [36m</body>[39m
+[36m</html>[39m
+ ❯ src/views/Approvals.test.tsx:116:61
+    114|   stubFetch(route)
+    115|   render(<Approvals onGoHome={() => undefined} />)
+    116|   await waitFor(() => expect(gets('/api/approvals').length).toBeGreate…
+       |                                                             ^
+    117| }
+    118| async function openDetail(route: Route = happy()): Promise<void> {
+ ❯ runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:47:12
+ ❯ checkCallback node_modules/@testing-library/dom/dist/wait-for.js:124:77
+ ❯ checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:118:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/87]⎯
+
+ FAIL  src/views/Approvals.test.tsx > P1 · lista > AS-31 · fetch rechazado: literal de la última fila de E9; cero filas y «No hay nada aparcado» ausente
+TestingLibraryElementError: Unable to find an element with the text: El núcleo no ha contestado nada legible.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div />[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div />[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/views/Approvals.test.tsx:216:25
+    214|     stubFetch(() => Promise.reject(new TypeError('Failed to fetch')) a…
+    215|     render(<Approvals onGoHome={() => undefined} />)
+    216|     expect(await screen.findByText('El núcleo no ha contestado nada le…
+       |                         ^
+    217|     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInT…
+    218|     expect(screen.queryByText('No hay nada aparcado.')).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/87]⎯
+
+ FAIL  src/views/Approvals.test.tsx > NAV > AS-48 · con aprobaciones apagadas, la entrada «Aprobaciones» sigue en el NAV
+ FAIL  src/views/Approvals.test.tsx > NAV > AS-62 · la entrada del NAV no lleva data-unread
+ FAIL  src/views/Approvals.test.tsx > NAV > AS-75 · la entrada «Aprobaciones» contiene un svg, entre Actividad y Ajustes
+ FAIL  src/views/Approvals.test.tsx > NAV > AS-49 · con aprobaciones apagadas, el StatusChip global no cambia de etiqueta
+TypeError: d.Version is not a function
+ ❯ src/App.tsx:62:8
+     60|     if (!d) return
+     61|     void d
+     62|       .Version()
+       |        ^
+     63|       .then(setVersion)
+     64|       .catch(() => undefined)
+ ❯ Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:25989:20
+ ❯ runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ commitHookEffectListMount node_modules/react-dom/cjs/react-dom-client.development.js:13249:29
+ ❯ commitHookPassiveMountEffects node_modules/react-dom/cjs/react-dom-client.development.js:13336:11
+ ❯ commitPassiveMountOnFiber node_modules/react-dom/cjs/react-dom-client.development.js:15484:13
+ ❯ recursivelyTraversePassiveMountEffects node_modules/react-dom/cjs/react-dom-client.development.js:15439:11
+ ❯ commitPassiveMountOnFiber node_modules/react-dom/cjs/react-dom-client.development.js:15519:11
+ ❯ flushPassiveEffects node_modules/react-dom/cjs/react-dom-client.development.js:18432:9
+ ❯ node_modules/react-dom/cjs/react-dom-client.development.js:17923:15
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/87]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  87 failed (87)
+   Start at  14:59:00
+   Duration  89.92s (transform 364ms, setup 86ms, import 465ms, tests 88.25s, environment 721ms)
+
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.0.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2
+npm notice To update run: npm install -g npm@12.0.2
+npm notice
+exit=1

@@ -1,0 +1,44 @@
+### controlapi approvals: green
+=== RUN   TestApprovals_NamedOutcomes/disabled
+=== RUN   TestApprovals_NamedOutcomes/params_digest_mismatch
+=== RUN   TestApprovals_NamedOutcomes/params_not_canonical
+=== RUN   TestApprovals_NamedOutcomes/invalidated
+=== RUN   TestApprovals_NamedOutcomes/evidence_corrupt
+=== RUN   TestApprovals_NamedOutcomes/brain_gone
+=== RUN   TestApprovals_NamedOutcomes/not_started_params_held
+=== RUN   TestApprovals_NamedOutcomes/not_started_params_gone
+=== RUN   TestApprovals_NamedOutcomes/params_unaccounted
+=== RUN   TestApprovals_NamedOutcomes/params_unreadable
+=== RUN   TestApprovals_NamedOutcomes/decided_evidence_corrupt
+=== RUN   TestApprovals_NamedOutcomes/already_closed
+=== RUN   TestApprovals_NamedOutcomes/not_decided
+=== RUN   TestApprovals_NamedOutcomes/params_belt_failed
+=== RUN   TestApprovals_NamedOutcomes/unknown_outcome
+=== RUN   TestApprovals_NamedOutcomes/close_failed
+--- PASS: TestApprovals_NamedOutcomes (0.02s)
+    --- PASS: TestApprovals_NamedOutcomes/already_decided (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/expired (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/digest_mismatch (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/not_found (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/unavailable (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/disabled (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/params_digest_mismatch (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/params_not_canonical (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/invalidated (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/evidence_corrupt (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/brain_gone (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/not_started_params_held (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/not_started_params_gone (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/params_unaccounted (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/params_unreadable (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/decided_evidence_corrupt (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/already_closed (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/not_decided (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/params_belt_failed (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/unknown_outcome (0.00s)
+    --- PASS: TestApprovals_NamedOutcomes/close_failed (0.00s)
+--- PASS: TestApprovals_RejectCommentIsBounded (0.50s)
+ok  	github.com/Sebastian197/korvun/internal/controlapi	(cached)
+
+### probing mutations, §17 F-bis — one per touched mould
+(each neutralises the branch its mould watches; all captured red, all reverted)

@@ -10,6 +10,7 @@ import { HealthzBadge } from './components/HealthzBadge'
 import { StatusChip } from './components/StatusChip'
 import {
   IconActivity,
+  IconApprovals,
   IconBuilder,
   IconChannels,
   IconChat,
@@ -20,6 +21,7 @@ import { desktop } from './lib/go'
 import { useUnreadTotal } from './console/useUnreadTotal'
 import { useSnapshot } from './snapshot/store'
 import { Activity, ActivityLiveChip } from './views/Activity'
+import { Approvals } from './views/Approvals'
 import { BuilderEmbed } from './views/BuilderEmbed'
 import { Channels } from './views/Channels'
 import { Console } from './views/Console'
@@ -28,7 +30,7 @@ import { Home } from './views/Home'
 import { Onboarding } from './views/Onboarding'
 import { Settings } from './views/Settings'
 
-type View = 'inicio' | 'builder' | 'chat' | 'canales' | 'actividad' | 'ajustes'
+type View = 'inicio' | 'builder' | 'chat' | 'canales' | 'actividad' | 'aprobaciones' | 'ajustes'
 
 // Design order (6a review rider a): Builder second, exactly as the sidebar
 // mock paints it.
@@ -42,6 +44,11 @@ const NAV: ReadonlyArray<{
   { id: 'chat', label: 'Chat', icon: IconChat },
   { id: 'canales', label: 'Canales', icon: IconChannels },
   { id: 'actividad', label: 'Actividad', icon: IconActivity },
+  // FR-UI-1/2/3: between Actividad and Ajustes, with its own icon, NO unread
+  // dot (data-unread is not reused here), and it stays visible with approvals
+  // switched off — the state that must be reachable is precisely the one that
+  // says the guarantee has a hole.
+  { id: 'aprobaciones', label: 'Aprobaciones', icon: IconApprovals },
   { id: 'ajustes', label: 'Ajustes', icon: IconSettings },
 ]
 
@@ -147,6 +154,7 @@ export function App(): React.JSX.Element {
           />
         )}
         {view === 'actividad' && <Activity />}
+        {view === 'aprobaciones' && <Approvals onGoHome={() => setView('inicio')} />}
         {view === 'ajustes' && <Settings version={version} />}
       </main>
 
