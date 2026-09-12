@@ -1602,9 +1602,10 @@ la evasión que esta sección existe para no ser.
   reclamada». Su molde es AS-104-bis, con un driver envuelto, y su
   desenlace exigido es **también `not_started_params_held`**: el
   `defer tx.Rollback()` deshace el UPDATE, así que la fila conserva sus bytes
-  pase lo que pase con `RowsAffected()`. Es el único molde de la lista que
-  necesita una costura de test en producción — AS-119 evita la suya llamando
-  al almacén directamente, con su nivel declarado.)
+  pase lo que pase con `RowsAffected()`. Es uno de los DOS moldes de la lista que
+  necesitan una costura de test en producción — el otro es AS-100, cuya
+  barrera se declaró al reescribirla el 2026-09-12; AS-119 evita la suya
+  llamando al almacén directamente, con su nivel declarado.)
 - **AS-105** (dos conexiones reales) **La fila de aprobación desaparece tras
   una decisión sellada**, con params NORMALES. La segunda conexión ejecuta
   `DELETE FROM approvals WHERE approval_id = ?`; la puerta nueva no encuentra
@@ -1724,6 +1725,20 @@ la evasión que esta sección existe para no ser.
   **ausente** y la palabra «restaura» **ausente**. **Mutación:** tratar todo
   fallo de `store.Get` como reparable ⇒ una corrupción permanente saldría con
   comando y promesa de reparación.
+- **AS-121** (en proceso, con sonda de conteo) **Una sola resolución de la ley
+  por decisión.** *Añadida el 2026-09-12 por adjudicación del director: era la
+  única costura del tren que no estaba declarada en esta sección.* El endpoint
+  resuelve la ley **una vez** y alimenta con ese mismo objeto el pin del decide
+  y el ejecutor, como manda FR-API-24. El molde monta una **sonda de conteo**
+  sobre la resolución —un contador que el paquete expone a su test, incrementado
+  en el punto único de resolución— y exige **exactamente 1** para un `approve`
+  completo. Aserto único, sin either/or: no «una o ninguna», **una**.
+  **Mutación:** llamar a `BuildApprovalExecutor` en vez de a
+  `BuildApprovalExecutorFromCage` ⇒ la sonda cuenta **2** y el molde enrojece.
+  Sin la sonda esa mutación NO enrojece, porque con el perfil intacto las dos
+  llamadas resuelven la misma jaula y el desenlace visible es idéntico — por eso
+  la sonda es el oráculo y no el resultado. Nivel: **en proceso, con sonda de
+  conteo**.
 - **AS-116** (dos conexiones reales) **La previa que no se puede ni leer.**
   Tras el decide commiteado, la segunda conexión hace
   `UPDATE approvals SET canonical_preview = canonical_preview || '}'` (o le
@@ -1782,21 +1797,39 @@ la evasión que esta sección existe para no ser.
   es el canal que se cierra tras ese commit confirmado. **Mutación:** dejar la rama por defecto sirviendo el
   documento ⇒ rojo, y es fail-open donde `internal/action/approval.go` dice
   fail-closed («the fail-closed answer for any unknown status»).
-- **AS-100** (dos conexiones reales) **La instantánea del detalle.** Con el
-  GET del detalle en vuelo, una segunda conexión ejecuta el rechazo legítimo
-  de la CLI —que vacía `canonical_params` en su misma transacción— **entre dos
-  de las lecturas del handler**, con **sincronización real** y no con una
-  ventana de carrera: el molde vive en el almacén, abre la transacción del
-  detalle, hace su primera lectura, **espera en un canal** a que una segunda
-  conexión confirme el `Commit` de su rechazo, y solo entonces sigue leyendo
-  dentro de la MISMA transacción. Aserto único, sin either/or: las lecturas
-  posteriores devuelven **los valores de la instantánea** —`PENDING` y los
-  params intactos—, así que el documento se sirve entero y las cadenas de
-  E6-ter y de `params_not_canonical` están **ausentes**. **Mutación de
-  almacén:** sacar las lecturas de la transacción única ⇒ la segunda lectura
-  ve la columna ya vaciada junto al digest leído antes, el cinturón no
-  re-deriva y sale E6-ter sobre un rechazo legítimo. Nivel: **dos conexiones
-  reales con punto de sincronización dentro del handler**.
+- **AS-100** (dos conexiones reales, con barrera DENTRO de la puerta de
+  producción) **La instantánea del detalle.** *Reescrita el 2026-09-12 por
+  adjudicación del director: la redacción anterior admitía dos lecturas y bajo
+  una de ellas el molde no llamaba a la puerta de producción, así que la
+  mutación no lo enrojecía. Su regla, literal: «una lectura que hace al molde
+  inmune a su propia mutación no es una garantía, es una tautología».*
+
+  **El molde llama a la puerta REAL del detalle** —la de la cura 20, la que
+  abre la transacción única— y no ejecuta SQL propio dentro de ella. La puerta
+  lleva una **barrera declarada**: un punto de sincronización interno del
+  paquete, nulo en producción, que el molde arma para detenerla **después de su
+  primera lectura**. Con la puerta detenida ahí, una segunda conexión real
+  ejecuta el rechazo legítimo de la CLI —que vacía `canonical_params` en su
+  misma transacción— y **confirma su `Commit`**; solo entonces el molde suelta
+  la barrera y la puerta sigue leyendo dentro de la MISMA transacción.
+
+  Aserto único, sin either/or: las lecturas posteriores devuelven **los valores
+  de la instantánea** —`PENDING` y los params intactos—, así que el documento
+  se sirve entero y las cadenas de E6-ter y de `params_not_canonical` están
+  **ausentes**.
+
+  **Mutación de almacén:** sacar las lecturas del detalle de su transacción
+  única ⇒ la segunda lectura ve la columna ya vaciada junto al digest leído
+  antes, el cinturón no re-deriva y sale E6-ter sobre un rechazo legítimo.
+  **Con esta redacción la mutación SÍ enrojece**, porque el molde recorre la
+  puerta mutada; con la anterior no, y ése era el hallazgo.
+
+  **La barrera es costura de producción y se declara como tal**, junto a la de
+  AS-104-bis. El «único molde que necesita una costura de test en producción»
+  de AS-104 pasa a ser **dos**, y se acota ahí.
+
+  Nivel: **dos conexiones reales con barrera dentro de la puerta de
+  producción**.
 - **AS-99** `Status()` que falla o sin bindings: literal de la tercera rama de
   FR-UI-63; las cadenas «El núcleo está parado» y «El proceso está en marcha»
   **ausentes**.

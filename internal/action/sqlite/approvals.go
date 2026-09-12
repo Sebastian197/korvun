@@ -220,7 +220,7 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 		return "", fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
 	} else if err := action.ValidatePreviewBinding(a, p); err != nil {
 		return "", fmt.Errorf("action/sqlite: approval %q: %w; refusing the decision", approvalID, err)
-	} else if err := s.verifyApprovalStory(ctx, tx, a, p); err != nil {
+	} else if err := verifyApprovalStoryTyped(ctx, tx, a, p); err != nil {
 		// R5-S2: the WHOLE story judged inside THIS transaction — a
 		// saboteur moving actions/action_decisions between any earlier
 		// read and this consume refuses by name, approval intact.
@@ -291,7 +291,12 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	}
 	if decision == action.DecisionApproved {
 		if err := transitionTx(ctx, tx, a.ActionID, action.StatePendingApproval, action.StateApproved); err != nil {
-			return "", err
+			// The parked action moved out from under this decision. The whole
+			// transaction rolls back: nothing was decided and no effect ran,
+			// so the name says THAT. Sending it to an unnamed failure would
+			// let the operator read "we do not know whether the effect
+			// happened" over a transaction that did nothing at all.
+			return "", fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalActionNotPending, err)
 		}
 	} else {
 		if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
@@ -793,13 +798,13 @@ func (s *Store) ApprovalParams(ctx context.Context, approvalID string) ([]byte, 
 	err := s.db.QueryRowContext(ctx,
 		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&params)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrNotFound)
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: approval params %q: %w", approvalID, err)
+		return nil, fmt.Errorf("action/sqlite: approval params %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	if params == "" {
-		return nil, fmt.Errorf("action/sqlite: approval %q params purged: %w", approvalID, ErrNotFound)
+		return nil, fmt.Errorf("action/sqlite: approval %q params purged: %w", approvalID, ErrApprovalParamsEmpty)
 	}
 	return []byte(params), nil
 }
@@ -840,7 +845,7 @@ func (s *Store) GetApproval(ctx context.Context, approvalID string) (action.Appr
 	// whose effect, operation or principal no longer match the action,
 	// or a decision whose outcome/rule or law no longer match the
 	// request, refuses BY NAME.
-	if err := s.verifyApprovalStory(ctx, s.db, a, p); err != nil {
+	if err := verifyApprovalStoryTyped(ctx, s.db, a, p); err != nil {
 		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 	}
 	return a, p, nil
@@ -853,50 +858,10 @@ type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// verifyApprovalStory checks the approval+preview pair against the
-// actions and action_decisions rows they claim to describe (R4-F2;
-// R5-S2 runs it INSIDE the decide and claim transactions too, over
-// the rows THOSE transactions read).
-func (s *Store) verifyApprovalStory(ctx context.Context, q rowQuerier, a action.Approval, p action.ActionPreview) error {
-	var (
-		effectClass, opNS, opName string
-		principal                 sql.NullString
-	)
-	err := q.QueryRowContext(ctx,
-		`SELECT effect_class, op_namespace, op_name, principal_id
-		   FROM actions WHERE action_id = ?`, a.ActionID).
-		Scan(&effectClass, &opNS, &opName, &principal)
-	if err != nil {
-		return fmt.Errorf("action/sqlite: story of %q: %w", a.ActionID, err)
-	}
-	if effectClass != string(p.EffectClass) {
-		return fmt.Errorf("preview_effect_mismatch: the preview shows %s but the action row carries %s", p.EffectClass, effectClass)
-	}
-	if op := opNS + "/" + opName; op != p.Operation {
-		return fmt.Errorf("preview_operation_mismatch: the preview shows %s but the action row carries %s", p.Operation, op)
-	}
-	if principal.String != p.PrincipalID {
-		return fmt.Errorf("preview_principal_mismatch: the preview shows %q but the action row carries %q", p.PrincipalID, principal.String)
-	}
-	var (
-		outcome, rule, polDigest string
-		polVersion               int64
-	)
-	err = q.QueryRowContext(ctx,
-		`SELECT outcome, rule, policy_version, policy_digest
-		   FROM action_decisions WHERE action_id = ?`, a.ActionID).
-		Scan(&outcome, &rule, &polVersion, &polDigest)
-	if err != nil {
-		return fmt.Errorf("action/sqlite: decision of %q: %w", a.ActionID, err)
-	}
-	if outcome != a.Reason || rule != a.Reason {
-		return fmt.Errorf("decision_outcome_mismatch: the request was born from %q but the decision row says outcome %q rule %q", a.Reason, outcome, rule)
-	}
-	if polVersion != a.PolicyVersion || polDigest != a.PolicyDigest {
-		return fmt.Errorf("decision_policy_mismatch: the request pinned law v%d %s but the decision row carries v%d %s", a.PolicyVersion, a.PolicyDigest, polVersion, polDigest)
-	}
-	return nil
-}
+// The story belt lives in approvals_v15.go as verifyApprovalStoryTyped: the
+// one that names what refused. The untyped original was retired when the
+// approvals screen made the distinction load-bearing — two copies of a belt
+// are two places for a caller to guess.
 
 // ListApprovals returns every approval in one status, newest first.
 func (s *Store) ListApprovals(ctx context.Context, status action.ApprovalStatus) ([]action.Approval, error) {
@@ -1011,29 +976,40 @@ func (s *Store) ClaimApprovalParams(ctx context.Context, approvalID string, law 
 		if err := action.ValidatePreviewBinding(a, p); err != nil {
 			return nil, fmt.Errorf("action/sqlite: approval %q: %w; refusing the claim", approvalID, err)
 		}
-		if err := s.verifyApprovalStory(ctx, tx, a, p); err != nil {
+		if err := verifyApprovalStoryTyped(ctx, tx, a, p); err != nil {
 			return nil, fmt.Errorf("action/sqlite: approval %q: %w; refusing the claim", approvalID, err)
 		}
 	}
 	var params string
 	err = tx.QueryRowContext(ctx,
 		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&params)
+	// The three refusals below used to be ONE ErrNotFound, so "the row is
+	// gone", "the column is empty" and "the update touched nothing" were the
+	// same answer to a caller that has to tell them apart to name an outcome.
+	// Each keeps ErrNotFound in its chain, so every older caller is unchanged.
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrNotFound)
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: claim params %q: %w", approvalID, err)
+		return nil, fmt.Errorf("action/sqlite: claim params %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	if params == "" {
-		return nil, fmt.Errorf("action/sqlite: approval %q already claimed or closed: %w", approvalID, ErrNotFound)
+		return nil, fmt.Errorf("action/sqlite: approval %q already claimed or closed: %w", approvalID, ErrApprovalParamsEmpty)
 	}
 	res, err := tx.ExecContext(ctx,
 		`UPDATE approvals SET canonical_params = '' WHERE approval_id = ? AND canonical_params != ''`, approvalID)
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: purge claim %q: %w", approvalID, err)
+		return nil, fmt.Errorf("action/sqlite: purge claim %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return nil, fmt.Errorf("action/sqlite: approval %q already claimed: %w", approvalID, ErrNotFound)
+	n, err := res.RowsAffected()
+	if err != nil {
+		// A count nobody obtained is not a count of zero: the old `n, _ :=`
+		// read a driver failure as "already claimed" and named an outcome
+		// over a fact that was never established.
+		return nil, fmt.Errorf("action/sqlite: claim %q: rows affected unavailable: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	if n == 0 {
+		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalClaimSkipped)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("action/sqlite: commit claim: %w", err)

@@ -143,6 +143,12 @@ func (e lawMovedError) Error() string { return ErrApprovalInvalidated.Error() }
 // text come from the one binding in the table rather than a second copy.
 func (e lawMovedError) Unwrap() error { return ErrApprovalInvalidated }
 
+// CurrentLawDigest exposes the law in force to a caller outside this package.
+// Without it the value travelled in a field nobody but writeApprovalError
+// could read, which is a field in name only — and FR-API-17's whole point is
+// that the current law must NOT be dug out of a sentence.
+func (e lawMovedError) CurrentLawDigest() string { return e.current }
+
 // LawMoved wraps the invalidated sentinel with the law digest now in force.
 func LawMoved(currentLawDigest string) error { return lawMovedError{current: currentLawDigest} }
 
@@ -248,6 +254,12 @@ type ApprovalGate struct {
 	ApprovalsEnabled bool `json:"approvals_enabled"`
 	BrainsTotal      int  `json:"brains_total"`
 	BrainsCanPark    int  `json:"brains_can_park"`
+	// RowsSkipped counts the parked requests this page could NOT serve
+	// whole — a row whose stored evidence will not scan. It travels so the
+	// screen can say how many were left out instead of letting the operator
+	// lose them in silence: a list that quietly returns fewer rows than the
+	// store holds is the failure this field exists to make impossible.
+	RowsSkipped int `json:"rows_skipped"`
 }
 
 // ApprovalList is the list response: the gate and the page, never a bare array.
