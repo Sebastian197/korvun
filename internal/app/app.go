@@ -553,6 +553,18 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 				if ss, ok := b.store.(conversation.SessionStore); ok && b.store != nil {
 					controlapi.RegisterConsole(adminServer, token, ss, app.router)
 				}
+				// The approvals surface, on the SAME bearer: its answers carry
+				// the parked parameters a model wrote, so it exists exactly
+				// where the write surface exists AND an action store is open.
+				//
+				// It mounts even when approvals are DISABLED, on purpose: a
+				// disabled profile owes E3's 409 by name, and an unmounted door
+				// would make the window paint «this window cannot find the
+				// approvals door» — a different literal, pointing the operator
+				// at a profile block that is not the one at fault.
+				if b.actions != nil {
+					controlapi.RegisterApprovals(adminServer, token, NewApprovalsAdapter(cfg, b.actions))
+				}
 			}
 		}
 	}

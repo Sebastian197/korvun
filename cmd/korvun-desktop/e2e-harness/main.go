@@ -59,12 +59,17 @@ import (
 	"syscall"
 	"time"
 
+	"strconv"
+
 	"github.com/Sebastian197/korvun/internal/app"
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
 	"github.com/Sebastian197/korvun/internal/shell"
+
+	"github.com/Sebastian197/korvun/internal/action"
+	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 )
 
 // harnessTokenEnv is the dummy secret var the scripted channel references —
@@ -220,8 +225,13 @@ func newFakeModel() (*fakeModel, error) {
 // harnessConfig is the channel-ful variant of the SP5 template: one scripted
 // telegram channel + the template's private ollama brain pointed at the fake
 // model endpoint.
-func harnessConfig(modelURL string) *config.Config {
-	return &config.Config{
+// harnessConfig builds the harness profile. `approvals` adds the PARKING brain
+// and turns the approvals surface on — and it is a flag, not a default,
+// because a second brain is visible to every other spec on this harness: the
+// approvals scenarios get their OWN instance so the existing ones keep seeing
+// the profile they were written against.
+func harnessConfig(modelURL string, approvals bool) *config.Config {
+	cfg := &config.Config{
 		Channels: []config.ChannelConfig{
 			{Type: defaultChannel, Mode: "polling", TokenEnv: harnessTokenEnv},
 			// The direct-chat channel (FR-CONS): no secret, no mode; it
@@ -246,8 +256,30 @@ func harnessConfig(modelURL string) *config.Config {
 		Session:       &config.SessionConfig{},
 		Observability: &config.ObservabilityConfig{Enabled: boolPtr(true)},
 	}
+	if approvals {
+		// The PARKING brain: an agent with a caged webhook_call and a ceiling
+		// that reaches it, so the gate's five conditions are met and
+		// brains_can_park is 1. Deliberately NOT routed — the screen is
+		// exercised through /__test/park, and routing it would change what the
+		// chat surface shows.
+		cfg.Brains = append(cfg.Brains, config.BrainConfig{
+			Name:        parkingBrain,
+			Sensitivity: "private",
+			Policy:      config.PolicyConfig{Kind: "priority", Order: []string{"ollama"}},
+			Models: []config.ModelConfig{
+				{Provider: "ollama", ModelID: "llama3.2:1b", Locality: "local", BaseURL: modelURL},
+			},
+			Agent: &config.AgentConfig{
+				Tools:         []string{"webhook_call"},
+				MaxIterations: 2,
+				EffectCeiling: "critical",
+				WebhookCall:   &config.WebhookCallToolConfig{AllowHosts: []string{"hooks.acme.io"}},
+			},
+		})
+		cfg.Approvals = &config.ApprovalsConfig{Enabled: true}
+	}
+	return cfg
 }
-
 func boolPtr(b bool) *bool { return &b }
 
 // requireLoopback refuses any bind address whose host is not a loopback IP
@@ -274,6 +306,11 @@ func run() error {
 	dist := flag.String("dist", filepath.Join("cmd", "korvun-desktop", "frontend", "dist"),
 		"path to the built chrome bundle")
 	autostart := flag.Bool("start", true, "start the core on boot")
+	approvals := flag.Bool("approvals", false,
+		"approvals mode: add the PARKING brain and turn the approvals surface on. "+
+			"Its own instance, because a second brain is visible to every spec on "+
+			"this harness and the existing ones were written against the profile "+
+			"without it.")
 	fresh := flag.Bool("fresh", false,
 		"fresh-install mode (SP6c onboarding e2e): HOME/XDG_CONFIG_HOME point at a "+
 			"temp dir and NO config is written or loaded — EnsureDefaultConfig's "+
@@ -378,7 +415,7 @@ func run() error {
 			if err := os.WriteFile(cfgPath, raw, 0o600); err != nil {
 				return fmt.Errorf("write -agent-config copy: %w", err)
 			}
-		} else if err := writeScriptedConfig(cfgPath, fm.url); err != nil {
+		} else if err := writeScriptedConfig(cfgPath, fm.url, *approvals); err != nil {
 			return err
 		}
 		if err := ctrl.LoadConfig(cfgPath); err != nil {
@@ -395,7 +432,8 @@ func run() error {
 	}
 
 	testAPI := testControl{
-		desk: desk, ctrl: ctrl, model: fm, channels: channels, chanMu: &chanMu,
+		approvals: *approvals,
+		desk:      desk, ctrl: ctrl, model: fm, channels: channels, chanMu: &chanMu,
 		listenAddr: *addr, cfgPath: cfgPath, modelURL: fm.url, fresh: *fresh,
 	}
 	proxy := ctrl.ProxyHandler()
@@ -454,11 +492,11 @@ const defaultChannel = "telegram"
 
 // writeScriptedConfig writes the one-telegram harness config (pointed at the
 // fake model) to path, creating the parent dir.
-func writeScriptedConfig(path, modelURL string) error {
+func writeScriptedConfig(path, modelURL string, approvals bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("mkdir config dir: %w", err)
 	}
-	cfgBytes, err := json.MarshalIndent(harnessConfig(modelURL), "", "  ")
+	cfgBytes, err := json.MarshalIndent(harnessConfig(modelURL, approvals), "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
 	}
@@ -479,6 +517,7 @@ type testControl struct {
 	cfgPath    string
 	modelURL   string
 	fresh      bool
+	approvals  bool
 }
 
 // lookupChannel resolves a scripted channel by name ("" → the default one).
@@ -523,6 +562,8 @@ func (tc testControl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tc.resetConfig(w)
 	case r.URL.Path == "/__test/fresh-reset":
 		tc.freshReset(w)
+	case r.URL.Path == "/__test/park":
+		tc.park(w, r)
 	default:
 		http.Error(w, "unknown test endpoint", http.StatusNotFound)
 	}
@@ -623,7 +664,7 @@ func (tc testControl) resetConfig(w http.ResponseWriter) {
 		_ = tc.ctrl.Stop(ctx)
 		cancel()
 	}
-	if err := writeScriptedConfig(tc.cfgPath, tc.modelURL); err != nil {
+	if err := writeScriptedConfig(tc.cfgPath, tc.modelURL, tc.approvals); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -724,3 +765,100 @@ func (tc testControl) bindings(w http.ResponseWriter, r *http.Request, method st
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"result": result})
 }
+
+// park is FR-TEST-1: it parks a REAL approval so the browser scenarios have a
+// document to read.
+//
+// It writes through a SECOND connection to the same store file, the way the
+// operator CLI does, and it parks through the REAL factory — envelope, bound
+// request, sealed preview, canonical params. Nothing here fabricates a row: a
+// hand-written INSERT would sail past every belt the screen exists to surface,
+// and the scenarios would prove nothing.
+//
+// The law pin comes from the SAME resolution the adapter will use, because a
+// row parked under any other pin reads `invalidated` on the first touch and
+// every scenario would pass for the wrong reason.
+func (tc testControl) park(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID         string `json:"id"`
+		Operation  string `json:"operation"`
+		Params     string `json:"params"`
+		Purpose    string `json:"purpose"`
+		Channel    string `json:"channel"`
+		TTLSeconds int    `json:"ttl_seconds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if body.ID == "" {
+		body.ID = "act_" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	if body.Operation == "" {
+		body.Operation = "webhook_call"
+	}
+	if body.Params == "" {
+		body.Params = `{"url":"https://hooks.acme.io/pedidos","body":"1"}`
+	}
+	if body.Channel == "" {
+		body.Channel = "telegram"
+	}
+	ttl := time.Duration(body.TTLSeconds) * time.Second
+	if ttl == 0 {
+		ttl = time.Hour
+	}
+	cfg := harnessConfig(tc.modelURL, tc.approvals)
+	_, pin, err := app.ResolveApprovalLaw(cfg, parkingBrain)
+	if err != nil {
+		http.Error(w, "resolve the parking brain's law: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	store, err := actionsqlite.OpenOperator(app.StoragePath(cfg))
+	if err != nil {
+		http.Error(w, "open the store: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	defer func() { _ = store.Close() }()
+
+	env := action.NewEnvelope(body.ID, "harness",
+		action.Source{Kind: "agent_brain", Protocol: "text", Channel: body.Channel},
+		action.Operation{Namespace: "tool", Name: body.Operation, Version: 1},
+		body.Params, time.Now().UTC())
+	env.IntentID = action.RootIntentID
+	env.Principal = action.PrincipalRef{PrincipalID: "principal_brain_" + parkingBrain}
+	env.Effect = action.Effect{Class: string(action.EffectWriteIrreversible)}
+	bound, err := action.NewBoundApprovalRequest(env, body.Params, action.ApprovalContext{
+		IntentPurpose: firstNonEmpty(body.Purpose, "avisar al webhook de pedidos"),
+		GrantID:       "grant_harness", GrantDepth: 1, CostLine: "1 of 5",
+		ToolCage:      body.Operation,
+		Descriptor:    action.EffectDescriptor{Class: action.EffectWriteIrreversible, DataEgress: true},
+		HasDescriptor: true,
+		LawVersion:    pin.Version, LawDigest: pin.Digest,
+		Rule: "require_approval",
+		Now:  time.Now().UTC(), TTL: ttl,
+	})
+	if err != nil {
+		http.Error(w, "bind the approval: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := store.CreateApprovalRequest(r.Context(), bound); err != nil {
+		http.Error(w, "park: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"approval_id": bound.Approval().ApprovalID,
+		"action_id":   body.ID,
+		"digest":      bound.Approval().ActionDigest,
+	})
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// parkingBrain is the agent brain the approvals scenarios park under.
+const parkingBrain = "operaciones"

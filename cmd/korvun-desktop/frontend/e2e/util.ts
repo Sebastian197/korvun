@@ -12,6 +12,13 @@ export const BASE = `http://${HARNESS_ADDR}`
 export const FRESH_ADDR = '127.0.0.1:43118'
 export const FRESH_BASE = `http://${FRESH_ADDR}`
 
+/** A THIRD harness for the approvals screen: it carries the parking brain and
+ * the approvals surface, and it needs its own instance because that second
+ * brain is visible to every spec on the shared one — the existing specs were
+ * written against the profile without it. */
+export const APPROVALS_ADDR = '127.0.0.1:43119'
+export const APPROVALS_BASE = `http://${APPROVALS_ADDR}`
+
 /** Screenshot destination: design-drafts/, the copilot's review inbox. */
 export const SHOT = (name: string): string => `../../../design-drafts/${name}`
 

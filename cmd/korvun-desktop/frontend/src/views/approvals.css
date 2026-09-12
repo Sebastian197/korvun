@@ -1,0 +1,77 @@
+/* The approvals screen's geometry — §7 of the spec, and the only place in the
+ * product where a layout number is a SAFETY number.
+ *
+ * The two doors are deliberately unequal. Rechazar is 260x64 and sits at the
+ * left edge, first in the DOM and first under Tab; Aprobar is 168x40 at the
+ * right edge, last. The ratio is 6 720 / 16 640 = 0,4038, under the 0,50 that
+ * FR-UI-48 caps — the cheap door is the big one, and the expensive one is
+ * small, far and behind a typed gate.
+ *
+ * The gate lives BETWEEN them. That is what buys the 320 px of separation
+ * without a stretch of dead space, and it is why the hand has to cross it.
+ *
+ * Nothing here uses the identity gradient (FR-UI-51), and the red marks the
+ * IRREVERSIBLE EFFECT, never the rejection (FR-UI-49).
+ */
+
+.approvals-doc {
+  /* The document scrolls inside its own container, so [Volver a leer] can put
+   * the reader back at the top of a NEW document instead of leaving him at an
+   * offset that meant something in the old one (AS-71). */
+  overflow-y: auto;
+  max-height: calc(100vh - 220px);
+}
+
+.approvals-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  margin-top: 28px;
+}
+
+.approvals-reject {
+  flex: 0 0 auto;
+  width: 260px;
+  height: 64px;
+  order: 1;
+}
+
+.approvals-arming {
+  /* The gate takes the middle. It grows, so the two doors are pushed to the
+   * edges and the separation is whatever the window can give — never less
+   * than the 320 px FR-UI-48 demands at >= 1100. */
+  flex: 1 1 auto;
+  order: 2;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.approvals-approve {
+  flex: 0 0 auto;
+  width: 168px;
+  height: 40px;
+  order: 3;
+}
+
+/* Below the window's own 1100 the row cannot hold the distance, so the doors
+ * STACK — Rechazar first, and at least 120 px between them, with the gate in
+ * the gap doing the same job vertically. */
+@media (max-width: 1099px) {
+  .approvals-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 60px;
+  }
+  .approvals-reject,
+  .approvals-approve {
+    width: 100%;
+  }
+  .approvals-arming {
+    min-width: 0;
+  }
+}
