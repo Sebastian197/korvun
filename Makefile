@@ -226,7 +226,11 @@ install-hooks:
 hook-probe:
 	@bash scripts/adversary-gate-probe.sh
 
-quality: guard-gopkgs lint test cover fuzz-smoke hook-probe
+.PHONY: integration-probe
+integration-probe:
+	python3 scripts/integration_gate_test.py
+
+quality: guard-gopkgs lint test cover fuzz-smoke hook-probe integration-probe
 	@echo "Quality gate passed."
 
 # --- Web track SP1: the site check harness (spec AS-1 + AS-9, ADR-0040) ----------

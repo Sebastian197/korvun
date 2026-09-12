@@ -151,6 +151,10 @@ jobs:
         shell: bash
         run: bash scripts/adversary-gate-probe.sh
 
+      - name: Integration reducer attack tests
+        shell: bash
+        run: python3 scripts/integration_gate_test.py
+
       - name: Test
         shell: bash
         run: |
