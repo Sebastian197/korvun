@@ -29,7 +29,7 @@ test('the stopped chrome: real 503 contract → parado hero, same-origin only', 
   })
 })
 
-test('sidebar navigation: six sections in design order, active state, real views', async ({
+test('sidebar navigation: seven sections in design order, active state, real views', async ({
   page,
 }) => {
   await page.goto('/')
@@ -45,6 +45,7 @@ test('sidebar navigation: six sections in design order, active state, real views
     'Chat',
     'Canales',
     'Actividad',
+    'Aprobaciones',
     'Ajustes',
   ])
   await page.getByRole('button', { name: 'Canales' }).click()

@@ -16,13 +16,13 @@ afterEach(() => {
 describe('chrome shell', () => {
   it('renders the sidebar with all five sections and the version row', () => {
     render(<App />)
-    for (const label of ['Inicio', 'Canales', 'Actividad', 'Builder', 'Ajustes']) {
+    for (const label of ['Inicio', 'Canales', 'Actividad', 'Builder', 'Aprobaciones', 'Ajustes']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
     expect(screen.getByTestId('version').textContent).toBe('dev')
   })
 
-  it('nav follows the design order: Inicio, Builder, Chat, Canales, Actividad, Ajustes', () => {
+  it('nav follows the design order: Inicio, Builder, Chat, Canales, Actividad, Aprobaciones, Ajustes', () => {
     render(<App />)
     const nav = screen.getByRole('navigation', { name: 'Secciones' })
     const labels = Array.from(nav.querySelectorAll('button')).map((b) =>
@@ -30,7 +30,17 @@ describe('chrome shell', () => {
     )
     // SP4 (operator-console spec): Chat joins the nav, third — the console
     // sits right after the Builder in the daily flow.
-    expect(labels).toEqual(['Inicio', 'Builder', 'Chat', 'Canales', 'Actividad', 'Ajustes'])
+    // v0.15.0: Aprobaciones joins SIXTH, between Actividad and Ajustes
+    // (FR-UI-1) — the same kind of evolution the SP4 Chat line records.
+    expect(labels).toEqual([
+      'Inicio',
+      'Builder',
+      'Chat',
+      'Canales',
+      'Actividad',
+      'Aprobaciones',
+      'Ajustes',
+    ])
   })
 
   it('every nav item carries its real design icon (svg), not a placeholder dot', () => {

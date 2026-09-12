@@ -67,6 +67,12 @@ func configGetHandler(rl Reloader) http.Handler {
 // token (F12: comparing the raw variable-length tokens would leak length through
 // timing). The token travels only in the Authorization header, never a cookie, so a
 // cross-site page cannot forge it (CSRF defended by construction, ADR-0028 §3).
+//
+// A SECOND COPY of this check lives in approvals.go as approvalsAuth, which
+// differs only in the body it writes: that surface renders by error NAME, and
+// the name it needs is "forbidden", not "unauthorized". Two copies of a
+// security check are two places to hide, so the unification is FILED
+// (2026-09-12) for after the v0.15.0 tag. Until then: edit one, edit both.
 func bearerAuth(token string) func(http.Handler) http.Handler {
 	want := sha256.Sum256([]byte(token))
 	return func(next http.Handler) http.Handler {
