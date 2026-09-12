@@ -1,5 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
-import { BASE, FRESH_ADDR, FRESH_BASE, HARNESS_ADDR } from './e2e/util'
+import {
+  APPROVALS_ADDR,
+  APPROVALS_BASE,
+  BASE,
+  FRESH_ADDR,
+  FRESH_BASE,
+  HARNESS_ADDR,
+} from './e2e/util'
 
 // E2E for the desktop chrome (SP6). The webServer is the Go harness: built
 // chrome + the SP4 proxy + a REAL no-network core carrying one scripted
@@ -36,6 +43,16 @@ export default defineConfig({
       // EnsureDefaultConfig's created=true is real.
       command: `go run ../e2e-harness -addr ${FRESH_ADDR} -dist ./dist -fresh`,
       url: `${FRESH_BASE}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      // The approvals harness: the parking brain and the approvals surface.
+      // Its own instance on purpose — that brain is visible to every spec on
+      // the shared harness, and five of them were written against the profile
+      // without it.
+      command: `go run ../e2e-harness -addr ${APPROVALS_ADDR} -dist ./dist -start=false -approvals`,
+      url: `${APPROVALS_BASE}/`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },

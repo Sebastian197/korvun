@@ -15,6 +15,7 @@
 // The document is read-through: it is not painted until the store has returned
 // parameters that re-derive the digest (FR-UI-62). That check runs on the
 // server; this screen shows the confirmation and refuses to render without it.
+import './approvals.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { desktop } from '../lib/go'
@@ -767,6 +768,18 @@ function RequestDetail({
   return (
     <>
       <BackBar onBack={onBack} digest={d.digest} expires={d.expires_at} />
+      {/* The live document gets its re-read too, not only the refusal states.
+          An operator reading a request he no longer trusts had no way to ask
+          for it again, and `load` is what clears the arming and puts the
+          reader back at the top — a new document must never be handed over at
+          an offset that meant something in the old one. */}
+      {!sending && (
+        <Actions>
+          <button type="button" className="btn-secondary" onClick={load}>
+            Volver a leer la petición
+          </button>
+        </Actions>
+      )}
       <div className="approvals-doc" ref={scroller}>
         <article role="article">
           <section className="approvals-digest">
@@ -852,20 +865,6 @@ function RequestDetail({
 
             {sending && <p role="status">Ejecutando la acción aprobada. No cierres la ventana.</p>}
 
-            {canApprove && (
-              <ArmingField
-                typed={typed}
-                target={isDigest(d.digest) ? tailOf(d.digest) : ''}
-                pasteRefused={pasteRefused}
-                onKey={(ch) => setTyped((t) => (t.length >= 6 ? t : t + ch))}
-                onBackspace={() => setTyped((t) => t.slice(0, -1))}
-                onPaste={() => {
-                  setPasteRefused(true)
-                  setTyped('')
-                }}
-              />
-            )}
-
             <label htmlFor="approvals-comment">Motivo del rechazo (opcional)</label>
             <input
               id="approvals-comment"
@@ -883,6 +882,24 @@ function RequestDetail({
               >
                 Rechazar
               </button>
+              {/* The arming gate sits BETWEEN the two doors, in the DOM and on
+                  the screen. That is what puts 320 px between them without a
+                  stretch of dead space, and it is why Tab from the reason
+                  reaches Rechazar, then the gate, then Aprobar — the hand has
+                  to cross the gate to get to the expensive control. */}
+              {canApprove && (
+                <ArmingField
+                  typed={typed}
+                  target={isDigest(d.digest) ? tailOf(d.digest) : ''}
+                  pasteRefused={pasteRefused}
+                  onKey={(ch) => setTyped((t) => (t.length >= 6 ? t : t + ch))}
+                  onBackspace={() => setTyped((t) => t.slice(0, -1))}
+                  onPaste={() => {
+                    setPasteRefused(true)
+                    setTyped('')
+                  }}
+                />
+              )}
               {canApprove && (
                 <button
                   type="button"
