@@ -12,6 +12,15 @@
 #
 #   scripts/adversary-gate-check.sh <root> <sha-to-judge>
 #
+# Versioned evidence (2026-09-12): a second line beginning
+# KORVUN-REBASE-EVIDENCE delegates additional validation to rebase_evidence.py.
+# The original reviewed SHA remains the declaration. After GitHub rebase, the
+# helper requires an authenticated merged-PR record and compares every original
+# and integrated commit from the exact base, including the pure marker. Python
+# 3.9+ is required for this format; gh/network and retained source objects are
+# additionally required after rewrite. See docs/INTEGRATION.md. All markers now
+# have a 64 KiB cap enforced before reading blob content into the shell.
+#
 # THE PERIMETER, said once so no reader has to infer it: this check is a
 # DISCIPLINE AID inside the perimeter declared below, NOT a security
 # boundary. The hatches this check KNOWS it does not cover are declared
@@ -24,9 +33,9 @@
 #
 # Both arguments are mandatory and positional: no default to `.`, to the
 # top level, or to HEAD. Exit 0 = authorized. Exit 2 = blocked, ONE named
-# reason on stderr. The DECISION loop is `git` ONLY (bash builtins do
-# the rest: no grep, no head, no wc, no stat); the one external binary
-# in the file is a `tr` inside the LAST reason string, after the
+# reason on stderr. The legacy decision loop is `git` and Bash; versioned
+# evidence also runs the Python helper. The legacy error formatter uses
+# `tr` inside the LAST reason string, after the
 # decision is already taken — without it the reason loses its spacing,
 # never its exit (the eighteenth pass, P3-3).
 #
@@ -65,7 +74,8 @@
 #      [[ =~ ]] under LC_ALL=C; CRLF, leading or trailing whitespace, a
 #      BOM, uppercase hex, a 7-hex prefix, a bare "VETO LEVANTADO", a
 #      "VETO MANTENIDO … VETO LEVANTADO <sha>" sentence all fail here);
-#   8. the recorded 40-hex equals J's sole parent (both printed when not);
+#   8. legacy: the recorded 40-hex equals J's sole parent (both printed
+#      when not). Versioned evidence is checked by the helper after purity;
 #   9. `diff-tree -r --no-renames --name-only J^ J` lists EXACTLY the
 #      marker path (an empty diff → "changes nothing at the marker path";
 #      anything else → "carries more than the marker", the files listed).
@@ -75,7 +85,7 @@
 #   history and authorize a commit other than the one pushed (the
 #   probe's REPLACE fixture and its mutant m-replace).
 #
-# WHAT THE LETRERO MEANS — "a marker whose FIRST LINE names the direct
+# WHAT THE LEGACY LETRERO MEANS — "a marker whose FIRST LINE names the direct
 # sole parent was committed", never "audited": only the first line is
 # read (a body saying anything else is not judged); the wire enforces
 # ONLY that. "Amend, never stack" is guidance: a chain of pure marker
@@ -187,6 +197,7 @@ SIZE=$(G cat-file -s "$OBJ" 2>/dev/null) || block "marker blob SIZE unreadable (
 DIGITS='^[0-9]+$'
 [[ $SIZE =~ $DIGITS ]] || block "marker blob SIZE unreadable (object $OBJ): got '$SIZE'."
 [ "$SIZE" -ne 0 ] || block "empty verdict marker (object $OBJ) at $J."
+[ "$SIZE" -le 65536 ] || block "verdict marker exceeds the 64 KiB limit at $J."
 CONTENT=$(G cat-file -p "$OBJ" 2>/dev/null) || block "marker blob CONTENT unreadable (object $OBJ)."
 
 # 7. The first line, exactly.
@@ -195,11 +206,23 @@ RE='^VETO LEVANTADO ([0-9a-f]{40})$'
 [[ $FIRST =~ $RE ]] || block "the marker's first line is not exactly 'VETO LEVANTADO <40-hex sha>' at $J (got '${FIRST:0:80}')."
 RECORDED=${BASH_REMATCH[1]}
 
-# 8. The recorded sha is J's direct sole parent.
-[ "$RECORDED" = "$PARENT" ] || block "the marker at $J records $RECORDED, but the judged commit's parent is $PARENT — the recording commit does not name its direct parent."
+# 8. Legacy markers name the direct parent. Versioned markers additionally
+# validate the original sequence and, after rewrite, GitHub PR provenance.
+REST_CONTENT=${CONTENT#*$'\n'}
+SECOND=${REST_CONTENT%%$'\n'*}
+VERSIONED=0
+case "$SECOND" in KORVUN-REBASE-EVIDENCE*) VERSIONED=1 ;; esac
+if [ "$VERSIONED" -eq 0 ]; then
+  [ "$RECORDED" = "$PARENT" ] || block "the marker at $J records $RECORDED, but the judged commit's parent is $PARENT — the recording commit does not name its direct parent."
+fi
 
 # 9. The recording commit changes exactly the marker.
 DIFF=$(G diff-tree -r --no-renames --name-only "$PARENT" "$J" 2>/dev/null) || block "diff unreadable (diff-tree failed for $PARENT..$J)."
 [ -n "$DIFF" ] || block "the recording commit $J changes nothing at the marker path."
 [ "$DIFF" = "$MARKER" ] || block "the recording commit $J carries more than the marker: $(printf '%s' "$DIFF" | tr '\n' ' ')"
+if [ "$VERSIONED" -eq 1 ]; then
+  command -v python3 >/dev/null || block "REBASE_COMMAND: Python 3 is required for versioned evidence."
+  [ -f "$ROOT/scripts/rebase_evidence.py" ] || block "REBASE_COMMAND: rebase evidence checker is missing."
+  python3 "$ROOT/scripts/rebase_evidence.py" "$ROOT" "$J" || exit 2
+fi
 exit 0

@@ -229,6 +229,7 @@ hook-probe:
 .PHONY: integration-probe
 integration-probe:
 	python3 scripts/integration_gate_test.py
+	python3 scripts/rebase_evidence_test.py
 
 quality: guard-gopkgs lint test cover fuzz-smoke hook-probe integration-probe
 	@echo "Quality gate passed."

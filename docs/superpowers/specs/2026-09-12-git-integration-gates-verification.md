@@ -1,5 +1,11 @@
 # Integration verifier bootstrap: verification
 
+This report records the initial snapshot at
+33a12cce73b294562e777b8bc5bb418d8fa64c9f. The subsequent rebase procedure,
+checker changes and their validation are recorded in
+[the rebase verification report](2026-09-12-rebase-evidence-verification.md).
+The original execution record retains its original file hashes.
+
 This first delivery contains the verifier, attack tests, mutation runner, empty
 reviewer policy, existing worker changes and operating instructions. It excludes
 integration.yml. No new required check, protection change, merge or release is

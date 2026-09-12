@@ -1,0 +1,110 @@
+{
+  "source_base": "c6ccd242b8539890593dfeced652a6d322fe2531",
+  "rebase_tests": 23,
+  "rebase_mutants": 18,
+  "reducer_mutants": 27,
+  "mutations": [
+    {
+      "name": "ignore-intermediate-tree",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-author",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-message",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-encoding",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-marker-equivalence",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "allow-unmerged-pr",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "accept-truthy-merged",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-merge-result",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-repository-identity",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-base-branch",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "allow-unknown-header",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "allow-duplicate-json",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "weaken-output-limit",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-global-deadline",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "omit-source-purity",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-history-count",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "weaken-history-limit",
+      "detected": true,
+      "exit_code": 1
+    },
+    {
+      "name": "ignore-reader-failure",
+      "detected": true,
+      "exit_code": 1
+    }
+  ],
+  "hashes": {
+    "scripts/rebase_evidence.py": "c6fef1d6d205b4d662a42335e510efb5925bbcfb669ee5b13d22168cfe6814c6",
+    "scripts/rebase_evidence_test.py": "f61b1da18b871b6e4ae4eb160f60ea1643c2864cecc62041166066fdb5b8fdcf",
+    "scripts/rebase_evidence_mutations.py": "7b5a334e4a95f05dae113aeb9867e794bc5f192d8f0ec0418c4395ef4b5d125f",
+    "scripts/adversary-gate-check.sh": "13744f1664050f323d534b5475589b7d11eaccf1a5a30c4e53f359975c1efeda",
+    "scripts/adversary-gate-probe.sh": "d792c871ef531d7dc7e6b3a655dfd6b67922152c0bffee95a652a29ebc1213c2",
+    "Makefile": "06533cd2351207054912ebcad79e2127338b528fdd6e06390d9b04b9798f2468",
+    ".github/workflows/quality.yml": "94ab71d1cb6d7f63ec9b6a0c2fbd2e7d04143df7cd6199b374216cc49cb07406"
+  },
+  "quality": "Go stages passed; initial composite stopped at old BIGBLOB expectation; adjudicated hook-probe and integration-probe rerun passed",
+  "govulncheck": "v1.7.0: No vulnerabilities found",
+  "boundary": "Git fixtures and controlled gh executable; real remote integration results recorded separately in PR"
+}

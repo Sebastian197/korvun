@@ -155,6 +155,10 @@ jobs:
         shell: bash
         run: python3 scripts/integration_gate_test.py
 
+      - name: Rebase evidence attack tests
+        shell: bash
+        run: python3 scripts/rebase_evidence_test.py
+
       - name: Test
         shell: bash
         run: |

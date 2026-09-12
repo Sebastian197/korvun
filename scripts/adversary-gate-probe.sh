@@ -326,7 +326,7 @@ door2 EMPTYFIRSTLINE "$EMPTYFIRST" blocked "$(newbare emptyfirst)" probe "first 
 door2 NEWLINESONLY "$NLONLY" blocked "$(newbare nlonly)" probe "first line is not exactly"
 door2 REVOKED-WITH-SHA "$REVOKED" blocked "$(newbare revoked)" probe "first line is not exactly"
 door2 EMPTYBLOB "$EMPTYBLOB" blocked "$(newbare emptyblob)" probe "empty verdict marker"
-door2 BIGBLOB "$BIGBLOB" allowed "$(newbare bigblob)" probe
+door2 BIGBLOB "$BIGBLOB" blocked "$(newbare bigblob)" probe "verdict marker exceeds the 64 KiB limit"
 door2 NONEWLINE "$NONL" allowed "$(newbare nonewline)" probe
 door2 CRLF "$CRLF" blocked "$(newbare crlf)" probe "first line is not exactly"
 door2 NOTBLOB-SYMLINK "$SYML" blocked "$(newbare symlink)" probe "not a regular file (mode 120000)"

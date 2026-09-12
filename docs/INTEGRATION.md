@@ -41,7 +41,9 @@ that list defaults to `custodian_ids`. Unknown commenters cannot veto the reduce
 GitHub may separately impose its own review protections.
 
 After actual review of code commit C, retain the existing pure marker commit H
-whose first line names C. Do not fabricate a marker to obtain a descriptor. With
+whose first line names C. Use the versioned format described in the rebase
+procedure for a train that will be integrated through GitHub rebase. Do not
+fabricate a marker to obtain a descriptor. With
 H available locally, an open PR and its current base B, inspect the descriptor:
 
 ```sh
@@ -109,12 +111,10 @@ block the reducer. This increases CI use; push and tag triggers are unchanged.
 3. Configure the real reviewer/origin through review. Exercise real positive and
    negative cases in GitHub: paths, failed/skipped/missing jobs, forks, new head,
    base advancement, edited/dismissed review, rerun/cancel and API outage.
-4. Resolve the merge policy before changing it: the captured server permits
-   squash and requires linear history, while GitHub rebase rewrites SHAs. The
-   local checker rejects a merge commit. A possible merge-only approach preserves
-   H and tags H after integration only if ancestry and tree equality to the merge
-   are proven; this is a proposal requiring a packaging rehearsal, not the active
-   procedure. Do not tag an unreviewed merge or auto-write a repair marker.
+4. Integrate through the rebase procedure with versioned evidence. Keep the
+   existing linear-history and PR protections. Squash and merge commits do not
+   satisfy this procedure. Never auto-write a repair marker or claim review of
+   a rewritten SHA from a review of the original SHA.
 5. Only after demonstrated server behavior may the director make the new check
    required and align strict-base/review/merge settings. Preserve all eleven
    existing required checks, administrator enforcement and no-bypass protection.
@@ -132,3 +132,54 @@ If the control becomes unhealthy, stop integration and report the exact failing
 context. Restore previously validated code through the reviewed flow; never
 manufacture success, accept unknown state, disable protections or bypass hooks.
 Until activation prerequisites are met, existing protections continue to govern.
+
+## Rebase procedure and retained evidence
+
+The director authorizes integration; the integrator may execute that authorized
+decision after review and checks. The marker records the actual review of C.
+Its second line is exactly `KORVUN-REBASE-EVIDENCE v1`. The remaining bytes are
+one JSON object with exactly `schema` (integer 1), `repository`
+(`Sebastian197/korvun`), `pr` (the actual positive PR number), `base` (the exact
+reviewed base B as a full lowercase SHA), and `review` (the real review text).
+The first line remains `VETO LEVANTADO <C>`. All markers, including legacy ones,
+are capped at 64 KiB before the Bash checker loads their content.
+
+Before publication, H must change only the marker and have C as its direct
+parent. The checker validates the complete original B..H sequence, allowing at
+most 128 commits. Obtain the PR number from the existing PR; for a new train,
+open the initial reviewed PR under the existing workflow before adding its
+versioned marker. Never guess a future number or fabricate a review to obtain it.
+
+Run both destructive mutation suites, the complete quality gate and fresh
+govulncheck. Publish H to ensayo and the PR branch with hooks enabled and no
+force. Wait for the full rehearsal and the PR's own required checks. Reread H,
+B, review state and protections. Stop if any input changed. Integrate with
+GitHub rebase using the expected-head constraint; do not delete the source
+branch. The merge API has no expected-base constraint: prechecks are not an
+atomic exclusion of another integrator. Detecting a base change means stopping
+and obtaining fresh review/CI, not accepting a different base silently.
+
+After integration, fetch master and run the reviewed checker on GitHub's
+reported merge result J. Its recorded C is unchanged. For rewritten histories,
+the checker reads the merged PR through `gh api --hostname github.com`, requires
+the fixed repository identity in both head and base, base branch master, source
+head H and merge result J. It requires the original source objects locally and
+checks the marker bytes, pure marker commit and each commit in B..H versus B..J.
+Trees, author, message and encoding must match in order. Only committer metadata,
+Git signatures and remapped parent links may differ. This proves explicit
+equivalence and GitHub provenance; it does not authenticate the reviewer's work
+or assert review of a rewritten commit identity.
+
+Python 3.9+ is needed for versioned evidence. After rebase, gh, API access and
+the original source history are needed. Keep the PR source branch as evidence.
+If a clone lacks source objects, fetch the preserved branch explicitly, for
+example `git fetch origin codex/git-integration-controls` for PR #32. In a
+shallow clone, obtain complete history with `git fetch --unshallow origin`
+first. Verify that origin is the intended repository. The checker itself never
+fetches objects and rejects missing provenance, missing objects, malformed API
+data and deadline/size violations. API downtime blocks rewritten histories.
+
+A failed postmerge check is an integration incident, never an accepted result
+or a reason to weaken the anchor or repair the marker automatically. Record the
+original H, integrated J, exact B and validation output in the PR evidence. This
+procedure does not authorize tags/releases or activate `korvun/integration`.
