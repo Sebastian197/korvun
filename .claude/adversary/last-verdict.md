@@ -1,24 +1,9 @@
-VETO LEVANTADO 33a12cce73b294562e777b8bc5bb418d8fa64c9f
-
-Date: 2026-09-12
-Scope: first integration-evidence bootstrap delivery.
-Base: c6ccd242b8539890593dfeced652a6d322fe2531
-
-The coordinating reviewer issued this verdict for the exact code commit
-above after inspecting its diff, all three workflow changes, Makefile,
-CLAUDE.md, the integration guide and the updated verification report.
-The reviewer confirmed that integration.yml is absent and that the three
-Python scripts match the previously reviewed source and recorded hashes.
-
-The reviewer reused prior executions of the 18 tests and three P2
-reproductions against identical code; both fixes remain accepted. The
-commit passes diff-check. No new P1/P2 findings were identified within
-this local scope. All 27 mutation records report detection. Fresh
-make quality and govulncheck evidence was supplied by the implementer,
-not independently rerun by the reviewer.
-
-This verdict permits publication and the required rehearsal, followed by
-a pull request when that rehearsal passes. It does not certify an external
-review engine, server activation, atomic revocation, merge or release,
-or protection against malicious workflows. No merge or control activation
-is authorized by this marker.
+VETO LEVANTADO c75b9db2d6096b714c06b3173c74916e3f22f17b
+KORVUN-REBASE-EVIDENCE v1
+{
+  "schema": 1,
+  "repository": "Sebastian197/korvun",
+  "pr": 32,
+  "base": "c6ccd242b8539890593dfeced652a6d322fe2531",
+  "review": "VEREDICTO REAL de revisión del snapshot: VETO LEVANTADO c75b9db2d6096b714c06b3173c74916e3f22f17b. Revisé contenido committed del helper, diff Bash/probe/Makefile/quality, pruebas/mutaciones, docs INTEGRATION/CLAUDE y registro de verificación. Ejecuté independientemente la suite completa23: PASS33.158s, código0; checkout tracked limpio del snapshot. No hallazgos P1/P2 pendientes en el alcance de esta corrección. Veredicto limitado a procedencia GitHub y equivalencia completa B..H/B..J con restricciones documentadas; no autentica trabajo intelectual externo ni promete CAS base, Bash Windows o ausencia de todo fallo. Evidencia fuente: helper c6fef1d6d205b4d662a42335e510efb5925bbcfb669ee5b13d22168cfe6814c6. Puedes registrar este texto real en marker versionado puro de C, publicar FF ensayo y PR y ejecutar integración ya autorizada después de ambos CI verdes y prechecks; luego verificar J y reportar. No se requiere otra confirmación del usuario. Conserva source branch y protecciones, no phase2 requerido aún."
+}
