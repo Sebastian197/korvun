@@ -1,3 +1,10 @@
+# Security advisories are grouped too. A group without `applies-to` covers
+# version updates ONLY (GitHub's documented default), which is why each of the
+# five groups below carries a `-security` twin: without one, every advisory
+# would arrive as its own pull request. None has arrived yet — Dependabot
+# security updates are disabled on the repository, so the advisories simply
+# accumulate as alerts. Enabling that setting is what starts the flow; this
+# configuration only decides that what then arrives comes grouped.
 version: 2
 updates:
   - package-ecosystem: "gomod"
@@ -13,6 +20,10 @@ updates:
       go-dependencies:
         patterns:
           - "*"
+      go-dependencies-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -25,6 +36,10 @@ updates:
       include: "scope"
     groups:
       github-actions:
+        patterns:
+          - "*"
+      github-actions-security:
+        applies-to: security-updates
         patterns:
           - "*"
 
@@ -46,6 +61,10 @@ updates:
       website-npm:
         patterns:
           - "*"
+      website-npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/web/builder"
@@ -60,6 +79,10 @@ updates:
       builder-npm:
         patterns:
           - "*"
+      builder-npm-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   - package-ecosystem: "npm"
     directory: "/cmd/korvun-desktop/frontend"
@@ -72,5 +95,9 @@ updates:
       include: "scope"
     groups:
       desktop-frontend-npm:
+        patterns:
+          - "*"
+      desktop-frontend-npm-security:
+        applies-to: security-updates
         patterns:
           - "*"
