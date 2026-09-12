@@ -123,7 +123,8 @@ by our own commit is debt of the same train.
 OWN branch, gets the full `ensayo` rehearsal BEFORE the pull request is
 opened, then goes to a PR against `master` carrying the adversary's
 verdict and the external Codex report in its body, waits for the
-required checks, and the MERGE is the director's act — never ours.
+required checks, and the MERGE requires the director's explicit authorization.
+An integrator may execute that authorized decision under docs/INTEGRATION.md.
 
 If a required check never reports on the PR and blocks it forever, the
 train STOPS and the director is told the check's exact name. The list is
@@ -149,11 +150,14 @@ the director must name a real source before any evidence can pass. Follow the
 two-step trusted-base bootstrap in `docs/INTEGRATION.md`. Commit and push still
 require an explicit request; the director owns merge and release decisions.
 
-Re-read both classic protection and rulesets before changing settings. The
-2026-09-12 API capture found squash enabled and linear history required. GitHub
-rebase rewrites SHAs, and the existing marker checker rejects merge commits.
-Do not treat either merge method as automatically preserving marker validity.
-Resolve and rehearse candidate/merge/tag compatibility before aligning settings.
+Re-read both classic protection and rulesets before integration or settings
+changes. The server requires linear history. Use versioned review evidence and
+the GitHub rebase procedure in docs/INTEGRATION.md, preserving the source branch.
+The checker retains the actual reviewed SHA and verifies authenticated PR
+provenance plus every source/integrated commit from the exact base. Original
+publication is offline; rewritten histories require gh/API and original objects.
+Legacy markers still require the exact parent; all markers have a 64 KiB cap.
+Do not squash, accept an invalid marker or automatically write a repair marker.
 Keep current required checks intact. Do not activate the new requirement before
 server tests cover stale base/review state and the documented revocation window.
 
