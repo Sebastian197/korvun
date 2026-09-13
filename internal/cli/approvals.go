@@ -286,12 +286,21 @@ func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Stor
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
 	}
-	result, err := app.ExecuteApprovedAction(ctx, store, exec, approvalID, law)
+	run, err := app.ExecuteApprovedAction(ctx, store, exec, approvalID, law)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: execution: %v\n", verb, err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: SUCCEEDED\nresult: %s\n",
-		approvalID, headline, a.ActionDigest, result)
+	// The outcome is REPORTED, not assumed. The old line printed SUCCEEDED on
+	// every run that returned without an error — and a tool that ran and said
+	// no now returns without one, because that is a decided outcome with its
+	// receipt and not a failure to learn anything.
+	if run.Failed {
+		_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: FAILED\nreceipt: %s\nerror: %s\n",
+			approvalID, headline, a.ActionDigest, run.ReceiptID, run.FailureDetail)
+		return 1
+	}
+	_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: SUCCEEDED\nreceipt: %s\nresult: %s\n",
+		approvalID, headline, a.ActionDigest, run.ReceiptID, run.Result)
 	return 0
 }

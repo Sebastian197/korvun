@@ -13,6 +13,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -133,41 +134,40 @@ func (a *App) recorderForTest() brain.ActionRecorder {
 // belt, execute, and close the parked action with its era's E4 receipt
 // and the on-the-fly result digest. A request that is not APPROVED —
 // pending, rejected, cancelled or expired — never executes.
-func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string, law actionsqlite.PolicyPin) (string, error) {
+func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string, law actionsqlite.PolicyPin) (ApprovedExecution, error) {
 	approval, _, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
-		return "", err
+		return ApprovedExecution{}, err
 	}
 	if approval.Status != action.ApprovalApproved {
-		return "", fmt.Errorf("app: approval %s is %s — only APPROVED requests execute", approvalID, approval.Status)
-	}
-	// C1: execution consumes authority too — the law is re-checked at
-	// THIS touch, not only at decide (a config change between the two
-	// must refuse here as well).
-	if rule, dim := action.ValidateApprovalBinding(approval, approval.ActionDigest, law.Version, law.Digest); rule != "" {
-		return "", fmt.Errorf("app: %s (%s): approval %s was parked under law v%d %s but the current law is v%d %s — refusing execution", rule, dim, approvalID, approval.PolicyVersion, approval.PolicyDigest, law.Version, law.Digest)
+		if approval.Status == action.ApprovalPending {
+			return ApprovedExecution{}, fmt.Errorf("app: approval %s is %s — only APPROVED requests execute: %w", approvalID, approval.Status, ErrApprovalNotDecided)
+		}
+		return ApprovedExecution{}, fmt.Errorf("app: approval %s is %s: %w", approvalID, approval.Status, ErrApprovalAlreadyClosed)
 	}
 	rec, err := store.Get(ctx, approval.ActionID)
 	if err != nil {
-		return "", fmt.Errorf("app: approved action %s: %w", approval.ActionID, err)
+		return ApprovedExecution{}, fmt.Errorf("app: approved action %s: %w", approval.ActionID, err)
 	}
 	if rec.State != action.StateApproved {
-		return "", fmt.Errorf("app: action %s is %s — already executed or closed", approval.ActionID, rec.State)
+		return ApprovedExecution{}, fmt.Errorf("app: action %s is %s: %w", approval.ActionID, rec.State, ErrApprovalAlreadyClosed)
 	}
-	// The atomic claim: exactly one caller gets the params — and the
-	// law is judged inside the claiming transaction (R4-F2), over the
-	// re-read row.
-	params, err := store.ClaimApprovalParams(ctx, approvalID, &law)
+	// The atomic claim, and with it the WHOLE judgement: the law, the belts and
+	// the digest all run inside the claiming transaction, over the row that
+	// transaction read.
+	//
+	// The old shape read the operation triple here, claimed (committing the
+	// purge), and only THEN compared the digest against that earlier read. An
+	// external UPDATE of op_version in that window passed every belt and fired
+	// an irreversible effect under an operation the row no longer declared. So
+	// the claim hands back the triple it judged, and that is the one that runs.
+	params, op, err := store.ClaimApprovalParamsUnderDigest(ctx, approvalID, &law, approval.ActionDigest)
 	if err != nil {
-		return "", fmt.Errorf("app: claim execution of %s: %w", approvalID, err)
+		return ApprovedExecution{}, fmt.Errorf("app: claim execution of %s: %w", approvalID, err)
 	}
-	// The belt (NC-2): the claimed params must re-derive the EXACT
-	// digest the human approved — identity, never equivalence.
-	if got := action.Digest(rec.Envelope.Operation, string(params)); got != approval.ActionDigest {
-		return "", fmt.Errorf("app: refusing execution of %s: stored params re-derive digest %s but the human approved %s", approvalID, got, approval.ActionDigest)
-	}
+	toolName := op.Name
 	conv := ""
-	result, _, execErr := exec.Run(ctx, rec.Envelope.Operation.Name,
+	result, _, execErr := exec.Run(ctx, toolName,
 		tool.Scope{Brain: "", Conversation: conv}, string(params))
 	outcome := action.StateSucceeded
 	resultDigest := action.HashCanonical(result)
@@ -176,13 +176,62 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		resultDigest = ""
 	}
 	if err := store.FinishWithResult(ctx, approval.ActionID, outcome, time.Now().UTC(), resultDigest); err != nil {
-		return "", fmt.Errorf("app: close executed action %s: %w", approval.ActionID, err)
+		// The effect already happened or already failed; what could not be
+		// written is the close. That is a KNOWN effect with an unwritten
+		// record, never an unknown one.
+		return ApprovedExecution{}, fmt.Errorf("app: close executed action %s: %w: %w", approval.ActionID, ErrApprovalCloseFailed, err)
+	}
+	// The receipt identifiers are re-read: neither the decide nor the close
+	// returns them, and P4 and P5 print them.
+	after, _, rerr := store.GetApproval(ctx, approvalID)
+	if rerr != nil {
+		return ApprovedExecution{}, fmt.Errorf("app: read back the receipt of %s: %w: %w", approvalID, ErrApprovalCloseFailed, rerr)
+	}
+	out := ApprovedExecution{
+		Result:       result,
+		ResultDigest: resultDigest,
+		ReceiptID:    after.DecisionReceiptID,
+		Operation:    op,
 	}
 	if execErr != nil {
-		return "", fmt.Errorf("app: approved execution of %s failed: %w", approvalID, execErr)
+		// The tool ran and said no. That is a DECIDED outcome with its receipt,
+		// and it travels as one: a caller that received this knows the effect
+		// was attempted and failed, which is a different fact from not knowing.
+		out.Failed = true
+		out.FailureDetail = execErr.Error()
+		return out, nil
 	}
-	return result, nil
+	return out, nil
 }
+
+// ApprovedExecution is what one approved run produced. It carries the receipt
+// because neither DecideApprovalUnderLaw nor FinishWithResult returns it and
+// both the CLI and the window print it.
+//
+// Failed is not an error: the tool ran, it said no, and the ledger closed it
+// with its receipt. Reporting that through the error channel would make a
+// KNOWN outcome indistinguishable from a failure to learn the outcome.
+type ApprovedExecution struct {
+	Result        string
+	ResultDigest  string
+	ReceiptID     string
+	Operation     action.Operation
+	Failed        bool
+	FailureDetail string
+}
+
+// The named refusals of the ONE execution path. They exist so both callers —
+// the operator CLI and the desktop window — can name what happened instead of
+// matching the English of a sentence.
+var (
+	// ErrApprovalNotDecided is a request still awaiting a decision. Calling it
+	// «already closed» would contradict what the row says.
+	ErrApprovalNotDecided = errors.New("app: the approval is still awaiting a decision")
+	// ErrApprovalAlreadyClosed is a request that is not awaiting execution.
+	ErrApprovalAlreadyClosed = errors.New("app: the approval was already closed and is not awaiting execution")
+	// ErrApprovalCloseFailed is the effect happening and its record not closing.
+	ErrApprovalCloseFailed = errors.New("app: the executed action could not be closed")
+)
 
 // ResolveApprovalLaw resolves ONE brain's effective cage and its law
 // pin in a SINGLE resolution (R6-X3): the operator CLI feeds BOTH the

@@ -536,7 +536,7 @@ func TestClaimApprovalParamsUnderDigest_judgesTheTernaItReadItself(t *testing.T)
 	a := boundPark(t, store, "act_toctou")
 	corruptCell(t, store, "actions", "op_version", "action_id", "act_toctou", "2")
 
-	_, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest)
+	_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest)
 	if !errors.Is(err, ErrApprovalParamsDigestMismatch) {
 		t.Fatalf("err = %v, want ErrApprovalParamsDigestMismatch", err)
 	}
