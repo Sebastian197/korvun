@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -366,4 +367,62 @@ func TestExecuteApprovedAction_aToolThatSaysNoIsADecidedOutcome(t *testing.T) {
 	if fail.runs.Load() != 1 {
 		t.Fatalf("runs = %d, want exactly 1", fail.runs.Load())
 	}
+}
+
+// slowTool blocks until the context the executor gave it dies. It is the only
+// honest way to reach the one outcome nobody can account for.
+type slowTool struct{ runs atomic.Int64 }
+
+func (s *slowTool) Name() string        { return "webhook_call" }
+func (s *slowTool) Description() string { return "slow fake" }
+func (s *slowTool) Execute(ctx context.Context, args string) (string, error) {
+	s.runs.Add(1)
+	<-ctx.Done()
+	return "", fmt.Errorf("webhook_call: %w", ctx.Err())
+}
+
+// TestExecuteApprovedAction_aDeadlineIsNeitherSuccessNorFailure pins the one
+// outcome that is genuinely unknown — and the two lies it replaced, both of
+// which this train introduced and neither of which had a mould.
+//
+// A call that times out MAY have been delivered and its answer lost. Closing it
+// FAILED writes a definite claim into the ledger that nobody can support; the
+// store's own C5 comment calls that «a FAILED lie» and OUTCOME_UNKNOWN exists
+// for exactly this. And reporting it as success — which the CLI did, by never
+// reading the field — puts that claim in front of the operator.
+//
+// Probing mutations: close it StateFailed ⇒ the ledger row reddens; drop the
+// Unknown flag ⇒ the outcome assertion reddens.
+func TestExecuteApprovedAction_aDeadlineIsNeitherSuccessNorFailure(t *testing.T) {
+	store, _, _, approvalID := approvedFlow(t)
+	slow := &slowTool{}
+	exec := executor.New(tool.Registry{"webhook_call": slow}, 50*time.Millisecond, time.Now)
+
+	run, err := ExecuteApprovedAction(context.Background(), store, exec, approvalID, testLaw, "")
+	if err != nil {
+		t.Fatalf("a deadline is an OUTCOME, not a failure of this call: %v", err)
+	}
+	if !run.Unknown {
+		t.Fatal("Unknown = false over a call that timed out")
+	}
+	if run.Failed {
+		t.Fatal("a deadline is not a failure: the effect may well have happened")
+	}
+	// The ledger has to carry the same uncertainty the screen prints.
+	rec, gerr := store.Get(context.Background(), actionOf(t, store, approvalID))
+	if gerr != nil {
+		t.Fatalf("read the action back: %v", gerr)
+	}
+	if rec.State != action.StateOutcomeUnknown {
+		t.Fatalf("state = %q, want OUTCOME_UNKNOWN — a FAILED here is a claim nobody can support", rec.State)
+	}
+}
+
+func actionOf(t *testing.T, store *actionsqlite.Store, approvalID string) string {
+	t.Helper()
+	a, _, err := store.GetApproval(context.Background(), approvalID)
+	if err != nil {
+		t.Fatalf("get approval: %v", err)
+	}
+	return a.ActionID
 }

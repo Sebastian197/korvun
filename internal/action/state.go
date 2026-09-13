@@ -77,7 +77,14 @@ var transitions = map[State]map[State]bool{
 	StateNormalized:      {StateDenied: true, StateShadowed: true, StateAuthorized: true, StatePendingApproval: true},
 	StateAuthorized:      {StateSucceeded: true, StateFailed: true},
 	StatePendingApproval: {StateRejected: true, StateApproved: true},
-	StateApproved:        {StateSucceeded: true, StateFailed: true},
+	// OUTCOME_UNKNOWN joins APPROVED's edges on 2026-09-13. The recovery pass
+	// already writes exactly this close for an execution that died past its
+	// claim (internal/action/sqlite/store.go), and an in-process DEADLINE is
+	// the same fact learned a different way: the call may have been delivered
+	// and its answer lost. Without the edge the only reachable close was
+	// FAILED — a definite claim nobody can support, which C5 names «a FAILED
+	// lie».
+	StateApproved: {StateSucceeded: true, StateFailed: true, StateOutcomeUnknown: true},
 }
 
 // Transition validates one state-machine edge. It returns nil for the

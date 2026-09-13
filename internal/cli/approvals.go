@@ -295,6 +295,15 @@ func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Stor
 	// every run that returned without an error — and a tool that ran and said
 	// no now returns without one, because that is a decided outcome with its
 	// receipt and not a failure to learn anything.
+	if run.Unknown {
+		// The deadline: the call may have been delivered and its answer lost.
+		// Printing SUCCEEDED here — which is what the previous shape did, by
+		// never reading this field — puts a definite claim on an irreversible
+		// effect nobody can account for.
+		_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: OUTCOME_UNKNOWN\nreceipt: %s\nerror: %s\n",
+			approvalID, headline, a.ActionDigest, run.ReceiptID, run.FailureDetail)
+		return 1
+	}
 	if run.Failed {
 		_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: FAILED\nreceipt: %s\nerror: %s\n",
 			approvalID, headline, a.ActionDigest, run.ReceiptID, run.FailureDetail)

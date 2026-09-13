@@ -184,7 +184,16 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		tool.Scope{Brain: "", Conversation: conv}, string(params))
 	outcome := action.StateSucceeded
 	resultDigest := action.HashCanonical(result)
-	if execErr != nil {
+	unknown := errors.Is(execErr, context.DeadlineExceeded)
+	switch {
+	case unknown:
+		// A DEADLINE is not a failure: the call may have been delivered and the
+		// answer lost. Closing it FAILED would put a definite claim in the
+		// ledger that nobody can support — the store's own C5 comment calls
+		// that «a FAILED lie», and OUTCOME_UNKNOWN exists for exactly this.
+		outcome = action.StateOutcomeUnknown
+		resultDigest = ""
+	case execErr != nil:
 		outcome = action.StateFailed
 		resultDigest = ""
 	}
@@ -210,7 +219,7 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		// A DEADLINE is not a refusal. The call may well have been delivered and
 		// the answer lost, so the effect's fate is genuinely unknown — which is
 		// what `unknown_outcome` is for, and until now nothing produced it.
-		if errors.Is(execErr, context.DeadlineExceeded) {
+		if unknown {
 			out.Unknown = true
 			out.FailureDetail = execErr.Error()
 			return out, nil
