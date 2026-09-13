@@ -949,6 +949,47 @@ nombre se declara no servible por este tren.** Necesita tu adjudicación.
 
 ---
 
+## 7-bis. FICHAJE DE MÉTODO — el adversario sin ejecución (director, 2026-09-13)
+
+**Fichado para DESPUÉS del tag v0.15.0.** No se cura aquí y este papel no
+finge lo contrario.
+
+**El hecho.** El adversario interno ha revisado el diff completo de este tren
+**tres veces** y en las tres ha declarado, él mismo y sin que nadie se lo
+preguntara, que **no podía ejecutar nada**: ni `go test`, ni `vitest`, ni
+Playwright, ni `make quality`, ni `git diff`. Todos sus veredictos fueron
+derivaciones de lectura del árbol.
+
+| Pasada | Hallazgos | P1 | ¿Ejecutó? | Quién verificó |
+|---|---|---|---|---|
+| 1ª sobre el diff | 6 P1 + 12 P2 | 6 | no | el autor de la cura |
+| 2ª sobre el diff | 5 P1 + 10 P2 | 5 | no | el autor de la cura |
+| 3ª sobre el diff | en curso | — | no | — |
+
+**Por qué es un defecto de método y no una anécdota.** Las dos primeras pasadas
+acertaron en **todo** lo que se comprobó: once P1 verificados, once ciertos. Eso
+dice que la lectura hostil funciona; no dice que el circuito esté cerrado. Lo
+que falta es independencia: **quien verifica las predicciones del auditor es el
+autor de la cura que el auditor acaba de atacar**. Un auditor que no puede
+ejecutar y un verificador que no es independiente son la misma persona con dos
+sombreros, y la casa tiene fichado a dónde lleva eso.
+
+La propia pasada 2 lo dijo mejor que yo: nombró sus «tres predicciones
+falsables más baratas» y pidió que alguien las corriera. Que las corriera yo es
+exactamente el agujero.
+
+**La decisión del director:** al adversario se le da **ejecución de `go test`
+con el árbol en SOLO LECTURA**. Puede correr lo que quiera y no puede escribir
+nada, así que sus rojos son capturas suyas y sus mutaciones no tocan el árbol
+que audita.
+
+**Evidencia de este fichaje:** las tres pasadas, con sus declaraciones de
+alcance, y las verificaciones manuales que constan en los cantos de `ecf9b41`,
+`145b6ad` y `38304f4` — donde está escrito, en cada uno, que la evidencia de
+esos P1 es del conductor y no del adversario.
+
+---
+
 ## 8. Lo que este papel NO resuelve
 
 El adaptador no está escrito; la superficie sí, y en verde contra un almacén
@@ -957,6 +998,9 @@ comprobación marcada en V11.
 
 **Lo que bloquea el rojo y necesita tu mano:**
 
+0. **El fichaje de método de §7-bis**: el adversario con ejecución de `go test`
+   sobre un árbol en solo lectura, para que sus predicciones no las verifique
+   el autor de la cura. Después del tag, por decisión del director.
 1. **Las cuatro contradicciones de la spec madre** (§0-quater K1-K4; la K5 la
    había fabricado yo truncando una cita y queda retirada).
 2. **R2, reabierto** — qué mitad de AS-100 manda. De eso depende que G2 tenga
