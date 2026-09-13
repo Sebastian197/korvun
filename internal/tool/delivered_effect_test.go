@@ -19,7 +19,8 @@ package tool
 import (
 	"context"
 	"errors"
-	"net"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,6 +35,18 @@ import (
 // dangerous branch: the handler reads the body (the effect IS delivered) and
 // then hijacks the connection and closes it, so io.ReadAll fails.
 //
+// The branch is forced DETERMINISTICALLY: the handler declares a 64-byte body
+// and writes ten, so net/http closes the connection short and io.ReadAll
+// returns io.ErrUnexpectedEOF on every platform.
+//
+// The first shape of this test tore the connection with a TCP RST and carried a
+// `t.Skip` for the case where the tear did not produce a read error. The
+// director's ruling is the reason it is gone: a mould that can stop running in
+// silence is not a mould, and a guarantee behind one is NOT PROVEN. The skip
+// was also hiding a defect of its own — it called w.WriteHeader BEFORE setting
+// Content-Length, so that header never reached the wire and the whole attack
+// rested on the kernel's timing.
+//
 // Probing mutation (executed, red, declared in the canto): drop
 // `ErrEffectDelivered` from the read-response wrap ⇒ this reddens.
 func TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure(t *testing.T) {
@@ -43,27 +56,15 @@ func TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure(t *testing.T) {
 		body := make([]byte, 64)
 		n, _ := r.Body.Read(body)
 		delivered <- string(body[:n])
-		// The status line goes out, then the connection dies under the body.
-		w.WriteHeader(http.StatusOK)
+		// The POST is ACCEPTED and answered — and the answer is cut short.
+		// Content-Length goes in BEFORE WriteHeader or it never reaches the
+		// wire.
 		w.Header().Set("Content-Length", "64")
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
-		hj, ok := w.(http.Hijacker)
-		if !ok {
-			t.Error("the test server cannot hijack — the attack needs a torn connection")
-			return
-		}
-		conn, _, err := hj.Hijack()
-		if err != nil {
-			t.Errorf("hijack: %v", err)
-			return
-		}
-		if tc, ok := conn.(*net.TCPConn); ok {
-			_ = tc.SetLinger(0) // RST, not FIN: the read fails, it does not EOF cleanly
-		}
-		_ = conn.Close()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("0123456789"))
 	}))
+	// net/http logs the short write; the test is about the client's read.
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
 	defer srv.Close()
 
 	wc, err := WebhookCall(WebhookCallConfig{AllowHosts: []string{strings.TrimPrefix(srv.URL, "http://")}})
@@ -72,8 +73,10 @@ func TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure(t *testing.T) {
 	}
 	_, execErr := wc.Execute(context.Background(), srv.URL+` {"event":"ping"}`)
 	if execErr == nil {
-		t.Skip("the connection survived the tear on this platform; the branch needs a real failure to judge")
+		t.Fatal("a body cut short must not read as a successful call")
 	}
+	// The oracle that this really IS the post-delivery branch, and not some
+	// other failure wearing the same error: the server saw the payload.
 	select {
 	case got := <-delivered:
 		if !strings.Contains(got, "ping") {
@@ -81,6 +84,9 @@ func TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure(t *testing.T) {
 		}
 	default:
 		t.Fatal("the POST never reached the server — this is not the post-delivery branch")
+	}
+	if !errors.Is(execErr, io.ErrUnexpectedEOF) {
+		t.Fatalf("want the short-body read error, got %v — the branch under test is io.ReadAll's", execErr)
 	}
 	if !errors.Is(execErr, ErrEffectDelivered) {
 		t.Fatalf("the POST was ACCEPTED and the answer lost, and the error does not say so: %v", execErr)
