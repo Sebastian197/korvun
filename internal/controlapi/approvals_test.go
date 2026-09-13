@@ -27,8 +27,11 @@ package controlapi_test
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -299,8 +302,6 @@ func namedOutcomes() []struct {
 
 		{"params digest mismatch", controlapi.ErrApprovalParamsDigestMismatch, http.StatusConflict, "params_digest_mismatch",
 			"the stored parameters do not re-derive this request's digest — this is permanent and nothing was executed"},
-		{"params not canonical", controlapi.ErrApprovalParamsNotCanonical, http.StatusConflict, "params_not_canonical",
-			"the stored parameters re-derive the digest but are not the canonical form it seals — in production that column is born canonical, so this is an outside hand"},
 		{"invalidated", controlapi.ErrApprovalInvalidated, http.StatusConflict, "invalidated",
 			"the law this request was parked under no longer holds — this is not transient; rejecting it still works"},
 		{"evidence corrupt", controlapi.ErrApprovalEvidenceCorrupt, http.StatusConflict, "evidence_corrupt",
@@ -322,8 +323,6 @@ func namedOutcomes() []struct {
 			"this request is not awaiting execution — THIS execution did nothing"},
 		{"not decided", controlapi.ErrApprovalNotDecided, http.StatusConflict, "not_decided",
 			"the store says this request is still awaiting a decision, so THIS execution did nothing"},
-		{"params belt failed", controlapi.ErrApprovalParamsBeltFailed, http.StatusConflict, "params_belt_failed",
-			"what was stored does not reproduce the digest you approved — the decision is recorded and the parameters were emptied on claiming them, so there is nothing left to read"},
 		{"unknown outcome", controlapi.ErrApprovalUnknownOutcome, http.StatusConflict, "unknown_outcome",
 			"the decision left this window and whether the effect happened is unknown"},
 		{"close failed", controlapi.ErrApprovalCloseFailed, http.StatusConflict, "close_failed",
@@ -379,8 +378,14 @@ func TestApprovals_EveryNameIsInTheRegistry(t *testing.T) {
 			t.Fatalf("%q is in the registry and no outcome emits it — an orphan name reaches nobody", name)
 		}
 	}
-	if len(registry) != 22 {
-		t.Fatalf("the registry is the closed set of §12-ter: want 22 names, got %d", len(registry))
+	// TWENTY, not the 22 §12-ter listed. `params_not_canonical` and
+	// `params_belt_failed` left on 2026-09-13 under the director's rule «a name
+	// with no producer goes out»: verified by grep over the whole tree, no
+	// production path could emit either, so each was a paragraph of operator
+	// text, a branch in the screen and a mould certifying the void. §12-ter is
+	// scoped in the same commit.
+	if len(registry) != 20 {
+		t.Fatalf("the registry is the closed set: want 20 names, got %d", len(registry))
 	}
 }
 
@@ -542,4 +547,67 @@ func decodeMap(t *testing.T, res *http.Response) map[string]any {
 		t.Fatalf("decode raw body: %v", err)
 	}
 	return m
+}
+
+// TestApprovals_everyNameHasAProducer is the registry's THIRD direction, and
+// the one that was missing: a name is in the closed set, its text is pinned,
+// and SOMEBODY IN PRODUCTION EMITS IT.
+//
+// Without it the registry could — and did — carry three names no code path
+// could ever produce, each with a paragraph of operator text and a branch in
+// the screen. This file's own rule says a name the screen paints and the
+// server can never emit is dead interface; nothing enforced it.
+//
+// The scan is by SOURCE, over the non-test files that build the answers: each
+// sentinel must be referenced somewhere other than its own declaration and the
+// tables in this file.
+//
+// Probing mutation: re-add a sentinel with its outcome row and no producer ⇒
+// this reddens.
+func TestApprovals_everyNameHasAProducer(t *testing.T) {
+	t.Parallel()
+	roots := []string{"..", "../app", "../action/sqlite", "../cli"}
+	var haystack strings.Builder
+	for _, root := range roots {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil //nolint:nilerr // an unreadable subtree is not this test's subject
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			// The declaration file itself proves nothing: every name is in it.
+			if filepath.Base(path) == "approvals.go" && !strings.Contains(path, "/") {
+				return nil
+			}
+			b, rerr := os.ReadFile(path) //nolint:gosec // walking our own tree
+			if rerr != nil {
+				return nil //nolint:nilerr // ditto
+			}
+			haystack.Write(b)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	src := haystack.String()
+	for _, name := range controlapi.ApprovalOutcomeNames {
+		sentinel := "ErrApproval" + upperCamel(string(name))
+		if !strings.Contains(src, sentinel) && !strings.Contains(src, string(name)) {
+			t.Errorf("%q is in the registry and NOTHING in production emits it — dead interface", name)
+		}
+	}
+}
+
+// upperCamel turns an outcome name into the sentinel spelling the package uses.
+func upperCamel(s string) string {
+	out := ""
+	for _, part := range strings.Split(s, "_") {
+		if part == "" {
+			continue
+		}
+		out += strings.ToUpper(part[:1]) + part[1:]
+	}
+	return out
 }

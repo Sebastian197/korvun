@@ -771,98 +771,174 @@ func TestAdapter_aToolThatSaysNoReachesTheWindowAsFailed(t *testing.T) {
 // estado que lo produce y se exige por su nombre.
 // ---------------------------------------------------------------------------
 
-// approvedAndReady leaves a parked request APPROVED and its action APPROVED,
-// through a second real connection, so the claim is the next thing that runs.
-func approvedAndReady(t *testing.T, store *actionsqlite.Store, approvalID, actionID string) {
-	t.Helper()
-	attackerExec(t, store,
-		`UPDATE approvals SET status='APPROVED', decision='approved', decision_at=? WHERE approval_id=?`,
-		time.Now().UTC().Format(time.RFC3339Nano), approvalID)
-	attackerExec(t, store, `UPDATE actions SET state='APPROVED' WHERE action_id=?`, actionID)
-}
-
-// TestAdapter_theLadderOfDidItStart forces each rung and demands its name.
+// TestAdapter_theLadderOfDidItStart forces each rung THROUGH THE PRODUCTION
+// DOOR — `Approve`, the method the HTTP route calls — and demands its name.
 //
-// Probing mutations, one per row: collapse any two rungs into one name ⇒ that
-// row reddens. In particular, answering `gone` for every empty column — which
-// is what shipped — reddens the `params_unaccounted` row, and its literal is
-// the one that claims no execution could have started.
+// The first version of this mould called the adapter's private nameClaim with
+// an error the test handed it. It was green, and it stayed green when the whole
+// routing from nameExecution to nameClaim was deleted: a mould that enters by a
+// door production does not use cannot see who else walks in, and that is
+// exactly how the corrupt-ledger case hid behind «the row still holds its
+// parameters».
+//
+// The states are set up with TRIGGERS scoped to the claim's own UPDATE, so the
+// decide commits normally and the claim is the thing that refuses — which is
+// the real sequence, not a simulated one.
+//
+// Probing mutations: collapse any two rungs into one name ⇒ that row reddens;
+// delete nameExecution's routing into the ladder ⇒ all of them redden, which
+// the previous version did not do.
 func TestAdapter_theLadderOfDidItStart(t *testing.T) {
 	cases := []struct {
 		name  string
-		setUp func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string)
+		setUp func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) action.Approval
 		want  error
 	}{
 		{
-			// The claim's UPDATE is skipped and the bytes stay where they are.
+			// The claim's purge is skipped and the bytes stay where they are.
 			// Nothing may say they were taken.
 			name: "held · the claim touched no row and the params are still there",
-			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string) {
+			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) action.Approval {
 				a := parkOne(t, cfg, store, "act_held")
-				approvedAndReady(t, store, a.ApprovalID, "act_held")
-				attackerExec(t, store, `CREATE TRIGGER skip_ap BEFORE UPDATE ON approvals BEGIN SELECT RAISE(IGNORE); END`)
-				return a.ApprovalID, a.ActionDigest
+				attackerExec(t, store, `CREATE TRIGGER skip_purge BEFORE UPDATE OF canonical_params ON approvals
+				  WHEN NEW.canonical_params = '' BEGIN SELECT RAISE(IGNORE); END`)
+				return a
 			},
 			want: controlapi.ErrApprovalNotStartedParamsHeld,
 		},
 		{
-			// Born WITHOUT arguments: the empty body is what was approved, so
+			// Born WITHOUT arguments: the empty body IS what was approved, so
 			// the digest re-derives over it and nothing was ever taken.
 			name: "gone · the row was born without arguments and the digest re-derives",
-			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string) {
-				a := parkOneWithParams(t, cfg, store, "act_gone", "")
-				approvedAndReady(t, store, a.ApprovalID, "act_gone")
-				return a.ApprovalID, a.ActionDigest
+			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) action.Approval {
+				return parkOneWithParams(t, cfg, store, "act_gone", "")
 			},
 			want: controlapi.ErrApprovalNotStartedParamsGone,
 		},
 		{
-			// Born WITH arguments and emptied by somebody else. The empty body
-			// does NOT re-derive, so «born without parameters» would be a lie
-			// — and the competitor may be inside its own run right now.
-			name: "unaccounted · the column was emptied and the empty body does not re-derive",
-			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string) {
+			// Emptied in the window BETWEEN the decide's commit and the claim,
+			// which is the race this name exists for. The trigger fires on the
+			// decide's own status write, so the interleaving is exact and not
+			// a lottery.
+			name: "unaccounted · emptied between the decide and the claim",
+			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) action.Approval {
 				a := parkOne(t, cfg, store, "act_unacc")
-				approvedAndReady(t, store, a.ApprovalID, "act_unacc")
-				attackerExec(t, store, `UPDATE approvals SET canonical_params='' WHERE approval_id=?`, a.ApprovalID)
-				return a.ApprovalID, a.ActionDigest
+				attackerExec(t, store, `CREATE TRIGGER steal_params AFTER UPDATE OF status ON approvals
+				  WHEN NEW.status = 'APPROVED'
+				  BEGIN UPDATE approvals SET canonical_params = '' WHERE approval_id = NEW.approval_id; END`)
+				return a
 			},
 			want: controlapi.ErrApprovalParamsUnaccounted,
 		},
 		{
-			// The re-read itself cannot run. That is the ONE transient of this
-			// ladder, and it says it does not know instead of guessing.
-			name: "unreadable · the re-read fails and the answer says so",
-			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string) {
-				a := parkOne(t, cfg, store, "act_unread")
-				approvedAndReady(t, store, a.ApprovalID, "act_unread")
-				attackerExec(t, store, `UPDATE approvals SET canonical_params='' WHERE approval_id=?`, a.ApprovalID)
-				return a.ApprovalID, a.ActionDigest
+			// Corruption landing on a row whose decision is already sealed.
+			// WHERE it is caught, said precisely because the first draft of
+			// this comment got it wrong: the CLAIM's own read of the approval
+			// row catches it, not the re-read — the claim reads that row before
+			// it ever looks at the params, so a rotted timestamp never reaches
+			// the ladder. The re-read's own corrupt branch is defence in depth
+			// and is NOT reachable through this door; it is declared, not
+			// claimed as covered.
+			name: "decided_evidence_corrupt · corruption over a sealed decision",
+			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) action.Approval {
+				a := parkOne(t, cfg, store, "act_recorrupt")
+				attackerExec(t, store, `CREATE TRIGGER rot_row AFTER UPDATE OF status ON approvals
+				  WHEN NEW.status = 'APPROVED'
+				  BEGIN UPDATE approvals SET canonical_params = '', requested_at = 'ayer'
+				         WHERE approval_id = NEW.approval_id; END`)
+				return a
 			},
-			want: controlapi.ErrApprovalParamsUnreadable,
+			want: controlapi.ErrApprovalDecidedEvidenceBad,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, store, done := parkingProfile(t)
 			defer done()
-			id, digest := tc.setUp(t, cfg, store)
-			ad := NewApprovalsAdapter(cfg, store)
-			// The real claim, through the one execution path, so the error the
-			// ladder names is the one the store actually produced.
-			_, _, claimErr := store.ClaimApprovalParamsUnderDigest(context.Background(), id, nil, digest)
-			if claimErr == nil {
-				t.Fatal("the claim was expected to refuse")
-			}
-			if tc.want == controlapi.ErrApprovalParamsUnreadable {
-				// The re-read is what must fail, not the claim: the table goes
-				// away only AFTER the claim has already refused.
-				attackerExec(t, store, `ALTER TABLE approvals RENAME TO approvals_hidden`)
-			}
-			got := ad.nameClaim(context.Background(), id, claimErr)
-			if !errors.Is(got, tc.want) {
-				t.Fatalf("name = %v, want %v", got, tc.want)
+			a := tc.setUp(t, cfg, store)
+			_, err := NewApprovalsAdapter(cfg, store).Approve(context.Background(), a.ApprovalID, a.ActionDigest)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestAdapter_aMovedLawIsNamedByEVERYDoorTheOperatorTouches is rule 2 written
+// as a mould: curing ONE door and calling the class cured is the defect this
+// train has now committed twice.
+//
+// A moved law is PERMANENT and has its own cure — the literal tells the
+// operator that rejecting still works. Published as `unavailable` it becomes
+// «transient, retry», forever, and the one thing that would actually help is
+// never said.
+//
+// Probing mutation: drop the sentinel from any of these doors ⇒ its row
+// reddens.
+func TestAdapter_aMovedLawIsNamedByEVERYDoorTheOperatorTouches(t *testing.T) {
+	doors := map[string]func(*ApprovalsAdapter, string, string) error{
+		"Detail": func(ad *ApprovalsAdapter, id, _ string) error {
+			_, err := ad.Detail(context.Background(), id)
+			return err
+		},
+		"Approve": func(ad *ApprovalsAdapter, id, digest string) error {
+			_, err := ad.Approve(context.Background(), id, digest)
+			return err
+		},
+	}
+	for name, call := range doors {
+		t.Run(name, func(t *testing.T) {
+			cfg, store, done := parkingProfile(t)
+			defer done()
+			a := parkOne(t, cfg, store, "act_movedlaw")
+			moveTheLaw(t, cfg)
+			err := call(NewApprovalsAdapter(cfg, store), a.ApprovalID, a.ActionDigest)
+			if !errors.Is(err, controlapi.ErrApprovalInvalidated) {
+				t.Fatalf("err = %v, want ErrApprovalInvalidated", err)
+			}
+			if errors.Is(err, controlapi.ErrApprovalsUnavailable) {
+				t.Fatal("a moved law is permanent: telling the operator to retry hides the only cure there is")
+			}
+			var moved interface{ CurrentLawDigest() string }
+			if !errors.As(err, &moved) || moved.CurrentLawDigest() == "" {
+				t.Fatal("the current law must travel in a field of its own, by every door")
+			}
+			// Oracle by impossibility: refusing under a moved law consumes nothing.
+			after, serr := store.ApprovalStatusOf(context.Background(), a.ApprovalID)
+			if serr != nil {
+				t.Fatalf("re-read: %v", serr)
+			}
+			if after != action.ApprovalPending {
+				t.Fatalf("status = %q, want PENDING", after)
+			}
+		})
+	}
+}
+
+// TestAdapter_aCorruptActionRecordIsNotABenignNonStart closes the hole the
+// third pass found: the parked action's own row failing to read, AFTER the
+// decide has committed, was published as «the row still holds its parameters,
+// so no automatic pass has closed it» — a benign sentence over a permanently
+// broken ledger, chosen by re-reading the APPROVALS row to name a failure in
+// the ACTIONS row.
+//
+// Nothing on the read path notices this corruption: GetApproval never selects
+// actions.requested_at and the story belt selects four other columns. So the
+// decide commits and the failure lands on the execution path.
+//
+// Probing mutation: drop ErrApprovalRecordUnreadable from store.Get's wrap ⇒
+// the refusal falls into the ladder and this reddens.
+func TestAdapter_aCorruptActionRecordIsNotABenignNonStart(t *testing.T) {
+	cfg, store, done := parkingProfile(t)
+	defer done()
+	a := parkOne(t, cfg, store, "act_ledgerrot")
+	attackerExec(t, store, `UPDATE actions SET requested_at='ayer' WHERE action_id=?`, "act_ledgerrot")
+
+	_, err := NewApprovalsAdapter(cfg, store).Approve(context.Background(), a.ApprovalID, a.ActionDigest)
+	if !errors.Is(err, controlapi.ErrApprovalDecidedEvidenceBad) {
+		t.Fatalf("err = %v, want ErrApprovalDecidedEvidenceBad", err)
+	}
+	if errors.Is(err, controlapi.ErrApprovalNotStartedParamsHeld) {
+		t.Fatal("a permanently unreadable ledger must never be reported as a quiet non-start")
 	}
 }

@@ -545,6 +545,8 @@ func (a *ApprovalsAdapter) nameExecution(ctx context.Context, id string, err err
 		return controlapi.ErrApprovalAlreadyClosed
 	case errors.Is(err, ErrApprovalCloseFailed):
 		return controlapi.ErrApprovalCloseFailed
+	case errors.Is(err, ErrApprovalRecordUnreadable):
+		return controlapi.ErrApprovalDecidedEvidenceBad
 	}
 	return a.nameClaim(ctx, id, err)
 }
@@ -575,7 +577,22 @@ func (a *ApprovalsAdapter) nameClaim(ctx context.Context, id string, err error) 
 	case errors.Is(rerr, actionsqlite.ErrApprovalParamsUnaccounted),
 		errors.Is(rerr, actionsqlite.ErrApprovalNotFound):
 		return controlapi.ErrApprovalParamsUnaccounted
+	case errors.Is(rerr, actionsqlite.ErrApprovalEvidenceCorrupt):
+		// The re-read RAN and answered corrupt bytes. Letting this fall to the
+		// residual said «the store could not be read» about a store that was
+		// read perfectly well and told us its evidence no longer verifies.
+		//
+		// DEFENCE IN DEPTH, declared: through the endpoint this branch is not
+		// reachable today, because the claim reads the approval row before the
+		// params and catches the same corruption first. It is here so the next
+		// caller — or a claim that stops reading that row — does not reopen the
+		// hole, and no mould claims to cover it.
+		return controlapi.ErrApprovalDecidedEvidenceBad
+	case errors.Is(rerr, actionsqlite.ErrApprovalUnreadable):
+		return controlapi.ErrApprovalParamsUnreadable
 	default:
+		// Nothing named it. That is the only honest residual, and it says it
+		// does not know rather than guessing.
 		return controlapi.ErrApprovalParamsUnreadable
 	}
 }

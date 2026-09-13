@@ -1428,6 +1428,9 @@ la evasión que esta sección existe para no ser.
   recibido se trata como respuesta ilegible (E9, última fila).
 - **AS-35** `parameters_state:"unavailable"`: su literal, Aprobar ausente,
   [Reintentar] presente.
+
+> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». Verificado por `grep` sobre el árbol entero: **ningún camino de producción emite este nombre**, así que su literal era interfaz muerta y su molde certificaba la nada. El nombre sale del registro y de la pantalla; este AS queda sin objeto hasta que exista un emisor.
+
 - **AS-36** `parameters_state:"too_large"`: su literal, Aprobar ausente, la
   CLI nombrada. Lleva molde de servidor: se fuerza aparcando un valor JSON
   suelto cuyo crudo cabe en 64 KiB y cuyo canónico no.
@@ -1500,6 +1503,9 @@ la evasión que esta sección existe para no ser.
   que esta pantalla no reconoce» **ausentes**.
 - **AS-88** `params_belt_failed`: literal de E6-bis, sin [Volver a leer] y sin
   decisión; la cadena «Respuesta que esta pantalla no reconoce» **ausente**.
+
+> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». Verificado por `grep` sobre el árbol entero: **ningún camino de producción emite este nombre**, así que su literal era interfaz muerta y su molde certificaba la nada. El nombre sale del registro y de la pantalla; este AS queda sin objeto hasta que exista un emisor.
+
 - **AS-89** Un POST que muere **antes** del commit con `invalidated` (la ley
   juzgada en el decide, fila intacta y `PENDING`): se pinta E7 **con** su
   Rechazar, y la cadena «La decisión quedó registrada» **ausente**. **Segunda mitad, con el desenlace que el árbol
@@ -1845,6 +1851,9 @@ la evasión que esta sección existe para no ser.
   `bytes == CanonicalParams(bytes)` ⇒ el documento se pinta. (La mutación
   anterior —imprimir crudo en vez de canónico— no valía: con la comparación en
   pie, el desenlace no cambiaba.)
+
+> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». Verificado por `grep` sobre el árbol entero: **ningún camino de producción emite este nombre**, así que su literal era interfaz muerta y su molde certificaba la nada. El nombre sale del registro y de la pantalla; este AS queda sin objeto hasta que exista un emisor.
+
 - **AS-97** `params_unaccounted`: su literal; la cadena «Otra ejecución se llevó
   esta petición» **ausente** — el cable no puede probar un tercer ejecutor.
 - **AS-91** `not_decided`, `already_closed`, `params_unreadable`, `decided_evidence_corrupt`, `params_unaccounted`, `params_belt_failed`, `unknown_outcome`,
@@ -1915,6 +1924,9 @@ Escenarios de primera clase, con DOS actores reales. Ninguno es in-process.
   punto 3 de la doctrina.
 
 ## 12-ter. El registro de nombres y sus anclas (FR-TEST-6)
+
+> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». `params_not_canonical` y `params_belt_failed` SALEN del registro: verificado por `grep` sobre el árbol entero, ningún camino de producción podía emitirlos. El registro cerrado es de **veinte** nombres hasta que alguien los emita. `parameters_state: "unavailable"` sale por lo mismo, de FR-UI-16.
+
 
 Cada fila lleva su marcador estable. El molde de FR-TEST-6 cruza
 `ApprovalOutcomeNames` contra esta tabla y falla si falta alguna.

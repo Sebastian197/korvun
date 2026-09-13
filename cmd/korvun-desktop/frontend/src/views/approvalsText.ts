@@ -63,8 +63,6 @@ export const OUTCOME_TEXT: Record<string, string> = {
 export const PARAMS_STATE_TEXT: Record<string, string> = {
   empty:
     'esta acción se aparcó sin parámetros, y así no se puede ejecutar: el claim rechaza la fila vacía',
-  unavailable:
-    'los parámetros no se pudieron leer en este instante; es transitorio y no dice nada sobre la evidencia',
   too_large: 'esta pantalla no puede enseñarte esta petición entera, así que no te ofrece el sí',
 }
 

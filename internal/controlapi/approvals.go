@@ -63,7 +63,6 @@ const (
 	// The two belts that refuse before anything is decided.
 	OutcomeDigestMismatch       OutcomeName = "digest_mismatch"
 	OutcomeParamsDigestMismatch OutcomeName = "params_digest_mismatch"
-	OutcomeParamsNotCanonical   OutcomeName = "params_not_canonical"
 
 	// Permanent refusals on the read path.
 	OutcomeInvalidated     OutcomeName = "invalidated"
@@ -80,7 +79,6 @@ const (
 	OutcomeDecidedEvidenceBad   OutcomeName = "decided_evidence_corrupt"
 	OutcomeAlreadyClosed        OutcomeName = "already_closed"
 	OutcomeNotDecided           OutcomeName = "not_decided"
-	OutcomeParamsBeltFailed     OutcomeName = "params_belt_failed"
 	OutcomeUnknownOutcome       OutcomeName = "unknown_outcome"
 	OutcomeCloseFailed          OutcomeName = "close_failed"
 )
@@ -91,11 +89,11 @@ const (
 var ApprovalOutcomeNames = []OutcomeName{
 	OutcomeAlreadyDecided, OutcomeNotFound, OutcomeUnavailable, OutcomeForbidden,
 	OutcomeDisabled, OutcomeExpired,
-	OutcomeDigestMismatch, OutcomeParamsDigestMismatch, OutcomeParamsNotCanonical,
+	OutcomeDigestMismatch, OutcomeParamsDigestMismatch,
 	OutcomeInvalidated, OutcomeEvidenceCorrupt, OutcomeBrainGone,
 	OutcomeNotStartedParamsHeld, OutcomeNotStartedParamsGone, OutcomeParamsUnaccounted,
 	OutcomeParamsUnreadable, OutcomeDecidedEvidenceBad, OutcomeAlreadyClosed,
-	OutcomeNotDecided, OutcomeParamsBeltFailed, OutcomeUnknownOutcome, OutcomeCloseFailed,
+	OutcomeNotDecided, OutcomeUnknownOutcome, OutcomeCloseFailed,
 }
 
 // The sentinels the adapter returns. Each one is a distinction the store can
@@ -112,7 +110,6 @@ var (
 	ErrApprovalForbidden      = errors.New("approvals: the window could not authenticate")
 
 	ErrApprovalParamsDigestMismatch = errors.New("approvals: stored parameters do not re-derive the digest")
-	ErrApprovalParamsNotCanonical   = errors.New("approvals: stored parameters are not in canonical form")
 	ErrApprovalInvalidated          = errors.New("approvals: the pinned law no longer holds")
 	ErrApprovalEvidenceCorrupt      = errors.New("approvals: stored evidence does not verify")
 	ErrApprovalBrainGone            = errors.New("approvals: the requesting brain is no longer in the profile")
@@ -124,7 +121,6 @@ var (
 	ErrApprovalDecidedEvidenceBad   = errors.New("approvals: the sealed decision's evidence no longer verifies")
 	ErrApprovalAlreadyClosed        = errors.New("approvals: this request is not awaiting execution")
 	ErrApprovalNotDecided           = errors.New("approvals: this request is still awaiting a decision")
-	ErrApprovalParamsBeltFailed     = errors.New("approvals: the claimed parameters do not re-derive the digest")
 	ErrApprovalUnknownOutcome       = errors.New("approvals: the tool ran and its outcome is unknown")
 	ErrApprovalCloseFailed          = errors.New("approvals: the ledger could not be closed")
 )
@@ -182,8 +178,6 @@ var outcomes = map[error]outcome{
 
 	ErrApprovalParamsDigestMismatch: {http.StatusConflict, OutcomeParamsDigestMismatch,
 		"the stored parameters do not re-derive this request's digest — this is permanent and nothing was executed"},
-	ErrApprovalParamsNotCanonical: {http.StatusConflict, OutcomeParamsNotCanonical,
-		"the stored parameters re-derive the digest but are not the canonical form it seals — in production that column is born canonical, so this is an outside hand"},
 	ErrApprovalInvalidated: {http.StatusConflict, OutcomeInvalidated,
 		"the law this request was parked under no longer holds — this is not transient; rejecting it still works"},
 	ErrApprovalEvidenceCorrupt: {http.StatusConflict, OutcomeEvidenceCorrupt,
@@ -205,8 +199,6 @@ var outcomes = map[error]outcome{
 		"this request is not awaiting execution — THIS execution did nothing"},
 	ErrApprovalNotDecided: {http.StatusConflict, OutcomeNotDecided,
 		"the store says this request is still awaiting a decision, so THIS execution did nothing"},
-	ErrApprovalParamsBeltFailed: {http.StatusConflict, OutcomeParamsBeltFailed,
-		"what was stored does not reproduce the digest you approved — the decision is recorded and the parameters were emptied on claiming them, so there is nothing left to read"},
 	ErrApprovalUnknownOutcome: {http.StatusConflict, OutcomeUnknownOutcome,
 		"the decision left this window and whether the effect happened is unknown"},
 	ErrApprovalCloseFailed: {http.StatusConflict, OutcomeCloseFailed,
