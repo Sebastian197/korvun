@@ -58,6 +58,11 @@ interface Gate {
   approvals_enabled: boolean
   brains_total: number
   brains_can_park: number
+  /** Parked requests this page could NOT serve whole. The store skips a row it
+   * cannot scan instead of failing the page — and if nobody paints the count,
+   * the operator loses that request in silence, which is the exact failure
+   * skipping it was meant to avoid. */
+  rows_skipped?: number
 }
 
 /** What one request produced: a document, a named refusal, or an answer the
@@ -491,6 +496,7 @@ function PendingList({
   }
 
   const { gate, rows } = answer.value
+  const skipped = gate.rows_skipped ?? 0
   if (rows.length === 0) {
     if (!gate.approvals_enabled) {
       // The gate said off while still answering 200: E3's text, never V1's.
@@ -546,6 +552,13 @@ function PendingList({
 
   return (
     <div className="approvals-list">
+      {skipped > 0 && (
+        <p role="alert">
+          {skipped === 1
+            ? '1 petición aparcada no se ha podido leer y no sale en esta lista. Está en el almacén: míralo con la CLI.'
+            : `${String(skipped)} peticiones aparcadas no se han podido leer y no salen en esta lista. Están en el almacén: míralo con la CLI.`}
+        </p>
+      )}
       <Actions>
         <button type="button" className="btn-secondary" onClick={load}>
           Actualizar
@@ -596,6 +609,7 @@ type Decision =
   | null
   | { kind: 'sending' }
   | { kind: 'executed'; digest: string; result: string; receipt: string }
+  | { kind: 'failed'; digest: string; detail: string; receipt: string }
   | { kind: 'rejected'; receipt: string }
   | { kind: 'named'; name: string; message: string; currentLaw: string; status: number }
   | { kind: 'lost'; verb: 'approve' | 'reject' }
@@ -652,12 +666,22 @@ function RequestDetail({
         if (a.kind === 'ok') {
           setDecision(
             verb === 'approve'
-              ? {
-                  kind: 'executed',
-                  digest: a.value.digest ?? '',
-                  result: a.value.result ?? '',
-                  receipt: a.value.receipt_id,
-                }
+              ? a.value.outcome === 'failed'
+                ? {
+                    // The tool ran and said no. It is a KNOWN outcome with its
+                    // receipt: calling it executed would be a lie, and calling
+                    // it unknown would be a second one.
+                    kind: 'failed',
+                    digest: a.value.digest ?? '',
+                    detail: a.value.result ?? '',
+                    receipt: a.value.receipt_id,
+                  }
+                : {
+                    kind: 'executed',
+                    digest: a.value.digest ?? '',
+                    result: a.value.result ?? '',
+                    receipt: a.value.receipt_id,
+                  }
               : { kind: 'rejected', receipt: a.value.receipt_id },
           )
           return
@@ -1141,6 +1165,22 @@ function DecisionState({
       <State
         title="Ejecutada"
         lines={[detail.digest, escapeUntrusted(decision.result), `Recibo ${decision.receipt}`]}
+        alert
+      >
+        <Actions>{back}</Actions>
+      </State>
+    )
+  }
+  if (decision.kind === 'failed') {
+    return (
+      <State
+        title="La acción se ejecutó y falló"
+        lines={[
+          detail.digest,
+          'El efecto salió de esta ventana y la herramienta contestó que no. Eso es un desenlace CONOCIDO, no una duda: el registro se cerró con su recibo.',
+          escapeUntrusted(decision.detail),
+          `Recibo ${decision.receipt}`,
+        ]}
         alert
       >
         <Actions>{back}</Actions>

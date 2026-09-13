@@ -78,3 +78,33 @@ La primera versión del banco corría **solo el paquete del fichero mutado**, as
 que una mutación del almacén que enrojece un molde del adaptador se contaba como
 muda. Corregido: cada mutación ejecuta los dos paquetes. Sin esa corrección,
 `S18` y `S24` habrían pasado por mudas siendo correctas.
+
+## Segunda tanda — las mutaciones de lo CURADO tras el veto (2026-09-13)
+
+Nueve mutaciones sobre las tres curas del veto. Ocho enrojecen.
+
+| # | Qué neutraliza | Rojas |
+|---|---|---|
+| C1 | GetApproval vuelve a devolver el ErrNotFound generico | 4 |
+| C2 | GetApprovalByAction vuelve al generico | 2 |
+| C3 | approvalTx vuelve al generico | 2 |
+| C4 | dos centinelas se responden el uno al otro | 1 |
+| C5 | el camino unico vuelve a juzgar una terna leida fuera del claim | 0 |
+| C6 | el corte PENDING se manda a ya cerrada | 1 |
+| C7 | una ejecucion fallida vuelve a salir por el canal de error | 2 |
+| C8 | el desenlace fallido se publica como ejecutado | 1 |
+| C9 | la cuenta de filas saltadas deja de viajar | 1 |
+
+**C5 sale MUDA y es correcto, declarado.** Neutraliza que el camino único
+ejecute la terna que el claim juzgó, sustituyéndola por la que leyó `store.Get`
+antes. No enrojece porque **su rama está defendida aguas arriba**: la terna
+entra en `action.Digest`, así que un competidor que la mueva hace que el
+digest deje de re-derivar DENTRO de la transacción del claim y el claim
+rehúsa antes de que nadie ejecute nada. Usar la terna devuelta es defensa en
+profundidad, no el guardián que carga el peso, y este papel no lo vende como
+tal. Sin un punto de sincronización —el que AS-100 declara— las dos lecturas
+coinciden por construcción y la mutación no puede distinguirse.
+
+**C1 enrojece cuatro moldes y C3 dos**: la dirección de los centinelas no era
+un fallo de un sitio, era de clase, y el molde que la vigila recorre las siete
+puertas.

@@ -318,32 +318,34 @@ func TestAdapter_brainGoneHasItsOwnSentinel(t *testing.T) {
 	}
 }
 
-// TestAdapter_aPendingRowAtThePostIsNotDecided: the POST's first cut reads the
-// state, and a PENDING row means someone rewrote it underneath — never
-// «already closed», which would be self-contradictory.
+// TestExecuteApprovedAction_aPendingRowIsNotDecided walks the ONE execution
+// path — the same function `korvun approvals execute` runs — and pins its first
+// cut: a PENDING row here means someone rewrote the state underneath, which is
+// `not_decided` and never «already closed». The two would contradict each
+// other, and the operator would be told the request was closed by a store that
+// says it is still waiting.
 //
-// Probing mutation: send it to already_closed ⇒ this reddens.
-func TestAdapter_aPendingRowAtThePostIsNotDecided(t *testing.T) {
+// It calls the path directly because that IS the surface under test. The
+// adapter used to carry its own Execute; it was dead code with a mould on it,
+// and two implementations of an irreversible effect is the class this house
+// forbids.
+//
+// Probing mutation: send the PENDING cut to ErrApprovalAlreadyClosed ⇒ this
+// reddens.
+func TestExecuteApprovedAction_aPendingRowIsNotDecided(t *testing.T) {
 	cfg, store, done := parkingProfile(t)
 	defer done()
 	a := parkOne(t, cfg, store, "act_pending")
-	ad := NewApprovalsAdapter(cfg, store)
-	// The approve is allowed to fail at the RUN: there is no webhook at the
-	// other end of a real executor and this mould does not watch the effect.
-	// What it needs is the DECISION sealed, and that is asserted, not assumed.
-	_, _ = ad.Approve(context.Background(), a.ApprovalID, a.ActionDigest)
-	sealed, err := store.ApprovalStatusOf(context.Background(), a.ApprovalID)
+	_, pin, err := ResolveApprovalLaw(cfg, cfg.Brains[len(cfg.Brains)-1].Name)
 	if err != nil {
-		t.Fatalf("read the status back: %v", err)
+		t.Fatalf("resolve: %v", err)
 	}
-	if sealed != action.ApprovalApproved {
-		t.Fatalf("status = %q, want APPROVED — this mould needs a decision on the record", sealed)
-	}
-	setApprovalStatus(t, store, a.ApprovalID, string(action.ApprovalPending))
-
-	_, err = ad.Execute(context.Background(), a.ApprovalID)
-	if !errors.Is(err, controlapi.ErrApprovalNotDecided) {
+	_, err = ExecuteApprovedAction(context.Background(), store, nil, a.ApprovalID, pin)
+	if !errors.Is(err, ErrApprovalNotDecided) {
 		t.Fatalf("err = %v, want ErrApprovalNotDecided", err)
+	}
+	if errors.Is(err, ErrApprovalAlreadyClosed) {
+		t.Fatalf("a row the store says is PENDING must never be called closed")
 	}
 }
 
@@ -643,4 +645,108 @@ func breakTheReceiptReRead(t *testing.T, store *actionsqlite.Store, approvalID s
 	  BEGIN UPDATE approvals SET decision_at = 'ayer'
 	         WHERE approval_id = '` + approvalID + `'; END` // #nosec G202
 	attackerExec(t, store, stmt)
+}
+
+// ---------------------------------------------------------------------------
+// An id that does not exist is a CLASS, and every endpoint answers it.
+//
+// The defect that shipped was found on ONE of them, and curing that one would
+// have left the others carrying the same lie. So: every endpoint, with the
+// exact name it must produce.
+// ---------------------------------------------------------------------------
+
+// TestAdapter_anAbsentIdIsNamedTheSameByEveryEndpoint. A row that is not there
+// is PERMANENT, so no endpoint may answer it as transient, and none may claim a
+// decision exists over it.
+//
+// The two forbidden answers are named on purpose. `unavailable` would tell the
+// operator to retry a request that will never succeed; `decided_evidence_corrupt`
+// would print «the decision is recorded and sealed with its receipt» over a row
+// that never existed — a receipt invented out of an absence.
+//
+// Probing mutation: have any store door return a bare ErrNotFound instead of
+// ErrApprovalNotFound ⇒ that endpoint falls through the switch's default and
+// its row reddens.
+func TestAdapter_anAbsentIdIsNamedTheSameByEveryEndpoint(t *testing.T) {
+	calls := map[string]func(*ApprovalsAdapter) error{
+		"Detail": func(ad *ApprovalsAdapter) error {
+			_, err := ad.Detail(context.Background(), "apr_nope")
+			return err
+		},
+		"Approve": func(ad *ApprovalsAdapter) error {
+			_, err := ad.Approve(context.Background(), "apr_nope", "sha256:"+staleHex)
+			return err
+		},
+		"Reject": func(ad *ApprovalsAdapter) error {
+			_, err := ad.Reject(context.Background(), "apr_nope", "no")
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			cfg, store, done := parkingProfile(t)
+			defer done()
+			err := call(NewApprovalsAdapter(cfg, store))
+			if !errors.Is(err, controlapi.ErrApprovalNotFound) {
+				t.Fatalf("err = %v, want ErrApprovalNotFound", err)
+			}
+			if errors.Is(err, controlapi.ErrApprovalsUnavailable) {
+				t.Fatalf("a row that is not there is permanent: it must never say «retry»")
+			}
+			if errors.Is(err, controlapi.ErrApprovalDecidedEvidenceBad) {
+				t.Fatalf("no decision exists over an absent row, and its literal claims a sealed receipt")
+			}
+		})
+	}
+}
+
+// TestAdapter_anEmptyStoreIsAnEmptyPageAndNotARefusal is the list's half of the
+// same class: with nothing parked the answer is a PAGE with zero rows and its
+// gate, never an error. «Nothing parked» and «something went wrong» are
+// different facts and the screen paints different things for them.
+//
+// Probing mutation: refuse when there are no rows ⇒ this reddens.
+func TestAdapter_anEmptyStoreIsAnEmptyPageAndNotARefusal(t *testing.T) {
+	cfg, store, done := parkingProfile(t)
+	defer done()
+	got, err := NewApprovalsAdapter(cfg, store).ListPending(context.Background())
+	if err != nil {
+		t.Fatalf("an empty store is not a failure: %v", err)
+	}
+	if len(got.Rows) != 0 {
+		t.Fatalf("rows = %d, want 0", len(got.Rows))
+	}
+	if !got.Gate.ApprovalsEnabled {
+		t.Fatalf("the gate must still say the switch is on")
+	}
+}
+
+// TestAdapter_aToolThatSaysNoReachesTheWindowAsFailed is the adapter's half of
+// the same fact, and the one that was publishing a bare 500.
+//
+// The parked request points at a host the harness cannot reach, so the real
+// executor really fails. What must come back is a RESULT — outcome `failed`
+// with its receipt — and not an error: an irreversible effect that left and
+// was refused is a decided outcome, and the window has a literal for it.
+//
+// Probing mutation: publish it as `executed`, or send it back through the error
+// channel ⇒ this reddens.
+func TestAdapter_aToolThatSaysNoReachesTheWindowAsFailed(t *testing.T) {
+	cfg, store, done := parkingProfile(t)
+	defer done()
+	a := parkOne(t, cfg, store, "act_toolno")
+
+	out, err := NewApprovalsAdapter(cfg, store).Approve(context.Background(), a.ApprovalID, a.ActionDigest)
+	if err != nil {
+		t.Fatalf("a tool that says no must not surface as a failure of the call: %v", err)
+	}
+	if out.Outcome != "failed" {
+		t.Fatalf("outcome = %q, want %q", out.Outcome, "failed")
+	}
+	if out.ReceiptID == "" {
+		t.Fatal("the closed execution carries its receipt, failed or not")
+	}
+	if out.Result == "" {
+		t.Fatal("the failure travels without its detail")
+	}
 }

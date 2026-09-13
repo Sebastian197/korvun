@@ -1305,3 +1305,51 @@ describe('MUT · ramas sin vigilar', () => {
     ).toEqual(groups)
   })
 })
+
+// ---------------------------------------------------------------------------
+// LO QUE SE CURA, SE LEE. Dos hechos que el servidor ya produce y que la
+// pantalla no pintaba: un campo curado que nadie lee sigue sin curar.
+// ---------------------------------------------------------------------------
+describe('MUT · lo curado llega al operador', () => {
+  // El almacén salta la fila que no puede servir entera, la cuenta y la nombra.
+  // Si la pantalla no lo pinta, el operador pierde una petición aparcada en
+  // silencio — que es exactamente el fallo que saltarla existe para evitar.
+  it('MUT-5 · rows_skipped se pinta con su cuenta, y cero no dice nada', async () => {
+    await renderList(
+      happy({
+        'GET /api/approvals': () => json(200, { gate: { ...GATE, rows_skipped: 2 }, rows: [ROW] }),
+      }),
+    )
+    expect(
+      await screen.findByText(/2 peticiones aparcadas no se han podido leer/i),
+    ).toBeInTheDocument()
+  })
+
+  it('MUT-6 · sin filas saltadas no aparece ningún aviso', async () => {
+    await renderList()
+    expect(screen.queryByText(/no se han podido leer/i)).toBeNull()
+  })
+
+  // Una ejecución que FALLA es un desenlace conocido: el efecto salió, dijo que
+  // no, y el registro se cerró con su recibo. Pintarla como ejecutada sería
+  // mentir; pintarla como «no se sabe» también.
+  it('MUT-7 · outcome failed: se dice que falló, con su recibo, y no «ejecutada»', async () => {
+    await openDetail(
+      happy({
+        'POST /api/approvals/apr_1/approve': () =>
+          json(200, {
+            outcome: 'failed',
+            digest: DIGEST,
+            result: 'dial tcp: connection refused',
+            receipt_id: 'rcp_f1',
+          }),
+      }),
+    )
+    typeKeys(armingInput(), TAIL)
+    fireEvent.click(approveBtn()!)
+    expect(await screen.findByText(/La acción se ejecutó y falló/i)).toBeInTheDocument()
+    expect(screen.getByText(/rcp_f1/)).toBeInTheDocument()
+    expect(screen.getByText(/dial tcp: connection refused/)).toBeInTheDocument()
+    expect(screen.queryByText('No sabemos si el efecto llegó a ocurrir.')).toBeNull()
+  })
+})

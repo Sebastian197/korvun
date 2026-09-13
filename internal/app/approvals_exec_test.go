@@ -118,7 +118,8 @@ func TestExecuteApproved_theExactObjectRuns(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, approvalID := approvedFlow(t)
 	ctx := context.Background()
-	result, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw)
+	run, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw)
+	result := run.Result
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -319,5 +320,50 @@ func TestApprovalExecutor_errorBranches(t *testing.T) {
 	}
 	if d, _ := approvalTTL(nil); d != defaultApprovalTTL {
 		t.Fatalf("absent config defaults: %v", d)
+	}
+}
+
+// failingTool is a tool that RAN and said no — an external effect attempted and
+// refused, which is a decided outcome and not an unknown one.
+type failingTool struct{ runs atomic.Int64 }
+
+func (f *failingTool) Name() string        { return "webhook_call" }
+func (f *failingTool) Description() string { return "failing fake" }
+func (f *failingTool) Execute(ctx context.Context, args string) (string, error) {
+	f.runs.Add(1)
+	return "", errors.New("dial tcp: connection refused")
+}
+
+// TestExecuteApprovedAction_aToolThatSaysNoIsADecidedOutcome pins the fact the
+// whole «lo que se cura, se lee» principle turns on: the tool ran, the effect
+// was attempted, it failed, and the ledger closed it WITH its receipt.
+//
+// That travels as a RESULT, not through the error channel. Reporting it as an
+// error made it indistinguishable from a failure to learn the outcome, and by
+// the time it reached the window it had become a bare 500 — the worst possible
+// message over an irreversible effect that already left.
+//
+// Probing mutation: return it through the error channel, or drop the receipt ⇒
+// this reddens.
+func TestExecuteApprovedAction_aToolThatSaysNoIsADecidedOutcome(t *testing.T) {
+	store, _, _, approvalID := approvedFlow(t)
+	fail := &failingTool{}
+	exec := executor.New(tool.Registry{"webhook_call": fail}, 0, time.Now)
+
+	run, err := ExecuteApprovedAction(context.Background(), store, exec, approvalID, testLaw)
+	if err != nil {
+		t.Fatalf("a tool that says no is not an error of THIS call: %v", err)
+	}
+	if !run.Failed {
+		t.Fatal("Failed = false over a tool that returned an error")
+	}
+	if run.FailureDetail == "" {
+		t.Fatal("the failure travels without its detail")
+	}
+	if run.ReceiptID == "" {
+		t.Fatal("a closed execution carries its receipt, failed or not")
+	}
+	if fail.runs.Load() != 1 {
+		t.Fatalf("runs = %d, want exactly 1", fail.runs.Load())
 	}
 }

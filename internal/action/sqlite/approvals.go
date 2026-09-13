@@ -324,7 +324,7 @@ func (s *Store) approvalTx(ctx context.Context, tx *sql.Tx, approvalID string) (
 		   FROM approvals WHERE approval_id = ?`, approvalID)
 	a, err := scanApproval(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrNotFound)
+		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
 	}
 	return a, err
 }
@@ -819,7 +819,7 @@ func (s *Store) GetApproval(ctx context.Context, approvalID string) (action.Appr
 		   FROM approvals WHERE approval_id = ?`, approvalID)
 	a, err := scanApproval(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrNotFound)
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
 	}
 	if err != nil {
 		return action.Approval{}, action.ActionPreview{}, err
@@ -1024,7 +1024,7 @@ func (s *Store) GetApprovalByAction(ctx context.Context, actionID string) (actio
 	err := s.db.QueryRowContext(ctx,
 		`SELECT approval_id FROM approvals WHERE action_id = ?`, actionID).Scan(&approvalID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval for action %q: %w", actionID, ErrNotFound)
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval for action %q: %w", actionID, ErrApprovalNotFound)
 	}
 	if err != nil {
 		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval for action %q: %w", actionID, err)

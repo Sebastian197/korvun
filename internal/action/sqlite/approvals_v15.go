@@ -470,23 +470,31 @@ func (s *Store) Path() string { return s.path }
 //
 // Here the triple, the params and the digest all come from the row THIS
 // transaction read, and a mismatch refuses by name with nothing consumed.
-func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID string, law *PolicyPin, wantDigest string) ([]byte, error) {
+// It returns the OPERATION it judged alongside the params, so the caller runs
+// the triple this transaction read and not one it fetched somewhere else. That
+// is the whole cure: handing back only the params would leave the caller free
+// to execute under a stale operation, which is the defect this function exists
+// to close.
+func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID string, law *PolicyPin, wantDigest string) ([]byte, action.Operation, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: begin claim: %w: %w", ErrApprovalUnreadable, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: begin claim: %w: %w", ErrApprovalUnreadable, err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	a, err := s.approvalTx(ctx, tx, approvalID)
-	if errors.Is(err, ErrNotFound) {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+	if errors.Is(err, ErrApprovalNotFound) {
+		// Propagated, not re-mapped: re-wrapping here would make the door's own
+		// sentinel decorative — any door could go back to the generic error and
+		// nothing would notice.
+		return nil, action.Operation{}, err
 	}
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	}
 	if law != nil {
 		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
-			return nil, fmt.Errorf(
+			return nil, action.Operation{}, fmt.Errorf(
 				"action/sqlite: approval %q was parked under law v%d %s but the current law is v%d %s (%s): %w",
 				approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, dim, ErrApprovalInvalidated)
 		}
@@ -496,52 +504,52 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 		`SELECT canonical_preview, canonical_params FROM approvals WHERE approval_id = ?`,
 		approvalID).Scan(&rawPreview, &rawParams); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+			return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
 		}
-		return nil, fmt.Errorf("action/sqlite: claim read %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: claim read %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	p, err := action.ParseCanonicalPreview([]byte(rawPreview))
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: approval %q preview: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q preview: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	}
 	if err := action.ValidatePreviewBinding(a, p); err != nil {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	}
 	if err := verifyApprovalStoryTyped(ctx, tx, a, p); err != nil {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 	}
 
 	op, _, err := ternaOf(ctx, tx, a.ActionID)
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 	}
 	if got := action.Digest(op, rawParams); got != wantDigest {
-		return nil, fmt.Errorf(
+		return nil, action.Operation{}, fmt.Errorf(
 			"action/sqlite: approval %q: the row this transaction read re-derives %s but the caller approved %s: %w",
 			approvalID, got, wantDigest, ErrApprovalParamsDigestMismatch)
 	}
 	if rawParams == "" {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalParamsEmpty)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalParamsEmpty)
 	}
 
 	res, err := tx.ExecContext(ctx,
 		`UPDATE approvals SET canonical_params = '' WHERE approval_id = ? AND canonical_params != ''`, approvalID)
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: purge claim %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: purge claim %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
 		// A count that was never obtained is not a count of zero. Reading it
 		// as "already claimed" would name an outcome over a fact nobody has.
-		return nil, fmt.Errorf("action/sqlite: claim %q: rows affected unavailable: %w: %w", approvalID, ErrApprovalUnreadable, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: claim %q: rows affected unavailable: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	if n == 0 {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalClaimSkipped)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalClaimSkipped)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("action/sqlite: commit claim: %w: %w", ErrApprovalUnreadable, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: commit claim: %w: %w", ErrApprovalUnreadable, err)
 	}
-	return []byte(rawParams), nil
+	return []byte(rawParams), op, nil
 }
 
 // ApprovalStatusOf reads one column and runs NO belt.

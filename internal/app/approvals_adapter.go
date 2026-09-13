@@ -388,33 +388,7 @@ func (a *ApprovalsAdapter) Approve(ctx context.Context, id, digest string) (cont
 	if rule != "" {
 		return controlapi.ApprovalOutcome{}, nameInBandRule(rule)
 	}
-	return a.runApproved(ctx, id, cage, approval.ActionDigest)
-}
-
-// Execute runs an already-decided request. It is the path `korvun approvals
-// execute` shares, and its first cut reads the state: a PENDING row here means
-// someone rewrote it underneath, which is `not_decided` and never «already
-// closed» — the two would contradict each other.
-func (a *ApprovalsAdapter) Execute(ctx context.Context, id string) (controlapi.ApprovalOutcome, error) {
-	approval, _, err := a.store.GetApproval(ctx, id)
-	if err != nil {
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, true)
-	}
-	switch approval.Status {
-	case action.ApprovalApproved:
-	case action.ApprovalPending:
-		return controlapi.ApprovalOutcome{}, controlapi.ErrApprovalNotDecided
-	default:
-		return controlapi.ApprovalOutcome{}, controlapi.ErrApprovalAlreadyClosed
-	}
-	cage, _, err := a.resolveLawFor(ctx, id)
-	if err != nil {
-		if errors.Is(err, ErrBrainNotInProfile) {
-			return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %w", controlapi.ErrApprovalBrainGone, err)
-		}
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, true)
-	}
-	return a.runApproved(ctx, id, cage, approval.ActionDigest)
+	return a.runApproved(ctx, id, cage, pin, approval.ActionDigest)
 }
 
 // Reject seals the no and re-reads the receipt the DTO promises.
@@ -536,9 +510,11 @@ func approvalsOperator(approvalID string) (action.Envelope, actionsqlite.Attempt
 	}, nil
 }
 
-// runApproved is the execution half: claim under the digest the human
-// approved, run, close, and read back the receipt the DTO promises.
-func (a *ApprovalsAdapter) runApproved(ctx context.Context, id string, cage *EffectiveCage, digest string) (controlapi.ApprovalOutcome, error) {
+// runApproved delegates to the ONE execution path — the same function the
+// operator CLI runs. Two implementations of an irreversible effect is exactly
+// the class this house forbids, and the previous shape had them: a cure wired
+// only to the window while the CLI kept the defect.
+func (a *ApprovalsAdapter) runApproved(ctx context.Context, id string, cage *EffectiveCage, pin actionsqlite.PolicyPin, digest string) (controlapi.ApprovalOutcome, error) {
 	_, preview, err := a.store.GetApproval(ctx, id)
 	if err != nil {
 		return controlapi.ApprovalOutcome{}, a.nameTouch(err, true)
@@ -550,55 +526,41 @@ func (a *ApprovalsAdapter) runApproved(ctx context.Context, id string, cage *Eff
 	if err != nil {
 		return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %w", controlapi.ErrApprovalBrainGone, err)
 	}
-	params, err := a.store.ClaimApprovalParamsUnderDigest(ctx, id, nil, digest)
+	run, err := ExecuteApprovedAction(ctx, a.store, exec, id, pin)
 	if err != nil {
-		return controlapi.ApprovalOutcome{}, a.nameClaim(ctx, id, err)
+		return controlapi.ApprovalOutcome{}, a.nameExecution(ctx, id, err)
 	}
-	result, _, runErr := exec.Run(ctx, preview.Operation[len("tool/"):],
-		tool.Scope{}, string(params))
-	outcome := action.StateSucceeded
-	resultDigest := action.HashCanonical(result)
-	if runErr != nil {
-		outcome = action.StateFailed
-		resultDigest = ""
-	}
-	if err := a.store.FinishWithResult(ctx, actionIDOf(ctx, a.store, id), outcome, nowUTC(), resultDigest); err != nil {
-		// The effect already happened or already failed; what could not be
-		// written is the close. That is `close_failed`, and it is NOT
-		// `unknown_outcome`: the run's own error is known.
-		return controlapi.ApprovalOutcome{Outcome: string(controlapi.OutcomeCloseFailed)},
-			fmt.Errorf("%w: %w", controlapi.ErrApprovalCloseFailed, err)
-	}
-	after, _, rerr := a.store.GetApproval(ctx, id)
-	if rerr != nil {
-		return controlapi.ApprovalOutcome{Outcome: string(controlapi.OutcomeCloseFailed)},
-			fmt.Errorf("%w: %w", controlapi.ErrApprovalCloseFailed, rerr)
-	}
-	if runErr != nil {
-		// The tool ran and said no. That is a KNOWN outcome, closed with its
-		// receipt — reporting it as success would be the worst lie this
-		// surface can tell, and reporting it as unknown would be the second
-		// worst.
+	if run.Failed {
+		// The tool ran and said no. It reaches the window as the `failed`
+		// outcome WITH its receipt — never as a bare 500, which is the worst
+		// possible message over an irreversible effect that already left.
 		return controlapi.ApprovalOutcome{
 			Outcome:   "failed",
 			Digest:    digest,
-			ReceiptID: after.DecisionReceiptID,
-		}, fmt.Errorf("app: the approved execution of %s failed: %w", id, runErr)
+			Result:    run.FailureDetail,
+			ReceiptID: run.ReceiptID,
+		}, nil
 	}
 	return controlapi.ApprovalOutcome{
 		Outcome:   "executed",
 		Digest:    digest,
-		Result:    result,
-		ReceiptID: after.DecisionReceiptID,
+		Result:    run.Result,
+		ReceiptID: run.ReceiptID,
 	}, nil
 }
 
-func actionIDOf(ctx context.Context, store *actionsqlite.Store, approvalID string) string {
-	a, _, err := store.GetApproval(ctx, approvalID)
-	if err != nil {
-		return ""
+// nameExecution names what the one execution path refused. The claim's own
+// refusals go through the re-read ladder; the rest are named by sentinel.
+func (a *ApprovalsAdapter) nameExecution(ctx context.Context, id string, err error) error {
+	switch {
+	case errors.Is(err, ErrApprovalNotDecided):
+		return controlapi.ErrApprovalNotDecided
+	case errors.Is(err, ErrApprovalAlreadyClosed):
+		return controlapi.ErrApprovalAlreadyClosed
+	case errors.Is(err, ErrApprovalCloseFailed):
+		return controlapi.ErrApprovalCloseFailed
 	}
-	return a.ActionID
+	return a.nameClaim(ctx, id, err)
 }
 
 // nameClaim decides between the four «did it start?» names by RE-READING the
