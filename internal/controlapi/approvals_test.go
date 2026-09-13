@@ -272,9 +272,14 @@ func TestApprovals_ApproveWithoutADigestIsRefused(t *testing.T) {
 
 // namedOutcomes is the table change 7 took from six to eleven rows and change
 // 13 took to nineteen, plus not_decided, params_unreadable and
-// decided_evidence_corrupt from changes 22 and 23 — twenty-two, exactly the
-// registry of §12-ter. forbidden is proved on its own route above, where the
-// bearer can actually refuse.
+// decided_evidence_corrupt from changes 22 and 23. forbidden is proved on its
+// own route above, where the bearer can actually refuse, so this list is the
+// registry MINUS that one.
+//
+// This godoc used to end «— twenty-two, exactly the registry of §12-ter», which
+// is neither this list's length nor the registry's, in the same file whose
+// other stale count had just been corrected. No number is written here now:
+// TestApprovals_theSetIsClosed_countsInsteadOfClaiming executes the arithmetic.
 func namedOutcomes() []struct {
 	name   string
 	err    error
@@ -792,11 +797,15 @@ func TestApprovals_theRegistryCrossesTheSpecAnchorsBothWays(t *testing.T) {
 	// The arithmetic §12-ter writes about itself, EXECUTED. Class (h) of the
 	// checklist: the paragraph said twenty while the table held twenty-one and
 	// the registry twenty-one, and the sentence was published that way.
-	declared := specCount.FindSubmatch(raw)
+	// From the SECTION, never from `raw`. Scoping the anchors and leaving the
+	// count on the whole document was the same defect twice in one mould: with
+	// the count loose, §12-ter could declare seven over twenty-one rows and any
+	// stray sentence elsewhere in the file would satisfy the regex.
+	declared := specCount.FindStringSubmatch(strings.Join(section, "\n"))
 	if declared == nil {
 		t.Fatal("§12-ter no longer declares its own count in digits — FR-TEST-6 cannot judge the arithmetic")
 	}
-	want, err := strconv.Atoi(string(declared[1]))
+	want, err := strconv.Atoi(declared[1])
 	if err != nil {
 		t.Fatalf("the declared count is not a number: %v", err)
 	}
@@ -805,5 +814,30 @@ func TestApprovals_theRegistryCrossesTheSpecAnchorsBothWays(t *testing.T) {
 	}
 	if want != len(controlapi.ApprovalOutcomeNames) {
 		t.Errorf("§12-ter declares %d names and the registry carries %d", want, len(controlapi.ApprovalOutcomeNames))
+	}
+}
+
+// TestApprovals_theSetIsClosed_countsInsteadOfClaiming is class (h) taken out
+// of the prose: the relation between this file's table, the registry and the
+// one name proved elsewhere is ARITHMETIC, so it is executed.
+//
+// Probing mutation (executed, red, declared in the canto): drop a row from
+// namedOutcomes, or add a name to the registry ⇒ this reddens.
+func TestApprovals_theSetIsClosed_countsInsteadOfClaiming(t *testing.T) {
+	t.Parallel()
+	distinct := map[string]bool{}
+	for _, tc := range namedOutcomes() {
+		distinct[tc.error_] = true
+	}
+	if len(distinct) != len(namedOutcomes()) {
+		t.Fatalf("namedOutcomes has %d rows over %d distinct names", len(namedOutcomes()), len(distinct))
+	}
+	// forbidden is the one name this table cannot drive: it is refused by the
+	// bearer route, before the seam under test is reached.
+	if distinct["forbidden"] {
+		t.Fatal("forbidden is proved on the bearer route, not here")
+	}
+	if got, want := len(distinct)+1, len(controlapi.ApprovalOutcomeNames); got != want {
+		t.Errorf("this table drives %d names and forbidden makes %d, against a registry of %d", len(distinct), got, want)
 	}
 }

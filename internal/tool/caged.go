@@ -29,12 +29,24 @@ var ErrCageViolation = errors.New("tool: cage violation")
 // ErrShieldViolation marks a connection attempt the private-network shield
 // stopped at the dial (ADR-0041 §3): a Private brain's network tool resolved
 // a public address. Classified as a DENIAL with audit rule
-// "private_network_shield". Like ErrCageViolation, nothing was contacted.
+// "private_network_shield". Nothing was contacted — which is NOT true of every
+// ErrCageViolation, and this comment used to say it was: the redirect refusal
+// below is a cage violation raised over a response the host already sent.
 var ErrShieldViolation = errors.New("tool: private network shield violation")
 
+// ErrRedirectRefused marks the cage refusal raised by CheckRedirect: the host
+// received the request and answered a 3xx the cage will not follow. It wraps
+// ErrCageViolation, so every existing classification is unchanged; it exists
+// because "a cage violation" alone cannot say whether anything was sent, and
+// for a POST that difference is the difference between a refusal and an
+// irreversible effect nobody can account for.
+var ErrRedirectRefused = errors.New("tool: redirect refused by the cage")
+
 // ErrEffectDelivered marks a tool error raised AFTER the request left and the
-// remote end accepted it — the effect is out in the world and only our reading
-// of its answer failed. It is a typed marker on purpose: the only other way to
+// remote end accepted it. What it asserts is OUR side of the wire and nothing
+// more: the bytes were delivered. Whether the receiver acted on them is not
+// knowable from here — a listener can accept a body and drop it — so the
+// sentinel means «this may have happened», never «this happened». It is a typed marker on purpose: the only other way to
 // tell these apart is matching the error TEXT, which is class (g) of the
 // known-classes checklist and rots on the first rewording.
 //
@@ -46,8 +58,16 @@ var ErrShieldViolation = errors.New("tool: private network shield violation")
 // support — the store calls the same shape «a FAILED lie». An error wrapping
 // this sentinel closes OUTCOME_UNKNOWN instead.
 //
-// It does NOT mean the operation succeeded, and it never downgrades a cage or
-// shield breach: those fire before anything is sent.
+// It does NOT mean the operation succeeded, and it says nothing about what the
+// receiver did with what it got: the guarantee is about OUR side of the wire —
+// the request left and the remote end accepted it — and not a word more.
+//
+// It does not downgrade a SHIELD breach, which fires at the dial. It DOES
+// travel with the cage's redirect refusal (ErrRedirectRefused), because that
+// one is raised over a response, after the host already has the body. This
+// comment used to say "it never downgrades a cage or shield breach: those fire
+// before anything is sent", and the redirect refusal is the counterexample the
+// seventh adversarial pass drove through a real loopback server.
 var ErrEffectDelivered = errors.New("tool: the request was delivered and its answer was not read")
 
 // Attrs are the HOUSE-DEFAULT gate attributes of a built-in tool (ADR-0041

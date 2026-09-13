@@ -194,14 +194,19 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		tool.Scope{Brain: "", Conversation: conv}, string(params))
 	outcome := action.StateSucceeded
 	resultDigest := action.HashCanonical(result)
-	// The two producers of a genuinely unaccountable effect, named by TYPE.
-	// A deadline may have been delivered and its answer lost; so may a call the
-	// remote end ACCEPTED whose body we then failed to read, or whose body
-	// breached the size cap. The first cure of this classification handled only
-	// the deadline, so a webhook whose POST was accepted and whose answer was
-	// unreadable still closed FAILED — a definite claim over an irreversible
-	// effect. Matching the tool's error TEXT would be class (g); the tools wrap
-	// tool.ErrEffectDelivered instead.
+	// The producers of a genuinely unaccountable effect, named by TYPE. A
+	// deadline may have been delivered and its answer lost; so may a call the
+	// remote end ACCEPTED and then answered in a way we could not use — a body
+	// cut short, a body over the cap, a 3xx the cage will not follow, a 5xx
+	// from a receiver that had already read it.
+	//
+	// Two cures got here. The first classified only the deadline. The second
+	// added two of the four post-delivery branches and left the other two,
+	// because it guarded the class by TOOL NAME instead of by branch — so the
+	// commonest shape of all, an allow-listed host answering 500, still closed
+	// FAILED over a POST it had received. Matching the tool's error TEXT would
+	// be class (g); the tools wrap tool.ErrEffectDelivered, and an AST mould
+	// holds the rule at the site.
 	unknown := errors.Is(execErr, context.DeadlineExceeded) ||
 		errors.Is(execErr, tool.ErrEffectDelivered)
 	switch {
@@ -244,13 +249,21 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 			out.FailureDetail = execErr.Error()
 			return out, nil
 		}
-		// Anything else: the tool ran and said no BEFORE anything left — a
-		// cage refusal, a shield refusal, a malformed payload, an HTTP error
-		// status. That is a DECIDED outcome with its receipt, and it travels as
-		// one; knowing the attempt failed is a different fact from not knowing
-		// what happened. A tool that can fail AFTER delivering must say so with
-		// tool.ErrEffectDelivered, which routes above, and
-		// TestTools_everyPostDeliveryBranchIsTyped walks the ones that can.
+		// Anything else: the tool refused BEFORE anything left — a host off the
+		// allow-list, a shield refusal at the dial, a malformed payload, a
+		// failed dial. That is a DECIDED outcome with its receipt, and it
+		// travels as one; knowing the attempt failed is a different fact from
+		// not knowing what happened.
+		//
+		// This comment listed «an HTTP error status» among them, and that was
+		// false: a status comes from a receiver that already read the body. So
+		// did the cage's redirect refusal, raised over a response. Both wrap
+		// tool.ErrEffectDelivered now and route above.
+		//
+		// It also cited a mould by a name that existed NOWHERE but in this
+		// sentence. The rule is held by TestWebhookCall_everyBranchAfterDo,
+		// which reads the tool's AST and requires the sentinel on every error
+		// return past the point where a response exists.
 		out.Failed = true
 		out.FailureDetail = execErr.Error()
 		return out, nil

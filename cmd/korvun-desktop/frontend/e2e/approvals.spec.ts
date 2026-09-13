@@ -289,5 +289,5 @@ test('AS-99 · with no bindings the screen claims nothing about the process', as
   await expect(page.getByText('El proceso está en marcha')).toHaveCount(0)
 })
 
-// The two above leave the harness core stopped on purpose. Anything added after
-// them must start it itself — openOneParked already does.
+// AS-79 and AS-99 leave the harness core stopped on purpose: any spec that
+// needs it running starts it itself, which openOneParked already does.

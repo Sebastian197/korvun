@@ -57,8 +57,12 @@ func TestValidateToolEffects_wholeSafeToolsetPasses(t *testing.T) {
 	}
 }
 
-// TestBuild_undeclaredToolCannotBoot: the guard wired into the real boot
-// path. Today's config validation already rejects unknown tool names, so
+// TestBuild_declaredToolsStillBoot is the guard wired into the real boot
+// path. (This godoc opened by naming an "undeclaredToolCannotBoot" mould that
+// exists nowhere in the tree — the boot-refusal half is covered by
+// TestValidateToolEffects_undeclaredFailsLoudNamingTheTool, above.)
+//
+// Today's config validation already rejects unknown tool names, so
 // this rides the unit seam above; the wiring itself is proven by the
 // whole suite passing WITH the guard in place (every existing boot
 // carries only declared tools).
