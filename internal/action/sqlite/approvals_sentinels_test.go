@@ -17,14 +17,18 @@ package sqlite
 
 import (
 	"errors"
+	"os"
+	"regexp"
 	"testing"
 
 	"github.com/Sebastian197/korvun/internal/action"
 )
 
-// approvalSentinels is the closed set. A new sentinel that is not listed here
-// fails TestApprovalSentinels_theSetIsClosed, so the walk below can never go
-// stale behind a new error.
+// approvalSentinels is the set the walks below cover, and
+// TestApprovalSentinels_theSetIsClosed keeps it from going stale: it counts the
+// ErrApproval* declarations in the package source and fails when one is missing
+// here. Without that count the list would rot silently behind the next
+// sentinel, and a rotted list is worse than no list — it reads like coverage.
 var approvalSentinels = map[string]error{
 	"ErrApprovalNotFound":             ErrApprovalNotFound,
 	"ErrApprovalParamsEmpty":          ErrApprovalParamsEmpty,
@@ -139,4 +143,33 @@ func TestApprovalDoors_everyMissingRowNamesItself(t *testing.T) {
 		})
 	}
 	_ = action.ApprovalPending
+}
+
+// TestApprovalSentinels_theSetIsClosed counts the ErrApproval* sentinels the
+// package declares and refuses to pass while approvalSentinels does not name
+// them all.
+//
+// It exists because its absence was a published falsehood: the comment above
+// invoked it by name for a whole commit while the test did not exist, so the
+// list it promised to keep honest was covered by nothing.
+//
+// Probing mutation: remove any entry from approvalSentinels ⇒ this reddens.
+func TestApprovalSentinels_theSetIsClosed(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("approvals_v15.go")
+	if err != nil {
+		t.Fatalf("read the sentinel declarations: %v", err)
+	}
+	declared := regexp.MustCompile(`(?m)^\t(ErrApproval\w+)\s+=`).FindAllStringSubmatch(string(src), -1)
+	if len(declared) == 0 {
+		t.Fatal("found no ErrApproval* declarations — the scan is broken, not the set")
+	}
+	for _, m := range declared {
+		if _, listed := approvalSentinels[m[1]]; !listed {
+			t.Errorf("%s is declared and NOT in approvalSentinels — the walks below skip it in silence", m[1])
+		}
+	}
+	if len(declared) != len(approvalSentinels) {
+		t.Errorf("declared %d sentinels, listed %d", len(declared), len(approvalSentinels))
+	}
 }
