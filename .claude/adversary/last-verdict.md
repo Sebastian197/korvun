@@ -1,34 +1,41 @@
-VETO LEVANTADO ef1f7c2a3216f2a6b89b15bba836f683e38002b1
+VETO LEVANTADO c3a6d997631a3387f1b3df50badd3b5149d64b34
 
-El adversario interno devolvió VETO MANTENIDO en su OCTAVA pasada: dos P1, tres
-P2 y seis P3. Los once están curados en el commit que este marcador nombra, cada
-cura con su mutación probatoria ejecutada y su rojo capturado. NINGUNA pasada
-interna ha juzgado esas curas.
+Round: the marker master lost to the rebase button.
 
-El veto lo levanta EL DIRECTOR, no el adversario, y lo hace con la vara escrita:
-ocho pasadas y decenas de defectos reales demuestran que el bucle interno hace
-su trabajo y también que no converge solo — cada cura abre superficie nueva. La
-puerta EXTERNA existe para esto. El tren va a Codex con cero P1 exigidos allí, y
-un veto interno mantenido se declara en el cuerpo de la pull request en vez de
-esconderse.
+WHY THIS COMMIT EXISTS. The approvals-screen train (#36) carried a proper
+marker commit naming its code commit, `ef1f7c2`. The pull request was
+merged with REBASE, and a GitHub rebase writes new commits: the code
+commit landed on master as `6843883`, so the marker inside `c3a6d99`
+names a SHA that is not its parent in this history. The push gate said
+so plainly and refused:
 
-Qué encontró la octava, para que nadie tenga que buscarlo:
+    the marker at c3a6d997… records ef1f7c2a…, but the judged commit's
+    parent is 6843883660c8… — the recording commit does not name its
+    direct parent.
 
-- P1-1 — la frontera post-entrega estaba en el sitio equivocado por segunda vez,
-  y la segunda se publicó como verdadera en una nota de release y en la
-  ceremonia. Un host que lee el POST entero y cuelga devuelve un EOF pelado
-  dentro del bloque de error de Do: el libro lo cerraba FALLIDO. La frontera ya
-  no se razona, se OBSERVA con httptrace.
-- P1-2 — el centinela se leía en una de las dos rutas de ejecución.
-  internal/brain ejecuta la herramienta irreversible cuando la puerta no aparca,
-  y cerraba FALLIDO para todo error mientras su propio comentario decía «the
-  tool refused before any effect».
-- P2-1 — el guardián estructural, en su tercera forma: por nombre de herramienta
-  no podía enrojecer por una rama, y por posición sintáctica dejaba pasar dos
-  formas de retorno y enrojecía en falso una tercera.
-- P2-2 y P2-3 — dos frases que seguían diciendo lo contrario del commit que las
-  tocó.
-- Seis P3, entre ellos una cura que el canto anterior DECLARÓ y el diff no
-  llevaba, y una cita a un molde inexistente en la tabla de mutaciones.
+This commit changes exactly one path and its first line names its direct
+parent, `c3a6d99`.
 
-Decisión del director, 2026-09-13.
+WHY THE LEGACY FORM AND NOT THE VERSIONED ONE. The versioned evidence
+(`KORVUN-REBASE-EVIDENCE v1`) validates a marker that TRAVELLED INSIDE
+the pull request that integrated it: it requires that pull request's
+merge result to be the judged commit itself. A repair written after the
+merge is always a different commit, so the checker refuses it. Captured
+against master's own gate, on a candidate built over `c3a6d99`:
+
+    REBASE_PROVENANCE: PR does not bind source and integrated history
+
+The legacy form is the one the gate accepts here (exit 0, captured the
+same way). Making the versioned form pass for a post-merge repair is
+filed; it is not done here.
+
+WHAT IT ATTESTS, and what it does not. It attests that `c3a6d99` — the
+tip carrying #36 — is the commit judged. It does NOT re-open that train's
+review: its own marker, recording that the veto was lifted by the
+director and not by the adversary, is preserved in the history of
+`c3a6d99` and in the source branch of #36. Nothing is claimed here that
+was not claimed there.
+
+STATE: the tag gate is the only thing this commit unblocks. Not
+VERIFIED, not ACCEPTED: those words belong to the gate and to the
+director.
