@@ -40,7 +40,13 @@ var validTransitions = map[State][]State{
 	StateNormalized:      {StateDenied, StateShadowed, StateAuthorized, StatePendingApproval},
 	StateAuthorized:      {StateSucceeded, StateFailed},
 	StatePendingApproval: {StateRejected, StateApproved},
-	StateApproved:        {StateSucceeded, StateFailed},
+	// OUTCOME_UNKNOWN joins APPROVED on 2026-09-13. This table mirrors
+	// production and whoever moves one moves the other: the recovery pass
+	// already wrote that close for an execution that died past its claim, and
+	// an in-process DEADLINE is the same fact learned another way. Without the
+	// edge the only reachable close was FAILED, a definite claim nobody can
+	// support.
+	StateApproved: {StateSucceeded, StateFailed, StateOutcomeUnknown},
 }
 
 func allowed(from, to State) bool {
