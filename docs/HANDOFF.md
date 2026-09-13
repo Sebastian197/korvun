@@ -1,5 +1,20 @@
 # HANDOFF — Korvun
 
+## La vara de la puerta de Codex — ACOTADA para la v0.15.0 (director, 2026-09-13)
+
+**Para ESTA versión, y solo para ésta: la puerta externa se supera con CERO
+P1.** Los P2 se fichan **con su reproducción** contra la v0.15.1.
+
+Lo que la acotación NO toca, y sigue vigente sin excepción: **ninguno de esos
+P2 puede dejar viva una frase falsa PUBLICADA**. La ley del Tono no se acota
+aquí ni en ninguna parte — un P2 que sostenga un letrero falso se cura antes
+del tag o el letrero se acota en el mismo commit que lo nota.
+
+**La vara permanente —cero P1 y cero P2— vuelve en cuanto se etiquete la
+v0.15.0.** Esto es una excepción fechada, no una regla nueva, y se registra
+aquí para que nadie la herede por costumbre.
+
+
 > **Read this at the start of every session.** Restores the project
 > context, the current state, and the next thing to do without having
 > to re-derive it from `git log`. CLAUDE.md is the operating rules;
