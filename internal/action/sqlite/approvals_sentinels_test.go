@@ -110,10 +110,6 @@ func TestApprovalDoors_everyMissingRowNamesItself(t *testing.T) {
 			_, err := s.ApprovalParams(t.Context(), "apr_nope")
 			return err
 		},
-		"ClaimApprovalParams": func(s *Store) error {
-			_, err := s.ClaimApprovalParams(t.Context(), "apr_nope", nil)
-			return err
-		},
 		"ClaimApprovalParamsUnderDigest": func(s *Store) error {
 			_, _, err := s.ClaimApprovalParamsUnderDigest(t.Context(), "apr_nope", nil, "sha256:x")
 			return err

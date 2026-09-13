@@ -54,6 +54,8 @@ export const OUTCOME_TEXT: Record<string, string> = {
     'El almacén dice que esta petición sigue esperando decisión, así que esta ejecución no ha hecho nada. Si acabas de decidirla desde aquí, alguien ha reescrito su estado por debajo: mira el libro antes de repetir nada.',
   unknown_outcome:
     'La decisión salió de esta ventana. No sabemos si el efecto llegó a ocurrir. Compruébalo antes de repetir nada.',
+  receipt_unreadable:
+    'La decisión quedó registrada y sellada. Lo único que no se pudo leer es el identificador de su recibo, y en este camino no se intentó ninguna ejecución: no hay ningún efecto sobre el que dudar. El recibo está en el libro.',
   close_failed:
     'La decisión salió de esta ventana. No sabemos si el efecto llegó a ocurrir, y además esta ejecución no pudo cerrar el registro. Compruébalo antes de repetir nada.',
 }

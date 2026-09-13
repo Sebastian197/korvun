@@ -340,7 +340,7 @@ func TestExecuteApprovedAction_aPendingRowIsNotDecided(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	_, err = ExecuteApprovedAction(context.Background(), store, nil, a.ApprovalID, pin)
+	_, err = ExecuteApprovedAction(context.Background(), store, nil, a.ApprovalID, pin, a.ActionDigest)
 	if !errors.Is(err, ErrApprovalNotDecided) {
 		t.Fatalf("err = %v, want ErrApprovalNotDecided", err)
 	}
@@ -496,8 +496,15 @@ func TestAdapter_aFailedReceiptReReadNeverSaysTheExecutionDidNotStart(t *testing
 	if errors.Is(err, controlapi.ErrApprovalParamsUnreadable) {
 		t.Fatalf("a rejection has no execution: its literal must never say one did not start")
 	}
-	if !errors.Is(err, controlapi.ErrApprovalCloseFailed) {
-		t.Fatalf("err = %v, want ErrApprovalCloseFailed", err)
+	// Nor close_failed, whose literal says «whether the effect happened is
+	// unknown». On this path no effect is ever attempted, so that sentence is
+	// as invented as the one it replaced. The previous cure swapped one for the
+	// other and this mould, which only checked the first, certified it.
+	if errors.Is(err, controlapi.ErrApprovalCloseFailed) {
+		t.Fatalf("a rejection has no effect: its literal must never call one unknown")
+	}
+	if !errors.Is(err, controlapi.ErrApprovalReceiptUnreadable) {
+		t.Fatalf("err = %v, want ErrApprovalReceiptUnreadable", err)
 	}
 }
 
@@ -786,8 +793,10 @@ func TestAdapter_aToolThatSaysNoReachesTheWindowAsFailed(t *testing.T) {
 // the real sequence, not a simulated one.
 //
 // Probing mutations: collapse any two rungs into one name ⇒ that row reddens;
-// delete nameExecution's routing into the ladder ⇒ all of them redden, which
-// the previous version did not do.
+// replace nameExecution with a fixed return ⇒ ALL THREE redden. Both executed.
+// The version before this one carried a fourth row whose error never reached
+// the ladder at all, so that second mutation left it green — the row is now its
+// own mould, about its own door.
 func TestAdapter_theLadderOfDidItStart(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -829,26 +838,6 @@ func TestAdapter_theLadderOfDidItStart(t *testing.T) {
 				return a
 			},
 			want: controlapi.ErrApprovalParamsUnaccounted,
-		},
-		{
-			// Corruption landing on a row whose decision is already sealed.
-			// WHERE it is caught, said precisely because the first draft of
-			// this comment got it wrong: the CLAIM's own read of the approval
-			// row catches it, not the re-read — the claim reads that row before
-			// it ever looks at the params, so a rotted timestamp never reaches
-			// the ladder. The re-read's own corrupt branch is defence in depth
-			// and is NOT reachable through this door; it is declared, not
-			// claimed as covered.
-			name: "decided_evidence_corrupt · corruption over a sealed decision",
-			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) action.Approval {
-				a := parkOne(t, cfg, store, "act_recorrupt")
-				attackerExec(t, store, `CREATE TRIGGER rot_row AFTER UPDATE OF status ON approvals
-				  WHEN NEW.status = 'APPROVED'
-				  BEGIN UPDATE approvals SET canonical_params = '', requested_at = 'ayer'
-				         WHERE approval_id = NEW.approval_id; END`)
-				return a
-			},
-			want: controlapi.ErrApprovalDecidedEvidenceBad,
 		},
 	}
 	for _, tc := range cases {
@@ -915,6 +904,37 @@ func TestAdapter_aMovedLawIsNamedByEVERYDoorTheOperatorTouches(t *testing.T) {
 	}
 }
 
+// TestAdapter_corruptionOverASealedDecisionIsNamedByTheReadThatFindsIt used to
+// be the ladder's fourth rung, and it did NOT belong there: its error is named
+// two calls before the ladder, by runApproved's own re-read of the approval
+// row. I proved it by replacing nameExecution with a fixed return — three rungs
+// reddened and this one stayed green.
+//
+// So it moves out, and the ladder's declared mutation becomes true for the
+// three that actually walk it. What this mould watches is its own door: a row
+// whose decision is sealed and whose evidence rots is named permanent, never
+// «the row still holds its parameters».
+//
+// Probing mutation: drop the sealed branch of nameTouch's evidence case ⇒ this
+// reddens.
+func TestAdapter_corruptionOverASealedDecisionIsNamedByTheReadThatFindsIt(t *testing.T) {
+	cfg, store, done := parkingProfile(t)
+	defer done()
+	a := parkOne(t, cfg, store, "act_sealedrot")
+	attackerExec(t, store, `CREATE TRIGGER rot_row AFTER UPDATE OF status ON approvals
+	  WHEN NEW.status = 'APPROVED'
+	  BEGIN UPDATE approvals SET canonical_params = '', requested_at = 'ayer'
+	         WHERE approval_id = NEW.approval_id; END`)
+
+	_, err := NewApprovalsAdapter(cfg, store).Approve(context.Background(), a.ApprovalID, a.ActionDigest)
+	if !errors.Is(err, controlapi.ErrApprovalDecidedEvidenceBad) {
+		t.Fatalf("err = %v, want ErrApprovalDecidedEvidenceBad", err)
+	}
+	if errors.Is(err, controlapi.ErrApprovalNotStartedParamsHeld) {
+		t.Fatal("rotted evidence over a sealed decision must never read as a quiet non-start")
+	}
+}
+
 // TestAdapter_aCorruptActionRecordIsNotABenignNonStart closes the hole the
 // third pass found: the parked action's own row failing to read, AFTER the
 // decide has committed, was published as «the row still holds its parameters,
@@ -940,5 +960,57 @@ func TestAdapter_aCorruptActionRecordIsNotABenignNonStart(t *testing.T) {
 	}
 	if errors.Is(err, controlapi.ErrApprovalNotStartedParamsHeld) {
 		t.Fatal("a permanently unreadable ledger must never be reported as a quiet non-start")
+	}
+}
+
+// TestAdapter_theDigestTheOperatorTypedReachesTheClaim is G2 and V10 together,
+// and it was filed as a detail when it is neither.
+//
+// The screen makes the operator re-type the last six characters of the digest.
+// That ceremony means nothing if the value never leaves the endpoint: the claim
+// used to compare a RE-READ of the stored column against itself, which proves
+// the row agrees with itself and says nothing about what any human approved.
+//
+// Probing mutation: pass approval.ActionDigest into the claim instead of the
+// operator's value ⇒ this reddens.
+func TestAdapter_theDigestTheOperatorTypedReachesTheClaim(t *testing.T) {
+	cfg, store, done := parkingProfile(t)
+	defer done()
+	a := parkOne(t, cfg, store, "act_digesttravel")
+
+	// A second, legitimately parked request. Its row is COHERENT: digest,
+	// preview, preview_digest and params all agree with each other.
+	other := parkOneWithParams(t, cfg, store, "act_other", `{"a":2}`)
+
+	// And an external hand swaps it onto ours IN THE WINDOW — after the
+	// operator read the document and inside the decide's own transaction, which
+	// is the only place the swap is invisible to every belt that compares the
+	// row against itself. The trigger makes the interleaving exact instead of a
+	// lottery.
+	attackerExec(t, store, `CREATE TRIGGER swap_row AFTER UPDATE OF status ON approvals
+	  WHEN NEW.status = 'APPROVED' AND NEW.approval_id = '`+a.ApprovalID+`'
+	  BEGIN
+	    UPDATE approvals SET
+	      action_digest     = (SELECT action_digest FROM approvals WHERE approval_id = '`+other.ApprovalID+`'),
+	      preview_digest    = (SELECT preview_digest FROM approvals WHERE approval_id = '`+other.ApprovalID+`'),
+	      canonical_preview = (SELECT canonical_preview FROM approvals WHERE approval_id = '`+other.ApprovalID+`'),
+	      canonical_params  = (SELECT canonical_params FROM approvals WHERE approval_id = '`+other.ApprovalID+`')
+	    WHERE approval_id = '`+a.ApprovalID+`'; END`) // #nosec G202 -- test-owned ids
+
+	_, err := NewApprovalsAdapter(cfg, store).Approve(context.Background(), a.ApprovalID, a.ActionDigest)
+	if err == nil {
+		t.Fatal("a row rewritten under the operator must never execute on his click")
+	}
+	if !errors.Is(err, controlapi.ErrApprovalDigestMismatch) &&
+		!errors.Is(err, controlapi.ErrApprovalParamsDigestMismatch) {
+		t.Fatalf("err = %v, want a digest refusal", err)
+	}
+	// Oracle by impossibility: nothing was consumed.
+	params, _, rerr := store.ReReadParams(context.Background(), a.ApprovalID)
+	if rerr != nil {
+		t.Fatalf("re-read: %v", rerr)
+	}
+	if len(params) == 0 {
+		t.Fatal("a refused approval consumes nothing")
 	}
 }

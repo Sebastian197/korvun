@@ -81,6 +81,7 @@ const (
 	OutcomeNotDecided           OutcomeName = "not_decided"
 	OutcomeUnknownOutcome       OutcomeName = "unknown_outcome"
 	OutcomeCloseFailed          OutcomeName = "close_failed"
+	OutcomeReceiptUnreadable    OutcomeName = "receipt_unreadable"
 )
 
 // ApprovalOutcomeNames is every name this surface can emit, written from the
@@ -93,7 +94,7 @@ var ApprovalOutcomeNames = []OutcomeName{
 	OutcomeInvalidated, OutcomeEvidenceCorrupt, OutcomeBrainGone,
 	OutcomeNotStartedParamsHeld, OutcomeNotStartedParamsGone, OutcomeParamsUnaccounted,
 	OutcomeParamsUnreadable, OutcomeDecidedEvidenceBad, OutcomeAlreadyClosed,
-	OutcomeNotDecided, OutcomeUnknownOutcome, OutcomeCloseFailed,
+	OutcomeNotDecided, OutcomeUnknownOutcome, OutcomeCloseFailed, OutcomeReceiptUnreadable,
 }
 
 // The sentinels the adapter returns. Each one is a distinction the store can
@@ -123,6 +124,12 @@ var (
 	ErrApprovalNotDecided           = errors.New("approvals: this request is still awaiting a decision")
 	ErrApprovalUnknownOutcome       = errors.New("approvals: the tool ran and its outcome is unknown")
 	ErrApprovalCloseFailed          = errors.New("approvals: the ledger could not be closed")
+	// ErrApprovalReceiptUnreadable is a decision that IS sealed and whose
+	// receipt identifier could not be read back. It exists because
+	// close_failed says «whether the effect happened is unknown», and on the
+	// REJECT path there is no effect to be unknown about: no execution is ever
+	// attempted. Reusing that name swapped one fabricated sentence for another.
+	ErrApprovalReceiptUnreadable = errors.New("approvals: the sealed decision's receipt could not be read back")
 )
 
 // lawMovedError carries the law digest in force alongside the invalidated
@@ -203,6 +210,8 @@ var outcomes = map[error]outcome{
 		"the decision left this window and whether the effect happened is unknown"},
 	ErrApprovalCloseFailed: {http.StatusConflict, OutcomeCloseFailed,
 		"the decision left this window, whether the effect happened is unknown, and THIS execution could not close the ledger"},
+	ErrApprovalReceiptUnreadable: {http.StatusConflict, OutcomeReceiptUnreadable,
+		"the decision is sealed and recorded; only its receipt identifier could not be read back, and no execution was attempted"},
 }
 
 // ApprovalRow is one line of the pending list. The digest lives HERE, once, and

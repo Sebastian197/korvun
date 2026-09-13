@@ -327,6 +327,8 @@ func namedOutcomes() []struct {
 			"the decision left this window and whether the effect happened is unknown"},
 		{"close failed", controlapi.ErrApprovalCloseFailed, http.StatusConflict, "close_failed",
 			"the decision left this window, whether the effect happened is unknown, and THIS execution could not close the ledger"},
+		{"receipt unreadable", controlapi.ErrApprovalReceiptUnreadable, http.StatusConflict, "receipt_unreadable",
+			"the decision is sealed and recorded; only its receipt identifier could not be read back, and no execution was attempted"},
 	}
 }
 
@@ -384,8 +386,8 @@ func TestApprovals_EveryNameIsInTheRegistry(t *testing.T) {
 	// production path could emit either, so each was a paragraph of operator
 	// text, a branch in the screen and a mould certifying the void. §12-ter is
 	// scoped in the same commit.
-	if len(registry) != 20 {
-		t.Fatalf("the registry is the closed set: want 20 names, got %d", len(registry))
+	if len(registry) != 21 {
+		t.Fatalf("the registry is the closed set: want 21 names, got %d", len(registry))
 	}
 }
 
@@ -549,42 +551,81 @@ func decodeMap(t *testing.T, res *http.Response) map[string]any {
 	return m
 }
 
-// TestApprovals_everyNameHasAProducer is the registry's THIRD direction, and
-// the one that was missing: a name is in the closed set, its text is pinned,
-// and SOMEBODY IN PRODUCTION EMITS IT.
+// sentinelOf maps each registry name to the sentinel that carries it. It is
+// written by hand because the two spellings DIVERGE — `decided_evidence_corrupt`
+// is carried by ErrApprovalDecidedEvidenceBad — and a derivation that guessed
+// the name would have been the third guard-by-text of this train.
+var sentinelOf = map[controlapi.OutcomeName]string{
+	controlapi.OutcomeAlreadyDecided:       "ErrApprovalAlreadyDecided",
+	controlapi.OutcomeExpired:              "ErrApprovalExpired",
+	controlapi.OutcomeDigestMismatch:       "ErrApprovalDigestMismatch",
+	controlapi.OutcomeForbidden:            "ErrApprovalForbidden",
+	controlapi.OutcomeDisabled:             "ErrApprovalsDisabled",
+	controlapi.OutcomeUnavailable:          "ErrApprovalsUnavailable",
+	controlapi.OutcomeNotFound:             "ErrApprovalNotFound",
+	controlapi.OutcomeParamsDigestMismatch: "ErrApprovalParamsDigestMismatch",
+	controlapi.OutcomeInvalidated:          "ErrApprovalInvalidated",
+	controlapi.OutcomeEvidenceCorrupt:      "ErrApprovalEvidenceCorrupt",
+	controlapi.OutcomeBrainGone:            "ErrApprovalBrainGone",
+	controlapi.OutcomeNotStartedParamsHeld: "ErrApprovalNotStartedParamsHeld",
+	controlapi.OutcomeNotStartedParamsGone: "ErrApprovalNotStartedParamsGone",
+	controlapi.OutcomeParamsUnaccounted:    "ErrApprovalParamsUnaccounted",
+	controlapi.OutcomeParamsUnreadable:     "ErrApprovalParamsUnreadable",
+	controlapi.OutcomeDecidedEvidenceBad:   "ErrApprovalDecidedEvidenceBad",
+	controlapi.OutcomeAlreadyClosed:        "ErrApprovalAlreadyClosed",
+	controlapi.OutcomeNotDecided:           "ErrApprovalNotDecided",
+	controlapi.OutcomeUnknownOutcome:       "ErrApprovalUnknownOutcome",
+	controlapi.OutcomeReceiptUnreadable:    "ErrApprovalReceiptUnreadable",
+	controlapi.OutcomeCloseFailed:          "ErrApprovalCloseFailed",
+}
+
+// TestApprovals_everyNameHasAProducer is the registry's THIRD direction: a name
+// is in the closed set, its text is pinned, and SOMEBODY IN PRODUCTION EMITS IT.
 //
-// Without it the registry could — and did — carry three names no code path
-// could ever produce, each with a paragraph of operator text and a branch in
-// the screen. This file's own rule says a name the screen paints and the
-// server can never emit is dead interface; nothing enforced it.
+// The first version of this test could not fail. Its exclusion guard read
+// `!strings.Contains(path, "/")` over paths that ALWAYS contain a slash, so the
+// declaration file — where every name appears as a literal — went into the
+// haystack and matched all twenty. I added a name with no producer and watched
+// it stay green.
 //
-// The scan is by SOURCE, over the non-test files that build the answers: each
-// sentinel must be referenced somewhere other than its own declaration and the
-// tables in this file.
+// This version searches for the SENTINEL identifier, not the wire name, over
+// sources with their comments STRIPPED, and skips the declaration file by its
+// real path. A name cited only in a comment no longer counts as emitted.
 //
-// Probing mutation: re-add a sentinel with its outcome row and no producer ⇒
-// this reddens.
+// WHAT IT CANNOT SEE, declared: this is a SYNTACTIC check. A sentinel written
+// in a branch production can never reach counts as a producer here. Today that
+// is true of exactly one name — `unknown_outcome`, whose only emitter is the
+// default of nameInBandRule, and the store returns only two rule values — and
+// it is filed rather than hidden behind a green.
+//
+// Probing mutation: add a sentinel to the registry with no producer ⇒ this
+// reddens. Executed.
 func TestApprovals_everyNameHasAProducer(t *testing.T) {
 	t.Parallel()
-	roots := []string{"..", "../app", "../action/sqlite", "../cli"}
+	if len(sentinelOf) != len(controlapi.ApprovalOutcomeNames) {
+		t.Fatalf("sentinelOf has %d entries for %d names — the map is stale",
+			len(sentinelOf), len(controlapi.ApprovalOutcomeNames))
+	}
 	var haystack strings.Builder
-	for _, root := range roots {
+	for _, root := range []string{"..", "../app", "../action/sqlite", "../cli"} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil //nolint:nilerr // an unreadable subtree is not this test's subject
 			}
-			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			slash := filepath.ToSlash(path)
+			if !strings.HasSuffix(slash, ".go") || strings.HasSuffix(slash, "_test.go") {
 				return nil
 			}
-			// The declaration file itself proves nothing: every name is in it.
-			if filepath.Base(path) == "approvals.go" && !strings.Contains(path, "/") {
+			// The declaration file proves nothing: every sentinel is declared
+			// there. Matched by its real path, not by a guess about slashes.
+			if strings.HasSuffix(slash, "controlapi/approvals.go") {
 				return nil
 			}
 			b, rerr := os.ReadFile(path) //nolint:gosec // walking our own tree
 			if rerr != nil {
 				return nil //nolint:nilerr // ditto
 			}
-			haystack.Write(b)
+			haystack.WriteString(stripComments(string(b)))
 			return nil
 		})
 		if err != nil {
@@ -592,22 +633,49 @@ func TestApprovals_everyNameHasAProducer(t *testing.T) {
 		}
 	}
 	src := haystack.String()
+	// Names whose ONLY producer lives in the declaration file itself, each with
+	// the function that emits it. An exception with its anchor written down is
+	// a fact; an exception without one is the hole this test exists to close.
+	producedInPlace := map[controlapi.OutcomeName]string{
+		controlapi.OutcomeForbidden: "approvalsAuth, in this package's own approvals.go",
+	}
 	for _, name := range controlapi.ApprovalOutcomeNames {
-		sentinel := "ErrApproval" + upperCamel(string(name))
-		if !strings.Contains(src, sentinel) && !strings.Contains(src, string(name)) {
+		if _, inPlace := producedInPlace[name]; inPlace {
+			continue
+		}
+		sentinel, known := sentinelOf[name]
+		if !known {
+			t.Errorf("%q has no entry in sentinelOf — the map is stale", name)
+			continue
+		}
+		if !strings.Contains(src, sentinel) {
 			t.Errorf("%q is in the registry and NOTHING in production emits it — dead interface", name)
 		}
 	}
 }
 
-// upperCamel turns an outcome name into the sentinel spelling the package uses.
-func upperCamel(s string) string {
-	out := ""
-	for _, part := range strings.Split(s, "_") {
-		if part == "" {
+// stripComments removes // and /* */ comments so a name mentioned in prose can
+// never pass for a producer. Crude on purpose: it over-removes inside string
+// literals, which can only cause a FALSE RED, never a false green.
+func stripComments(src string) string {
+	var out strings.Builder
+	for i := 0; i < len(src); i++ {
+		if i+1 < len(src) && src[i] == '/' && src[i+1] == '/' {
+			for i < len(src) && src[i] != '\n' {
+				i++
+			}
+			out.WriteByte('\n')
 			continue
 		}
-		out += strings.ToUpper(part[:1]) + part[1:]
+		if i+1 < len(src) && src[i] == '/' && src[i+1] == '*' {
+			i += 2
+			for i+1 < len(src) && !(src[i] == '*' && src[i+1] == '/') {
+				i++
+			}
+			i++
+			continue
+		}
+		out.WriteByte(src[i])
 	}
-	return out
+	return out.String()
 }

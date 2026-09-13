@@ -43,7 +43,7 @@ func TestOpenOperator_besideALiveServerTouchesNothingItDoesNotOwn(t *testing.T) 
 		aBusy.RequestedAt.Add(time.Minute), envB, identB, ""); err != nil {
 		t.Fatalf("approve busy: %v", err)
 	}
-	if _, err := server.ClaimApprovalParams(ctx, aBusy.ApprovalID, nil); err != nil {
+	if _, _, err := server.ClaimApprovalParamsUnderDigest(ctx, aBusy.ApprovalID, nil, aBusy.ActionDigest); err != nil {
 		t.Fatalf("claim busy: %v", err)
 	}
 	// And a separate parked request the operator wants to reject.

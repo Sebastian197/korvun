@@ -118,7 +118,7 @@ func TestExecuteApproved_theExactObjectRuns(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, approvalID := approvedFlow(t)
 	ctx := context.Background()
-	run, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw)
+	run, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, "")
 	result := run.Result
 	if err != nil {
 		t.Fatalf("execute: %v", err)
@@ -148,10 +148,10 @@ func TestExecuteApproved_neverTwice(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, approvalID := approvedFlow(t)
 	ctx := context.Background()
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw); err != nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, ""); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw); err == nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, ""); err == nil {
 		t.Fatal("a second execution must refuse by name")
 	}
 	if fake.runs.Load() != 1 {
@@ -166,7 +166,7 @@ func TestExecuteApproved_theDigestBelt(t *testing.T) {
 	// The saboteur swaps the stored params AFTER approval (raw handle,
 	// behind the API's back).
 	tamperApprovalParams(t, dbPath, approvalID, `{"url":"https://EVIL.example"}`)
-	_, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw)
+	_, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, "")
 	if err == nil || !strings.Contains(err.Error(), "digest") {
 		t.Fatalf("tampered params must refuse EXECUTION naming the digest: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestExecuteApproved_aNoNeverExecutes(t *testing.T) {
 	}
 	fake := &countingTool{}
 	exec := executor.New(tool.Registry{"webhook_call": fake}, 0, time.Now)
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw); err == nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, ""); err == nil {
 		t.Fatal("a REJECTED request must never execute")
 	}
 	if fake.runs.Load() != 0 {
@@ -220,7 +220,7 @@ func TestExecuteApproved_raceOverTheFullFlow(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw); err == nil {
+			if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, ""); err == nil {
 				succeeded.Add(1)
 			}
 		}()
@@ -238,7 +238,7 @@ func TestExecuteApproved_ghostAndPending(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, _ := approvedFlow(t)
 	ctx := context.Background()
-	if _, err := ExecuteApprovedAction(ctx, store, exec, "apr_ghost", testLaw); !errors.Is(err, actionsqlite.ErrNotFound) {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, "apr_ghost", testLaw, ""); !errors.Is(err, actionsqlite.ErrNotFound) {
 		t.Fatalf("ghost request: %v", err)
 	}
 	_ = fake
@@ -350,7 +350,7 @@ func TestExecuteApprovedAction_aToolThatSaysNoIsADecidedOutcome(t *testing.T) {
 	fail := &failingTool{}
 	exec := executor.New(tool.Registry{"webhook_call": fail}, 0, time.Now)
 
-	run, err := ExecuteApprovedAction(context.Background(), store, exec, approvalID, testLaw)
+	run, err := ExecuteApprovedAction(context.Background(), store, exec, approvalID, testLaw, "")
 	if err != nil {
 		t.Fatalf("a tool that says no is not an error of THIS call: %v", err)
 	}

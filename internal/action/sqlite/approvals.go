@@ -289,7 +289,15 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	if err != nil {
 		return "", fmt.Errorf("action/sqlite: consume approval %q: %w", approvalID, err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		// A count nobody obtained is not a count of zero. Read as zero it
+		// published «the first decision stands and nothing ran twice» — an
+		// assertion about a previous decision nobody had read — over a
+		// transaction that then rolled back and decided nothing.
+		return "", fmt.Errorf("action/sqlite: consume approval %q: rows affected unavailable: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	if n == 0 {
 		return action.RuleApprovalAlreadyDecided, nil
 	}
 	// R6-X2: the decided preimage rides in the SAME transaction.
@@ -953,84 +961,12 @@ func nullable(v string) any {
 	return v
 }
 
-// ClaimApprovalParams atomically reads AND purges the stored canonical
-// params — the execution claim (Etapa 5 FR-EXEC): exactly one caller
-// wins the params; every later caller gets ErrNotFound. The claim
-// happens BEFORE the effect, so racing executors cannot fire twice; a
-// crash between claim and terminal close leaves a non-terminal action
-// the E1 recovery pass closes honestly on the next lifecycle open.
-func (s *Store) ClaimApprovalParams(ctx context.Context, approvalID string, law *PolicyPin) ([]byte, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: begin claim: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	// R4-F2 (FR-R4F2-4): the claim is execute's consume point — the law
-	// is judged HERE, inside the claiming transaction, over the re-read
-	// row. nil law skips (package-internal mechanics and tests).
-	if law != nil {
-		a, err := s.approvalTx(ctx, tx, approvalID)
-		if err != nil {
-			return nil, err
-		}
-		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
-			return nil, fmt.Errorf("action/sqlite: %s (%s): approval %q was parked under law v%d %s but the current law is v%d %s — refusing the claim", rule, dim, approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
-		}
-		// R5-S2: the claim is execute's consume — the whole story is
-		// judged inside THIS transaction over re-read rows too.
-		var rawPreview string
-		if err := tx.QueryRowContext(ctx,
-			`SELECT canonical_preview FROM approvals WHERE approval_id = ?`, approvalID).Scan(&rawPreview); err != nil {
-			return nil, fmt.Errorf("action/sqlite: claim preview %q: %w", approvalID, err)
-		}
-		p, err := action.ParseCanonicalPreview([]byte(rawPreview))
-		if err != nil {
-			return nil, fmt.Errorf("action/sqlite: claim preview %q: %w", approvalID, err)
-		}
-		if err := action.ValidatePreviewBinding(a, p); err != nil {
-			return nil, fmt.Errorf("action/sqlite: approval %q: %w; refusing the claim", approvalID, err)
-		}
-		if err := verifyApprovalStoryTyped(ctx, tx, a, p); err != nil {
-			return nil, fmt.Errorf("action/sqlite: approval %q: %w; refusing the claim", approvalID, err)
-		}
-	}
-	var params string
-	err = tx.QueryRowContext(ctx,
-		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&params)
-	// The three refusals below used to be ONE ErrNotFound, so "the row is
-	// gone", "the column is empty" and "the update touched nothing" were the
-	// same answer to a caller that has to tell them apart to name an outcome.
-	// Each keeps ErrNotFound in its chain, so every older caller is unchanged.
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: claim params %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
-	}
-	if params == "" {
-		return nil, fmt.Errorf("action/sqlite: approval %q already claimed or closed: %w", approvalID, ErrApprovalParamsEmpty)
-	}
-	res, err := tx.ExecContext(ctx,
-		`UPDATE approvals SET canonical_params = '' WHERE approval_id = ? AND canonical_params != ''`, approvalID)
-	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: purge claim %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		// A count nobody obtained is not a count of zero: the old `n, _ :=`
-		// read a driver failure as "already claimed" and named an outcome
-		// over a fact that was never established.
-		return nil, fmt.Errorf("action/sqlite: claim %q: rows affected unavailable: %w: %w", approvalID, ErrApprovalUnreadable, err)
-	}
-	if n == 0 {
-		return nil, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalClaimSkipped)
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("action/sqlite: commit claim: %w", err)
-	}
-	return []byte(params), nil
-}
-
+// The old ClaimApprovalParams door was DELETED on 2026-09-13. It was exported,
+// it had no production caller, and it never re-derived the digest over the
+// triple it read — the exact defect ClaimApprovalParamsUnderDigest documents as
+// closed. An exported door with the pre-cure defect and no caller is a gun on
+// the package API: the next caller reopens the hole and no mould notices.
+//
 // GetApprovalByAction returns the approval bound to one action (the
 // verifier's approval-coherence lookup).
 func (s *Store) GetApprovalByAction(ctx context.Context, actionID string) (action.Approval, action.ActionPreview, error) {

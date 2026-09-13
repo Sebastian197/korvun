@@ -14,6 +14,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -131,12 +132,16 @@ func TestClaim_lawValidatedInsideItsTransaction(t *testing.T) {
 	}
 	corruptCell(t, store, "approvals", "policy_digest", "approval_id",
 		a.ApprovalID, "sha256:law-changed-under-you")
-	_, err := store.ClaimApprovalParams(ctx, a.ApprovalID,
-		&PolicyPin{Version: 7, Digest: "sha256:law"})
+	_, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID,
+		&PolicyPin{Version: 7, Digest: "sha256:law"}, a.ActionDigest)
 	if err == nil {
 		t.Fatal("AUDIT R4-F2(f): the claim must judge the re-read row's law")
 	}
-	if !strings.Contains(err.Error(), "approval_invalidated") && !strings.Contains(err.Error(), "mismatch") {
-		t.Fatalf("the refusal must name the invalidation: %v", err)
+	// ELEVATED 2026-09-13: this asserted the ENGLISH of the message, and it
+	// accepted two spellings — a guard by text with an either/or inside. The
+	// claim now refuses by TYPE, which cannot be broken by rewording. Whoever
+	// touches an old mould raises it.
+	if !errors.Is(err, ErrApprovalInvalidated) {
+		t.Fatalf("err = %v, want ErrApprovalInvalidated", err)
 	}
 }

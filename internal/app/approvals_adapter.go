@@ -106,7 +106,19 @@ func (a *ApprovalsAdapter) ListPending(ctx context.Context) (controlapi.Approval
 	return out, nil
 }
 
-// Detail serves one parked request from ONE snapshot.
+// Detail serves one parked request.
+//
+// TWO reads, said plainly because the sentence that said «ONE snapshot» was
+// false: resolveLawFor reads the row to find which brain parked it, and the
+// store's detail door then opens its own transaction. The SECOND is the one the
+// guarantee is about — state, triple, params and belts all from one snapshot,
+// so a legitimate CLI rejection landing mid-read can never be painted as
+// corruption. The first read only answers «whose law?», and a row that moved
+// between the two changes which law is judged, never which document is served.
+//
+// Collapsing them into one transaction would mean the store door resolving the
+// profile, which is not its job. Filed, with the promise scoped to what the
+// wire does.
 func (a *ApprovalsAdapter) Detail(ctx context.Context, id string) (controlapi.ApprovalDetail, error) {
 	if !a.enabled() {
 		return controlapi.ApprovalDetail{}, controlapi.ErrApprovalsDisabled
@@ -404,12 +416,12 @@ func (a *ApprovalsAdapter) Reject(ctx context.Context, id, comment string) (cont
 	after, _, err := a.store.GetApproval(ctx, id)
 	if err != nil {
 		// The decision IS sealed; what failed is reading back its identifier.
-		// `params_unreadable` would open with «this execution did not start»,
-		// and on the rejection path there is no execution at all — a sentence
-		// nobody could have observed. The honest existing name says the record
-		// could not be closed, which is exactly what happened.
-		return controlapi.ApprovalOutcome{Outcome: string(controlapi.OutcomeCloseFailed)},
-			fmt.Errorf("%w: %w", controlapi.ErrApprovalCloseFailed, err)
+		// Neither `params_unreadable` nor `close_failed` fits: the first opens
+		// with «this execution did not start» and the second says «whether the
+		// effect happened is unknown» — and on the REJECT path no execution is
+		// ever attempted, so both invent a fact. The previous cure swapped one
+		// fabricated sentence for another; this name says only what happened.
+		return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %w", controlapi.ErrApprovalReceiptUnreadable, err)
 	}
 	return controlapi.ApprovalOutcome{
 		Outcome:   "rejected",
@@ -512,9 +524,15 @@ func (a *ApprovalsAdapter) runApproved(ctx context.Context, id string, cage *Eff
 	if err != nil {
 		return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %w", controlapi.ErrApprovalBrainGone, err)
 	}
-	run, err := ExecuteApprovedAction(ctx, a.store, exec, id, pin)
+	run, err := ExecuteApprovedAction(ctx, a.store, exec, id, pin, digest)
 	if err != nil {
 		return controlapi.ApprovalOutcome{}, a.nameExecution(ctx, id, err)
+	}
+	if run.Unknown {
+		// The deadline case: the effect may have left and its answer been lost.
+		// It is the ONE outcome that says «we do not know», and saying it is
+		// the whole reason the name exists.
+		return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %s", controlapi.ErrApprovalUnknownOutcome, run.FailureDetail)
 	}
 	if run.Failed {
 		// The tool ran and said no. It reaches the window as the `failed`
