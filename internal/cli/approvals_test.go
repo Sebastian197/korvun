@@ -285,3 +285,24 @@ func TestApprovals_moreErrorPaths(t *testing.T) {
 		t.Fatalf("second decide reports the rule: %d %q", code, stderr)
 	}
 }
+
+// TestHelp_listsEveryCommandFamilyTheBinaryAnswers pins the binary's own help
+// against what it actually dispatches.
+//
+// Three families answered and were not listed: approvals, ledger and receipt —
+// including the one this release exists for. `korvun help` is a public surface
+// like any other, and a public surface that omits a shipped capability is the
+// same defect as one that describes it wrongly.
+//
+// Probing mutation: remove any family from the help text ⇒ this reddens.
+func TestHelp_listsEveryCommandFamilyTheBinaryAnswers(t *testing.T) {
+	code, stdout, _ := runIntentCLI(t, "help")
+	if code != 0 {
+		t.Fatalf("help exit = %d", code)
+	}
+	for _, family := range []string{"approvals", "ledger", "receipt", "intent", "grant", "serve", "status"} {
+		if !strings.Contains(stdout, family) {
+			t.Errorf("korvun help does not mention %q, and the binary answers it", family)
+		}
+	}
+}
