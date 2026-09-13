@@ -115,6 +115,74 @@ function digestGroups(d: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Expiry (G7 of docs/superpowers/specs/2026-09-13-approvals-screen-to-mockup-pretest.md)
+// ---------------------------------------------------------------------------
+
+/** The one shape a stored expiry may have: UTC to the second, an optional
+ * fraction of up to nine digits, and Z. A value that fails it is illegible and
+ * is not handed to Date.parse, whose laxity differs between engines. */
+const EXPIRY_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?Z$/
+const ILLEGIBLE_EXPIRY = 'caducidad ilegible'
+/** setTimeout fires at once for a delay above this many milliseconds. */
+const MAX_TIMER_MS = 2147483647
+
+interface Expiry {
+  ms: number
+  date: string
+  time: string
+}
+
+/** The shape, then the calendar: month 01–12, a day that exists in that month
+ * (29 February in Gregorian leap years only), hour 00–23, minute and second
+ * 00–59. `null` is illegible. */
+function parseExpiry(v: string): Expiry | null {
+  const m = EXPIRY_RE.exec(v)
+  if (m === null) return null
+  const [y, mo, d, h, mi, sec] = m.slice(1, 7).map(Number)
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  if (mo < 1 || mo > 12 || d < 1 || d > days[mo - 1] || h > 23 || mi > 59 || sec > 59) return null
+  const frac = m[7] === undefined ? 0 : Number(m[7].padEnd(3, '0').slice(0, 3))
+  const t = new Date(0)
+  t.setUTCFullYear(y, mo - 1, d)
+  t.setUTCHours(h, mi, sec, frac)
+  return { ms: t.getTime(), date: v.slice(0, 10), time: v.slice(11, 19) }
+}
+
+const pad2 = (n: number): string => String(n).padStart(2, '0')
+
+/** «HH:MM:SSZ» sliced from the stored string, with the stored date before it
+ * when that UTC date is not the window clock's UTC date. */
+function expiryStamp(e: Expiry, now: number): string {
+  const today = new Date(now).toISOString().slice(0, 10)
+  return `${e.date === today ? '' : `${e.date} `}${e.time}Z`
+}
+
+/** The label of the bar and of the CADUCIDAD card. Seconds are ceiled, so a
+ * request that is still live does not read «0m 00s». */
+function expiryLabel(e: Expiry, now: number): string {
+  const s = Math.ceil((e.ms - now) / 1000)
+  const at = expiryStamp(e, now)
+  if (s <= 0) return `el reloj de la ventana dice 00:00 · ${at}`
+  if (s < 3600) return `caduca en ${Math.floor(s / 60)}m ${pad2(s % 60)}s · ${at}`
+  return `caduca en ${Math.floor(s / 3600)}h ${pad2(Math.floor((s % 3600) / 60))}m · ${at}`
+}
+
+/** The list row has no clock (FR-UI-11), so it shows the instant and no
+ * countdown that would freeze. */
+function RowExpiry({ value }: { value: string }): JSX.Element {
+  if (value === '') return <span className="approvals-row-expiry">no caduca</span>
+  const e = parseExpiry(value)
+  if (e === null)
+    return (
+      <span className="approvals-row-expiry">
+        <span>{ILLEGIBLE_EXPIRY}</span> <span>{escapeUntrusted(value)}</span>
+      </span>
+    )
+  return <span className="approvals-row-expiry">{`caduca · ${expiryStamp(e, Date.now())}`}</span>
+}
+
+// ---------------------------------------------------------------------------
 // Fetch
 // ---------------------------------------------------------------------------
 
@@ -590,9 +658,7 @@ function PendingList({
                     `${r.digest.slice(7, 15)}…${tailOf(r.digest)}`
                   )}
                 </span>
-                <span className="approvals-row-expiry">
-                  {r.expires_at === '' ? 'no caduca' : r.expires_at}
-                </span>
+                <RowExpiry value={r.expires_at} />
               </button>
             </li>
           )
@@ -629,14 +695,17 @@ function RequestDetail({
   const [decision, setDecision] = useState<Decision>(null)
   const [comment, setComment] = useState('')
   const [now, setNow] = useState(() => Date.now())
-  const scroller = useRef<HTMLDivElement>(null)
+  // One programmatic focus per load (G5a). The re-read's scroll to the top is
+  // carried by the loading state, which replaces the document in .main — the
+  // only scroll container of the view (G9, G10).
+  const autofocused = useRef(false)
 
   const load = useCallback(() => {
     setAnswer(null)
     setTyped('')
     setPasteRefused(false)
     setDecision(null)
-    if (scroller.current !== null) scroller.current.scrollTop = 0
+    autofocused.current = false
     void ask<Detail>(`/api/approvals/${id}`).then(setAnswer)
   }, [id])
   // Asked ONCE on opening; refreshing is [Volver a leer], which clears the
@@ -651,10 +720,56 @@ function RequestDetail({
   }, [])
 
   const detail = answer?.kind === 'ok' ? answer.value : null
-  const expiresAt =
-    detail !== null && detail.expires_at !== '' ? Date.parse(detail.expires_at) : NaN
-  const clockSaysExpired = !Number.isNaN(expiresAt) && now >= expiresAt
+  // G7: the stored expiry is judged by shape first. An illegible one withdraws
+  // Aprobar exactly like a window clock past a legible one.
+  const expiry = detail !== null && detail.expires_at !== '' ? parseExpiry(detail.expires_at) : null
+  const expiryIllegible = detail !== null && detail.expires_at !== '' && expiry === null
+  const clockSaysExpired = expiry !== null && now >= expiry.ms
   const armed = detail !== null && isDigest(detail.digest) && typed === tailOf(detail.digest)
+  // The live document is painted: a 200 whose parameters the screen can show.
+  // `present` with an empty body and an unknown state paint Unreadable (E9).
+  const documentPainted =
+    detail !== null &&
+    (detail.parameters_state === 'present'
+      ? detail.parameters !== ''
+      : PARAMS_STATE_TEXT[detail.parameters_state] !== undefined)
+  // FR-UI-15: an illegible digest offers no Aprobar and no arming row.
+  const canApprove =
+    documentPainted &&
+    isDigest(detail.digest) &&
+    detail.parameters_state === 'present' &&
+    detail.brain_gone !== true &&
+    !clockSaysExpired &&
+    !expiryIllegible
+
+  // G8: the arming dies with every presentational withdrawal. The typed tail is
+  // cleared, not only hidden, so a clock going back shows an empty gate.
+  useEffect(() => {
+    if (!canApprove) setTyped('')
+  }, [canApprove])
+
+  // G7: a one-shot timer at the expiry instant, so the withdrawal does not wait
+  // for the next tick. Its delay is clamped to setTimeout's range and the timer
+  // is re-armed by the render it causes; the 1 s tick stays the net for a
+  // wall-clock jump after arming.
+  const expiryMs = expiry === null ? null : expiry.ms
+  useEffect(() => {
+    if (expiryMs === null) return undefined
+    const left = expiryMs - Date.now()
+    if (left <= 0) return undefined
+    const t = setTimeout(() => setNow(Date.now()), Math.min(left, MAX_TIMER_MS))
+    return () => clearTimeout(t)
+  }, [expiryMs, now])
+
+  // G5: the arming row fully in view moves focus to the gate, once per load, and
+  // only when nobody holds the focus.
+  const reachEnd = useCallback((input: HTMLInputElement) => {
+    if (autofocused.current) return
+    const active = document.activeElement
+    if (active !== null && active !== document.body && !active.classList.contains('main')) return
+    autofocused.current = true
+    input.focus({ preventScroll: true })
+  }, [])
 
   const send = useCallback(
     (verb: 'approve' | 'reject', body: string) => {
@@ -707,11 +822,13 @@ function RequestDetail({
 
   // Esc rejects while the request is open and undecided, typing included — and
   // is inert everywhere else (FR-UI-53), which is what gives it one meaning.
-  const escActive = detail !== null && decision === null
+  // E9 (a 200 painted as unreadable) offers no decision, so Esc is inert there;
+  // an Esc that belongs to an IME composition cancels the IME and decides nothing.
+  const escActive = documentPainted && decision === null
   useEffect(() => {
     if (!escActive) return undefined
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') reject()
+      if (e.key === 'Escape' && !e.isComposing && e.keyCode !== 229) reject()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -786,12 +903,21 @@ function RequestDetail({
 
   const sending = decision !== null && decision.kind === 'sending'
   const banner = classBanner(d.effect_class)
-  const canApprove = paramsPresent && d.brain_gone !== true && !clockSaysExpired
   const groups = isDigest(d.digest) ? digestGroups(d.digest) : []
 
   return (
     <>
-      <BackBar onBack={onBack} digest={d.digest} expires={d.expires_at} />
+      <BackBar
+        onBack={onBack}
+        digest={d.digest}
+        expires={
+          d.expires_at === ''
+            ? ''
+            : expiry === null
+              ? `${ILLEGIBLE_EXPIRY} ${escapeUntrusted(d.expires_at)}`
+              : expiryLabel(expiry, now)
+        }
+      />
       {/* The live document gets its re-read too, not only the refusal states.
           An operator reading a request he no longer trusts had no way to ask
           for it again, and `load` is what clears the arming and puts the
@@ -804,7 +930,7 @@ function RequestDetail({
           </button>
         </Actions>
       )}
-      <div className="approvals-doc" ref={scroller}>
+      <div className="approvals-doc">
         <article role="article">
           <section className="approvals-digest">
             <h2>EL DIGEST — EXACTAMENTE ESTO SE EJECUTARÁ</h2>
@@ -861,7 +987,19 @@ function RequestDetail({
 
           <section>
             <h2>CADUCIDAD</h2>
-            <p>{d.expires_at === '' ? 'no caduca' : d.expires_at}</p>
+            {d.expires_at === '' ? (
+              <p>no caduca</p>
+            ) : expiry === null ? (
+              <>
+                <p>{ILLEGIBLE_EXPIRY}</p>
+                <p>{escapeUntrusted(d.expires_at)}</p>
+              </>
+            ) : (
+              <>
+                <p>{expiryLabel(expiry, now)}</p>
+                <p>{d.expires_at}</p>
+              </>
+            )}
           </section>
 
           <p>↓ la decisión está al final de la petición</p>
@@ -882,15 +1020,35 @@ function RequestDetail({
 
             {sending && <p role="status">Ejecutando la acción aprobada. No cierres la ventana.</p>}
 
+            {/* FR-UI-57 (director, decision 3 of 2026-09-13): the arming is a
+                full-width row ABOVE the reason field, as plates 03/03b draw it, so
+                Tab walks document → arming → reason → Rechazar → Aprobar. */}
+            {canApprove && (
+              <ArmingField
+                typed={typed}
+                target={isDigest(d.digest) ? tailOf(d.digest) : ''}
+                prefix={isDigest(d.digest) ? d.digest.slice(7).slice(48, 58) : ''}
+                pasteRefused={pasteRefused}
+                onKey={(ch) => setTyped((t) => (t.length >= 6 ? t : t + ch))}
+                onBackspace={() => setTyped((t) => t.slice(0, -1))}
+                onPaste={() => {
+                  setPasteRefused(true)
+                  setTyped('')
+                }}
+                onReachEnd={reachEnd}
+              />
+            )}
+
             <label htmlFor="approvals-comment">Motivo del rechazo (opcional)</label>
             <input
               id="approvals-comment"
+              className="approvals-reason"
               type="text"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
             />
 
-            <Actions>
+            <div className="approvals-actions approvals-doors">
               <button
                 type="button"
                 className="approvals-reject"
@@ -899,24 +1057,6 @@ function RequestDetail({
               >
                 Rechazar
               </button>
-              {/* The arming gate sits BETWEEN the two doors, in the DOM and on
-                  the screen. That is what puts 320 px between them without a
-                  stretch of dead space, and it is why Tab from the reason
-                  reaches Rechazar, then the gate, then Aprobar — the hand has
-                  to cross the gate to get to the expensive control. */}
-              {canApprove && (
-                <ArmingField
-                  typed={typed}
-                  target={isDigest(d.digest) ? tailOf(d.digest) : ''}
-                  pasteRefused={pasteRefused}
-                  onKey={(ch) => setTyped((t) => (t.length >= 6 ? t : t + ch))}
-                  onBackspace={() => setTyped((t) => t.slice(0, -1))}
-                  onPaste={() => {
-                    setPasteRefused(true)
-                    setTyped('')
-                  }}
-                />
-              )}
               {canApprove && (
                 <button
                   type="button"
@@ -927,7 +1067,7 @@ function RequestDetail({
                   Aprobar y ejecutar
                 </button>
               )}
-            </Actions>
+            </div>
             <p>{ESC_LINE}</p>
           </section>
         </article>
@@ -955,30 +1095,54 @@ function BackBar({
           {digest.slice(7, 15)}…{tailOf(digest)} · fijado mientras decides
         </span>
       )}
-      {expires !== undefined && expires !== '' && <span>{expires}</span>}
+      {expires !== undefined && expires !== '' && (
+        <span className="approvals-bar-expiry">{expires}</span>
+      )}
     </div>
   )
 }
 
-/** One input drawn as six cells. Typing arms it; pasting, dropping and
- * autofill do not — six characters are not a cryptographic proof and this
- * never sells them as one: what they prove is that whoever approves looked at
- * THIS digest. */
+/** The arming gate: one `<input maxlength=6>` drawn as six cells (FR-UI-39).
+ * Typing arms it; pasting, dropping and autofill do not, nor does a repeated
+ * key or a keydown reported with keyCode 229. Six characters are not a
+ * cryptographic proof and this does not sell them as one: what they prove is
+ * that whoever approves looked at THIS digest. */
 function ArmingField({
   typed,
   target,
+  prefix,
   pasteRefused,
   onKey,
   onBackspace,
   onPaste,
+  onReachEnd,
 }: {
   typed: string
   target: string
+  prefix: string
   pasteRefused: boolean
   onKey: (ch: string) => void
   onBackspace: () => void
   onPaste: () => void
+  onReachEnd: (input: HTMLInputElement) => void
 }): JSX.Element {
+  const row = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const el = row.current
+    const field = input.current
+    if (el === null || field === null || typeof IntersectionObserver === 'undefined') {
+      return undefined
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) if (entry.intersectionRatio >= 1) onReachEnd(field)
+      },
+      { root: el.closest('.main'), threshold: 1 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [onReachEnd])
   const status =
     typed.length < 6
       ? `faltan ${String(6 - typed.length)}`
@@ -986,40 +1150,64 @@ function ArmingField({
         ? '✓ coincide'
         : 'no coincide'
   return (
-    <div className="approvals-arming">
+    <div className="approvals-arming" data-testid="arming-row" ref={row}>
       <label htmlFor="approvals-arming-input">
         Para armar Aprobar, reteclea los seis últimos caracteres del digest
       </label>
-      <input
-        id="approvals-arming-input"
-        type="text"
-        maxLength={6}
-        value={typed}
-        aria-describedby="approvals-arming-status"
-        onKeyDown={(e) => {
-          if (e.key === 'Backspace') {
-            onBackspace()
-            return
-          }
-          if (e.key.length !== 1) return
-          const ch = e.key.toLowerCase()
-          // Alphabet [0-9a-f]; uppercase folds down; everything else is
-          // ignored WITHOUT painting an error (FR-UI-40).
-          if (/^[0-9a-f]$/.test(ch)) onKey(ch)
-        }}
-        onChange={() => undefined}
-        onPaste={(e) => {
-          e.preventDefault()
-          onPaste()
-        }}
-        onDrop={(e) => {
-          e.preventDefault()
-          onPaste()
-        }}
-      />
-      <span id="approvals-arming-status" aria-live="polite">
-        {status}
-      </span>
+      <div className="approvals-arming-line">
+        <span className="approvals-arming-prefix" data-testid="arming-prefix">
+          {`…${prefix.slice(0, 8)} ${prefix.slice(8)}`}
+        </span>
+        <div className="approvals-arming-cells" data-testid="arming-cells">
+          <input
+            ref={input}
+            id="approvals-arming-input"
+            className="approvals-arming-input"
+            type="text"
+            maxLength={6}
+            value={typed}
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby="approvals-arming-status"
+            onKeyDown={(e) => {
+              if (e.key === 'Backspace') {
+                onBackspace()
+                return
+              }
+              if (e.key.length !== 1) return
+              // G5e: a repeat or a keyCode 229 does not count as a keystroke.
+              if (e.repeat || e.keyCode === 229 || e.nativeEvent.isComposing) return
+              const ch = e.key.toLowerCase()
+              // Alphabet [0-9a-f]; uppercase folds down; everything else is
+              // ignored WITHOUT painting an error (FR-UI-40).
+              if (/^[0-9a-f]$/.test(ch)) onKey(ch)
+            }}
+            onChange={() => undefined}
+            onPaste={(e) => {
+              e.preventDefault()
+              onPaste()
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              onPaste()
+            }}
+          />
+          {Array.from({ length: 6 }, (_, i) => (
+            <span
+              key={i}
+              className={
+                i < typed.length ? 'approvals-arming-cell is-typed' : 'approvals-arming-cell'
+              }
+              data-testid="arming-cell"
+            >
+              {i < typed.length ? typed[i] : '–'}
+            </span>
+          ))}
+        </div>
+        <span id="approvals-arming-status" className="approvals-arming-status" aria-live="polite">
+          {status}
+        </span>
+      </div>
       {pasteRefused && <p>Pegar no arma: teclea los seis caracteres</p>}
     </div>
   )
@@ -1047,10 +1235,9 @@ function ReadRefusal({
       return (
         <State
           title="Esta petición caducó y ya no se puede decidir"
-          lines={[
-            `Caducó a las ${escapeUntrusted(answer.message)}. La acción aparcada se cierra con su recibo; no se ha ejecutado nada.`,
-            'DIGEST — YA NO ACCIONABLE',
-          ]}
+          // The READ door carries no stored instant, and no digest to declare
+          // no longer actionable: only what is known is said.
+          lines={['La acción aparcada se cierra con su recibo; no se ha ejecutado nada.']}
         >
           <Actions>{back}</Actions>
         </State>
@@ -1231,7 +1418,9 @@ function DecisionState({
         <State
           title="Esta petición caducó y ya no se puede decidir"
           lines={[
-            `Caducó a las ${detail.expires_at}. La acción aparcada se cierra con su recibo; no se ha ejecutado nada.`,
+            parseExpiry(detail.expires_at) === null
+              ? `Caducó en un instante que esta ventana no puede leer: ${ILLEGIBLE_EXPIRY} ${escapeUntrusted(detail.expires_at)}. La acción aparcada se cierra con su recibo; no se ha ejecutado nada.`
+              : `Caducó a las ${detail.expires_at}. La acción aparcada se cierra con su recibo; no se ha ejecutado nada.`,
             'DIGEST — YA NO ACCIONABLE',
           ]}
           alert

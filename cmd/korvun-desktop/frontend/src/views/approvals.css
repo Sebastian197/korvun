@@ -1,25 +1,160 @@
-/* The approvals screen's geometry — §7 of the spec, and the only place in the
- * product where a layout number is a SAFETY number.
+/* The approvals screen's geometry and look — §7 of the spec and plates 01, 02,
+ * 03, 03b and 05 of design-drafts/approvals-screen-ux.html. It is the place in
+ * the product where a layout number is a SAFETY number.
  *
  * The two doors are deliberately unequal. Rechazar is 260x64 and sits at the
- * left edge, first in the DOM and first under Tab; Aprobar is 168x40 at the
- * right edge, last. The ratio is 6 720 / 16 640 = 0,4038, under the 0,50 that
- * FR-UI-48 caps — the cheap door is the big one, and the expensive one is
- * small, far and behind a typed gate.
+ * left edge, first in the DOM; Aprobar is 168x40 at the right edge, last. The
+ * ratio is 6 720 / 16 640 = 0,4038, under the 0,50 that FR-UI-48 caps. Below
+ * 1100 px they stack with Aprobar at half of Rechazar's width, 120 px apart.
  *
- * The gate lives BETWEEN them. That is what buys the 320 px of separation
- * without a stretch of dead space, and it is why the hand has to cross it.
+ * The Tailwind preflight and the `button` reset of src/styles/index.css zero
+ * borders and backgrounds, so the controls below carry their own edge: without
+ * it they were invisible in the 2026-09-13 ceremony.
  *
  * Nothing here uses the identity gradient (FR-UI-51), and the red marks the
  * IRREVERSIBLE EFFECT, never the rejection (FR-UI-49).
  */
 
-.approvals-doc {
-  /* The document scrolls inside its own container, so [Volver a leer] can put
-   * the reader back at the top of a NEW document instead of leaving him at an
-   * offset that meant something in the old one (AS-71). */
-  overflow-y: auto;
-  max-height: calc(100vh - 220px);
+/* The pinned bar: sticky inside .main, the only scroll container of the view
+ * (G9 of the 2026-09-13 paper), and opaque so the document does not read
+ * through it. */
+.approvals-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--vio-s);
+  background: var(--card2);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.approvals-bar-expiry {
+  color: var(--warn-t);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+/* The document: one card per section (plate 02). It does not scroll on its
+ * own; .main does. */
+.approvals-doc article section {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+
+.approvals-doc article section h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--capt);
+}
+
+.approvals-digest-hex {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.approvals-decision label {
+  display: block;
+  margin-top: 16px;
+  color: var(--capt);
+  font-size: 11.5px;
+}
+
+/* The arming row (plates 03/03b): prefix, six cells, status. */
+.approvals-arming {
+  margin-top: 14px;
+}
+
+.approvals-decision .approvals-arming label {
+  margin-top: 0;
+  color: var(--tx2);
+  font-size: 12.5px;
+}
+
+.approvals-arming-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.approvals-arming-prefix {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--capt);
+}
+
+.approvals-arming-cells {
+  position: relative;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.approvals-arming-cell {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  font-family: var(--font-mono);
+  font-size: 17px;
+  color: var(--capt);
+}
+
+.approvals-arming-cell.is-typed {
+  color: var(--tx1);
+}
+
+/* The focus indicator lives on the cells: the input itself is transparent. */
+.approvals-arming-cells:focus-within .approvals-arming-cell {
+  border-color: var(--vio);
+}
+
+.approvals-arming-input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: text;
+}
+
+.approvals-arming-status {
+  color: var(--capt);
+  font-size: 12.5px;
+}
+
+.approvals-reason {
+  display: block;
+  width: 460px;
+  max-width: 100%;
+  height: 34px;
+  margin-top: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--win);
+  color: var(--tx1);
+  font: inherit;
 }
 
 .approvals-actions {
@@ -32,46 +167,134 @@
   margin-top: 28px;
 }
 
+.approvals-doors {
+  margin-top: 20px;
+}
+
 .approvals-reject {
   flex: 0 0 auto;
   width: 260px;
   height: 64px;
-  order: 1;
-}
-
-.approvals-arming {
-  /* The gate takes the middle. It grows, so the two doors are pushed to the
-   * edges and the separation is whatever the window can give — never less
-   * than the 320 px FR-UI-48 demands at >= 1100. */
-  flex: 1 1 auto;
-  order: 2;
-  min-width: 320px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card2);
+  color: var(--tx1);
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .approvals-approve {
   flex: 0 0 auto;
   width: 168px;
   height: 40px;
-  order: 3;
+  border: 1px solid var(--err-t);
+  border-radius: 9px;
+  background: var(--err-s);
+  color: var(--err-t);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.approvals-approve:disabled {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--off-t);
+  cursor: default;
+}
+
+/* The global focus ring draws 2 px outside with a 2 px offset; on Aprobar it is
+ * drawn inside, so a keyboard focus does not grow the expensive door past the
+ * cap (G2). */
+.approvals-approve:focus-visible {
+  outline-offset: -2px;
+  border-radius: 9px;
+}
+
+.approvals-reject:focus-visible {
+  border-radius: 10px;
 }
 
 /* Below the window's own 1100 the row cannot hold the distance, so the doors
- * STACK — Rechazar first, and at least 120 px between them, with the gate in
- * the gap doing the same job vertically. */
+ * STACK — Rechazar first at full width, Aprobar at half of it, 120 px apart. */
 @media (max-width: 1099px) {
-  .approvals-actions {
+  .approvals-doors {
     flex-direction: column;
     align-items: stretch;
-    gap: 60px;
+    gap: 120px;
   }
-  .approvals-reject,
-  .approvals-approve {
+  .approvals-reject {
     width: 100%;
   }
-  .approvals-arming {
-    min-width: 0;
+  .approvals-approve {
+    width: 50%;
+    align-self: flex-start;
   }
+}
+
+/* Untrusted text arrives as long unbroken tokens (canonical JSON has no spaces).
+ * It wraps inside its card, row or bar — FR-UI-47 gives the parameters no scroll
+ * of their own — so .main does not scroll sideways and take the sticky bar with it. */
+.approvals-doc article section p,
+.approvals-bar > span,
+.approvals-state-line,
+.approvals-state p,
+.approvals-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The document prints exactly what the digest seals (FR-UI-68): repeated spaces in
+ * an untrusted field are painted, not collapsed. */
+.approvals-doc article section p {
+  white-space: pre-wrap;
+}
+
+/* The list (plate 01): one card per row. */
+.approvals-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.approvals-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 18px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--card);
+  color: var(--tx1);
+  text-align: left;
+}
+
+.approvals-row-op,
+.approvals-row-digest {
+  font-family: var(--font-mono);
+}
+
+.approvals-row-expiry {
+  color: var(--tx2);
+  font-size: 11.5px;
+}
+
+/* Terminal and refusal states. */
+.approvals-state {
+  margin-top: 18px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.approvals-state-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.approvals-state-line {
+  margin-top: 8px;
+  color: var(--tx2);
 }

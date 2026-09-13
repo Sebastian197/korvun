@@ -894,8 +894,10 @@ ventana.
 - **FR-UI-48** — `área(Aprobar) ≤ 0,50 × área(Rechazar)` (AS-52 mide en navegador
   real: `approve=6720.0px2 reject=16640.0px2`, 0,4038); separación horizontal
   `≥ 320 px` a anchos `≥ 1100` — **medida**, no calculada: AS-53 imprime
-  `reject={"x":260,…,"width":260}, approve={"x":904,…}, gap=384.0px`, que es lo
-  que el cálculo 812 − 260 − 168 predecía; por debajo de 1100 se apilan con
+  `reject={"x":275,…,"width":260}, approve={"x":889,…}, gap=354.0px` (2026-09-13, con
+  las tarjetas de la maqueta; antes de ellas medía 384, lo que el cálculo
+  812 − 260 − 168 predecía; la tarjeta resta su relleno y su borde, 28 + 2 px, y
+  el cálculo 782 − 260 − 168 da los 354 medidos); por debajo de 1100 se apilan con
   Rechazar **primero** y `≥ 120 px` de separación vertical.
 - **FR-UI-49** — El rojo marca el efecto irreversible, no el rechazo.
 - **FR-UI-50** — **Ningún diálogo modal en esta pantalla, nunca.** Es lo que
@@ -939,8 +941,9 @@ mientras se teclea.
   `aria-describedby`; la coincidencia se anuncia por `aria-live="polite"`.
 - **FR-UI-56** — Cada estado es `role="status"` (condición) o `role="alert"`
   (suceso).
-- **FR-UI-57** — Tabulación: documento → motivo → **Rechazar** → armado →
-  **Aprobar**. Aprobar es el último foco alcanzable. Se verifica **en
+- **FR-UI-57** — Tabulación: documento → armado → motivo → **Rechazar** →
+  **Aprobar** (director, decisión 3 del 2026-09-13: el armado es una fila a todo
+  el ancho encima del motivo, como las láminas 03/03b). Aprobar es el último foco alcanzable. Se verifica **en
   navegador** (jsdom no recorre el tabulador).
 - **FR-UI-58** — AA en los dos temas, con el gate de axe del e2e.
 
