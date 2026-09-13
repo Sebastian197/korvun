@@ -147,7 +147,12 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 	}
 	rec, err := store.Get(ctx, approval.ActionID)
 	if err != nil {
-		return ApprovedExecution{}, fmt.Errorf("app: approved action %s: %w", approval.ActionID, err)
+		// The decide has COMMITTED by the time this runs, and the actions row
+		// is what the recovery pass would close. A failure here is evidence
+		// that no longer reads, not «the execution simply did not start»: left
+		// unnamed it was published as «the row still holds its parameters»,
+		// which is a benign sentence over a permanently broken ledger.
+		return ApprovedExecution{}, fmt.Errorf("app: approved action %s: %w: %w", approval.ActionID, ErrApprovalRecordUnreadable, err)
 	}
 	if rec.State != action.StateApproved {
 		return ApprovedExecution{}, fmt.Errorf("app: action %s is %s: %w", approval.ActionID, rec.State, ErrApprovalAlreadyClosed)
@@ -231,6 +236,9 @@ var (
 	ErrApprovalAlreadyClosed = errors.New("app: the approval was already closed and is not awaiting execution")
 	// ErrApprovalCloseFailed is the effect happening and its record not closing.
 	ErrApprovalCloseFailed = errors.New("app: the executed action could not be closed")
+	// ErrApprovalRecordUnreadable is the parked action's own row refusing to
+	// read after the decision is sealed. It is evidence, not absence.
+	ErrApprovalRecordUnreadable = errors.New("app: the parked action's record no longer reads")
 )
 
 // ResolveApprovalLaw resolves ONE brain's effective cage and its law

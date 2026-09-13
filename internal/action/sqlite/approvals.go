@@ -214,12 +214,15 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	var rawPreview string
 	if err := tx.QueryRowContext(ctx,
 		`SELECT canonical_preview FROM approvals WHERE approval_id = ?`, approvalID).Scan(&rawPreview); err != nil {
-		return "", fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+		}
+		return "", fmt.Errorf("action/sqlite: approval preview %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	if p, err := action.ParseCanonicalPreview([]byte(rawPreview)); err != nil {
-		return "", fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
+		return "", fmt.Errorf("action/sqlite: approval preview %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	} else if err := action.ValidatePreviewBinding(a, p); err != nil {
-		return "", fmt.Errorf("action/sqlite: approval %q: %w; refusing the decision", approvalID, err)
+		return "", fmt.Errorf("action/sqlite: approval %q: %w: %w; refusing the decision", approvalID, ErrApprovalEvidenceCorrupt, err)
 	} else if err := verifyApprovalStoryTyped(ctx, tx, a, p); err != nil {
 		// R5-S2: the WHOLE story judged inside THIS transaction — a
 		// saboteur moving actions/action_decisions between any earlier
@@ -253,7 +256,11 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	// here, atomically.
 	if law != nil {
 		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
-			return "", fmt.Errorf("action/sqlite: %s (%s): the request was parked under law v%d %s but the current law is v%d %s — nothing was decided; re-request under the current law or reject this one", rule, dim, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest)
+			// NAMED, and it is the door Approve actually touches. Typing
+			// GetApproval and leaving this one bare published a moved law —
+			// permanent, with its own cure — as «this is transient, retry»,
+			// because the caller's switch fell through to its default.
+			return "", fmt.Errorf("action/sqlite: %s (%s): the request was parked under law v%d %s but the current law is v%d %s — nothing was decided; re-request under the current law or reject this one: %w", rule, dim, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, ErrApprovalInvalidated)
 		}
 	}
 

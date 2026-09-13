@@ -844,13 +844,6 @@ function RequestDetail({
               {paramsPresent ? escapeUntrusted(d.parameters) : paramsText}
             </p>
             {d.parameters_state === 'too_large' && <p>korvun approvals show {d.id}</p>}
-            {d.parameters_state === 'unavailable' && (
-              <Actions>
-                <button type="button" className="btn-secondary" onClick={load}>
-                  Reintentar
-                </button>
-              </Actions>
-            )}
           </section>
 
           <section>
@@ -1091,18 +1084,6 @@ function ReadRefusal({
           <Actions>{back}</Actions>
         </State>
       )
-    case 'params_not_canonical':
-      return (
-        <State
-          title="Los parámetros guardados no están en la forma que este digest sella"
-          lines={[
-            'Re-derivan el digest, pero alguien los ha reescrito en otra forma. En producción esta columna nace ya canónica, así que esto es una mano externa.',
-            'No se ha ejecutado nada y no se ofrece ninguna decisión.',
-          ]}
-        >
-          <Actions>{back}</Actions>
-        </State>
-      )
     case 'invalidated':
       return (
         <State
@@ -1243,19 +1224,6 @@ function DecisionState({
             </button>
             {back}
           </Actions>
-        </State>
-      )
-    case 'params_belt_failed':
-      return (
-        <State
-          title="Lo guardado no reproduce el digest que aprobaste"
-          lines={[
-            'No se ha ejecutado nada. Pero esta petición ya está consumida: la decisión se registró y los parámetros se vaciaron al reclamarlos, así que no se puede volver a intentar ni volver a leer.',
-            'La acción queda aprobada y sin ejecutar; en el próximo arranque el libro la cerrará como desenlace desconocido, con su recibo.',
-          ]}
-          alert
-        >
-          <Actions>{back}</Actions>
         </State>
       )
     case 'expired':

@@ -129,3 +129,24 @@ DECLARABA y que antes lo dejaba verde. Con la sonda movida a
 **D1 enrojece tres moldes.** Devolver el cinturón del digest delante de la
 comprobación de columna vacía se lleva por delante los tres peldaños que
 distinguen «no arrancó» de «algo se los llevó»: era un orden, no un detalle.
+
+## Cuarta tanda — las tres reglas estructurales (2026-09-13)
+
+| # | Qué neutraliza | Rojas |
+|---|---|---|
+| E1 | el rehuse por ley movida del DECIDE vuelve a salir desnudo | 2 |
+| E3 | el fallo de store.Get pierde su nombre y cae en la escalera | 1 |
+| E4 | la escalera deja de distinguir: todo vacio es held | 2 |
+| E5 | el enrutado de produccion a la escalera desaparece | 4 |
+
+**E5 es la que importa.** Borrar el enrutado de producción hacia la escalera
+enrojece **los cuatro peldaños**. La versión anterior del molde entraba por
+`nameClaim` directamente y esa misma mutación la dejaba VERDE: un molde que
+entra por una puerta que producción no usa no puede ver quién más entra.
+
+**E2 salió MUDA y destapó un molde mío que decía otra cosa de la que hacía.**
+El cuarto peldaño afirmaba ejercitar la rama corrupta de la RE-LECTURA; en
+realidad la corrupción la caza el CLAIM, que lee la fila de aprobación antes
+que los params. La rama de la re-lectura queda declarada como defensa en
+profundidad y NO como cubierta — ni en el código ni en el molde. E2 se retira
+por eso: no había rama que mutar, había una frase que corregir.

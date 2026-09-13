@@ -592,22 +592,6 @@ describe('P2 · detalle', () => {
     expect(gets('/api/approvals/apr_1').length).toBe(1)
   })
 
-  it('AS-35 · parameters_state unavailable: su literal, Aprobar ausente, [Reintentar] presente', async () => {
-    await openDetail(
-      happy({
-        'GET /api/approvals/apr_1': () =>
-          json(200, { ...DETAIL, parameters: '', parameters_state: 'unavailable' }),
-      }),
-    )
-    expect(
-      await screen.findByText(
-        'los parámetros no se pudieron leer en este instante; es transitorio y no dice nada sobre la evidencia',
-      ),
-    ).toBeInTheDocument()
-    expect(approveBtn()).toBeNull()
-    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
-  })
-
   it('AS-36 · parameters_state too_large: su literal, Aprobar ausente, la CLI nombrada', async () => {
     await openDetail(
       happy({
@@ -712,22 +696,6 @@ describe('P2 · detalle', () => {
     expect(rejectBtn()).toBeNull()
     expect(screen.queryByText(/Es transitorio/)).toBeNull()
     expect(screen.queryByText('Respuesta que esta pantalla no reconoce.')).toBeNull()
-  })
-
-  it('AS-98 · params_not_canonical: su literal propio, sin decisión', async () => {
-    await openDetail(
-      happy({
-        'GET /api/approvals/apr_1': () =>
-          json(409, { error: 'params_not_canonical', message: 'x' }),
-      }),
-    )
-    expect(
-      await screen.findByText(
-        'Los parámetros guardados no están en la forma que este digest sella',
-      ),
-    ).toBeInTheDocument()
-    expect(approveBtn()).toBeNull()
-    expect(rejectBtn()).toBeNull()
   })
 
   it('AS-23 · 409 invalidated en el GET: literal de E7, Rechazar presente, Aprobar ausente, «Es transitorio» ausente', async () => {
@@ -1133,15 +1101,6 @@ describe('P4 · desenlaces', () => {
       await approveWith(name, 'x')
       expect(document.body.textContent, name).not.toContain('korvun approvals execute')
     }
-  })
-
-  it('AS-88 · params_belt_failed: literal de E6-bis, sin [Volver a leer], sin decisión, sin «no reconoce»', async () => {
-    await approveWith('params_belt_failed', 'x')
-    expect(screen.getByText(/Lo guardado no reproduce el digest que aprobaste/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Volver a leer la petición' })).toBeNull()
-    expect(approveBtn()).toBeNull()
-    expect(rejectBtn()).toBeNull()
-    expect(screen.queryByText('Respuesta que esta pantalla no reconoce.')).toBeNull()
   })
 
   it('AS-68 · E6-bis no reutiliza el texto de E6: «léela otra vez, entera» ausente', async () => {
