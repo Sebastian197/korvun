@@ -1,5 +1,45 @@
 # HANDOFF — Korvun
 
+## Fichado con prioridad para la v0.15.1 — el marcador tras un rebase (director, 2026-09-13)
+
+La punta de master quedó sin autorizar tras fusionar la #29 y la #30 por squash
+(reparada en la #31) y tras fusionar la #36 por rebase (reparada en la PR del
+marcador sobre `c3a6d99`), las dos veces con la negativa de la puerta capturada. El
+director cuenta también la #33; su marcador en master, `265dc1a`, hoy pasa la
+puerta (`mode: github-rebase`, exit 0), y aquí no se ha establecido que fallara.
+Dos fichajes, con su captura:
+
+1. **El marcador versionado lo escribe el guion, no la memoria.** Siempre que la
+   fusión sea por rebase, el marcador lleva la forma `KORVUN-REBASE-EVIDENCE v1`.
+   Hoy ningún guion del árbol escribe el marcador: solo lo juzgan
+   `scripts/adversary-gate-check.sh`, `.githooks/pre-push`,
+   `scripts/rebase_evidence.py` y `scripts/integration_gate.py`. El fichaje es
+   CREAR ese paso.
+2. **La forma versionada no acepta una reparación posterior a la fusión.** Sobre
+   `c3a6d99`, un marcador versionado con `pr: 36` y `base: 265dc1a` se rechaza con
+   `REBASE_PROVENANCE: PR does not bind source and integrated history`, y con un
+   campo `integrated_head` con `REBASE_FORMAT: unexpected marker fields`. Solo la
+   forma legacy pasa (exit 0). La reparación de la #36 salió legacy por eso.
+
+## Fichado — la fila de la lista colapsa los espacios de la operación (2026-09-13)
+
+La operación entra en el digest. La tarjeta OPERACIÓN del documento pinta los
+espacios repetidos (FR-UI-68, tren de la pantalla a la maqueta), pero la fila de
+la lista, con `white-space: normal`, pinta uno: dos operaciones que solo difieran
+en espacios se ven iguales en la lista. En la lista no se decide nada. Captura del
+adversario: `listRow op "tool/webhook call"` frente a `opText "tool/webhook  call"`.
+Queda también sin molde la tarjeta OPERACIÓN del documento: el molde FR-UI-68 lee
+parámetros y propósito.
+
+## Fichado — el título de AS-44 promete más de lo que afirma (2026-09-13)
+
+`Approvals.test.tsx`, «AS-44 · digest vacío y digest malformado: «digest
+ilegible», sin Aprobar, fuera de la colisión», solo pinta la LISTA
+(`renderList`) y no afirma nada sobre Aprobar. Es un test aprobado y no se edita
+sin el director. La mitad del documento la vigila ya el molde «FR-UI-15 · digest
+ilegible en el detalle» (tren de la pantalla a la maqueta, 2026-09-13). Queda
+para decidir: acotar el título o añadirle la aserción.
+
 ## La vara de la puerta de Codex — ACOTADA para la v0.15.0 (director, 2026-09-13)
 
 **Para ESTA versión, y solo para ésta: la puerta externa se supera con CERO

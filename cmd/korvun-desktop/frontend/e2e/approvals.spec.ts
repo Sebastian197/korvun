@@ -56,10 +56,11 @@ test('AS-2 · the decision block sits below the parameters, at 1100x760', async 
   await page.screenshot({ path: SHOT('as2-decision-below-parameters.png'), fullPage: true })
 })
 
-// AS-51 — Tab from the reason reaches Rechazar, then the arming field, then
-// Aprobar, and Aprobar is LAST. The keyboard order is the same ladder the eye
-// walks: the cheap control first, the expensive one behind a typed gate.
-test('AS-51 · tab order: reason, Rechazar, arming, Aprobar — and Aprobar is last', async ({
+// AS-51 — Tab from the arming field reaches the reason, then Rechazar, then
+// Aprobar, and Aprobar is LAST. The ladder changed by the director's decision 3
+// of 2026-09-13 (FR-UI-57: document → arming → reason → Rechazar → Aprobar):
+// the gate is a full-width row above the reason, as the approved mockup draws.
+test('AS-51 · tab order: arming, reason, Rechazar, Aprobar — and Aprobar is last', async ({
   page,
 }) => {
   const parked = await openOneParked(page)
@@ -72,8 +73,7 @@ test('AS-51 · tab order: reason, Rechazar, arming, Aprobar — and Aprobar is l
   for (const ch of parked.digest.slice(-6)) await page.keyboard.press(ch)
   await expect(approve(page)).toBeEnabled()
 
-  const reason = page.getByRole('textbox', { name: /motivo/i })
-  await reason.focus()
+  await gate.focus()
   const seen: string[] = []
   for (let i = 0; i < 3; i++) {
     await page.keyboard.press('Tab')
@@ -92,8 +92,8 @@ test('AS-51 · tab order: reason, Rechazar, arming, Aprobar — and Aprobar is l
       }),
     )
   }
-  expect(seen[0]).toMatch(/Rechazar/)
-  expect(seen[1]).toMatch(/digest|reteclea/i)
+  expect(seen[0]).toMatch(/motivo/i)
+  expect(seen[1]).toMatch(/Rechazar/)
   expect(seen[2]).toMatch(/Aprobar/)
 })
 
@@ -168,14 +168,28 @@ test('AS-55 · at 900x700 they stack, Rechazar first, at least 120 px apart', as
   )
   expect(no!.y).toBeLessThan(yes!.y)
   expect(gap).toBeGreaterThanOrEqual(120)
+  // The director's decision 4 (2026-09-13): the asymmetry holds in the stack
+  // too — Aprobar at half of Rechazar's width.
+  expect(Math.abs(yes!.width - 0.5 * no!.width)).toBeLessThanOrEqual(1)
 })
 
 // AS-63 — axe AA in BOTH themes. The document is the one place in the product
 // where a contrast failure costs an irreversible effect.
+//
+// The theme is chosen the way the product chooses it: data-theme, from the
+// stored choice. The first shape used page.emulateMedia, which did not move
+// data-theme here, so both runs were dark (captured in pass 1 of the
+// 2026-09-13 paper).
 test('AS-63 · axe AA in light and dark', async ({ page }) => {
   await openOneParked(page)
   for (const theme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme: theme })
+    await page.evaluate((t) => {
+      localStorage.setItem('korvun.chrome.theme', t)
+      document.documentElement.dataset.theme = t
+    }, theme)
+    await expect
+      .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor))
+      .toBe(theme === 'light' ? 'rgb(250, 250, 252)' : 'rgb(15, 15, 22)')
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze()
@@ -189,16 +203,28 @@ test('AS-63 · axe AA in light and dark', async ({ page }) => {
 // AS-71 — [Volver a leer] leaves the container scroll at 0. A re-read that kept
 // the old offset would show the operator a different part of a NEW document
 // while he believes he is looking at the same one.
+//
+// Retargeted on 2026-09-13: .main becomes the document's single scrolling
+// ancestor (G9 of the paper, watched by approvals-mockup.spec.ts), and
+// the button is activated WITHOUT scrolling. Playwright's click() scrolls the
+// button into view first, which put scrollTop at 0 on its own and made the
+// first shape of this test pass with the mechanism removed.
 test('AS-71 · a re-read leaves the document scrolled to the top', async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 760 })
   await openOneParked(page)
-  const doc = page.locator('.approvals-doc')
-  await doc.evaluate((el) => {
+  const main = page.locator('.main')
+  await main.evaluate((el) => {
     el.scrollTop = el.scrollHeight
   })
-  expect(await doc.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
-  await page.getByRole('button', { name: 'Volver a leer la petición' }).click()
+  expect(await main.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('button')).find(
+      (x) => x.textContent === 'Volver a leer la petición',
+    )
+    b?.click()
+  })
   await expect(page.getByTestId('approval-parameters')).toBeVisible()
-  expect(await doc.evaluate((el) => el.scrollTop)).toBe(0)
+  expect(await main.evaluate((el) => el.scrollTop)).toBe(0)
 })
 
 // AS-73 — the browser's own autofill over the arming field. The field stays

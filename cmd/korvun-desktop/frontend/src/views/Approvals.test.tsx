@@ -891,6 +891,17 @@ describe('P3 · decisión', () => {
     expect(approveBtn()).toBeNull()
     expect(rejectBtn()).toBeEnabled()
     expect(screen.queryByText(/Esta petición caducó/)).toBeNull()
+
+    // The director's decision 1 (2026-09-13): the arming DIES with the
+    // presentational expiry, it is not only hidden. Pass 1 of the paper caught
+    // the clock going back re-arming Aprobar with nothing typed. Level J.
+    await act(async () => {
+      vi.setSystemTime(NOW)
+      await vi.advanceTimersByTimeAsync(1_500)
+    })
+    expect(armingInput().value).toBe('')
+    expect(screen.getByText('faltan 6')).toBeInTheDocument()
+    expect(approveBtn()).toBeDisabled()
   })
 
   it('AS-22 · 409 expired: literal de E5 con el instante UTC; ambos botones ausentes', async () => {
@@ -1313,5 +1324,279 @@ describe('MUT · lo curado llega al operador', () => {
     expect(screen.getByText(/rcp_f1/)).toBeInTheDocument()
     expect(screen.getByText(/dial tcp: connection refused/)).toBeInTheDocument()
     expect(screen.queryByText('No sabemos si el efecto llegó a ocurrir.')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// B · the screen brought to its approved mockup (train of 2026-09-13)
+//
+// Pre-test paper: docs/superpowers/specs/2026-09-13-approvals-screen-to-mockup-pretest.md
+// (G7 expiry, G8 arming dies, G6 Esc on E9, G3/G4 exact texts, G5e keys).
+// Evidence level: jsdom, fetch stubbed — what the screen paints and when it
+// withdraws. Geometry, focus, visibility and IME live in
+// e2e/approvals-mockup.spec.ts, in a real browser.
+// ---------------------------------------------------------------------------
+describe('B · maqueta aprobada — caducidad, armado y Esc', () => {
+  function withExpiry(expires_at: string): Route {
+    return happy({
+      'GET /api/approvals': () => json(200, { gate: GATE, rows: [{ ...ROW, expires_at }] }),
+      'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, expires_at }),
+    })
+  }
+  function bar(): HTMLElement {
+    const el = document.querySelector<HTMLElement>('.approvals-bar')
+    expect(el, 'the pinned bar').not.toBeNull()
+    return el!
+  }
+  // getByText matches an element by its OWN text nodes, so a label rendered in
+  // a sibling element of the time cannot satisfy it (A18).
+  const inBar = (text: string) => within(bar()).getByText(text, { exact: true })
+
+  it('G7 · menos de 60 min: «caduca en 31m 00s · 14:31:00Z» en un solo elemento, en la barra y en la tarjeta', async () => {
+    await openDetail()
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(inBar('caduca en 31m 00s · 14:31:00Z')).toBeInTheDocument()
+    expect(screen.getAllByText('caduca en 31m 00s · 14:31:00Z', { exact: true })).toHaveLength(2)
+    expect(screen.getByText(EXPIRES, { exact: true })).toBeInTheDocument()
+  })
+
+  it('G7 · desde 60 min: horas y minutos con relleno — 1h 30m y 1h 05m', async () => {
+    await openDetail(withExpiry('2026-09-08T15:30:00Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(inBar('caduca en 1h 30m · 15:30:00Z')).toBeInTheDocument()
+    cleanup()
+    await openDetail(withExpiry('2026-09-08T15:05:00Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(inBar('caduca en 1h 05m · 15:05:00Z')).toBeInTheDocument()
+  })
+
+  it('G7 · redondeo hacia arriba: 3599,5 s se lee 1h 00m y 2,5 s se lee 0m 03s con Aprobar ofrecido', async () => {
+    await openDetail(withExpiry('2026-09-08T14:59:59.500Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(inBar('caduca en 1h 00m · 14:59:59Z')).toBeInTheDocument()
+    cleanup()
+    await openDetail(withExpiry('2026-09-08T14:00:02.500Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(inBar('caduca en 0m 03s · 14:00:02Z')).toBeInTheDocument()
+    expect(approveBtn()).not.toBeNull()
+  })
+
+  it('G7 · otro día UTC: la fecha delante de la hora', async () => {
+    await openDetail(withExpiry('2026-09-09T02:00:00Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(inBar('caduca en 12h 00m · 2026-09-09 02:00:00Z')).toBeInTheDocument()
+  })
+
+  it('G7 · en cero: el texto de la lámina 05, con la regla de fecha; Aprobar retirado, Rechazar y Esc vivos', async () => {
+    await openDetail(withExpiry('2026-09-08T13:59:59Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(inBar('el reloj de la ventana dice 00:00 · 13:59:59Z')).toBeInTheDocument()
+    expect(approveBtn()).toBeNull()
+    expect(rejectBtn()).toBeEnabled()
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    await waitFor(() => expect(posts('/api/approvals/apr_1/reject')).toHaveLength(1))
+    cleanup()
+    await openDetail(withExpiry('2026-09-07T23:00:00Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(inBar('el reloj de la ventana dice 00:00 · 2026-09-07 23:00:00Z')).toBeInTheDocument()
+  })
+
+  it('G7 · la retirada llega en el instante de la caducidad, no en el tic de un segundo', async () => {
+    await openDetail(withExpiry('2026-09-08T14:00:01.400Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    const elapsed = Date.now() - NOW.getTime()
+    // Precondition, not an oracle: the 1 s interval must not be able to land
+    // inside [1400, 1450] ms, or a tick-only screen could pass by luck.
+    expect(elapsed, 'detail must open before +350 ms').toBeLessThan(350)
+    expect(approveBtn()).not.toBeNull()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_450 - (Date.now() - NOW.getTime()))
+    })
+    expect(approveBtn()).toBeNull()
+  })
+
+  it('G7 · la fila de la lista: «caduca · 14:31:00Z», sin cuenta atrás', async () => {
+    await renderList()
+    const row = await screen.findByRole('button', { name: /tool\/webhook_call/ })
+    expect(within(row).getByText('caduca · 14:31:00Z', { exact: true })).toBeInTheDocument()
+    expect(within(row).queryByText(/caduca en/)).toBeNull()
+  })
+
+  it('G7 · caducidad ilegible por forma y por calendario: estado con nombre, sin Aprobar, Rechazar vivo', async () => {
+    const illegible = [
+      'garbage',
+      '2030',
+      '1',
+      '0',
+      '2026-09-13 16:00:08',
+      '2026-09-13T16:00:08',
+      '2026-02-30T10:00:00Z',
+      '2026-02-29T10:00:00Z',
+      '2026-09-13T24:00:00Z',
+    ]
+    for (const v of illegible) {
+      cleanup()
+      await renderList(withExpiry(v))
+      const row = await screen.findByRole('button', { name: /tool\/webhook_call/ })
+      expect(
+        within(row).getByText('caducidad ilegible', { exact: false }),
+        `row ${v}`,
+      ).toBeInTheDocument()
+      fireEvent.click(row)
+      await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+      expect(within(bar()).getByText(/caducidad ilegible/), `bar ${v}`).toBeInTheDocument()
+      expect(approveBtn(), `approve ${v}`).toBeNull()
+      expect(rejectBtn(), `reject ${v}`).toBeEnabled()
+      expect(screen.queryByText(/caduca en/), `countdown ${v}`).toBeNull()
+    }
+  })
+
+  it('G7 · el 29 de febrero de un año bisiesto es legal', async () => {
+    await openDetail(withExpiry('2028-02-29T10:00:00Z'))
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(
+      within(bar()).getByText(/^caduca en \d+h \d{2}m · 2028-02-29 10:00:00Z$/),
+    ).toBeInTheDocument()
+    expect(approveBtn()).not.toBeNull()
+  })
+
+  it('G6 · Esc inerte en E9: un 200 pintado como ilegible no ofrece decisión y Esc no rechaza', async () => {
+    const variants: Array<[string, Record<string, unknown>]> = [
+      ['present con cuerpo vacío', { ...DETAIL, parameters: '' }],
+      ['parameters_state desconocido', { ...DETAIL, parameters_state: 'pepino' }],
+    ]
+    for (const [name, detail] of variants) {
+      cleanup()
+      await openDetail(happy({ 'GET /api/approvals/apr_1': () => json(200, detail) }))
+      await waitFor(() => expect(screen.queryByText('Consultando el almacén…')).toBeNull())
+      expect(rejectBtn(), name).toBeNull()
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      await act(async () => {})
+      expect(posts('/api/approvals/apr_1/reject'), name).toHaveLength(0)
+    }
+  })
+
+  // The sixth site (pass 5 of the paper): E5 reached by the READ door. A 409
+  // expired on the GET carries no stored instant, and the literal used to put the
+  // server's English sentence where the instant goes.
+  it('G7 · E5 por la puerta de lectura: sin «Caducó a las», porque no hay instante que citar', async () => {
+    await openDetail(
+      happy({
+        'GET /api/approvals/apr_1': () =>
+          json(409, {
+            error: 'expired',
+            message: 'this request expired before the decision touched it — it never executes',
+          }),
+      }),
+    )
+    expect(
+      await screen.findByText('Esta petición caducó y ya no se puede decidir'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Caducó a las/)).toBeNull()
+    expect(screen.queryByText(/this request expired before the decision touched it/)).toBeNull()
+    // Pass 6 (instrument): the read door has no digest to declare «no longer actionable».
+    expect(screen.queryByText('DIGEST — YA NO ACCIONABLE')).toBeNull()
+  })
+
+  // The fifth site that paints expires_at: E5's literal after a POST answers
+  // expired. It printed the stored value raw, outside escapeUntrusted — the sister
+  // door of the illegible-expiry class found by the author's own check.
+  it('G7 · E5 tras un POST con caducidad ilegible: «caducidad ilegible», no el valor crudo', async () => {
+    const raw = 'garbage\u202e'
+    await openDetail(
+      happy({
+        'GET /api/approvals': () => json(200, { gate: GATE, rows: [{ ...ROW, expires_at: raw }] }),
+        'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, expires_at: raw }),
+        'POST /api/approvals/apr_1/reject': () => json(409, { error: 'expired', message: 'x' }),
+      }),
+    )
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    fireEvent.click(rejectBtn()!)
+    await screen.findByText('Esta petición caducó y ya no se puede decidir')
+    expect(screen.getByText(/caducidad ilegible/)).toBeInTheDocument()
+    expect(screen.queryByText(/Caducó a las garbage/)).toBeNull()
+    expect(document.body.textContent ?? '').not.toContain('\u202e')
+  })
+
+  it('G6 (apoyo J) · Esc de una composición IME en el motivo no rechaza', async () => {
+    await openDetail()
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    const reason = screen.getByRole('textbox', { name: /motivo/i })
+    fireEvent.keyDown(reason, { key: 'Escape', isComposing: true })
+    fireEvent.keyDown(reason, { key: 'Escape', keyCode: 229 })
+    await act(async () => {})
+    expect(posts('/api/approvals/apr_1/reject')).toHaveLength(0)
+  })
+
+  it('G3/G4 · textos exactos: etiqueta, «faltan N», casillas «–» y prefijo de diez caracteres', async () => {
+    await openDetail()
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    expect(
+      screen.getByText('Para armar Aprobar, reteclea los seis últimos caracteres del digest', {
+        exact: true,
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('faltan 6', { exact: true })).toBeInTheDocument()
+    const cells = screen.getAllByTestId('arming-cell')
+    expect(cells).toHaveLength(6)
+    expect(cells.map((c) => c.textContent)).toEqual(['–', '–', '–', '–', '–', '–'])
+    const prefix = screen.getByTestId('arming-prefix').textContent ?? ''
+    expect(prefix.replace(/[…\s]/g, '')).toBe(HEX.slice(48, 58))
+    typeKeys(armingInput(), TAIL.slice(0, 2))
+    expect(screen.getByText('faltan 4', { exact: true })).toBeInTheDocument()
+    expect(screen.getAllByTestId('arming-cell').map((c) => c.textContent)).toEqual([
+      TAIL[0],
+      TAIL[1],
+      '–',
+      '–',
+      '–',
+      '–',
+    ])
+    expect(armingInput().value).toBe(TAIL.slice(0, 2))
+  })
+
+  it('G5e (apoyo J) · una tecla repetida o con keyCode 229 no arma', async () => {
+    await openDetail()
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    fireEvent.keyDown(armingInput(), { key: TAIL[0], repeat: true })
+    fireEvent.keyDown(armingInput(), { key: TAIL[0], keyCode: 229 })
+    expect(armingInput().value).toBe('')
+    expect(screen.getByText('faltan 6', { exact: true })).toBeInTheDocument()
+  })
+
+  // The sister door of the illegible class found by the adversary's review of the
+  // green diff: FR-UI-15 says an illegible digest offers no Aprobar. AS-44 covers
+  // only the list; this is the document.
+  it('FR-UI-15 · digest ilegible en el detalle: sin Aprobar y sin fila de armado, Rechazar vivo', async () => {
+    for (const digest of ['', 'sha256:xyz']) {
+      cleanup()
+      await openDetail(
+        happy({
+          'GET /api/approvals': () => json(200, { gate: GATE, rows: [{ ...ROW, digest }] }),
+          'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, digest }),
+        }),
+      )
+      await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+      expect(approveBtn(), `approve «${digest}»`).toBeNull()
+      expect(screen.queryByTestId('arming-row'), `arming «${digest}»`).toBeNull()
+      expect(rejectBtn(), `reject «${digest}»`).toBeEnabled()
+    }
+  })
+
+  it('G3 · orden en el DOM: armado → motivo → Rechazar → Aprobar', async () => {
+    await openDetail()
+    await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
+    const ladder = [
+      armingInput(),
+      screen.getByRole('textbox', { name: /motivo/i }),
+      rejectBtn()!,
+      approveBtn()!,
+    ]
+    for (let i = 0; i + 1 < ladder.length; i++) {
+      expect(
+        ladder[i].compareDocumentPosition(ladder[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING,
+        `step ${i}`,
+      ).toBeTruthy()
+    }
   })
 })
