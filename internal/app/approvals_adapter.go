@@ -569,7 +569,8 @@ func (a *ApprovalsAdapter) runApproved(ctx context.Context, id string, cage *Eff
 		return controlapi.ApprovalOutcome{}, a.nameExecution(ctx, id, err)
 	}
 	if run.Unknown {
-		// The deadline case: the effect may have left and its answer been lost.
+		// The deadline, and every delivered request whose answer was lost: the
+		// effect may have left and nobody can account for it.
 		// It is the ONE outcome that says «we do not know», and saying it is
 		// the whole reason the name exists.
 		return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %s", controlapi.ErrApprovalUnknownOutcome, run.FailureDetail)

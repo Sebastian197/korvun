@@ -73,9 +73,15 @@ var ErrInvalidTransition = errors.New("action: invalid state transition")
 // executes directly in E5 (→SUCCEEDED | →FAILED; PREPARING waits for
 // E6). Everything else stays closed.
 var transitions = map[State]map[State]bool{
-	StateReceived:        {StateNormalized: true},
-	StateNormalized:      {StateDenied: true, StateShadowed: true, StateAuthorized: true, StatePendingApproval: true},
-	StateAuthorized:      {StateSucceeded: true, StateFailed: true},
+	StateReceived:   {StateNormalized: true},
+	StateNormalized: {StateDenied: true, StateShadowed: true, StateAuthorized: true, StatePendingApproval: true},
+	// OUTCOME_UNKNOWN joins AUTHORIZED's edges on 2026-09-13, for the same
+	// reason it joined APPROVED's and in the same commit that found the gap:
+	// the approvals path is not the only one that runs an irreversible tool.
+	// When the gate does not park, internal/brain closes this attempt, and it
+	// closed FAILED for a POST the host had already received. The honest close
+	// has to be REACHABLE from here too, or the cure is a comment.
+	StateAuthorized:      {StateSucceeded: true, StateFailed: true, StateOutcomeUnknown: true},
 	StatePendingApproval: {StateRejected: true, StateApproved: true},
 	// OUTCOME_UNKNOWN joins APPROVED's edges on 2026-09-13. The recovery pass
 	// already writes exactly this close for an execution that died past its

@@ -22,7 +22,7 @@ un `*sql.DB` segundo sobre el mismo fichero.
 | A11 | el digest del operador deja de compararse | `TestAdapter_aStaleDigestIsRefusedWithoutConsumingTheApprov` |
 | A13 | el status desconocido sirve el documento | `TestAdapter_aRowDecidedBetweenTheListAndTheDetailIsAlready`, `TestAdapter_anUnknownStatusFailsClosed` |
 | A14 | brain_gone pierde su centinela | `TestAdapter_brainGoneHasItsOwnSentinel` |
-| A15 | la PENDING en el POST se manda a ya cerrada | `TestAdapter_aPendingRowAtThePostIsNotDecided` |
+| A15 | la PENDING en el POST se manda a ya cerrada | `TestExecuteApprovedAction_aPendingRowIsNotDecided` |
 | A16 | la cuenta de filas saltadas no llega al wire | `TestAdapter_theListSurfacesTheRowsItHadToSkip` |
 | A17 | la accion que ya no estaba pendiente dice no saber | `TestAdapter_theActionThatWasNoLongerPendingGetsItsName` |
 | A18 | la ley se resuelve dos veces | `TestAdapter_resolvesTheLawExactlyOnce` |

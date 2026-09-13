@@ -1155,11 +1155,11 @@ function DecisionState({
   if (decision.kind === 'failed') {
     return (
       <State
-        title="La acción se ejecutó y falló"
+        title="El intento falló"
         lines={[
           detail.digest,
           'La ejecución se intentó y no salió bien. El registro se cerró con su recibo, así que esto no es una duda sobre la DECISIÓN.',
-          'Lo que esta pantalla no puede decirte es si el efecto llegó a salir: la herramienta puede haber rechazado sus argumentos sin tocar nada, o haber expirado con la llamada ya entregada. Mira el libro antes de repetir nada.',
+          'La herramienta se negó antes de que nada saliera, o falló sin llegar a entregar nada. Cuando el binario NO puede afirmar eso, esta pantalla no dice «falló»: dice que no se sabe. Mira el libro antes de repetir nada.',
           escapeUntrusted(decision.detail),
           `Recibo ${decision.receipt}`,
         ]}

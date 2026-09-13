@@ -39,9 +39,10 @@ var reservedStates = []State{
 // validTransitions is the COMPLETE transition table (E1 + the sealed
 // Etapa-5 approval edges).
 var validTransitions = map[State][]State{
-	StateReceived:        {StateNormalized},
-	StateNormalized:      {StateDenied, StateShadowed, StateAuthorized, StatePendingApproval},
-	StateAuthorized:      {StateSucceeded, StateFailed},
+	StateReceived:   {StateNormalized},
+	StateNormalized: {StateDenied, StateShadowed, StateAuthorized, StatePendingApproval},
+	// Mirrors production: AUTHORIZED gained OUTCOME_UNKNOWN on 2026-09-13.
+	StateAuthorized:      {StateSucceeded, StateFailed, StateOutcomeUnknown},
 	StatePendingApproval: {StateRejected, StateApproved},
 	// OUTCOME_UNKNOWN joins APPROVED on 2026-09-13. This table mirrors
 	// production and whoever moves one moves the other: the recovery pass

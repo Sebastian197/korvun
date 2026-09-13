@@ -301,7 +301,8 @@ func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Stor
 	// no now returns without one, because that is a decided outcome with its
 	// receipt and not a failure to learn anything.
 	if run.Unknown {
-		// The deadline: the call may have been delivered and its answer lost.
+		// The deadline, and every request the wire reports as written: the call
+		// may have been delivered and its answer lost.
 		// Printing SUCCEEDED here — which is what the previous shape did, by
 		// never reading this field — puts a definite claim on an irreversible
 		// effect nobody can account for. The headline cannot claim it either:
@@ -311,8 +312,11 @@ func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Stor
 		return 1
 	}
 	if run.Failed {
-		// The tool ran and said no: "executed" is exactly what happened.
-		_, _ = fmt.Fprintf(c.stdout, "approval %s %s — executed the exact approved object (digest %s)\noutcome: FAILED\nreceipt: %s\nerror: %s\n",
+		// NOT "executed": this branch covers a host off the allow-list and a
+		// malformed payload, where the tool refused and nothing ran at all.
+		// The word the evidence supports is «attempted», and the honest half
+		// of the old line — that the object was the approved one — survives.
+		_, _ = fmt.Fprintf(c.stdout, "approval %s %s — attempted the exact approved object (digest %s)\noutcome: FAILED\nreceipt: %s\nerror: %s\n",
 			approvalID, decided, a.ActionDigest, run.ReceiptID, run.FailureDetail)
 		return 1
 	}
