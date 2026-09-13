@@ -15,6 +15,44 @@ v0.15.0.** Esto es una excepción fechada, no una regla nueva, y se registra
 aquí para que nadie la herede por costumbre.
 
 
+## El adversario ejecuta — y la primera pasada que ejecutó cambió el rendimiento (2026-09-13)
+
+Cinco pasadas sin shell: predecían, y **las predicciones las verificaba el
+autor de la cura**. El director lo fichó como defecto de método y luego lo
+adelantó: ejecución de `go test` y `npm test` sobre un árbol en solo lectura.
+
+**El eslabón que faltaba no era el permiso.** La definición del agente ya
+llevaba `tools: Read, Grep, Glob, Bash`; lo que hacía falta era **relanzar la
+sesión**, porque la definición cacheada no se relee en caliente. El mensaje
+«Bash is disabled for this session, in subagents as well as here» es más ancho
+que su cable: salta cuando una herramienta simplemente no está en la lista de
+ESE agente.
+
+**Qué cambió al ejecutar.** La sexta pasada —la primera con shell— encontró
+**cuatro moldes que no vigilaban nada**, ninguno de los cuales las cinco
+anteriores había visto leyendo:
+
+- el `if run.Unknown` de la CLI, sin test: neutralizarlo dejaba la suite entera
+  en verde;
+- el molde de la ayuda casando `strings.Contains` sobre todo el stdout;
+- FR-TEST-6 barriendo el fichero entero en vez de su sección;
+- AS-79 y AS-99, que **nunca habían llegado a la rama que sus nombres
+  prometen** porque un spec anterior arranca el núcleo compartido.
+
+Los cuatro son de la misma clase: un molde cuya mutación probatoria nadie había
+ejecutado. Es exactamente lo que una revisión por lectura no puede encontrar.
+
+**Montaje del árbol de solo lectura**, para la próxima:
+
+```sh
+cp -R <worktree> /private/tmp/korvun-audit-ro && chmod -R a-w /private/tmp/korvun-audit-ro
+```
+
+El frontend NO corre ahí (`vite` escribe en `node_modules/.vite-temp`): el
+adversario copia a su propio scratch para las mutaciones, y lo declara.
+
+---
+
 > **Read this at the start of every session.** Restores the project
 > context, the current state, and the next thing to do without having
 > to re-derive it from `git log`. CLAUDE.md is the operating rules;

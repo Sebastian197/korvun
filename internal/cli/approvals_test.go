@@ -18,7 +18,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"net"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -559,24 +560,15 @@ func TestApprovalsApprove_aDeliveredPostIsNeverPrintedAsFailure(t *testing.T) {
 		case arrived <- struct{}{}:
 		default:
 		}
+		// The POST is ACCEPTED and the answer is cut short: 64 bytes declared,
+		// ten written. Deterministic on every platform — the first shape tore
+		// the connection with a TCP RST and depended on the kernel's timing to
+		// produce a read error at all.
 		w.Header().Set("Content-Length", "64")
 		w.WriteHeader(http.StatusOK)
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
-		hj, ok := w.(http.Hijacker)
-		if !ok {
-			return
-		}
-		conn, _, err := hj.Hijack()
-		if err != nil {
-			return
-		}
-		if tc, ok := conn.(*net.TCPConn); ok {
-			_ = tc.SetLinger(0)
-		}
-		_ = conn.Close()
+		_, _ = w.Write([]byte("0123456789"))
 	}))
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
 	defer srv.Close()
 	host := strings.TrimPrefix(srv.URL, "http://")
 	cfgPath, dbPath, approvalID := parkedWebhookExpiring(t, host, srv.URL)
