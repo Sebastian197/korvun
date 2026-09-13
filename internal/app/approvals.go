@@ -134,7 +134,12 @@ func (a *App) recorderForTest() brain.ActionRecorder {
 // belt, execute, and close the parked action with its era's E4 receipt
 // and the on-the-fly result digest. A request that is not APPROVED —
 // pending, rejected, cancelled or expired — never executes.
-func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string, law actionsqlite.PolicyPin) (ApprovedExecution, error) {
+// approvedDigest is the digest the HUMAN saw and re-typed. It travels all the
+// way into the claiming transaction and is compared THERE, against the row that
+// transaction read. Comparing a re-read of the stored column against itself —
+// which is what passing approval.ActionDigest did — proves the row agrees with
+// itself and says nothing about what anybody approved.
+func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string, law actionsqlite.PolicyPin, approvedDigest string) (ApprovedExecution, error) {
 	approval, _, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
 		return ApprovedExecution{}, err
@@ -166,7 +171,10 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 	// external UPDATE of op_version in that window passed every belt and fired
 	// an irreversible effect under an operation the row no longer declared. So
 	// the claim hands back the triple it judged, and that is the one that runs.
-	params, op, err := store.ClaimApprovalParamsUnderDigest(ctx, approvalID, &law, approval.ActionDigest)
+	if approvedDigest == "" {
+		approvedDigest = approval.ActionDigest
+	}
+	params, op, err := store.ClaimApprovalParamsUnderDigest(ctx, approvalID, &law, approvedDigest)
 	if err != nil {
 		return ApprovedExecution{}, fmt.Errorf("app: claim execution of %s: %w", approvalID, err)
 	}
@@ -199,9 +207,17 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		Operation:    op,
 	}
 	if execErr != nil {
-		// The tool ran and said no. That is a DECIDED outcome with its receipt,
-		// and it travels as one: a caller that received this knows the effect
-		// was attempted and failed, which is a different fact from not knowing.
+		// A DEADLINE is not a refusal. The call may well have been delivered and
+		// the answer lost, so the effect's fate is genuinely unknown — which is
+		// what `unknown_outcome` is for, and until now nothing produced it.
+		if errors.Is(execErr, context.DeadlineExceeded) {
+			out.Unknown = true
+			out.FailureDetail = execErr.Error()
+			return out, nil
+		}
+		// Anything else: the tool ran and said no. That is a DECIDED outcome
+		// with its receipt, and it travels as one — knowing the attempt failed
+		// is a different fact from not knowing what happened.
 		out.Failed = true
 		out.FailureDetail = execErr.Error()
 		return out, nil
@@ -217,11 +233,14 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 // with its receipt. Reporting that through the error channel would make a
 // KNOWN outcome indistinguishable from a failure to learn the outcome.
 type ApprovedExecution struct {
-	Result        string
-	ResultDigest  string
-	ReceiptID     string
-	Operation     action.Operation
-	Failed        bool
+	Result       string
+	ResultDigest string
+	ReceiptID    string
+	Operation    action.Operation
+	Failed       bool
+	// Unknown is a deadline: the call may have been delivered and the answer
+	// lost, so nobody can say whether the effect happened.
+	Unknown       bool
 	FailureDetail string
 }
 

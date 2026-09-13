@@ -286,7 +286,7 @@ func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Stor
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
 	}
-	run, err := app.ExecuteApprovedAction(ctx, store, exec, approvalID, law)
+	run, err := app.ExecuteApprovedAction(ctx, store, exec, approvalID, law, a.ActionDigest)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: execution: %v\n", verb, err)
 		return 1

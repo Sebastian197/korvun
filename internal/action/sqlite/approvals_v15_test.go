@@ -439,7 +439,7 @@ func TestClaimApprovalParams_tellsItsThreeRefusalsApart(t *testing.T) {
 	t.Run("the row is not there", func(t *testing.T) {
 		t.Parallel()
 		store, _ := openTemp(t)
-		_, err := store.ClaimApprovalParams(context.Background(), "apr_nope", nil)
+		_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), "apr_nope", nil, "sha256:x")
 		if !errors.Is(err, ErrApprovalNotFound) {
 			t.Fatalf("err = %v, want ErrApprovalNotFound", err)
 		}
@@ -450,7 +450,7 @@ func TestClaimApprovalParams_tellsItsThreeRefusalsApart(t *testing.T) {
 		store, _ := openTemp(t)
 		a := boundPark(t, store, "act_claim_1")
 		corruptCell(t, store, "approvals", "canonical_params", "approval_id", a.ApprovalID, "")
-		_, err := store.ClaimApprovalParams(context.Background(), a.ApprovalID, nil)
+		_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest)
 		if !errors.Is(err, ErrApprovalParamsEmpty) {
 			t.Fatalf("err = %v, want ErrApprovalParamsEmpty — an empty column is not an absent row", err)
 		}
@@ -498,7 +498,7 @@ func TestClaimApprovalParams_propagatesTheRowsAffectedError(t *testing.T) {
 	a := boundPark(t, store, "act_claim_3")
 	ignoreUpdatesOn(t, store, "approvals")
 
-	_, err := store.ClaimApprovalParams(context.Background(), a.ApprovalID, nil)
+	_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest)
 	if !errors.Is(err, ErrApprovalClaimSkipped) {
 		t.Fatalf("err = %v, want ErrApprovalClaimSkipped — zero rows is not «already claimed»", err)
 	}

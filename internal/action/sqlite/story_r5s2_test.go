@@ -55,8 +55,8 @@ func TestClaim_storyVerifiedInsideItsTransaction(t *testing.T) {
 	// The saboteur moves the DECISION row's law before the claim.
 	corruptCell(t, store, "action_decisions", "policy_digest", "action_id",
 		a.ActionID, "sha256:moved-under-you")
-	_, err := store.ClaimApprovalParams(ctx, a.ApprovalID,
-		&PolicyPin{Version: 7, Digest: "sha256:law"})
+	_, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID,
+		&PolicyPin{Version: 7, Digest: "sha256:law"}, a.ActionDigest)
 	if err == nil {
 		t.Fatal("AUDIT R5-S2: the claim must judge the story inside its transaction")
 	}
