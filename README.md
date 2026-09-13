@@ -100,7 +100,7 @@ Everything below is **on `master` today** — no roadmap item is counted as pres
 - **Signed releases** — each release ships cosign keyless signatures over the
   checksums and a per-artifact SBOM (SPDX via Syft).
 - **First-class CLI** — `serve`, `config check`, `status`, `intent`, `grant`,
-  `version`, `help`:
+  `approvals`, `ledger`, `receipt`, `version`, `help`:
 
   ```sh
   korvun serve --config korvun.json            # load config, wire, serve

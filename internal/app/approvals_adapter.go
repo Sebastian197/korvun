@@ -356,7 +356,7 @@ func (a *ApprovalsAdapter) Approve(ctx context.Context, id, digest string) (cont
 	if err != nil {
 		return controlapi.ApprovalOutcome{}, a.nameTouch(err, false)
 	}
-	sealed := status != action.ApprovalPending
+	sealed := decideWasCommitted(status)
 	approval, _, err := a.store.GetApproval(ctx, id)
 	if err != nil {
 		return controlapi.ApprovalOutcome{}, a.nameTouch(err, sealed)
@@ -386,7 +386,13 @@ func (a *ApprovalsAdapter) Approve(ctx context.Context, id, digest string) (cont
 	if rule != "" {
 		return controlapi.ApprovalOutcome{}, nameInBandRule(rule)
 	}
-	return a.runApproved(ctx, id, cage, pin, approval.ActionDigest)
+	// The OPERATOR's digest, not the column re-read. The two are proven equal
+	// three statements up, so this changes no value today — it changes the
+	// provenance the code can be read to carry, which is the whole content of
+	// FR-API-14. Handing `approval.ActionDigest` on meant the sentence «the
+	// digest the human re-typed travels all the way there» was true only by
+	// coincidence of an earlier comparison.
+	return a.runApproved(ctx, id, cage, pin, digest)
 }
 
 // Reject seals the no and re-reads the receipt the DTO promises.
@@ -441,10 +447,37 @@ func nameInBandRule(rule string) error {
 	}
 }
 
+// decideWasCommitted answers the ONLY question `sealed` is allowed to ask:
+// did an operator's decide act commit for this request?
+//
+// It is a closed set, and it is judged by naming its members rather than by
+// negating PENDING. `status != PENDING` reads as the same thing and is not:
+// EXPIRED is written by the CLOCK at a consume touch and CANCELLED is a
+// withdrawal "before any decision" (internal/action/approval.go), so under the
+// old predicate a clock-closed row that then failed a belt answered
+// `decided_evidence_corrupt`, whose operator literal opens «La decisión quedó
+// registrada y sellada, con su recibo». There was no decision and there was no
+// receipt — a fabricated fact on the screen that governs an irreversible
+// effect. A status this file has never seen is NOT a decision either: the
+// default is the safe half here, because claiming a receipt that may not exist
+// is the damage.
+//
+// TestAdapter_sealedNamesOnlyTheTwoDecidedStatuses walks every member of
+// action's status set in both directions, so a sixth status cannot be added
+// without this function answering for it.
+func decideWasCommitted(status action.ApprovalStatus) bool {
+	switch status {
+	case action.ApprovalApproved, action.ApprovalRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // nameTouch maps a store refusal on a TOUCH. `sealed` says whether a decide
-// was already committed for this request, and it is the frontier: before the
-// commit a driver failure means nothing was decided, after it the decision
-// exists and only the effect is unknown.
+// was already committed for this request — decideWasCommitted is the judge —
+// and it is the frontier: before the commit a driver failure means nothing was
+// decided, after it the decision exists and only the effect is unknown.
 func (a *ApprovalsAdapter) nameTouch(err error, sealed bool) error {
 	switch {
 	case errors.Is(err, actionsqlite.ErrApprovalActionNotPending):

@@ -119,7 +119,7 @@ func TestExecuteApproved_theExactObjectRuns(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, approvalID := approvedFlow(t)
 	ctx := context.Background()
-	run, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, "")
+	run, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, digestOf(t, store, approvalID))
 	result := run.Result
 	if err != nil {
 		t.Fatalf("execute: %v", err)
@@ -149,10 +149,10 @@ func TestExecuteApproved_neverTwice(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, approvalID := approvedFlow(t)
 	ctx := context.Background()
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, ""); err != nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, digestOf(t, store, approvalID)); err != nil {
 		t.Fatalf("first: %v", err)
 	}
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, ""); err == nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, digestOf(t, store, approvalID)); err == nil {
 		t.Fatal("a second execution must refuse by name")
 	}
 	if fake.runs.Load() != 1 {
@@ -164,10 +164,12 @@ func TestExecuteApproved_theDigestBelt(t *testing.T) {
 	t.Parallel()
 	store, exec, fake, approvalID, dbPath := approvedFlowWithPath(t)
 	ctx := context.Background()
+	// What the operator approved, read BEFORE the saboteur moves anything.
+	approved := digestOf(t, store, approvalID)
 	// The saboteur swaps the stored params AFTER approval (raw handle,
 	// behind the API's back).
 	tamperApprovalParams(t, dbPath, approvalID, `{"url":"https://EVIL.example"}`)
-	_, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, "")
+	_, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, approved)
 	if err == nil || !strings.Contains(err.Error(), "digest") {
 		t.Fatalf("tampered params must refuse EXECUTION naming the digest: %v", err)
 	}
@@ -203,7 +205,7 @@ func TestExecuteApproved_aNoNeverExecutes(t *testing.T) {
 	}
 	fake := &countingTool{}
 	exec := executor.New(tool.Registry{"webhook_call": fake}, 0, time.Now)
-	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, ""); err == nil {
+	if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, digestOf(t, store, approvalID)); err == nil {
 		t.Fatal("a REJECTED request must never execute")
 	}
 	if fake.runs.Load() != 0 {
@@ -221,7 +223,7 @@ func TestExecuteApproved_raceOverTheFullFlow(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, ""); err == nil {
+			if _, err := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, digestOf(t, store, approvalID)); err == nil {
 				succeeded.Add(1)
 			}
 		}()
@@ -351,7 +353,7 @@ func TestExecuteApprovedAction_aToolThatSaysNoIsADecidedOutcome(t *testing.T) {
 	fail := &failingTool{}
 	exec := executor.New(tool.Registry{"webhook_call": fail}, 0, time.Now)
 
-	run, err := ExecuteApprovedAction(context.Background(), store, exec, approvalID, testLaw, "")
+	run, err := ExecuteApprovedAction(context.Background(), store, exec, approvalID, testLaw, digestOf(t, store, approvalID))
 	if err != nil {
 		t.Fatalf("a tool that says no is not an error of THIS call: %v", err)
 	}
@@ -398,7 +400,7 @@ func TestExecuteApprovedAction_aDeadlineIsNeitherSuccessNorFailure(t *testing.T)
 	slow := &slowTool{}
 	exec := executor.New(tool.Registry{"webhook_call": slow}, 50*time.Millisecond, time.Now)
 
-	run, err := ExecuteApprovedAction(context.Background(), store, exec, approvalID, testLaw, "")
+	run, err := ExecuteApprovedAction(context.Background(), store, exec, approvalID, testLaw, digestOf(t, store, approvalID))
 	if err != nil {
 		t.Fatalf("a deadline is an OUTCOME, not a failure of this call: %v", err)
 	}
@@ -425,4 +427,21 @@ func actionOf(t *testing.T, store *actionsqlite.Store, approvalID string) string
 		t.Fatalf("get approval: %v", err)
 	}
 	return a.ActionID
+}
+
+// digestOf is what a caller has to stand behind: the digest the row carries at
+// the moment of the call.
+//
+// Every mould in this file used to pass "" and let ExecuteApprovedAction
+// replace it with approval.ActionDigest — so almost the whole coverage of the
+// only path that fires an irreversible effect exercised the DEGRADED
+// self-comparison the FR-API-14 cure exists to remove. The replacement is gone
+// and the callers say what they approve.
+func digestOf(t *testing.T, store *actionsqlite.Store, approvalID string) string {
+	t.Helper()
+	a, _, err := store.GetApproval(context.Background(), approvalID)
+	if err != nil {
+		t.Fatalf("read the approved digest: %v", err)
+	}
+	return a.ActionDigest
 }

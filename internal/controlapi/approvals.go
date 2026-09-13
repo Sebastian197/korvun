@@ -168,8 +168,13 @@ type outcome struct {
 // is an internal error and answers 500 without a name — never a name invented
 // at the boundary.
 var outcomes = map[error]outcome{
+	// NOT «the first decision stands»: the store's consume rule answers this
+	// name for ANY status that is not PENDING, and two of those — EXPIRED,
+	// written by the clock, and CANCELLED, a withdrawal before any decision —
+	// have no first decision to stand. Asserting an actor that may not exist is
+	// the same defect the screen's decided_evidence_corrupt literal had.
 	ErrApprovalAlreadyDecided: {http.StatusConflict, OutcomeAlreadyDecided,
-		"this request was already decided — the first decision stands and nothing ran twice"},
+		"this request is no longer open to a decision, and nothing ran twice — the ledger says what closed it"},
 	ErrApprovalExpired: {http.StatusConflict, OutcomeExpired,
 		"this request expired before the decision touched it — it never executes"},
 	ErrApprovalDigestMismatch: {http.StatusConflict, OutcomeDigestMismatch,

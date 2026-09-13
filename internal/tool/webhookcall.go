@@ -161,12 +161,15 @@ func (w *webhookCallTool) Execute(ctx context.Context, args string) (string, err
 	if resp.StatusCode >= 400 {
 		return "", fmt.Errorf("webhook_call: HTTP %d from %s", resp.StatusCode, u.Host)
 	}
+	// Past this line the POST has been ACCEPTED: the effect is out. Every
+	// error from here wraps ErrEffectDelivered, because closing it as a
+	// plain failure tells the operator the call did not happen.
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, w.maxBytes+1))
 	if err != nil {
-		return "", fmt.Errorf("webhook_call: read response: %w", err)
+		return "", fmt.Errorf("webhook_call: read response: %w: %w", ErrEffectDelivered, err)
 	}
 	if int64(len(respBody)) > w.maxBytes {
-		return "", fmt.Errorf("webhook_call: response exceeds the %d-byte cap: %w", w.maxBytes, ErrCageViolation)
+		return "", fmt.Errorf("webhook_call: response exceeds the %d-byte cap: %w: %w", w.maxBytes, ErrEffectDelivered, ErrCageViolation)
 	}
 	if len(respBody) == 0 {
 		return fmt.Sprintf("HTTP %d", resp.StatusCode), nil

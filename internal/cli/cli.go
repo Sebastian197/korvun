@@ -196,12 +196,16 @@ const logo = `
 
 `
 
-// helpText is the usage screen. It names the subcommands an operator
-// starts from, with a one-line description plus a couple of copy-paste
-// examples, and points to the docs. It is NOT the full dispatch list:
-// receipt, ledger and approvals dispatch (see run) and are documented
-// in SECURITY.md and the operator reference, not here. Widening the
-// screen is a UX change, filed, not a comment fix.
+// helpText is the usage screen, and its Commands block IS the full dispatch
+// list: TestHelp_listsEveryCommandFamilyTheBinaryAnswers reads run()'s case
+// labels out of this file and crosses them against these lines in both
+// directions, so a family cannot be answered without being listed, nor listed
+// without being answered.
+//
+// This comment used to say the opposite — "It is NOT the full dispatch list:
+// receipt, ledger and approvals dispatch (see run) and are documented in
+// SECURITY.md and the operator reference, not here" — and it stayed after the
+// three lines were added.
 const helpText = `korvun — a single Go binary: messaging gateway + multi-model router + multi-brain orchestrator.
 
 Usage:

@@ -891,10 +891,12 @@ ventana.
 | estado inicial | siempre habilitado | deshabilitado hasta armarse |
 | color | neutro | armado: tono de peligro |
 
-- **FR-UI-48** — `área(Aprobar) ≤ 0,50 × área(Rechazar)` (real: 6 720 / 16 640 =
-  **0,4038**); separación horizontal `≥ 320 px` a anchos `≥ 1100` (el cálculo da
-  812 − 260 − 168 = **384 px**, sin medir); por debajo de 1100 se apilan con Rechazar
-  **primero** y `≥ 120 px` de separación vertical.
+- **FR-UI-48** — `área(Aprobar) ≤ 0,50 × área(Rechazar)` (AS-52 mide en navegador
+  real: `approve=6720.0px2 reject=16640.0px2`, 0,4038); separación horizontal
+  `≥ 320 px` a anchos `≥ 1100` — **medida**, no calculada: AS-53 imprime
+  `reject={"x":260,…,"width":260}, approve={"x":904,…}, gap=384.0px`, que es lo
+  que el cálculo 812 − 260 − 168 predecía; por debajo de 1100 se apilan con
+  Rechazar **primero** y `≥ 120 px` de separación vertical.
 - **FR-UI-49** — El rojo marca el efecto irreversible, no el rechazo.
 - **FR-UI-50** — **Ningún diálogo modal en esta pantalla, nunca.** Es lo que
   deja a Esc un solo significado.
@@ -1925,7 +1927,7 @@ Escenarios de primera clase, con DOS actores reales. Ninguno es in-process.
 
 ## 12-ter. El registro de nombres y sus anclas (FR-TEST-6)
 
-> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». `params_not_canonical` y `params_belt_failed` SALEN del registro: verificado por `grep` sobre el árbol entero, ningún camino de producción podía emitirlos. El registro cerrado es de **veinte** nombres hasta que alguien los emita. `parameters_state: "unavailable"` sale por lo mismo, de FR-UI-16.
+> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». `params_not_canonical` y `params_belt_failed` SALEN del registro: verificado por `grep` sobre el árbol entero, ningún camino de producción podía emitirlos. El registro cerrado es de **21** nombres. La cifra va en dígitos a propósito: el molde de FR-TEST-6 la lee de esta frase y la cruza contra las filas de la tabla y contra `ApprovalOutcomeNames`, porque escrita en letra decía **veinte** sobre una tabla de veintiuna filas y nadie lo enrojecía. `parameters_state: "unavailable"` sale por lo mismo, de FR-UI-16.
 
 
 Cada fila lleva su marcador estable. El molde de FR-TEST-6 cruza

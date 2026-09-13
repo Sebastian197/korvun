@@ -112,15 +112,26 @@ const approvalColumns = `approval_id, schema_version, action_id, action_digest, 
 // PreviewReadable false means the preview did not parse. The row still comes
 // out — with its identifier and its digest — because a row the operator cannot
 // read is exactly the row he most needs to see (FR-API-1).
+//
+// SCOPE, as of 2026-09-13: both flags are computed here and NO production
+// consumer reads either. internal/app's adapter copies Preview.Operation and
+// Channel straight onto the wire, so a corrupt preview and an empty channel
+// reach the screen as the same empty fields — the exact conflation the
+// ChannelKnown comment used to say this struct prevents. The screen does print
+// «SIN CLASE LEGIBLE» for an empty effect class, but it INFERS that from
+// another column instead of reading the fact this door already established,
+// and the `origin` column has no such banner at all. Carrying the flags to the
+// wire is filed for v0.15.1 with its reproduction; the claim they already do
+// is not shipped.
 type ApprovalListRow struct {
 	Approval        action.Approval
 	Preview         action.ActionPreview
 	PreviewReadable bool
 	// Channel is the origin, read from the preview's sealed resources set.
 	Channel string
-	// ChannelKnown separates a channel that IS empty from one that could
-	// not be determined. Serving both as "" would treat a corrupt preview
-	// and an empty channel as the same fact.
+	// ChannelKnown distinguishes a channel that IS empty from one that could
+	// not be determined — at THIS door. Nothing downstream consumes it yet
+	// (see the scope note on this type).
 	ChannelKnown bool
 }
 

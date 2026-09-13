@@ -104,8 +104,10 @@ Delegation must shrink here too: the child inherits the parent's ceiling
 unless narrowed, and a child reaching ABOVE it is denied naming
 `effect_ceiling` — the tenth attenuation dimension, judged by the same
 validator everywhere. Under a ceilinged (bounded) grant,
-`write_irreversible` and `critical` actions also require human approval —
-which, until the approval workflow ships, dies with the honest
+`write_irreversible` and `critical` actions also require human approval.
+With `approvals.enabled` set, that requirement PARKS the action as a
+pending request you decide in the inbox below; without it — and if the
+park itself fails — the call still dies with the honest
 `approval_unavailable`. Grants without a ceiling (the root's standing
 authority and the config-derived grants) behave exactly as before.
 
