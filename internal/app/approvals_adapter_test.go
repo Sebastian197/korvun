@@ -724,10 +724,17 @@ func TestAdapter_anEmptyStoreIsAnEmptyPageAndNotARefusal(t *testing.T) {
 // TestAdapter_aToolThatSaysNoReachesTheWindowAsFailed is the adapter's half of
 // the same fact, and the one that was publishing a bare 500.
 //
-// The parked request points at a host the harness cannot reach, so the real
-// executor really fails. What must come back is a RESULT — outcome `failed`
-// with its receipt — and not an error: an irreversible effect that left and
-// was refused is a decided outcome, and the window has a literal for it.
+// What must come back is a RESULT — outcome `failed` with its receipt — and
+// not an error: the run was attempted, it did not succeed, the ledger closed
+// it, and that is a decided outcome the window has a literal for.
+//
+// HOW the run fails here, stated because the first version of this comment got
+// it wrong and invented a mechanism: the parked params are `{"a":1}`, and
+// webhook_call needs «URL, a space, then the JSON body», so the tool refuses
+// its ARGUMENTS and no host is ever contacted. That is enough for what this
+// mould watches — the outcome travels as a result and not as an error — and it
+// is NOT enough to claim the effect left the window. The literal that does
+// claim that is a separate finding, filed and not cured here.
 //
 // Probing mutation: publish it as `executed`, or send it back through the error
 // channel ⇒ this reddens.

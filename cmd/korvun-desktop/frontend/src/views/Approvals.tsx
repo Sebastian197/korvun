@@ -1177,7 +1177,8 @@ function DecisionState({
         title="La acción se ejecutó y falló"
         lines={[
           detail.digest,
-          'El efecto salió de esta ventana y la herramienta contestó que no. Eso es un desenlace CONOCIDO, no una duda: el registro se cerró con su recibo.',
+          'La ejecución se intentó y no salió bien. El registro se cerró con su recibo, así que esto no es una duda sobre la DECISIÓN.',
+          'Lo que esta pantalla no puede decirte es si el efecto llegó a salir: la herramienta puede haber rechazado sus argumentos sin tocar nada, o haber expirado con la llamada ya entregada. Mira el libro antes de repetir nada.',
           escapeUntrusted(decision.detail),
           `Recibo ${decision.receipt}`,
         ]}
