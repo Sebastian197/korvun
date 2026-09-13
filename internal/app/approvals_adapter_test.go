@@ -998,19 +998,29 @@ func TestAdapter_theDigestTheOperatorTypedReachesTheClaim(t *testing.T) {
 	    WHERE approval_id = '`+a.ApprovalID+`'; END`) // #nosec G202 -- test-owned ids
 
 	_, err := NewApprovalsAdapter(cfg, store).Approve(context.Background(), a.ApprovalID, a.ActionDigest)
-	if err == nil {
-		t.Fatal("a row rewritten under the operator must never execute on his click")
+	// ONE outcome, named. The first version of this assert accepted
+	// `digest_mismatch` OR `params_digest_mismatch`, and the either/or hid that
+	// the first is UNREACHABLE here: the operator's value matches the column at
+	// the entrance check, so the swap can only be caught inside the claim.
+	if !errors.Is(err, controlapi.ErrApprovalParamsDigestMismatch) {
+		t.Fatalf("err = %v, want ErrApprovalParamsDigestMismatch", err)
 	}
-	if !errors.Is(err, controlapi.ErrApprovalDigestMismatch) &&
-		!errors.Is(err, controlapi.ErrApprovalParamsDigestMismatch) {
-		t.Fatalf("err = %v, want a digest refusal", err)
+	// What is and is NOT proven here, because the first version claimed more
+	// than it could: the DECIDE committed — this row is APPROVED with its
+	// receipt — and what the claim refused to do is EXECUTE. The oracle is
+	// therefore about the effect, not about the decision.
+	st, serr := store.ApprovalStatusOf(context.Background(), a.ApprovalID)
+	if serr != nil {
+		t.Fatalf("read the status back: %v", serr)
 	}
-	// Oracle by impossibility: nothing was consumed.
-	params, _, rerr := store.ReReadParams(context.Background(), a.ApprovalID)
-	if rerr != nil {
-		t.Fatalf("re-read: %v", rerr)
+	if st != action.ApprovalApproved {
+		t.Fatalf("status = %q, want APPROVED — the decision DID commit before the claim refused", st)
 	}
-	if len(params) == 0 {
-		t.Fatal("a refused approval consumes nothing")
+	rec, gerr := store.Get(context.Background(), "act_digesttravel")
+	if gerr != nil {
+		t.Fatalf("read the action back: %v", gerr)
+	}
+	if rec.State != action.StateApproved {
+		t.Fatalf("state = %q, want APPROVED — a refused claim fires nothing and closes nothing", rec.State)
 	}
 }
