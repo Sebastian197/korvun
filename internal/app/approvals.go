@@ -284,7 +284,7 @@ type ApprovedExecution struct {
 	ReceiptID    string
 	Operation    action.Operation
 	Failed       bool
-	// Unknown is a deadline: the call may have been delivered and the answer
+	// Unknown is a deadline or a delivered request whose answer was lost: the call may have been delivered and the answer
 	// lost, so nobody can say whether the effect happened.
 	Unknown       bool
 	FailureDetail string

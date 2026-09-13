@@ -803,16 +803,32 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	}
 	result, latency, err := a.exec.Run(ctx, name, tool.Scope{Brain: a.name, Conversation: conv}, args)
 
-	// A cage/shield breach is a DENIAL, not an executed-with-error use
-	// (ADR-0041 §4/§5): the tool refused before any effect. The model still
-	// receives the tool's honest error observation below; only the audit
-	// classification changes.
+	// Did the request reach the wire before it failed? The tool says so with
+	// tool.ErrEffectDelivered, and the answer governs the STATE this attempt
+	// closes on — here exactly as on the approvals path.
+	//
+	// The approvals path is not the only way an irreversible tool runs: when
+	// the gate does not park (approvals off, no ceiling, a class below the
+	// bar), this is the path, and it closed StateFailed for every error. That
+	// is the same definite claim over the same effect, and this file said so in
+	// its own words — «the tool refused before any effect» — including for the
+	// cage's redirect refusal, which is raised over a response the host already
+	// answered.
+	closeState := action.StateFailed
+	if errors.Is(err, tool.ErrEffectDelivered) {
+		closeState = action.StateOutcomeUnknown
+	}
+
+	// A cage/shield breach is a DENIAL rather than an executed-with-error use
+	// (ADR-0041 §4/§5): the tool's own rule refused it. The model still
+	// receives the tool's honest error observation below; the audit rule is
+	// what changes, and the state is judged by delivery, not by the rule.
 	if rule, breached := cageRule(err); breached {
 		a.logger.Warn("agent: tool denied by its cage",
 			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-			"rule", rule, "args_prefix", boundedArgs(args))
+			"rule", rule, "args_prefix", boundedArgs(args), "delivered", closeState == action.StateOutcomeUnknown)
 		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: rule})
-		a.finishAction(ctx, actionID, action.StateFailed, "")
+		a.finishAction(ctx, actionID, closeState, "")
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
 
@@ -825,7 +841,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 		"outcome", outcome, "latency", latency, "args_prefix", boundedArgs(args))
 	a.auditTool(ctx, env, bus.Event{Type: bus.ToolUsed, Tool: name, Outcome: outcome, Latency: latency})
 	if err != nil {
-		a.finishAction(ctx, actionID, action.StateFailed, "")
+		a.finishAction(ctx, actionID, closeState, "")
 		return fmt.Sprintf("tool %s failed: %v", name, err)
 	}
 	// NC-3: the digest is computed ON THE FLY over the observation; the

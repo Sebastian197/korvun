@@ -29,9 +29,14 @@ var ErrCageViolation = errors.New("tool: cage violation")
 // ErrShieldViolation marks a connection attempt the private-network shield
 // stopped at the dial (ADR-0041 §3): a Private brain's network tool resolved
 // a public address. Classified as a DENIAL with audit rule
-// "private_network_shield". Nothing was contacted — which is NOT true of every
-// ErrCageViolation, and this comment used to say it was: the redirect refusal
-// below is a cage violation raised over a response the host already sent.
+// "private_network_shield".
+//
+// It does NOT mean nothing was contacted, and this comment has now said that
+// twice and been wrong twice — first as «Like ErrCageViolation, nothing was
+// contacted», then as a bare «Nothing was contacted». http_fetch follows up to
+// three hops, so the shield can stop hop two AFTER hop one was contacted and
+// answered. What the sentinel says is where the refusal happened: at a DIAL,
+// so that particular address was never reached.
 var ErrShieldViolation = errors.New("tool: private network shield violation")
 
 // ErrRedirectRefused marks the cage refusal raised by CheckRedirect: the host

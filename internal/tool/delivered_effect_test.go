@@ -24,6 +24,7 @@ import (
 	"go/token"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -129,26 +130,33 @@ func TestWebhookCall_aCappedAnswerIsStillADeliveredPost(t *testing.T) {
 
 // TestWebhookCall_everyBranchAfterDo holds the post-delivery rule BY SITE.
 //
-// The first shape of this guard was TestBuiltins_…HasADriverForItsPostDelivery‑
-// Branch: it crossed the effect catalog against a map of tool names typed by
-// hand, `driven := map[string]bool{"webhook_call": true}`. That is a guard by
-// NAME where the rule is about a BRANCH — class (g) of the checklist, and the
-// seventh adversarial pass walked straight through it: TWO further branches of
-// webhook_call's own Execute stayed untyped (the cage's redirect refusal and
-// an HTTP error status), both of them closing the ledger FAILED over a POST the
-// host had already received, and the name guard stayed green because no new
-// tool had appeared.
+// Three shapes of this guard, and the first two were built around a premise
+// that was false:
 //
-// This reads the AST instead. The frontier is not the Do CALL — the transport's
-// own failures are returned just after it and mean nothing left — it is the end
-// of Do's `if err != nil` block: past that point a response exists, so the host
-// has the body. Every error return past it must carry ErrEffectDelivered, and
-// the error block itself must name ErrRedirectRefused, which is the one
-// transport error raised over a response.
+//   - by TOOL NAME, a map typed by hand. It could only redden for a tool that
+//     did not exist yet, never for a branch of the one already inside, and two
+//     untyped branches walked through it;
+//   - by SYNTACTIC POSITION, «past the end of Do's error block». That assumed
+//     every error out of Do means nothing left, which is not what Do does: a
+//     host that reads the whole POST and closes without answering returns an
+//     EOF from inside that block. The guard could not reach the branch. It also
+//     asked whether a return NODE mentions the sentinel, which let a one-result
+//     helper return and a naked return past the frontier through, and reddened
+//     a correctly-typed error hoisted into a variable.
+//
+// The frontier is not a position in the syntax. It is a FACT about the wire,
+// and the tool now observes it with httptrace. So this guard asks the only
+// question worth asking: does every error leaving this function past the Do
+// call ACCOUNT for that observation — by carrying the sentinel, by consulting
+// the observation, or by returning a variable that was given one?
+//
+// A shape it cannot analyse — a naked return, a return of some helper's two
+// results — fails loudly instead of passing. A guard that cannot see a shape
+// must say so; that is the whole lesson of the two before it.
 //
 // Probing mutations (executed, red, declared in the canto): drop the sentinel
-// from the redirect wrap, from the HTTP-status wrap, from the read-response
-// wrap or from the cap wrap; add a new untyped error return past the block.
+// from any branch; drop the WroteRequest hook; add an untyped branch past the
+// Do call, as an inline return, via a one-result helper, or as a naked return.
 func TestWebhookCall_everyBranchAfterDo(t *testing.T) {
 	t.Parallel()
 	fset := token.NewFileSet()
@@ -156,71 +164,104 @@ func TestWebhookCall_everyBranchAfterDo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	body := executeBody(t, file)
+	fn := executeDecl(t, file)
 
-	// The Do call, and the `if err != nil` that owns every transport failure.
-	var doPos token.Pos
-	var errBlock *ast.IfStmt
-	for i, stmt := range body.List {
-		as, ok := stmt.(*ast.AssignStmt)
-		if !ok || len(as.Rhs) != 1 {
-			continue
-		}
-		call, ok := as.Rhs[0].(*ast.CallExpr)
-		if !ok {
-			continue
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != "Do" {
-			continue
-		}
-		doPos = call.Pos()
-		if i+1 < len(body.List) {
-			errBlock, _ = body.List[i+1].(*ast.IfStmt)
-		}
-		break
+	// Without the observation there is no frontier at all, only the guessing
+	// the two previous shapes did.
+	if !mentions(fn, "WroteRequest") {
+		t.Fatal("Execute installs no WroteRequest trace hook — delivery is being inferred from the error's shape again, and that was wrong twice")
 	}
+
+	var doPos token.Pos
+	ast.Inspect(fn, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Do" {
+			doPos = call.Pos()
+			return false
+		}
+		return true
+	})
 	if doPos == token.NoPos {
 		t.Fatal("no client.Do call in webhookCallTool.Execute — the mould's anchor moved, the rule did not")
 	}
-	if errBlock == nil {
-		t.Fatal("the Do call is not followed by its error block — the frontier cannot be located")
-	}
-	if !mentions(errBlock, "ErrRedirectRefused") {
-		t.Error("Do's error block does not name ErrRedirectRefused — a redirect refusal is raised over a RESPONSE, so its POST was delivered, and nothing here tells it from a dial failure")
-	}
 
-	// Past the block, a response exists.
 	checked := 0
-	ast.Inspect(body, func(n ast.Node) bool {
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		ret, ok := n.(*ast.ReturnStmt)
-		if !ok || ret.Pos() <= errBlock.End() || len(ret.Results) != 2 {
+		if !ok || ret.Pos() <= doPos {
+			return true
+		}
+		if len(ret.Results) != 2 {
+			t.Errorf("%s: a return past the Do call has %d results — this guard reads the error it returns, so inline it instead of hiding it behind a helper or a naked return",
+				fset.Position(ret.Pos()), len(ret.Results))
 			return true
 		}
 		if id, ok := ret.Results[1].(*ast.Ident); ok && id.Name == "nil" {
 			return true // a successful answer says nothing about delivery
 		}
 		checked++
-		if !mentions(ret, "ErrEffectDelivered") {
-			t.Errorf("%s: an error return past Do's error block does not carry ErrEffectDelivered — the host already has the body, and the ledger will close this FAILED",
+		if !accountsForDelivery(fn, ret) {
+			t.Errorf("%s: an error return past the Do call neither carries ErrEffectDelivered nor consults the delivery observation — if the body reached the wire, this closes somebody's ledger FAILED over an effect that already left",
 				fset.Position(ret.Pos()))
 		}
 		return true
 	})
 	if checked < 3 {
-		t.Fatalf("found only %d post-delivery error returns — the scan is broken, not the tool", checked)
+		t.Fatalf("found only %d post-Do error returns — the scan is broken, not the tool", checked)
 	}
 }
 
-// executeBody returns the body of (*webhookCallTool).Execute.
-func executeBody(t *testing.T, file *ast.File) *ast.BlockStmt {
+// accountsForDelivery reports whether one error return has been through the
+// delivery question: the sentinel in the returned expression, the observation
+// consulted in it, or a variable it returns that was assigned either.
+func accountsForDelivery(fn *ast.FuncDecl, ret *ast.ReturnStmt) bool {
+	if mentions(ret, "ErrEffectDelivered") || mentions(ret, "delivered") {
+		return true
+	}
+	// The error may be built earlier and returned through a variable. Collect
+	// the identifiers this return mentions and look for an assignment to any
+	// of them that did the accounting.
+	named := map[string]bool{}
+	ast.Inspect(ret, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok {
+			named[id.Name] = true
+		}
+		return true
+	})
+	accounted := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		as, ok := n.(*ast.AssignStmt)
+		if !ok || as.Pos() > ret.Pos() {
+			return true
+		}
+		for _, lhs := range as.Lhs {
+			id, ok := lhs.(*ast.Ident)
+			if !ok || !named[id.Name] {
+				continue
+			}
+			for _, rhs := range as.Rhs {
+				if mentions(rhs, "ErrEffectDelivered") || mentions(rhs, "delivered") {
+					accounted = true
+				}
+			}
+		}
+		return true
+	})
+	return accounted
+}
+
+// executeDecl returns the declaration of (*webhookCallTool).Execute.
+func executeDecl(t *testing.T, file *ast.File) *ast.FuncDecl {
 	t.Helper()
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || fn.Name.Name != "Execute" || fn.Recv == nil || fn.Body == nil {
 			continue
 		}
-		return fn.Body
+		return fn
 	}
 	t.Fatal("webhookcall.go declares no Execute method")
 	return nil
@@ -238,7 +279,7 @@ func mentions(n ast.Node, name string) bool {
 	return found
 }
 
-// TestBuiltins_everyIrreversibleToolHasADriverForItsPostDeliveryBranch keeps// TestBuiltins_everyIrreversibleToolHasADriverForItsPostDeliveryBranch keeps
+// TestBuiltins_everyIrreversibleToolHasADriverForItsPostDeliveryBranch keeps
 // the class OPEN. The catalog is read out of effects.go, not typed here: the
 // defect this train kept repeating is curing one door and calling the class
 // cured, so a NEW tool declared write_irreversible or critical reddens this
@@ -367,5 +408,95 @@ func TestWebhookCall_anErrorStatusIsStillADeliveredPost(t *testing.T) {
 	}
 	if !errors.Is(execErr, ErrEffectDelivered) {
 		t.Fatalf("the receiver READ the body before answering 500, and the error does not say so: %v", execErr)
+	}
+}
+
+// TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost is the eighth pass's
+// P1-1, reproduced: the host reads the whole POST and closes the socket without
+// answering. Do returns a bare EOF — no cage sentinel, no deadline — and both
+// previous cures classified that as «nothing left».
+//
+// It is the plainest shape of the whole class: a receiver that takes the
+// request and dies. The ledger closed FAILED over it twice.
+//
+// Probing mutation (executed, red, declared in the canto): remove the
+// WroteRequest hook, or the `if delivered.Load()` wrap in Do's error block.
+func TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost(t *testing.T) {
+	t.Parallel()
+	read := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		select {
+		case read <- string(b):
+		default:
+		}
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			return
+		}
+		_ = conn.Close() // not one byte of answer
+	}))
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0)
+	defer srv.Close()
+
+	wc, err := WebhookCall(WebhookCallConfig{AllowHosts: []string{strings.TrimPrefix(srv.URL, "http://")}})
+	if err != nil {
+		t.Fatalf("wire: %v", err)
+	}
+	_, execErr := wc.Execute(context.Background(), srv.URL+` {"event":"ping"}`)
+	if execErr == nil {
+		t.Fatal("a host that answers nothing must not read as a successful call")
+	}
+	select {
+	case got := <-read:
+		if !strings.Contains(got, "ping") {
+			t.Fatalf("the host did not receive the payload: %q", got)
+		}
+	default:
+		t.Fatal("the POST never reached the server — this is not the post-delivery branch")
+	}
+	// The oracle that the OLD reasoning cannot save this case: the error wears
+	// no cage sentinel and no deadline, which is exactly why both previous
+	// frontiers let it through.
+	if errors.Is(execErr, ErrCageViolation) || errors.Is(execErr, context.DeadlineExceeded) {
+		t.Fatalf("this branch must be the bare transport error, or it is not the one under test: %v", execErr)
+	}
+	if !errors.Is(execErr, ErrEffectDelivered) {
+		t.Fatalf("the host READ the whole POST and the error does not say so: %v", execErr)
+	}
+}
+
+// TestWebhookCall_aDialThatNeverConnectsDeliveredNothing is the other
+// direction, and it is the one that keeps the cure honest: without it, wrapping
+// every Do error in the sentinel would pass every test above while telling the
+// operator «we do not know» about a call that never left the machine.
+//
+// Probing mutation (executed, red, declared in the canto): wrap Do's error
+// unconditionally, ignoring the observation.
+func TestWebhookCall_aDialThatNeverConnectsDeliveredNothing(t *testing.T) {
+	t.Parallel()
+	// A listener opened and closed: the port is allow-listed and answers
+	// nothing, so the dial is refused.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+
+	wc, err := WebhookCall(WebhookCallConfig{AllowHosts: []string{addr}})
+	if err != nil {
+		t.Fatalf("wire: %v", err)
+	}
+	_, execErr := wc.Execute(context.Background(), "http://"+addr+` {"event":"ping"}`)
+	if execErr == nil {
+		t.Fatal("a dial to a closed port must fail")
+	}
+	if errors.Is(execErr, ErrEffectDelivered) {
+		t.Fatalf("nothing reached the wire and the error claims delivery: %v", execErr)
 	}
 }

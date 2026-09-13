@@ -1306,7 +1306,7 @@ describe('MUT · lo curado llega al operador', () => {
     )
     typeKeys(armingInput(), TAIL)
     fireEvent.click(approveBtn()!)
-    expect(await screen.findByText(/La acción se ejecutó y falló/i)).toBeInTheDocument()
+    expect(await screen.findByText(/El intento falló/i)).toBeInTheDocument()
     // Y NO afirma que el efecto saliera: exec.Run también falla cuando la
     // herramienta rechaza sus argumentos sin tocar nada.
     expect(screen.queryByText(/El efecto salió de esta ventana/)).toBeNull()
