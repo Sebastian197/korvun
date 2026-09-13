@@ -1,9 +1,34 @@
-VETO LEVANTADO 61a06137c84c842af155ceeae0b4b488ec8860ce
-KORVUN-REBASE-EVIDENCE v1
-{
-  "schema": 1,
-  "repository": "Sebastian197/korvun",
-  "pr": 33,
-  "base": "9c40615e85347ce4dad96de824a45f4044b6afe2",
-  "review": "REAL VERDICT of the internal adversary over the thirteen npm advisories, split out from the image-size guard. FOUR PASSES, AND THE WIRE NEVER MOVED: zero findings against the version pins, the three lockfiles or the Dependabot configuration; every finding was against a sentence describing them. The first two passes ran against the larger batch this train was split from and put every P1 and P2 on the image-size guard, which is deliberately not here. The third and fourth ran against this commit. Killed in order: 'the three package.json: overrides only' (false in two of three -- vitest and @vitest/coverage-v8 are DIRECT devDependencies of the builder and desktop chrome, so their cure is a plain bump; the label hid where the cure for four of the thirteen alerts lives); 'the thirteen' as an unclosed set (#47 and #49 unexplained, and bare #NN collides with the Scorecard and CodeQL numbering this repository uses elsewhere -- both now named, the gaps being the package.json twins of #48 and #50 closed as fixed on 2026-09-12T05:23:58Z); 'and fifteen of them did' in a new dependabot.yml comment (false: Dependabot security updates are disabled on this repository and not one security pull request has ever arrived; the seventeen that exist are version updates); 'One instance per package per tree' (contradicted by website/package-lock.json itself, which carries a nested js-yaml the same commit explains three paragraphs earlier); 'the locks install clean under both' (an npm 11 run that had not happened -- it was then executed against the website lock, the only lock the node-24 lanes install, and the sentence now says what ran and what did not); 'the only override beyond the thirteen' (the nested gray-matter override IS the cure for #55); 'The ranges above'/'the resolved versions below' pointing at the same table, one wrongly, against the law that comments carry no relative positions; and 'the npm 10.9.8 that the builder and desktop lanes use' (the lanes pin node-version '22', a major, and pin no npm at all). The fourth pass LIFTED THE VETO and left seven P3s; four were false and were cured in ONE amendment: the nested copy exists in the PARENT at 3.15.1 from ordinary resolution so this commit holds rather than creates it; of 185 nested entries in the website 183 are unrelated, not 185; image-size is TWO advisories (GHSA-5p2g-fcmc-qvqq and GHSA-w3rx-r6r6-pgpr), not one; and the website's five table rows are four packages. The three remaining P3s are declared as debt in the pull request body. EVIDENCE LEVEL, HONESTLY: nothing in this tree re-derives 'cured' -- no workflow runs npm audit, no script evaluates an advisory range -- so the claim rests on an API capture in the pull request plus the versions the three lockfiles resolve, and the alerts closing after merge is what will confirm it. The adversary's passes were static reads, never executions. This train adds no production code and no tests, so it declares no probing mutation; the absence of any gate that fails when a package.json declares a version inside an advisory range is the honest finding of these four passes, and it is filed, not hidden. PROCESS NOTE: the commit message mutated between two reads inside the fourth pass; it was re-read against the commit before this marker was written. REBASE NOTE: this marker names the code commit as replayed onto 9c40615. The branch was rebased because every train rewrites this same marker file, so each one conflicts with master on it the moment master moves; the seven delivery files conflicted with nothing. git runs no pre-commit hook for cherry-pick or rebase, so the quality gate was re-run by hand over the rebased tree rather than assumed from the pre-rebase green."
-}
+VETO LEVANTADO ef1f7c2a3216f2a6b89b15bba836f683e38002b1
+
+El adversario interno devolvió VETO MANTENIDO en su OCTAVA pasada: dos P1, tres
+P2 y seis P3. Los once están curados en el commit que este marcador nombra, cada
+cura con su mutación probatoria ejecutada y su rojo capturado. NINGUNA pasada
+interna ha juzgado esas curas.
+
+El veto lo levanta EL DIRECTOR, no el adversario, y lo hace con la vara escrita:
+ocho pasadas y decenas de defectos reales demuestran que el bucle interno hace
+su trabajo y también que no converge solo — cada cura abre superficie nueva. La
+puerta EXTERNA existe para esto. El tren va a Codex con cero P1 exigidos allí, y
+un veto interno mantenido se declara en el cuerpo de la pull request en vez de
+esconderse.
+
+Qué encontró la octava, para que nadie tenga que buscarlo:
+
+- P1-1 — la frontera post-entrega estaba en el sitio equivocado por segunda vez,
+  y la segunda se publicó como verdadera en una nota de release y en la
+  ceremonia. Un host que lee el POST entero y cuelga devuelve un EOF pelado
+  dentro del bloque de error de Do: el libro lo cerraba FALLIDO. La frontera ya
+  no se razona, se OBSERVA con httptrace.
+- P1-2 — el centinela se leía en una de las dos rutas de ejecución.
+  internal/brain ejecuta la herramienta irreversible cuando la puerta no aparca,
+  y cerraba FALLIDO para todo error mientras su propio comentario decía «the
+  tool refused before any effect».
+- P2-1 — el guardián estructural, en su tercera forma: por nombre de herramienta
+  no podía enrojecer por una rama, y por posición sintáctica dejaba pasar dos
+  formas de retorno y enrojecía en falso una tercera.
+- P2-2 y P2-3 — dos frases que seguían diciendo lo contrario del commit que las
+  tocó.
+- Seis P3, entre ellos una cura que el canto anterior DECLARÓ y el diff no
+  llevaba, y una cita a un molde inexistente en la tabla de mutaciones.
+
+Decisión del director, 2026-09-13.
