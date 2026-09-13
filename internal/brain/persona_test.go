@@ -235,7 +235,7 @@ func TestAgentBrain_noPersona_promptUnchanged(t *testing.T) {
 	}
 }
 
-// TestAgentBrain_emptyPersonaPrefixIsNoise-free: an empty composed persona
+// TestAgentBrain_emptyPersonaPrefixNoNoise: an empty composed persona
 // (WithAgentPersona("")) must leave the prompt byte-identical to today — no
 // stray separator lines.
 func TestAgentBrain_emptyPersonaPrefixNoNoise(t *testing.T) {

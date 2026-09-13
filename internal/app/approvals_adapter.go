@@ -452,15 +452,22 @@ func nameInBandRule(rule string) error {
 //
 // It is a closed set, and it is judged by naming its members rather than by
 // negating PENDING. `status != PENDING` reads as the same thing and is not:
-// EXPIRED is written by the CLOCK at a consume touch and CANCELLED is a
-// withdrawal "before any decision" (internal/action/approval.go), so under the
-// old predicate a clock-closed row that then failed a belt answered
+// EXPIRED is written by the CLOCK at a consume touch, so under the old
+// predicate a clock-closed row that then failed a belt answered
 // `decided_evidence_corrupt`, whose operator literal opens «La decisión quedó
 // registrada y sellada, con su recibo». There was no decision and there was no
 // receipt — a fabricated fact on the screen that governs an irreversible
 // effect. A status this file has never seen is NOT a decision either: the
 // default is the safe half here, because claiming a receipt that may not exist
 // is the damage.
+//
+// CANCELLED sits on the false side too, and the reason is NOT action's phrase
+// «withdrawn before any decision» — that describes the intent, while the only
+// writer of the status (consumeApprovalTx) records a decision act and stores
+// its proof in decision_receipt_id in the same UPDATE. No production caller
+// passes DecisionCancelled today, so the arm is unreachable and no mould can
+// force it; whoever wires it decides which side it belongs on. Until then the
+// safe half holds it.
 //
 // TestAdapter_sealedNamesOnlyTheTwoDecidedStatuses walks every member of
 // action's status set in both directions, so a sixth status cannot be added

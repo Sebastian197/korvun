@@ -152,6 +152,13 @@ func (w *webhookCallTool) Execute(ctx context.Context, args string) (string, err
 
 	resp, err := w.client.Do(req)
 	if err != nil {
+		// The cage's REDIRECT refusal is raised over a response: the host has
+		// the body already, so this POST is delivered even though it is
+		// refused. Every other error out of Do — the dial, the shield, a DNS
+		// failure — means nothing left.
+		if errors.Is(err, ErrRedirectRefused) {
+			return "", fmt.Errorf("webhook_call: %w: %w", ErrEffectDelivered, err)
+		}
 		if errors.Is(err, ErrShieldViolation) || errors.Is(err, ErrCageViolation) {
 			return "", fmt.Errorf("webhook_call: %w", err)
 		}
@@ -159,11 +166,16 @@ func (w *webhookCallTool) Execute(ctx context.Context, args string) (string, err
 	}
 	defer resp.Body.Close() //nolint:errcheck // read-only body
 	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("webhook_call: HTTP %d from %s", resp.StatusCode, u.Host)
+		// The receiver read the body and answered. Whatever it did with the
+		// POST before answering 500 is not ours to claim either way, so this
+		// is a delivered request with an unusable answer — never a refusal
+		// that stopped the effect.
+		return "", fmt.Errorf("webhook_call: HTTP %d from %s: %w", resp.StatusCode, u.Host, ErrEffectDelivered)
 	}
-	// Past this line the POST has been ACCEPTED: the effect is out. Every
-	// error from here wraps ErrEffectDelivered, because closing it as a
-	// plain failure tells the operator the call did not happen.
+	// Past this line the POST has been ACCEPTED. Every error from here wraps
+	// ErrEffectDelivered, because closing it as a plain failure tells the
+	// operator the call did not happen. TestWebhookCall_everyBranchAfterDo
+	// reads this function's AST and holds that rule by SITE.
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, w.maxBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("webhook_call: read response: %w: %w", ErrEffectDelivered, err)

@@ -516,8 +516,10 @@ func TestApprovalsApprove_aDeadlineIsNeverPrintedAsSuccess(t *testing.T) {
 	if !strings.Contains(stdout, "OUTCOME_UNKNOWN") {
 		t.Fatalf("want the honest OUTCOME_UNKNOWN, got %q (stderr %q)", stdout, stderr)
 	}
-	if code == 0 {
-		t.Fatalf("an unaccountable effect must not exit 0: %d", code)
+	// The exact code, not «not zero»: 1 is what runApprovedExecution returns
+	// here, and accepting 2 as well would let a usage error pass for this.
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1 over an unaccountable effect", code)
 	}
 	// The headline must not claim the execution happened either. «executed the
 	// exact approved object» over OUTCOME_UNKNOWN is the same lie one line up.
@@ -585,8 +587,10 @@ func TestApprovalsApprove_aDeliveredPostIsNeverPrintedAsFailure(t *testing.T) {
 	if !strings.Contains(stdout, "OUTCOME_UNKNOWN") {
 		t.Fatalf("want the honest OUTCOME_UNKNOWN, got %q (stderr %q)", stdout, stderr)
 	}
-	if code == 0 {
-		t.Fatalf("an unaccountable effect must not exit 0: %d", code)
+	// The exact code, not «not zero»: 1 is what runApprovedExecution returns
+	// here, and accepting 2 as well would let a usage error pass for this.
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1 over an unaccountable effect", code)
 	}
 	store, err := actionsqlite.Open(dbPath)
 	if err != nil {

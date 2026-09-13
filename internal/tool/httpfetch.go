@@ -160,12 +160,17 @@ func newCagedClient(allow allowList, maxRedirects int, privateOnly bool) *http.C
 	}
 	return &http.Client{
 		Transport: transport,
+		// Both refusals below run over a RESPONSE: the request reached the
+		// host and the host answered a 3xx. They keep wrapping
+		// ErrCageViolation — the classification as a denial is unchanged —
+		// and add ErrRedirectRefused so a caller can tell this cage refusal
+		// from the ones that fire before anything is sent.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > maxRedirects {
-				return fmt.Errorf("more than %d redirects: %w", maxRedirects, ErrCageViolation)
+				return fmt.Errorf("more than %d redirects: %w: %w", maxRedirects, ErrRedirectRefused, ErrCageViolation)
 			}
 			if !allow.permits(req.URL) {
-				return fmt.Errorf("redirect to %q is not in the allow-list: %w", req.URL.Host, ErrCageViolation)
+				return fmt.Errorf("redirect to %q is not in the allow-list: %w: %w", req.URL.Host, ErrRedirectRefused, ErrCageViolation)
 			}
 			return nil
 		},

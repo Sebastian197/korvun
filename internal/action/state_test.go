@@ -11,6 +11,9 @@ package action
 
 import (
 	"errors"
+	"os"
+	"regexp"
+	"slices"
 	"testing"
 )
 
@@ -118,17 +121,26 @@ func TestTerminal_truthTable(t *testing.T) {
 		StatePendingApproval: false, StateApproved: false, StateRejected: true,
 		// OUTCOME_UNKNOWN was missing from a table that calls itself a truth
 		// table: flipping Terminal(OUTCOME_UNKNOWN) to false left this whole
-		// package green. The coverage assert below is the real cure — the
-		// entry alone would only move the hole to the next state.
+		// package green. The coverage assert below is the real cure, and it
+		// reads state.go — its first shape crossed against a slice typed in
+		// this file, so the hole simply moved to the next entry nobody typed.
 		StateOutcomeUnknown: true,
 	}
-	// EVERY reachable state answers here. A table of ten over a set of eleven
-	// is a hole nothing reports, and it stayed one until the state this train
-	// woke fell through it.
-	for _, s := range etapa1States {
-		if _, ok := terminal[s]; !ok {
-			t.Fatalf("the truth table has no row for %s — it is not a truth table", s)
+	// EVERY state the package DECLARES answers here — read out of state.go,
+	// not out of a slice typed in this file. A table of ten over a set of
+	// eleven is a hole nothing reports, and it stayed one until the state this
+	// train woke fell through it; crossing against etapa1States alone would
+	// only have moved the hole to the next entry somebody forgot to type,
+	// which is exactly what the coverage assert claims to prevent.
+	for _, name := range declaredStateNames(t) {
+		s := State(name)
+		if _, ok := terminal[s]; ok {
+			continue
 		}
+		if slices.Contains(reservedStates, s) {
+			continue // answered by the reserved loop below
+		}
+		t.Fatalf("the truth table has no row for %s and it is not reserved — it is not a truth table", s)
 	}
 	for s, want := range terminal {
 		if got := s.Terminal(); got != want {
@@ -141,4 +153,24 @@ func TestTerminal_truthTable(t *testing.T) {
 			t.Fatalf("state %s must not report terminal in Etapa 1", s)
 		}
 	}
+}
+
+// declaredStateNames reads the string value of every `State = "..."` constant
+// out of internal/action/state.go. The lists in this file are conveniences;
+// the SOURCE is the set.
+func declaredStateNames(t *testing.T) []string {
+	t.Helper()
+	src, err := os.ReadFile("state.go")
+	if err != nil {
+		t.Fatalf("read the state set: %v", err)
+	}
+	var names []string
+	for _, m := range regexp.MustCompile(`State[A-Za-z]+ State = "([A-Z_]+)"`).
+		FindAllStringSubmatch(string(src), -1) {
+		names = append(names, m[1])
+	}
+	if len(names) < 15 {
+		t.Fatalf("read only %d state constants — the scan is broken, not the set", len(names))
+	}
+	return names
 }

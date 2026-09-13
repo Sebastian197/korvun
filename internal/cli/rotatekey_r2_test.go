@@ -28,10 +28,10 @@ import (
 )
 
 // CONTRACT INVERSION (R4 Phase 1, authorized by the mandate): the old
-// TestRotateKey_besideALiveServerTouchesNothing asserted that a
-// rotation BESIDE a live server succeeds and leaves the server's rows
-// alone — measuring survival of the ACTION while missing the auditor's
-// P1: the live server kept SEALING with the retired key, so every
+// mould for a rotation beside a live server — DELETED in that phase, so
+// do not go looking for it — asserted that such a rotation succeeds and
+// leaves the server's rows alone — measuring survival of the ACTION
+// while missing the auditor's P1: the live server kept SEALING with the retired key, so every
 // receipt after the rotation was born key_window_violated until a
 // restart. That contract WAS the bug. The new contract: a rotation
 // while the server's profile lock is held refuses with the stable rule
