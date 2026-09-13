@@ -223,7 +223,7 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 		return 0
 	}
 	// approve: the lote-3 deferred execution of the EXACT object.
-	return c.runApprovedExecution(ctx, store, cage, approvalID, law, "approve", "approved — executed the exact approved object")
+	return c.runApprovedExecution(ctx, store, cage, approvalID, law, "approve", "approved")
 }
 
 // approvalsExecute implements `korvun approvals execute` (C3): the
@@ -269,13 +269,18 @@ func (c *cli) approvalsExecute(args []string) int {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
 		return 1
 	}
-	return c.runApprovedExecution(ctx, store, cage, approvalID, law, "execute", "resumed — executed the exact approved object")
+	return c.runApprovedExecution(ctx, store, cage, approvalID, law, "execute", "resumed")
 }
 
 // runApprovedExecution is the one deferred-execution path shared by
 // approve and execute: rebuild from the CURRENT config, claim, belt,
 // run, report the REAL outcome.
-func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Store, cage *app.EffectiveCage, approvalID string, law actionsqlite.PolicyPin, verb, headline string) int {
+//
+// `decided` is the decision's own word — "approved" or "resumed" — and NOT the
+// headline: each outcome builds its own, because a single headline handed in by
+// the caller said «executed the exact approved object» over every branch,
+// including the one whose next line says the outcome is unknown.
+func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Store, cage *app.EffectiveCage, approvalID string, law actionsqlite.PolicyPin, verb, decided string) int {
 	a, p, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
@@ -299,17 +304,19 @@ func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Stor
 		// The deadline: the call may have been delivered and its answer lost.
 		// Printing SUCCEEDED here — which is what the previous shape did, by
 		// never reading this field — puts a definite claim on an irreversible
-		// effect nobody can account for.
-		_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: OUTCOME_UNKNOWN\nreceipt: %s\nerror: %s\n",
-			approvalID, headline, a.ActionDigest, run.ReceiptID, run.FailureDetail)
+		// effect nobody can account for. The headline cannot claim it either:
+		// "executed the exact approved object" is the same claim one line up.
+		_, _ = fmt.Fprintf(c.stdout, "approval %s %s — the approved object was sent and its effect cannot be accounted for (digest %s)\noutcome: OUTCOME_UNKNOWN\nreceipt: %s\nerror: %s\n",
+			approvalID, decided, a.ActionDigest, run.ReceiptID, run.FailureDetail)
 		return 1
 	}
 	if run.Failed {
-		_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: FAILED\nreceipt: %s\nerror: %s\n",
-			approvalID, headline, a.ActionDigest, run.ReceiptID, run.FailureDetail)
+		// The tool ran and said no: "executed" is exactly what happened.
+		_, _ = fmt.Fprintf(c.stdout, "approval %s %s — executed the exact approved object (digest %s)\noutcome: FAILED\nreceipt: %s\nerror: %s\n",
+			approvalID, decided, a.ActionDigest, run.ReceiptID, run.FailureDetail)
 		return 1
 	}
-	_, _ = fmt.Fprintf(c.stdout, "approval %s %s (digest %s)\noutcome: SUCCEEDED\nreceipt: %s\nresult: %s\n",
-		approvalID, headline, a.ActionDigest, run.ReceiptID, run.Result)
+	_, _ = fmt.Fprintf(c.stdout, "approval %s %s — executed the exact approved object (digest %s)\noutcome: SUCCEEDED\nreceipt: %s\nresult: %s\n",
+		approvalID, decided, a.ActionDigest, run.ReceiptID, run.Result)
 	return 0
 }

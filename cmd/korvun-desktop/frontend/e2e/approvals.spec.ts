@@ -218,11 +218,34 @@ test('AS-73 · browser autofill does not arm the approval', async ({ page }) => 
   await expect(approve(page)).toBeDisabled()
 })
 
+// ---------------------------------------------------------------------------
+// The two FR-UI-63 branches, and what they were really asserting.
+//
+// Both specs asserted ONLY absences — toHaveCount(0) four times between them —
+// which the sixth adversarial pass caught: replacing either branch with an
+// empty fragment left them green over a blank screen.
+//
+// Driving that cure found the worse half. Every spec above starts the shared
+// harness core through openOneParked, so by the time these two ran the door
+// answered 200 and the screen painted the INBOX. Neither test ever reached the
+// branch its name promises; the four absences held because the sentences live
+// in a component that was not on the page at all.
+//
+// So each one now stops the core first, and asserts what its branch must PAINT.
+// ---------------------------------------------------------------------------
+
+/** Stops the shared harness core so the approvals door answers its real 503. */
+async function stopTheCore(page: import('@playwright/test').Page): Promise<void> {
+  const res = await page.request.post(APPROVALS_BASE + '/__test/bindings/Stop', { data: [] })
+  expect(res.ok(), `Stop failed: ${res.status()}`).toBe(true)
+}
+
 // AS-79 — a 503 «core stopped» while Status() says Running = true. The two
 // disagree, and the screen believes the DOOR, not the binding: it prints the
 // third branch of FR-UI-63 and never offers [Arrancar el núcleo], because
 // starting a core that says it is already running fixes nothing.
 test('AS-79 · a 503 against a Running=true binding paints the honest branch', async ({ page }) => {
+  await stopTheCore(page)
   await installBindings(page)
   await page.addInitScript(() => {
     const w = window as unknown as { go: { shell: { Desktop: Record<string, unknown> } } }
@@ -237,6 +260,12 @@ test('AS-79 · a 503 against a Running=true binding paints the honest branch', a
   await page.goto(APPROVALS_BASE + '/')
   // The core is NOT started, so the proxy answers the real 503.
   await page.getByRole('button', { name: 'Aprobaciones' }).click()
+  // What it MUST paint. The first shape of this test asserted only the two
+  // absences, so replacing this whole branch with an empty fragment left it
+  // green over a blank screen — no title, no explanation, no way out.
+  await expect(page.getByText('El proceso está en marcha', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible()
+  // And what it must NOT.
   await expect(page.getByText('El núcleo está parado')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Arrancar el núcleo' })).toHaveCount(0)
 })
@@ -245,8 +274,20 @@ test('AS-79 · a 503 against a Running=true binding paints the honest branch', a
 // neither of the two confident sentences may appear: the window does not know
 // what the process is doing and says so.
 test('AS-99 · with no bindings the screen claims nothing about the process', async ({ page }) => {
+  await stopTheCore(page)
   await page.goto(APPROVALS_BASE + '/')
   await page.getByRole('button', { name: 'Aprobaciones' }).click()
+  // Same lesson as AS-79: the branch has to be THERE, saying the one thing it
+  // is entitled to say.
+  await expect(
+    page.getByText('tampoco ha podido preguntar al núcleo en qué estado está', {
+      exact: false,
+    }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible()
   await expect(page.getByText('El núcleo está parado')).toHaveCount(0)
   await expect(page.getByText('El proceso está en marcha')).toHaveCount(0)
 })
+
+// The two above leave the harness core stopped on purpose. Anything added after
+// them must start it itself — openOneParked already does.

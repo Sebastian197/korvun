@@ -111,8 +111,10 @@ padre salvo que lo estreches, y un hijo que alcance POR ENCIMA se
 deniega nombrando `effect_ceiling` — la décima dimensión de la
 atenuación, juzgada por el mismo validador en todas partes. Bajo un
 grant con techo (autoridad acotada), las acciones `write_irreversible`
-y `critical` exigen además aprobación humana — que, hasta que llegue el
-workflow de aprobación, muere con el no honesto `approval_unavailable`.
+y `critical` exigen además aprobación humana. Con `approvals.enabled`
+puesto, esa exigencia APARCA la acción como petición pendiente que
+decides en la bandeja de más abajo; sin él —y si el aparcamiento falla—
+la llamada sigue muriendo con el no honesto `approval_unavailable`.
 Los grants sin techo (la autoridad permanente de la raíz y los derivados
 de config) se comportan exactamente como antes.
 

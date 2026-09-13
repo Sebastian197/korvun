@@ -17,7 +17,14 @@ package cli
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -294,15 +301,311 @@ func TestApprovals_moreErrorPaths(t *testing.T) {
 // like any other, and a public surface that omits a shipped capability is the
 // same defect as one that describes it wrongly.
 //
-// Probing mutation: remove any family from the help text ⇒ this reddens.
+// The second shape of this mould cured two holes, both found by driving it:
+//
+//   - it asserted with strings.Contains over the WHOLE stdout, so deleting the
+//     `receipt` line stayed green — "receipt" survives inside the ledger line's
+//     "The book of receipts: check.";
+//   - its list of families was seven names typed by hand, so deleting the
+//     `config check` line stayed green and a new dispatched family would never
+//     be noticed at all.
+//
+// It now reads the dispatch out of cli.go and the Commands block out of the
+// help, and crosses them BOTH ways by line.
+//
+// Probing mutations (executed, red, declared in the canto): delete any Commands
+// line; delete a `case` from the dispatch without touching the help.
 func TestHelp_listsEveryCommandFamilyTheBinaryAnswers(t *testing.T) {
+	dispatched := dispatchedFamilies(t)
+	listed := helpCommandBlock(t)
+	for _, family := range dispatched {
+		if !listed[family] {
+			t.Errorf("korvun help has no Commands line for %q, and run() dispatches it", family)
+		}
+	}
+	for name := range listed {
+		if !slices.Contains(dispatched, name) {
+			t.Errorf("korvun help lists %q on its own line and run() dispatches nothing by that name", name)
+		}
+	}
+}
+
+// dispatchedFamilies reads the `case` labels of run()'s switch out of the
+// SOURCE. A hand-typed list is a second place to forget a family, which is the
+// defect this mould exists to catch.
+func dispatchedFamilies(t *testing.T) []string {
+	t.Helper()
+	src, err := os.ReadFile("cli.go")
+	if err != nil {
+		t.Fatalf("read cli.go: %v — this mould crosses the DISPATCH, not a list", err)
+	}
+	body := string(src)
+	from := strings.Index(body, "func (c *cli) run(args []string) int {")
+	if from < 0 {
+		t.Fatal("run() not found in cli.go — the mould's anchor moved")
+	}
+	sw := strings.Index(body[from:], "switch args[0] {")
+	if sw < 0 {
+		t.Fatal("run() has no `switch args[0]` — the mould's anchor moved")
+	}
+	rest := body[from+sw:]
+	to := strings.Index(rest, "\n\t}\n")
+	if to < 0 {
+		t.Fatal("the dispatch switch has no closing brace at the expected indent")
+	}
+	var families []string
+	for _, m := range regexp.MustCompile(`case ((?:"[^"]+"(?:, )?)+):`).FindAllStringSubmatch(rest[:to], -1) {
+		for _, lit := range regexp.MustCompile(`"([^"]+)"`).FindAllStringSubmatch(m[1], -1) {
+			// The flag spellings (-h, --help) are aliases of the family, not
+			// families of their own: help does not list them as commands.
+			if strings.HasPrefix(lit[1], "-") {
+				continue
+			}
+			families = append(families, lit[1])
+		}
+	}
+	if len(families) < 5 {
+		t.Fatalf("read only %d dispatched families — the scan is broken, not the binary: %v", len(families), families)
+	}
+	return families
+}
+
+// helpCommandBlock returns the first token of every line of the help's
+// Commands block — what a reader sees as the command's name.
+func helpCommandBlock(t *testing.T) map[string]bool {
+	t.Helper()
 	code, stdout, _ := runIntentCLI(t, "help")
 	if code != 0 {
 		t.Fatalf("help exit = %d", code)
 	}
-	for _, family := range []string{"approvals", "ledger", "receipt", "intent", "grant", "serve", "status"} {
-		if !strings.Contains(stdout, family) {
-			t.Errorf("korvun help does not mention %q, and the binary answers it", family)
+	_, after, ok := strings.Cut(stdout, "Commands:\n")
+	if !ok {
+		t.Fatal("korvun help has no Commands: block")
+	}
+	block, _, _ := strings.Cut(after, "\n\n")
+	listed := map[string]bool{}
+	for _, ln := range strings.Split(block, "\n") {
+		fields := strings.Fields(ln)
+		if len(fields) == 0 {
+			continue
 		}
+		listed[fields[0]] = true
+	}
+	if len(listed) == 0 {
+		t.Fatal("the Commands block parsed empty — the scan is broken, not the help")
+	}
+	return listed
+}
+
+// ---------------------------------------------------------------------------
+// The deadline at the CLI surface — the sixth pass's P1-1.
+//
+// `340b9c1` added `if run.Unknown` to this file to cure a regression the fifth
+// pass caught: `korvun approvals approve` printed `outcome: SUCCEEDED` over a
+// webhook_call whose POST may have been delivered and whose answer was lost.
+// The cure landed with NO mould of its own — `grep -rn Unknown internal/cli`
+// over the _test files returned nothing — and its canto declared two probing
+// mutations, both over `internal/app`. Deleting the branch left the whole suite
+// green, so the regression could walk back in tomorrow.
+//
+// This drives the REAL command, over the REAL tool, against a server that never
+// answers inside the cage's one-second bound.
+//
+// Evidence level, honest: in-process CLI (Run over the real arg vector) with a
+// real store on disk and a real HTTP server. Not a compiled binary.
+// ---------------------------------------------------------------------------
+
+// parkedWebhookExpiring writes a profile whose webhook_call cage points at
+// `host` with a one-second bound, and parks one irreversible call to `url`.
+func parkedWebhookExpiring(t *testing.T, host, url string) (cfgPath, dbPath, approvalID string) {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath = filepath.Join(dir, "korvun.db")
+	raw, err := json.Marshal(map[string]any{
+		"schema_version": 1,
+		"storage":        map[string]any{"path": dbPath},
+		"approvals":      map[string]any{"enabled": true},
+		"brains": []map[string]any{{
+			"name": "a", "sensitivity": "public",
+			"policy": map[string]any{"kind": "priority"},
+			"models": []map[string]any{{"provider": "ollama", "model_id": "m", "locality": "local"}},
+			"agent": map[string]any{
+				"tools":          []any{"webhook_call"},
+				"effect_ceiling": "critical",
+				"webhook_call": map[string]any{
+					"allow_hosts":     []any{host},
+					"timeout_seconds": 1,
+				},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	cfgPath = filepath.Join(dir, "korvun.json")
+	if err := os.WriteFile(cfgPath, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	_, law, err := app.ResolveApprovalLaw(cfg, "a")
+	if err != nil {
+		t.Fatalf("law: %v", err)
+	}
+	store, err := actionsqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	args := url + ` {"event":"ping"}`
+	env := action.NewEnvelope("act_slowhook", "env-slowhook",
+		action.Source{Kind: "agent_brain", Protocol: "text", Channel: "telegram"},
+		action.Operation{Namespace: "tool", Name: "webhook_call", Version: 1},
+		args, time.Now().UTC())
+	env.IntentID = action.RootIntentID
+	env.Principal = action.PrincipalRef{PrincipalID: "principal_brain_a"}
+	env.Effect = action.Effect{Class: string(action.EffectWriteIrreversible)}
+	now := time.Now().UTC()
+	b, err := action.NewBoundApprovalRequest(env, args, action.ApprovalContext{
+		IntentPurpose: "avisar al webhook",
+		GrantID:       "-", GrantDepth: 1, CostLine: "unbudgeted",
+		ToolCage: "webhook_call",
+		Descriptor: action.EffectDescriptor{
+			Class: action.EffectWriteIrreversible, DataEgress: true,
+		},
+		HasDescriptor: true,
+		LawVersion:    law.Version, LawDigest: law.Digest,
+		Rule: "require_approval",
+		Now:  now, TTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatalf("factory: %v", err)
+	}
+	if err := store.CreateApprovalRequest(context.Background(), b); err != nil {
+		t.Fatalf("park: %v", err)
+	}
+	return cfgPath, dbPath, b.Approval().ApprovalID
+}
+
+// TestApprovalsApprove_aDeadlineIsNeverPrintedAsSuccess forces the dangerous
+// branch and observes it: the POST leaves, the server never answers, the cage's
+// bound kills the call.
+//
+// Probing mutation (executed, red, declared in the canto): neutralise
+// `if run.Unknown` in runApprovedExecution ⇒ this reddens on both halves, the
+// printed outcome and the exit code.
+func TestApprovalsApprove_aDeadlineIsNeverPrintedAsSuccess(t *testing.T) {
+	t.Parallel()
+	hung := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The request arrived — the effect IS delivered — and the answer
+		// never comes. That is exactly the state nobody can account for.
+		<-hung
+	}))
+	t.Cleanup(func() { close(hung); srv.Close() })
+	host := strings.TrimPrefix(srv.URL, "http://")
+	cfgPath, dbPath, approvalID := parkedWebhookExpiring(t, host, srv.URL)
+
+	code, stdout, stderr := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, approvalID)
+	if strings.Contains(stdout, "SUCCEEDED") {
+		t.Fatalf("a call that timed out printed SUCCEEDED: %q", stdout)
+	}
+	if !strings.Contains(stdout, "OUTCOME_UNKNOWN") {
+		t.Fatalf("want the honest OUTCOME_UNKNOWN, got %q (stderr %q)", stdout, stderr)
+	}
+	if code == 0 {
+		t.Fatalf("an unaccountable effect must not exit 0: %d", code)
+	}
+	// The headline must not claim the execution happened either. «executed the
+	// exact approved object» over OUTCOME_UNKNOWN is the same lie one line up.
+	if strings.Contains(stdout, "executed the exact approved object") {
+		t.Fatalf("the headline claims the execution over an unknown outcome: %q", stdout)
+	}
+
+	// And the LEDGER agrees with the screen: one story, not three.
+	store, err := actionsqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	rec, err := store.Get(context.Background(), "act_slowhook")
+	if err != nil {
+		t.Fatalf("get the action: %v", err)
+	}
+	if rec.State != action.StateOutcomeUnknown {
+		t.Fatalf("the ledger closed %v while the CLI said OUTCOME_UNKNOWN", rec.State)
+	}
+}
+
+// TestApprovalsApprove_aDeliveredPostIsNeverPrintedAsFailure is the other
+// producer of an unaccountable effect, and the sixth pass's P2-3: the remote
+// end ACCEPTS the POST and the answer never arrives whole. Before the cure the
+// ledger closed FAILED and the CLI printed `outcome: FAILED` — a definite
+// claim that the irreversible call did not happen, over a call that did.
+//
+// Probing mutation (executed, red, declared in the canto): drop
+// `tool.ErrEffectDelivered` from the `unknown` predicate in
+// internal/app/approvals.go ⇒ this reddens on the printed outcome and on the
+// ledger's state.
+func TestApprovalsApprove_aDeliveredPostIsNeverPrintedAsFailure(t *testing.T) {
+	t.Parallel()
+	arrived := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := make([]byte, 64)
+		_, _ = r.Body.Read(body)
+		select {
+		case arrived <- struct{}{}:
+		default:
+		}
+		w.Header().Set("Content-Length", "64")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			return
+		}
+		conn, _, err := hj.Hijack()
+		if err != nil {
+			return
+		}
+		if tc, ok := conn.(*net.TCPConn); ok {
+			_ = tc.SetLinger(0)
+		}
+		_ = conn.Close()
+	}))
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "http://")
+	cfgPath, dbPath, approvalID := parkedWebhookExpiring(t, host, srv.URL)
+
+	code, stdout, stderr := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, approvalID)
+	select {
+	case <-arrived:
+	default:
+		t.Fatalf("the POST never reached the server — this is not the post-delivery branch (%q %q)", stdout, stderr)
+	}
+	if strings.Contains(stdout, "outcome: FAILED") {
+		t.Fatalf("the POST was accepted and the ledger says it failed: %q", stdout)
+	}
+	if !strings.Contains(stdout, "OUTCOME_UNKNOWN") {
+		t.Fatalf("want the honest OUTCOME_UNKNOWN, got %q (stderr %q)", stdout, stderr)
+	}
+	if code == 0 {
+		t.Fatalf("an unaccountable effect must not exit 0: %d", code)
+	}
+	store, err := actionsqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	rec, err := store.Get(context.Background(), "act_slowhook")
+	if err != nil {
+		t.Fatalf("get the action: %v", err)
+	}
+	if rec.State != action.StateOutcomeUnknown {
+		t.Fatalf("the ledger closed %v over a POST the server accepted", rec.State)
 	}
 }

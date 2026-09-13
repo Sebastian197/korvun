@@ -116,6 +116,19 @@ func TestTerminal_truthTable(t *testing.T) {
 		StateReceived: false, StateNormalized: false, StateAuthorized: false,
 		StateDenied: true, StateShadowed: true, StateSucceeded: true, StateFailed: true,
 		StatePendingApproval: false, StateApproved: false, StateRejected: true,
+		// OUTCOME_UNKNOWN was missing from a table that calls itself a truth
+		// table: flipping Terminal(OUTCOME_UNKNOWN) to false left this whole
+		// package green. The coverage assert below is the real cure — the
+		// entry alone would only move the hole to the next state.
+		StateOutcomeUnknown: true,
+	}
+	// EVERY reachable state answers here. A table of ten over a set of eleven
+	// is a hole nothing reports, and it stayed one until the state this train
+	// woke fell through it.
+	for _, s := range etapa1States {
+		if _, ok := terminal[s]; !ok {
+			t.Fatalf("the truth table has no row for %s — it is not a truth table", s)
+		}
 	}
 	for s, want := range terminal {
 		if got := s.Terminal(); got != want {

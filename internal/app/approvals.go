@@ -134,11 +134,24 @@ func (a *App) recorderForTest() brain.ActionRecorder {
 // belt, execute, and close the parked action with its era's E4 receipt
 // and the on-the-fly result digest. A request that is not APPROVED —
 // pending, rejected, cancelled or expired — never executes.
-// approvedDigest is the digest the HUMAN saw and re-typed. It travels all the
-// way into the claiming transaction and is compared THERE, against the row that
-// transaction read. Comparing a re-read of the stored column against itself —
-// which is what passing approval.ActionDigest did — proves the row agrees with
-// itself and says nothing about what anybody approved.
+// approvedDigest is the digest the caller is standing behind, and it travels
+// all the way into the claiming transaction to be compared THERE, against the
+// row that transaction read. Comparing a re-read of the stored column against
+// itself — which is what passing approval.ActionDigest did — proves the row
+// agrees with itself and says nothing about what anybody approved.
+//
+// Its PROVENANCE differs by door, and this godoc is not entitled to flatten
+// that: from the window it is the string the operator typed into the arming
+// gate; from `korvun approvals approve|execute` there is no such string,
+// because that command takes no digest flag, so the CLI stands behind the
+// column it just read. The CLI's gap is FILED for v0.15.1 with its
+// reproduction; what is NOT filed is a sentence claiming otherwise.
+//
+// An EMPTY digest is refused by the store's belt rather than silently replaced
+// by the stored column. The replacement was here, and it made the degraded
+// self-comparison the quiet default for every caller that passed nothing —
+// class (a) of the known-classes checklist, on the one path that fires an
+// irreversible effect.
 func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string, law actionsqlite.PolicyPin, approvedDigest string) (ApprovedExecution, error) {
 	approval, _, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
@@ -171,9 +184,6 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 	// external UPDATE of op_version in that window passed every belt and fired
 	// an irreversible effect under an operation the row no longer declared. So
 	// the claim hands back the triple it judged, and that is the one that runs.
-	if approvedDigest == "" {
-		approvedDigest = approval.ActionDigest
-	}
 	params, op, err := store.ClaimApprovalParamsUnderDigest(ctx, approvalID, &law, approvedDigest)
 	if err != nil {
 		return ApprovedExecution{}, fmt.Errorf("app: claim execution of %s: %w", approvalID, err)
@@ -184,11 +194,20 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		tool.Scope{Brain: "", Conversation: conv}, string(params))
 	outcome := action.StateSucceeded
 	resultDigest := action.HashCanonical(result)
-	unknown := errors.Is(execErr, context.DeadlineExceeded)
+	// The two producers of a genuinely unaccountable effect, named by TYPE.
+	// A deadline may have been delivered and its answer lost; so may a call the
+	// remote end ACCEPTED whose body we then failed to read, or whose body
+	// breached the size cap. The first cure of this classification handled only
+	// the deadline, so a webhook whose POST was accepted and whose answer was
+	// unreadable still closed FAILED — a definite claim over an irreversible
+	// effect. Matching the tool's error TEXT would be class (g); the tools wrap
+	// tool.ErrEffectDelivered instead.
+	unknown := errors.Is(execErr, context.DeadlineExceeded) ||
+		errors.Is(execErr, tool.ErrEffectDelivered)
 	switch {
 	case unknown:
-		// A DEADLINE is not a failure: the call may have been delivered and the
-		// answer lost. Closing it FAILED would put a definite claim in the
+		// Neither of these is a failure: the call may have been delivered and
+		// the answer lost. Closing it FAILED would put a definite claim in the
 		// ledger that nobody can support — the store's own C5 comment calls
 		// that «a FAILED lie», and OUTCOME_UNKNOWN exists for exactly this.
 		outcome = action.StateOutcomeUnknown
@@ -216,17 +235,22 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		Operation:    op,
 	}
 	if execErr != nil {
-		// A DEADLINE is not a refusal. The call may well have been delivered and
-		// the answer lost, so the effect's fate is genuinely unknown — which is
-		// what `unknown_outcome` is for, and until now nothing produced it.
+		// Neither a deadline nor a delivered-and-unread answer is a refusal.
+		// The call may well have gone out and its answer been lost, so the
+		// effect's fate is genuinely unknown — which is what `unknown_outcome`
+		// is for, and until the deadline cure nothing produced it.
 		if unknown {
 			out.Unknown = true
 			out.FailureDetail = execErr.Error()
 			return out, nil
 		}
-		// Anything else: the tool ran and said no. That is a DECIDED outcome
-		// with its receipt, and it travels as one — knowing the attempt failed
-		// is a different fact from not knowing what happened.
+		// Anything else: the tool ran and said no BEFORE anything left — a
+		// cage refusal, a shield refusal, a malformed payload, an HTTP error
+		// status. That is a DECIDED outcome with its receipt, and it travels as
+		// one; knowing the attempt failed is a different fact from not knowing
+		// what happened. A tool that can fail AFTER delivering must say so with
+		// tool.ErrEffectDelivered, which routes above, and
+		// TestTools_everyPostDeliveryBranchIsTyped walks the ones that can.
 		out.Failed = true
 		out.FailureDetail = execErr.Error()
 		return out, nil

@@ -32,6 +32,24 @@ var ErrCageViolation = errors.New("tool: cage violation")
 // "private_network_shield". Like ErrCageViolation, nothing was contacted.
 var ErrShieldViolation = errors.New("tool: private network shield violation")
 
+// ErrEffectDelivered marks a tool error raised AFTER the request left and the
+// remote end accepted it — the effect is out in the world and only our reading
+// of its answer failed. It is a typed marker on purpose: the only other way to
+// tell these apart is matching the error TEXT, which is class (g) of the
+// known-classes checklist and rots on the first rewording.
+//
+// The distinction is not academic. internal/app closes a deferred approved
+// execution FAILED for any error that is not a deadline, and its own comment
+// said «the tool ran and said no. That is a DECIDED outcome with its receipt.»
+// For a webhook_call whose POST was accepted and whose body then failed to
+// read, that is a definite claim about an irreversible effect that nobody can
+// support — the store calls the same shape «a FAILED lie». An error wrapping
+// this sentinel closes OUTCOME_UNKNOWN instead.
+//
+// It does NOT mean the operation succeeded, and it never downgrades a cage or
+// shield breach: those fire before anything is sent.
+var ErrEffectDelivered = errors.New("tool: the request was delivered and its answer was not read")
+
 // Attrs are the HOUSE-DEFAULT gate attributes of a built-in tool (ADR-0041
 // §4, R-2): the declared inputs the policy gate routes on. The operator may
 // override them in config (SP5); this catalog is the default the wiring

@@ -22,7 +22,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
@@ -1022,5 +1024,92 @@ func TestAdapter_theDigestTheOperatorTypedReachesTheClaim(t *testing.T) {
 	}
 	if rec.State != action.StateApproved {
 		t.Fatalf("state = %q, want APPROVED — a refused claim fires nothing and closes nothing", rec.State)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The sealed frontier, judged as the CLOSED CLASS it is — the sixth pass's P1.
+//
+// `sealed := status != action.ApprovalPending` read like "a decide committed"
+// and was not. EXPIRED is written by the clock at a consume touch; CANCELLED is
+// a withdrawal "before any decision". Under the old predicate either of them,
+// meeting a belt refusal, answered `decided_evidence_corrupt`, whose literal on
+// the screen opens «La decisión quedó registrada y sellada, con su recibo».
+// Neither the decision nor the receipt existed. The screen fabricated the one
+// fact an operator uses to decide whether to repeat an irreversible effect.
+//
+// Two moulds, because one alone would be the R-C2 defect again: the first
+// drives the PRODUCTION door on the exact row the adversary built, the second
+// walks the whole status set so a sixth member cannot arrive unanswered.
+// ---------------------------------------------------------------------------
+
+// TestAdapter_clockClosedRowNeverClaimsADecision is the adversary's sixth-pass
+// reproduction, verbatim: park, write EXPIRED, break requested_at, Approve.
+//
+// Probing mutation (executed, red, declared in the canto): restore
+// `sealed := status != action.ApprovalPending` ⇒ this reddens naming
+// decided_evidence_corrupt.
+func TestAdapter_clockClosedRowNeverClaimsADecision(t *testing.T) {
+	t.Parallel()
+	cfg, store, closeStore := parkingProfile(t)
+	defer closeStore()
+	a := parkOne(t, cfg, store, "act_expired_belt")
+	adapter := NewApprovalsAdapter(cfg, store)
+	ctx := context.Background()
+
+	db := attackerDB(t, store)
+	if _, err := db.ExecContext(ctx,
+		`UPDATE approvals SET status='EXPIRED' WHERE approval_id=?`, a.ApprovalID); err != nil {
+		t.Fatalf("close it by the clock: %v", err)
+	}
+	// The belt's refusal, forced: the stored evidence no longer re-derives.
+	if _, err := db.ExecContext(ctx,
+		`UPDATE approvals SET requested_at='not-a-time' WHERE approval_id=?`, a.ApprovalID); err != nil {
+		t.Fatalf("corrupt the evidence: %v", err)
+	}
+
+	_, err := adapter.Approve(ctx, a.ApprovalID, a.ActionDigest)
+	if err == nil {
+		t.Fatal("a clock-closed row with corrupt evidence must refuse")
+	}
+	if errors.Is(err, controlapi.ErrApprovalDecidedEvidenceBad) {
+		t.Fatalf("the answer claims a committed decision and its receipt over a row the CLOCK closed: %v", err)
+	}
+	if !errors.Is(err, controlapi.ErrApprovalEvidenceCorrupt) {
+		t.Fatalf("want the undecided evidence_corrupt, got %v", err)
+	}
+}
+
+// TestAdapter_sealedNamesOnlyTheTwoDecidedStatuses reads action's status set out
+// of the SOURCE and answers for every member. A hand-typed list here would be a
+// second place to forget a status, which is the defect this exists to catch.
+//
+// Probing mutation (executed, red, declared in the canto): add EXPIRED to
+// decideWasCommitted's true arm ⇒ this reddens.
+func TestAdapter_sealedNamesOnlyTheTwoDecidedStatuses(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("../action/approval.go")
+	if err != nil {
+		t.Fatalf("read the status set: %v", err)
+	}
+	found := regexp.MustCompile(`Approval[A-Za-z]+ ApprovalStatus = "([A-Z]+)"`).
+		FindAllStringSubmatch(string(src), -1)
+	if len(found) < 5 {
+		t.Fatalf("read only %d statuses — the scan is broken, not the set", len(found))
+	}
+	// The two an operator's decide act writes, each carrying a decision
+	// receipt. Every other member is closed by something that is not a person
+	// saying yes or no.
+	decided := map[string]bool{"APPROVED": true, "REJECTED": true}
+	for _, m := range found {
+		status := action.ApprovalStatus(m[1])
+		if got, want := decideWasCommitted(status), decided[m[1]]; got != want {
+			t.Errorf("decideWasCommitted(%q) = %v, want %v — %q is %s", status, got, want,
+				status, map[bool]string{true: "a committed decide", false: "NOT a decide"}[want])
+		}
+	}
+	// A status this file has never seen is not a decision either.
+	if decideWasCommitted(action.ApprovalStatus("SOMETHING_NEW")) {
+		t.Error("an unknown status must not be read as a committed decision")
 	}
 }

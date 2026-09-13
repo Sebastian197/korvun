@@ -33,6 +33,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -289,7 +290,7 @@ func namedOutcomes() []struct {
 		text   string
 	}{
 		{"already decided", controlapi.ErrApprovalAlreadyDecided, http.StatusConflict, "already_decided",
-			"this request was already decided — the first decision stands and nothing ran twice"},
+			"this request is no longer open to a decision, and nothing ran twice — the ledger says what closed it"},
 		{"expired", controlapi.ErrApprovalExpired, http.StatusConflict, "expired",
 			"this request expired before the decision touched it — it never executes"},
 		{"digest mismatch", controlapi.ErrApprovalDigestMismatch, http.StatusConflict, "digest_mismatch",
@@ -381,12 +382,15 @@ func TestApprovals_EveryNameIsInTheRegistry(t *testing.T) {
 			t.Fatalf("%q is in the registry and no outcome emits it — an orphan name reaches nobody", name)
 		}
 	}
-	// TWENTY, not the 22 §12-ter listed. `params_not_canonical` and
-	// `params_belt_failed` left on 2026-09-13 under the director's rule «a name
-	// with no producer goes out»: verified by grep over the whole tree, no
-	// production path could emit either, so each was a paragraph of operator
-	// text, a branch in the screen and a mould certifying the void. §12-ter is
-	// scoped in the same commit.
+	// TWENTY-ONE. `params_not_canonical` and `params_belt_failed` left on
+	// 2026-09-13 under the director's rule «a name with no producer goes out»:
+	// verified by grep over the whole tree, no production path could emit
+	// either, so each was a paragraph of operator text, a branch in the screen
+	// and a mould certifying the void. `receipt_unreadable` arrived in the same
+	// stretch. This comment said TWENTY over an assert of 21, and named a
+	// §12-ter of 22 rows that by then had 21 — two false numbers three lines
+	// above the assert that contradicted them. The count that governs is the
+	// one FR-TEST-6 executes against the document.
 	if len(registry) != 21 {
 		t.Fatalf("the registry is the closed set: want 21 names, got %d", len(registry))
 	}
@@ -686,6 +690,39 @@ func stripComments(src string) string {
 // circle, and a circle is what three labels in the tree called FR-TEST-6.
 const specPath = "../../docs/superpowers/specs/2026-09-08-approvals-screen-ux.md"
 
+// specSection returns the lines of one level-2 section of the spec, from its
+// heading to the next `## `. FR-TEST-6 names §12-ter, so it must READ §12-ter:
+// the first shape of this mould regexed the whole 2469-line document, and a
+// bare anchor parked anywhere — a paragraph, a retired section, line 1 —
+// satisfied a guarantee whose words say "the closed table".
+func specSection(t *testing.T, raw, heading string) []string {
+	t.Helper()
+	lines := strings.Split(raw, "\n")
+	first := -1
+	for i, ln := range lines {
+		if strings.HasPrefix(ln, heading) {
+			first = i
+			break
+		}
+	}
+	if first < 0 {
+		t.Fatalf("the spec has no section starting %q — FR-TEST-6 crosses THAT section", heading)
+	}
+	for i := first + 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "## ") {
+			return lines[first:i]
+		}
+	}
+	return lines[first:]
+}
+
+// specRow is one row of §12-ter's closed table: the stable anchor and the
+// literal an operator actually reads in the rendered document.
+var specRow = regexp.MustCompile("^\\|\\s*<!-- outcome:([a-z_]+) -->\\s*`([a-z_]+)`\\s*\\|")
+
+// specCount reads the count §12-ter declares about itself, in digits.
+var specCount = regexp.MustCompile(`El registro cerrado es de \*\*(\d+)\*\* nombres`)
+
 // TestApprovals_theRegistryCrossesTheSpecAnchorsBothWays is FR-TEST-6, and it
 // did not exist.
 //
@@ -696,31 +733,77 @@ const specPath = "../../docs/superpowers/specs/2026-09-08-approvals-screen-ux.md
 // itself closed. In the other direction, two retired names kept their anchors
 // after the code dropped them.
 //
-// Probing mutation: add a name to the registry without its anchor, or leave an
-// anchor whose name is gone ⇒ the corresponding half reddens.
+// The second shape of this mould cured three holes the first one had, each one
+// found by driving it rather than by reading it:
+//
+//   - it swept the WHOLE file, so an anchor outside §12-ter counted;
+//   - it read the HTML comment and never the backticked literal beside it, so
+//     the visible text could be renamed to anything and stay green;
+//   - it never judged the count §12-ter declares about itself, which said
+//     twenty over twenty-one rows.
+//
+// Probing mutations (all four executed, all four red, declared in the canto):
+// add a registry name with no row; leave a row whose name is gone; rename a
+// row's visible literal away from its anchor; move the declared count off the
+// number of rows.
 func TestApprovals_theRegistryCrossesTheSpecAnchorsBothWays(t *testing.T) {
 	t.Parallel()
 	raw, err := os.ReadFile(specPath)
 	if err != nil {
 		t.Fatalf("read the spec: %v — FR-TEST-6 crosses the DOCUMENT, not another table", err)
 	}
+	section := specSection(t, string(raw), "## 12-ter.")
+
 	anchors := map[string]bool{}
-	for _, m := range regexp.MustCompile(`<!-- outcome:([a-z_]+) -->`).FindAllStringSubmatch(string(raw), -1) {
+	rows := 0
+	for _, ln := range section {
+		m := specRow.FindStringSubmatch(ln)
+		if m == nil {
+			// Not a row of the closed table. A bare anchor in §12-ter's prose
+			// is NOT a row, and the count below refuses to accept it as one.
+			if strings.Contains(ln, "<!-- outcome:") && !strings.HasPrefix(ln, ">") {
+				t.Errorf("§12-ter carries an anchor outside the closed table: %q", ln)
+			}
+			continue
+		}
+		rows++
+		if m[1] != m[2] {
+			t.Errorf("§12-ter row anchors %q and shows the operator %q — the marker and the literal must be the same name", m[1], m[2])
+		}
 		anchors[m[1]] = true
 	}
-	if len(anchors) == 0 {
-		t.Fatal("found no outcome anchors — the scan is broken, not the table")
+	if rows == 0 {
+		t.Fatal("§12-ter has no parsable rows — the scan is broken, not the table")
 	}
+
 	inRegistry := map[string]bool{}
 	for _, n := range controlapi.ApprovalOutcomeNames {
 		inRegistry[string(n)] = true
 		if !anchors[string(n)] {
-			t.Errorf("%q is in the registry and has NO anchor in §12-ter — a name reaches the screen with no literal behind it", n)
+			t.Errorf("%q is in the registry and has NO row in §12-ter — a name reaches the screen with no literal behind it", n)
 		}
 	}
 	for a := range anchors {
 		if !inRegistry[a] {
-			t.Errorf("§12-ter anchors %q and the registry does not carry it — an orphan anchor outlives its name", a)
+			t.Errorf("§12-ter rows %q and the registry does not carry it — an orphan row outlives its name", a)
 		}
+	}
+
+	// The arithmetic §12-ter writes about itself, EXECUTED. Class (h) of the
+	// checklist: the paragraph said twenty while the table held twenty-one and
+	// the registry twenty-one, and the sentence was published that way.
+	declared := specCount.FindSubmatch(raw)
+	if declared == nil {
+		t.Fatal("§12-ter no longer declares its own count in digits — FR-TEST-6 cannot judge the arithmetic")
+	}
+	want, err := strconv.Atoi(string(declared[1]))
+	if err != nil {
+		t.Fatalf("the declared count is not a number: %v", err)
+	}
+	if want != rows {
+		t.Errorf("§12-ter declares %d names and its closed table has %d rows", want, rows)
+	}
+	if want != len(controlapi.ApprovalOutcomeNames) {
+		t.Errorf("§12-ter declares %d names and the registry carries %d", want, len(controlapi.ApprovalOutcomeNames))
 	}
 }
