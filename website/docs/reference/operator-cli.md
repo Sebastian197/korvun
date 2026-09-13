@@ -165,8 +165,15 @@ security notes carry them in full.
 
 When `approvals.enabled` is on, an action whose effect class demands a
 human yes no longer dies with the honest `approval_unavailable`: it
-PARKS as a pending request with a sealed preview, and the CLI is where
-you decide.
+PARKS as a pending request with a sealed preview.
+
+**Since v0.15.0 you decide from TWO places, and they are the same
+decision.** The Aprobaciones screen in Korvun Desktop lists what is
+parked, shows the whole document and takes the yes behind a typed gate;
+this page documents the CLI, which does the same thing from a terminal
+and is the only way in on a headless server. Both touch the same store,
+the same belts and the same one-shot consume: whichever decides first,
+the other is told so by name.
 
 The parking needs a BOUNDED brain: set `agent.effect_ceiling` on the
 brain (for example `"write_reversible"`) — the missing cable landed

@@ -175,8 +175,16 @@ seguridad del proyecto las llevan enteras.
 
 Con `approvals.enabled` activado, una acción cuya clase de efecto
 exige un sí humano ya no muere con el honesto `approval_unavailable`:
-se APARCA como solicitud pendiente con su preview sellado, y la CLI
-es donde decides.
+se APARCA como solicitud pendiente con su preview sellado.
+
+**Desde la v0.15.0 se decide desde DOS sitios, y es la misma
+decisión.** La pantalla de Aprobaciones de Korvun Desktop lista lo
+aparcado, enseña el documento entero y toma el sí detrás de una puerta
+que hay que teclear; esta página documenta la CLI, que hace lo mismo
+desde un terminal y es la única entrada en un servidor sin pantalla.
+Las dos tocan el mismo almacén, los mismos cinturones y el mismo
+consumo de una sola vez: decida quien decida primero, a la otra se lo
+dicen por su nombre.
 
 El aparcamiento necesita un cerebro ACOTADO: pon `agent.effect_ceiling`
 en el brain (por ejemplo `"write_reversible"`) — el cable que faltaba

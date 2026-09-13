@@ -126,6 +126,14 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
+**Approvals (v0.15.0).** When a brain reaches for something irreversible under a
+bounded ceiling, the action PARKS instead of firing, and the window's
+Aprobaciones screen is where a human reads it whole and decides. The yes sits
+behind a typed gate — you re-type the last six characters of the digest, and
+pasting does not arm it — while the no is always one click away. The operator
+CLI takes the same decision against the same store, which is still the only way
+in on a headless server.
+
 **Download v0.14.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
