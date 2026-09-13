@@ -1941,7 +1941,6 @@ Cada fila lleva su marcador estable. El molde de FR-TEST-6 cruza
 | <!-- outcome:expired --> `expired` | E5 |
 | <!-- outcome:digest_mismatch --> `digest_mismatch` | E6 |
 | <!-- outcome:params_digest_mismatch --> `params_digest_mismatch` | E6-ter |
-| <!-- outcome:params_not_canonical --> `params_not_canonical` | E6-ter |
 | <!-- outcome:invalidated --> `invalidated` | E7 |
 | <!-- outcome:evidence_corrupt --> `evidence_corrupt` | E8 |
 | <!-- outcome:brain_gone --> `brain_gone` | E9-bis |
@@ -1952,9 +1951,9 @@ Cada fila lleva su marcador estable. El molde de FR-TEST-6 cruza
 | <!-- outcome:not_decided --> `not_decided` | P4 |
 | <!-- outcome:decided_evidence_corrupt --> `decided_evidence_corrupt` | P4 |
 | <!-- outcome:params_unreadable --> `params_unreadable` | P4 |
-| <!-- outcome:params_belt_failed --> `params_belt_failed` | E6-bis |
 | <!-- outcome:unknown_outcome --> `unknown_outcome` | P4 |
 | <!-- outcome:close_failed --> `close_failed` | P4 |
+| <!-- outcome:receipt_unreadable --> `receipt_unreadable` | P5 |
 
 ## 13. Pruebas, evidencia y mutacion — una mutación por rama vigilada
 

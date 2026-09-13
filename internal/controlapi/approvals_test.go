@@ -32,6 +32,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -678,4 +679,48 @@ func stripComments(src string) string {
 		out.WriteByte(src[i])
 	}
 	return out.String()
+}
+
+// specPath is §12-ter's home. The mould reads the SPEC, which is the whole
+// point: crossing the registry against another table in this same file is a
+// circle, and a circle is what three labels in the tree called FR-TEST-6.
+const specPath = "../../docs/superpowers/specs/2026-09-08-approvals-screen-ux.md"
+
+// TestApprovals_theRegistryCrossesTheSpecAnchorsBothWays is FR-TEST-6, and it
+// did not exist.
+//
+// Three places in the tree promised it — the godoc of ApprovalOutcomeNames, the
+// godoc of the registry, and §12-ter itself — while nothing opened the
+// document. `receipt_unreadable` proved the cost the day it was born: a name in
+// the registry, a literal on the screen, and no anchor in the table that calls
+// itself closed. In the other direction, two retired names kept their anchors
+// after the code dropped them.
+//
+// Probing mutation: add a name to the registry without its anchor, or leave an
+// anchor whose name is gone ⇒ the corresponding half reddens.
+func TestApprovals_theRegistryCrossesTheSpecAnchorsBothWays(t *testing.T) {
+	t.Parallel()
+	raw, err := os.ReadFile(specPath)
+	if err != nil {
+		t.Fatalf("read the spec: %v — FR-TEST-6 crosses the DOCUMENT, not another table", err)
+	}
+	anchors := map[string]bool{}
+	for _, m := range regexp.MustCompile(`<!-- outcome:([a-z_]+) -->`).FindAllStringSubmatch(string(raw), -1) {
+		anchors[m[1]] = true
+	}
+	if len(anchors) == 0 {
+		t.Fatal("found no outcome anchors — the scan is broken, not the table")
+	}
+	inRegistry := map[string]bool{}
+	for _, n := range controlapi.ApprovalOutcomeNames {
+		inRegistry[string(n)] = true
+		if !anchors[string(n)] {
+			t.Errorf("%q is in the registry and has NO anchor in §12-ter — a name reaches the screen with no literal behind it", n)
+		}
+	}
+	for a := range anchors {
+		if !inRegistry[a] {
+			t.Errorf("§12-ter anchors %q and the registry does not carry it — an orphan anchor outlives its name", a)
+		}
+	}
 }
