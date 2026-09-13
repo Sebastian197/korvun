@@ -418,7 +418,12 @@ func TestAdapter_resolvesTheLawExactlyOnce(t *testing.T) {
 	a := parkOne(t, cfg, store, "act_once")
 
 	var resolutions int
-	ad := NewApprovalsAdapter(cfg, store, WithLawResolutionProbe(func() { resolutions++ }))
+	// The seam is armed on ResolveApprovalLaw itself, which is where every
+	// resolution goes through — including BuildApprovalExecutor's, which is the
+	// branch this mould forbids and which the first version of the probe could
+	// not see at all.
+	defer setLawResolutionProbe(func() { resolutions++ })()
+	ad := NewApprovalsAdapter(cfg, store)
 	// The outcome of the run is not what this mould watches, and it cannot be:
 	// with an intact profile both resolvers hand back the SAME cage, so the
 	// visible result is identical either way. That is precisely why the probe
@@ -755,5 +760,109 @@ func TestAdapter_aToolThatSaysNoReachesTheWindowAsFailed(t *testing.T) {
 	}
 	if out.Result == "" {
 		t.Fatal("the failure travels without its detail")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// La escalera de los cuatro nombres de «¿arrancó?», uno por uno.
+//
+// Sin estos moldes la escalera pasaba idéntica si la rama no existiera — el
+// mismo defecto que ya retiró D3 y que cazó A4. Cada nombre se fuerza con el
+// estado que lo produce y se exige por su nombre.
+// ---------------------------------------------------------------------------
+
+// approvedAndReady leaves a parked request APPROVED and its action APPROVED,
+// through a second real connection, so the claim is the next thing that runs.
+func approvedAndReady(t *testing.T, store *actionsqlite.Store, approvalID, actionID string) {
+	t.Helper()
+	attackerExec(t, store,
+		`UPDATE approvals SET status='APPROVED', decision='approved', decision_at=? WHERE approval_id=?`,
+		time.Now().UTC().Format(time.RFC3339Nano), approvalID)
+	attackerExec(t, store, `UPDATE actions SET state='APPROVED' WHERE action_id=?`, actionID)
+}
+
+// TestAdapter_theLadderOfDidItStart forces each rung and demands its name.
+//
+// Probing mutations, one per row: collapse any two rungs into one name ⇒ that
+// row reddens. In particular, answering `gone` for every empty column — which
+// is what shipped — reddens the `params_unaccounted` row, and its literal is
+// the one that claims no execution could have started.
+func TestAdapter_theLadderOfDidItStart(t *testing.T) {
+	cases := []struct {
+		name  string
+		setUp func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string)
+		want  error
+	}{
+		{
+			// The claim's UPDATE is skipped and the bytes stay where they are.
+			// Nothing may say they were taken.
+			name: "held · the claim touched no row and the params are still there",
+			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string) {
+				a := parkOne(t, cfg, store, "act_held")
+				approvedAndReady(t, store, a.ApprovalID, "act_held")
+				attackerExec(t, store, `CREATE TRIGGER skip_ap BEFORE UPDATE ON approvals BEGIN SELECT RAISE(IGNORE); END`)
+				return a.ApprovalID, a.ActionDigest
+			},
+			want: controlapi.ErrApprovalNotStartedParamsHeld,
+		},
+		{
+			// Born WITHOUT arguments: the empty body is what was approved, so
+			// the digest re-derives over it and nothing was ever taken.
+			name: "gone · the row was born without arguments and the digest re-derives",
+			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string) {
+				a := parkOneWithParams(t, cfg, store, "act_gone", "")
+				approvedAndReady(t, store, a.ApprovalID, "act_gone")
+				return a.ApprovalID, a.ActionDigest
+			},
+			want: controlapi.ErrApprovalNotStartedParamsGone,
+		},
+		{
+			// Born WITH arguments and emptied by somebody else. The empty body
+			// does NOT re-derive, so «born without parameters» would be a lie
+			// — and the competitor may be inside its own run right now.
+			name: "unaccounted · the column was emptied and the empty body does not re-derive",
+			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string) {
+				a := parkOne(t, cfg, store, "act_unacc")
+				approvedAndReady(t, store, a.ApprovalID, "act_unacc")
+				attackerExec(t, store, `UPDATE approvals SET canonical_params='' WHERE approval_id=?`, a.ApprovalID)
+				return a.ApprovalID, a.ActionDigest
+			},
+			want: controlapi.ErrApprovalParamsUnaccounted,
+		},
+		{
+			// The re-read itself cannot run. That is the ONE transient of this
+			// ladder, and it says it does not know instead of guessing.
+			name: "unreadable · the re-read fails and the answer says so",
+			setUp: func(t *testing.T, cfg *config.Config, store *actionsqlite.Store) (string, string) {
+				a := parkOne(t, cfg, store, "act_unread")
+				approvedAndReady(t, store, a.ApprovalID, "act_unread")
+				attackerExec(t, store, `UPDATE approvals SET canonical_params='' WHERE approval_id=?`, a.ApprovalID)
+				return a.ApprovalID, a.ActionDigest
+			},
+			want: controlapi.ErrApprovalParamsUnreadable,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, store, done := parkingProfile(t)
+			defer done()
+			id, digest := tc.setUp(t, cfg, store)
+			ad := NewApprovalsAdapter(cfg, store)
+			// The real claim, through the one execution path, so the error the
+			// ladder names is the one the store actually produced.
+			_, _, claimErr := store.ClaimApprovalParamsUnderDigest(context.Background(), id, nil, digest)
+			if claimErr == nil {
+				t.Fatal("the claim was expected to refuse")
+			}
+			if tc.want == controlapi.ErrApprovalParamsUnreadable {
+				// The re-read is what must fail, not the claim: the table goes
+				// away only AFTER the claim has already refused.
+				attackerExec(t, store, `ALTER TABLE approvals RENAME TO approvals_hidden`)
+			}
+			got := ad.nameClaim(context.Background(), id, claimErr)
+			if !errors.Is(got, tc.want) {
+				t.Fatalf("name = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

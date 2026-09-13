@@ -46,21 +46,10 @@ var ErrBrainNotInProfile = errors.New("app: the brain is no longer in the profil
 type ApprovalsAdapter struct {
 	cfg   *config.Config
 	store *actionsqlite.Store
-	// onLawResolved is the counting probe of AS-121. It is nil in
-	// production; a mould arms it to prove the law is resolved EXACTLY once
-	// per decision. The probe is the oracle and not the result, because with
-	// an intact profile resolving twice yields the same cage and the visible
-	// outcome is identical.
-	onLawResolved func()
 }
 
 // ApprovalsAdapterOption configures the adapter.
 type ApprovalsAdapterOption func(*ApprovalsAdapter)
-
-// WithLawResolutionProbe arms the counting probe of AS-121.
-func WithLawResolutionProbe(f func()) ApprovalsAdapterOption {
-	return func(a *ApprovalsAdapter) { a.onLawResolved = f }
-}
 
 // NewApprovalsAdapter wires the seam to a real store and a live profile.
 func NewApprovalsAdapter(cfg *config.Config, store *actionsqlite.Store, opts ...ApprovalsAdapterOption) *ApprovalsAdapter {
@@ -334,9 +323,6 @@ func (a *ApprovalsAdapter) resolveLawFor(ctx context.Context, approvalID string)
 	if err != nil {
 		return nil, actionsqlite.PolicyPin{}, fmt.Errorf("%w: %w", ErrBrainNotInProfile, err)
 	}
-	if a.onLawResolved != nil {
-		a.onLawResolved()
-	}
 	return cage, pin, nil
 }
 
@@ -566,6 +552,11 @@ func (a *ApprovalsAdapter) nameExecution(ctx context.Context, id string, err err
 // nameClaim decides between the four «did it start?» names by RE-READING the
 // row, never by inferring from the fact that our transaction rolled back — an
 // inference that is false in at least two verified branches.
+//
+// The re-read RE-DERIVES where the answer depends on it: an empty column is
+// two different facts, and only the digest tells them apart. Answering `gone`
+// for both printed «the row was born without parameters, so no execution could
+// have started» over a request a competitor had just claimed and was running.
 func (a *ApprovalsAdapter) nameClaim(ctx context.Context, id string, err error) error {
 	// A belt or a parse refusing is named by its SENTINEL, and what a sentinel
 	// names is not re-read: its literal may not assert state it never looked at.
@@ -575,13 +566,14 @@ func (a *ApprovalsAdapter) nameClaim(ctx context.Context, id string, err error) 
 		errors.Is(err, actionsqlite.ErrApprovalInvalidated):
 		return a.nameTouch(err, true)
 	}
-	params, rerr := a.store.ApprovalParams(ctx, id)
+	params, state, rerr := a.store.ReReadParams(ctx, id)
 	switch {
-	case rerr == nil && len(params) > 0:
+	case rerr == nil && state == actionsqlite.ParamsPresent && len(params) > 0:
 		return controlapi.ErrApprovalNotStartedParamsHeld
-	case errors.Is(rerr, actionsqlite.ErrApprovalParamsEmpty):
+	case rerr == nil && state == actionsqlite.ParamsEmpty:
 		return controlapi.ErrApprovalNotStartedParamsGone
-	case errors.Is(rerr, actionsqlite.ErrApprovalNotFound):
+	case errors.Is(rerr, actionsqlite.ErrApprovalParamsUnaccounted),
+		errors.Is(rerr, actionsqlite.ErrApprovalNotFound):
 		return controlapi.ErrApprovalParamsUnaccounted
 	default:
 		return controlapi.ErrApprovalParamsUnreadable

@@ -822,23 +822,30 @@ func (s *Store) GetApproval(ctx context.Context, approvalID string) (action.Appr
 		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
 	}
 	if err != nil {
-		return action.Approval{}, action.ActionPreview{}, err
+		// A column that will not parse is corruption of the evidence, not a
+		// disk that did not answer. Left bare, this refusal fell through the
+		// caller's switch and was published as «transient, retry» on the door
+		// that precedes an irreversible effect.
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	}
 	var rawPreview string
 	if err := s.db.QueryRowContext(ctx,
 		`SELECT canonical_preview FROM approvals WHERE approval_id = ?`, approvalID).Scan(&rawPreview); err != nil {
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+		}
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval preview %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	p, err := action.ParseCanonicalPreview([]byte(rawPreview))
 	if err != nil {
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval preview %q: %w", approvalID, err)
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval preview %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	}
 	// C2+F1: the READ runs the WHOLE binding, like the decision — a
 	// stored preview that parses fine but lies about the digest, the
 	// law, the args or the rule is refused by name at the read; the
 	// human never reads a lie.
 	if err := action.ValidatePreviewBinding(a, p); err != nil {
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	}
 	// R4-F2 (FR-R4F2-3): the read also re-verifies the persisted STORY
 	// against the actions row and the action_decisions row — a preview

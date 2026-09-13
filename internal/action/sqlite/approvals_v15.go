@@ -67,6 +67,14 @@ var (
 	// longer re-deriving the digest the human approved.
 	ErrApprovalParamsDigestMismatch = errors.New("action/sqlite: the stored parameters no longer re-derive the approved digest")
 
+	// ErrApprovalParamsUnaccounted is a row whose column is empty and whose
+	// empty body does NOT re-derive the approved digest. It was born WITH
+	// arguments and something took them, which is a different fact from a row
+	// parked without any — and the two used to share a name, so a literal that
+	// says «no execution could have started» was printed over a request whose
+	// params a competitor had just claimed.
+	ErrApprovalParamsUnaccounted = errors.New("action/sqlite: the parameters are no longer where they were")
+
 	// ErrApprovalActionNotPending is the parked action that moved out from
 	// under a decision. Nothing was decided and nothing ran — the whole
 	// transaction rolls back — so its name says exactly that and not a word
@@ -523,13 +531,20 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 	if err != nil {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 	}
+	// The EMPTY column is judged FIRST, and the order is the whole point. An
+	// empty body almost never re-derives a digest taken over a non-empty one,
+	// so running the belt first swallowed every emptied row into
+	// `params_digest_mismatch` — whose literal says «this is permanent and
+	// nothing was executed» while the competitor that emptied it may be inside
+	// its own run. Emptiness is a fact about the ROW; the mismatch is a fact
+	// about the BYTES, and only the first one can be told apart by re-reading.
+	if rawParams == "" {
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalParamsEmpty)
+	}
 	if got := action.Digest(op, rawParams); got != wantDigest {
 		return nil, action.Operation{}, fmt.Errorf(
 			"action/sqlite: approval %q: the row this transaction read re-derives %s but the caller approved %s: %w",
 			approvalID, got, wantDigest, ErrApprovalParamsDigestMismatch)
-	}
-	if rawParams == "" {
-		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalParamsEmpty)
 	}
 
 	res, err := tx.ExecContext(ctx,
@@ -570,4 +585,58 @@ func (s *Store) ApprovalStatusOf(ctx context.Context, approvalID string) (action
 		return "", fmt.Errorf("action/sqlite: approval status %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	return action.ApprovalStatus(status), nil
+}
+
+// ReReadParams is the eje-2 re-read: it looks at the row AGAIN and answers what
+// it finds NOW, re-deriving where the answer depends on it.
+//
+// It exists because «the column is empty» is two different facts. A row parked
+// WITHOUT arguments re-derives its digest over the empty body — nothing was
+// ever there to take. A row parked WITH arguments whose column is now empty
+// does not — something took them. Collapsing the two let a literal that says
+// «the row was born without parameters, so no execution could have started»
+// be printed over a request a competitor had just claimed and was executing.
+//
+// What it does NOT do is claim exclusivity: the store is multi-process and a
+// reader here can prove nothing about who else holds what.
+func (s *Store) ReReadParams(ctx context.Context, approvalID string) ([]byte, ParamsState, error) {
+	var rawParams string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&rawParams)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, "", fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("action/sqlite: re-read params %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	if rawParams != "" {
+		return []byte(rawParams), ParamsPresent, nil
+	}
+	a, err := s.approvalTx0(ctx, approvalID)
+	if err != nil {
+		return nil, "", err
+	}
+	op, _, err := ternaOf(ctx, s.db, a.ActionID)
+	if err != nil {
+		return nil, "", fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+	}
+	if action.Digest(op, "") == a.ActionDigest {
+		// Born without arguments: the empty body IS what was approved.
+		return nil, ParamsEmpty, nil
+	}
+	return nil, "", fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalParamsUnaccounted)
+}
+
+// approvalTx0 reads the approval row outside any transaction, for the re-read.
+func (s *Store) approvalTx0(ctx context.Context, approvalID string) (action.Approval, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT `+approvalColumns+` FROM approvals WHERE approval_id = ?`, approvalID)
+	a, err := scanApproval(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+	}
+	if err != nil {
+		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+	}
+	return a, nil
 }

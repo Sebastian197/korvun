@@ -108,3 +108,24 @@ coinciden por construcción y la mutación no puede distinguirse.
 **C1 enrojece cuatro moldes y C3 dos**: la dirección de los centinelas no era
 un fallo de un sitio, era de clase, y el molde que la vigila recorre las siete
 puertas.
+
+## Tercera tanda — las tres del segundo veto (2026-09-13)
+
+| # | Qué neutraliza | Rojas |
+|---|---|---|
+| D1 | el cinturon del digest vuelve a correr antes de la columna vacia | 3 |
+| D2 | el fallo de scan de GetApproval vuelve a salir desnudo | 2 |
+| D3 | la previa impaseable de GetApproval vuelve a salir desnuda | 2 |
+| D4 | toda columna vacia vuelve a llamarse gone | 2 |
+| D5 | la re-lectura deja de re-derivar: todo vacio es nacido vacio | 2 |
+| D6 | la sonda de la ley deja de ver la resolución que prohíbe | 1 |
+
+**D6 se ejecutó a mano** y es la que importa: es la mutación que el molde
+DECLARABA y que antes lo dejaba verde. Con la sonda movida a
+`ResolveApprovalLaw` —por donde pasa toda resolución— sustituir
+`BuildApprovalExecutorFromCage` por `BuildApprovalExecutor` da
+«law resolutions = 2, want exactly 1» y el molde enrojece.
+
+**D1 enrojece tres moldes.** Devolver el cinturón del digest delante de la
+comprobación de columna vacía se lleva por delante los tres peldaños que
+distinguen «no arrancó» de «algo se los llevó»: era un orden, no un detalle.

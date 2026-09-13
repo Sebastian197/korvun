@@ -37,6 +37,7 @@ var approvalSentinels = map[string]error{
 	"ErrApprovalEvidenceCorrupt":      ErrApprovalEvidenceCorrupt,
 	"ErrApprovalUnreadable":           ErrApprovalUnreadable,
 	"ErrApprovalParamsDigestMismatch": ErrApprovalParamsDigestMismatch,
+	"ErrApprovalParamsUnaccounted":    ErrApprovalParamsUnaccounted,
 	"ErrApprovalActionNotPending":     ErrApprovalActionNotPending,
 }
 
@@ -171,5 +172,57 @@ func TestApprovalSentinels_theSetIsClosed(t *testing.T) {
 	}
 	if len(declared) != len(approvalSentinels) {
 		t.Errorf("declared %d sentinels, listed %d", len(declared), len(approvalSentinels))
+	}
+}
+
+// TestGetApproval_namesEveryRefusal walks the four ways GetApproval can refuse
+// beyond the absent row. Until this passed, three of them left UNTYPED, and a
+// caller's switch fell through to its default — which published permanent
+// corruption as «transient, retry» on the door that precedes an irreversible
+// effect, while the SAME bytes answered `evidence_corrupt` through the detail.
+//
+// Typed at the ROOT, not wrapped at the caller: a caller that re-maps makes the
+// door's own sentinel decorative, and the next door can go back to a bare error
+// with nothing noticing.
+//
+// Probing mutation, one per row: return the bare error from that branch ⇒ its
+// row reddens.
+func TestGetApproval_namesEveryRefusal(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		corrupt func(t *testing.T, s *Store, approvalID, actionID string)
+		want    error
+	}{
+		{"a time column that will not parse", func(t *testing.T, s *Store, ap, _ string) {
+			corruptCell(t, s, "approvals", "requested_at", "approval_id", ap, "ayer")
+		}, ErrApprovalEvidenceCorrupt},
+		{"a preview that will not parse", func(t *testing.T, s *Store, ap, _ string) {
+			corruptCell(t, s, "approvals", "canonical_preview", "approval_id", ap, "{not json")
+		}, ErrApprovalEvidenceCorrupt},
+		{"a preview that parses and lies", func(t *testing.T, s *Store, ap, _ string) {
+			corruptCell(t, s, "approvals", "preview_digest", "approval_id", ap, "sha256:not-the-preview")
+		}, ErrApprovalEvidenceCorrupt},
+		{"a story that no longer matches", func(t *testing.T, s *Store, _, id string) {
+			corruptCell(t, s, "actions", "effect_class", "action_id", id, string(action.EffectPure))
+		}, ErrApprovalEvidenceCorrupt},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			store, _ := openTemp(t)
+			a := boundPark(t, store, "act_getapproval")
+			tc.corrupt(t, store, a.ApprovalID, "act_getapproval")
+			_, _, err := store.GetApproval(t.Context(), a.ApprovalID)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v — an untyped refusal here is published as transient", err, tc.want)
+			}
+			if errors.Is(err, ErrApprovalUnreadable) {
+				t.Fatalf("corruption must never read as a driver failure")
+			}
+			if errors.Is(err, ErrApprovalNotFound) {
+				t.Fatalf("corruption must never read as an absent row")
+			}
+		})
 	}
 }

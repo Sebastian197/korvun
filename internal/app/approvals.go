@@ -237,7 +237,28 @@ var (
 // pin in a SINGLE resolution (R6-X3): the operator CLI feeds BOTH the
 // decision (the pin) and the deferred executor (the cage) from this
 // one object.
+// lawResolutionProbe is AS-121's counting seam. It is nil in production and a
+// test arms it with setLawResolutionProbe.
+//
+// It lives HERE, on the one function every resolution goes through, and not on
+// a caller's helper. The first version counted calls to the adapter's own
+// private method, so the very mutation it published as its proof — calling
+// BuildApprovalExecutor, which resolves again through a package function —
+// left the mould green. An oracle that cannot see the branch it forbids is not
+// an oracle.
+var lawResolutionProbe func()
+
+// setLawResolutionProbe arms the counting seam and returns it to nil. Test-only
+// by construction: nothing in production assigns it.
+func setLawResolutionProbe(f func()) func() {
+	lawResolutionProbe = f
+	return func() { lawResolutionProbe = nil }
+}
+
 func ResolveApprovalLaw(cfg *config.Config, brainName string) (*EffectiveCage, actionsqlite.PolicyPin, error) {
+	if lawResolutionProbe != nil {
+		lawResolutionProbe()
+	}
 	for _, bc := range cfg.Brains {
 		if bc.Name != brainName {
 			continue
