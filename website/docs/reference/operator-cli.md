@@ -200,7 +200,9 @@ korvun approvals show --config korvun.json apr_…
 THE DIGEST you approve, first and prominent; then the full preview —
 purpose, actor and delegation position, operation, resources, what
 data leaves, cost, effect class and reversibility, the pinned law —
-and the RAW parameters (loopback only: they exist nowhere else).
+and the RAW parameters. They are kept only in the local store, and the
+approvals API serves them too, on the admin server's address
+(`observability.addr`, loopback by default).
 
 ```sh
 korvun approvals approve --config korvun.json apr_…

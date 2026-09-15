@@ -45,7 +45,7 @@ Everything here is in the current release — nothing on this page is roadmap:
 - **Durable memory**: per-conversation history that survives restarts
   (SQLite), optional.
 - **Observability**: structured logs, Prometheus `/metrics`, `/healthz` —
-  on a loopback-only admin server by default.
+  on an admin server that binds loopback by default.
 - **Signed releases**: every artifact covered by a cosign-signed checksum
   manifest plus an SBOM, for six platforms.
 

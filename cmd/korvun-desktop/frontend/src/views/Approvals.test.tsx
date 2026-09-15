@@ -569,6 +569,49 @@ describe('P2 · detalle', () => {
     expect(params.textContent).not.toMatch(/[\u200B\uFEFF]/)
   })
 
+  // P1-2 of the v0.15.0 external review: "pagar100 EUR" and "pagar\u2060100 EUR"
+  // seal different digests and read the same. escapeUntrusted judges by Unicode
+  // class, and these rows SAMPLE each class, they do not enumerate it. Every
+  // class it names owns at least one row that no other class catches (U+0090
+  // Cc, U+FFF9 Cf, U+DC00 Cs, U+00A0 Zs, U+2028 Zl, U+2029 Zp, U+034F and
+  // U+3164 Default_Ignorable), so dropping any one class reddens this table.
+  it.each([
+    ['U+2060', '\u2060', '<U+2060>'],
+    ['U+0080 (first C1)', '\u0080', '<U+0080>'],
+    ['U+0085 (NEL)', '\u0085', '<U+0085>'],
+    ['U+0090 (inside C1)', '\u0090', '<U+0090>'],
+    ['U+009F (last C1)', '\u009F', '<U+009F>'],
+    ['U+061C', '\u061C', '<U+061C>'],
+    ['U+200E', '\u200E', '<U+200E>'],
+    ['U+200F', '\u200F', '<U+200F>'],
+    ['U+2063', '\u2063', '<U+2063>'],
+    ['U+2061', '\u2061', '<U+2061>'],
+    ['U+00AD', '\u00AD', '<U+00AD>'],
+    ['U+180E', '\u180E', '<U+180E>'],
+    ['U+034F', '\u034F', '<U+034F>'],
+    ['U+FE0F', '\uFE0F', '<U+FE0F>'],
+    ['U+3164', '\u3164', '<U+3164>'],
+    ['U+E0041', '\u{E0041}', '<U+E0041>'],
+    ['U+FFF9', '\uFFF9', '<U+FFF9>'],
+    ['U+00A0', '\u00A0', '<U+00A0>'],
+    ['U+2028', '\u2028', '<U+2028>'],
+    ['U+2029', '\u2029', '<U+2029>'],
+    ['U+DC00 (lone surrogate)', '\uDC00', '<U+DC00>'],
+  ])(
+    'P1-2 \u00B7 par\u00E1metros con %s: la pantalla muestra el escape visible y no el invisible',
+    async (_label, invisible, escaped) => {
+      await openDetail(
+        happy({
+          'GET /api/approvals/apr_1': () =>
+            json(200, { ...DETAIL, parameters: `pagar${invisible}100 EUR` }),
+        }),
+      )
+      const params = await screen.findByTestId('approval-parameters')
+      expect(params.textContent).toContain(`pagar${escaped}100 EUR`)
+      expect(params.textContent).not.toContain(invisible)
+    },
+  )
+
   it('AS-39 · purpose con U+202E: idéntico en el bloque ORIGEN', async () => {
     await openDetail(
       happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, purpose: 'ver‮reb' }) }),

@@ -80,6 +80,11 @@ var (
 	// transaction rolls back — so its name says exactly that and not a word
 	// about effects.
 	ErrApprovalActionNotPending = errors.New("action/sqlite: the parked action was no longer pending")
+
+	// ErrApprovalNoLongerApproved is a claim that found the approval or its
+	// parked action out of APPROVED inside its own transaction. The claim rolls
+	// back whole, so nothing was consumed and nothing was handed to an executor.
+	ErrApprovalNoLongerApproved = errors.New("action/sqlite: the approval or its action was not APPROVED inside the claim")
 )
 
 // ParamsState is FR-UI-16's four values. `present` is the only one that lets
@@ -558,8 +563,15 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 			approvalID, got, wantDigest, ErrApprovalParamsDigestMismatch)
 	}
 
+	// The purge is conditioned on the AUTHORITY, not only on the parameters
+	// still being there. ExecuteApprovedAction checks approval=APPROVED and
+	// action=APPROVED before this transaction opens; a state that moved after
+	// those prechecks used to be consumed here and handed to the executor.
 	res, err := tx.ExecContext(ctx,
-		`UPDATE approvals SET canonical_params = '' WHERE approval_id = ? AND canonical_params != ''`, approvalID)
+		`UPDATE approvals SET canonical_params = ''
+		  WHERE approval_id = ? AND canonical_params != '' AND status = ?
+		    AND EXISTS (SELECT 1 FROM actions WHERE action_id = ? AND state = ?)`,
+		approvalID, string(action.ApprovalApproved), a.ActionID, string(action.StateApproved))
 	if err != nil {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: purge claim %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
@@ -569,6 +581,14 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 		// as "already claimed" would name an outcome over a fact nobody has.
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: claim %q: rows affected unavailable: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
+	// The authority is re-read AFTER the purge and before the commit, in this
+	// transaction. The conditioned WHERE only sees the state as it stood when
+	// the purge evaluated it; a trigger on the purge itself can move it later
+	// in the same statement, and only this read observes that. It also names
+	// the zero-row purge: a moved authority is not «already claimed».
+	if err := claimAuthorityTx(ctx, tx, approvalID, a.ActionID); err != nil {
+		return nil, action.Operation{}, err
+	}
 	if n == 0 {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalClaimSkipped)
 	}
@@ -576,6 +596,30 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: commit claim: %w: %w", ErrApprovalUnreadable, err)
 	}
 	return []byte(rawParams), op, nil
+}
+
+// claimAuthorityTx refuses, by name, a claim whose approval or parked action is
+// not APPROVED as its own transaction sees them. An unreadable row fails
+// closed with its own name; it is never read as a moved state.
+func claimAuthorityTx(ctx context.Context, tx *sql.Tx, approvalID, actionID string) error {
+	var status string
+	err := tx.QueryRowContext(ctx,
+		`SELECT status FROM approvals WHERE approval_id = ?`, approvalID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("action/sqlite: approval %q is gone inside its claim: %w", approvalID, ErrApprovalEvidenceCorrupt)
+	}
+	if err != nil {
+		return fmt.Errorf("action/sqlite: claim authority %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	_, state, err := ternaOf(ctx, tx, actionID)
+	if err != nil {
+		return fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
+	}
+	if status != string(action.ApprovalApproved) || state != action.StateApproved {
+		return fmt.Errorf("action/sqlite: approval %q is %s and its action is %s inside the claim: %w",
+			approvalID, status, state, ErrApprovalNoLongerApproved)
+	}
+	return nil
 }
 
 // ApprovalStatusOf reads one column and runs NO belt.

@@ -89,7 +89,7 @@ Everything below is **on `master` today** — no roadmap item is counted as pres
   skills that inform the model without granting it authority. Native tool calling on
   Ollama, with an honest text-lane fallback ([ADR-0042](docs/adr/0042-native-tool-calling-lane.md)).
 - **Observability** — structured `slog`, a Prometheus `/metrics` endpoint, and a
-  `/healthz` liveness probe on a loopback admin server.
+  `/healthz` liveness probe on an admin server that binds loopback by default.
 - **Durable, governed memory** — per-conversation history that survives restarts
   (SQLite by default, behind a `Store` seam), plus deliberate recall (`/recall`
   quotes the previous session's tail back into an empty one) and per-brain notes

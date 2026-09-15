@@ -1,5 +1,194 @@
 # HANDOFF — Korvun
 
+## Tren de la v0.15.1 — lo que la pasada externa de Codex dejó sobre `1817dd4` (director, 2026-09-15)
+
+Codex juzgó el árbol completo fijado a `1817dd4ae4d510701c8035ac58888c7ec6eb16be`
+y vetó el tag v0.15.0 con 3 P1, 8 P2 y 2 P3. Por orden del director, los tres P1
+se curan antes del tag, y con ellos las dos frases públicas falsas de la P3-13
+(«Three defects» en las notas, «loopback» en README y web). Lo que sigue queda
+fichado para la v0.15.1. Cada reproducción es la de Codex; donde la cura de un
+P1 cambió lo que la reproducción observa, se dice.
+
+### P2-4 · un deadline anterior a la transmisión cierra `OUTCOME_UNKNOWN`
+
+Todo `context.DeadlineExceeded` se trata como incertidumbre, incluso cuando
+`webhook_call` demuestra que la petición nunca se escribió.
+
+**Reproducción (Codex):** listener TCP loopback que acepta la conexión pero no
+completa el handshake TLS; `WebhookCallConfig` con ese `https://host:port`,
+allow-list y timeout corto; ejecutar una aprobación. `client.Do` vence antes de
+`WroteRequest`, `delivered=false` y no aparece `ErrEffectDelivered`; el ledger
+queda `OUTCOME_UNKNOWN`.
+
+**Lo que cambió con la cura de la P1-3:** Codex observó además que la ruta brain
+cerraba ese mismo caso `FAILED`. Ya no: las dos rutas cierran ahora cualquier
+deadline desnudo `OUTCOME_UNKNOWN`, y el defecto afecta a las dos por igual.
+Ficheros: `internal/tool/webhookcall.go` (el trace `WroteRequest`),
+`internal/app/approvals.go` (`unknown :=`), `internal/brain/agent.go`
+(`closeState`).
+
+**Y con la cancelación:** el adversario del diff de este tren encontró la
+hermana con `context.Canceled`, y la ruta brain la cierra ahora también
+`OUTCOME_UNKNOWN`, así que una cancelación anterior a la escritura tiene el mismo
+defecto en brain. En la ruta aprobada una cancelación posterior al claim no llega
+a cerrar nada: capturado el 2026-09-15, `FinishWithResult` falla con `begin
+finish: context canceled` y la acción queda `APPROVED` sin parámetros, que es la
+forma que la pasada de recuperación cierra como desconocida.
+
+### P2-5 · el digest tecleado no viaja al servidor
+
+Los seis caracteres que teclea el operador solo habilitan el botón. El POST envía
+el digest completo que la pantalla recibió antes en el detalle (`d.digest`). La
+cadena es segura frente al TOCTOU de parámetros, porque ese digest llega al claim
+y se compara dentro de su transacción. Lo falso es la procedencia declarada:
+no es «el digest que el operador tecleó».
+
+**Reproducción (Codex):** inspeccionar el cuerpo de `/approve` después de escribir
+los seis caracteres. Contiene el digest completo de la respuesta de detalle y
+ningún valor derivado del campo `typed`.
+Ficheros: `cmd/korvun-desktop/frontend/src/views/Approvals.tsx`,
+`internal/app/approvals_adapter.go`, `docs/releases/v0.15.0.md` (la frase «From
+the window, the digest travelling there is the one the operator typed into the
+arming gate») y el godoc de `ExecuteApprovedAction`, que dice lo mismo.
+
+### P2-6 · los mismos bytes corruptos cambian de clasificación
+
+`GetApproval` envuelve los errores de lectura como `ErrApprovalEvidenceCorrupt`;
+el camino de decisión propaga en crudo algunos errores de `Scan`.
+
+**Reproducción (Codex):** `UPDATE approvals SET requested_at='ayer' WHERE
+approval_id=?` sobre una aprobación aparcada y llamar `DecideApprovalUnderLaw`.
+El error no satisface `ErrApprovalEvidenceCorrupt` ni `ErrApprovalUnreadable`. Los
+mismos bytes por `GetApproval` salen `evidence_corrupt`; si la corrupción entra
+entre el precheck y el decide, la API puede responder `unavailable`.
+Fichero: `internal/action/sqlite/approvals.go`.
+
+### P2-7 · la API de aprobaciones no está confinada a loopback y el recibo falsea la procedencia
+
+Las rutas se montan en el servidor de administración, que escucha en
+`observability.addr` y acepta `0.0.0.0`. El bearer se compara en tiempo
+constante, pero una decisión remota se firma igualmente como
+`CredentialLoopbackInProcess`.
+
+**Reproducción (Codex):** `observability.addr=0.0.0.0:43117`, aprobaciones
+habilitadas, acceder desde otro equipo con el bearer. Las cuatro rutas responden
+por HTTP remoto y el recibo declara loopback/in-process.
+
+**Lo curado en este tren, solo prosa:** README y la web ya no llaman «loopback» al
+servidor ni a los parámetros crudos sin decir «por defecto». El recibo sigue
+declarando `CredentialLoopbackInProcess`: esa es la parte de código que queda.
+Ficheros: `internal/app/app.go` (`RegisterApprovals` sobre `adminServer`),
+`internal/config/config.go` (`DefaultObservabilityAddr`),
+`internal/app/approvals_adapter.go`.
+
+### P2-8 · `current_law_digest` puede pertenecer a otro brain
+
+La aprobación resuelve bien su brain, pero `currentLawDigest()` usa siempre
+`cfg.Brains[0]`.
+
+**Reproducción (Codex):** brains A y B con leyes distintas, aparcar para
+`principal_brain_B`, cambiar solo la ley de B y pedir el detalle o aprobar. La
+invalidación se decide bien contra B, pero `current_law_digest` trae la ley de
+A. La prueba `internal/app/approvals_adapter_test.go` que cubre el campo usa un
+solo brain y solo exige que no esté vacío.
+Fichero: `internal/app/approvals_adapter.go`.
+
+### P2-9 · cualquier fallo SQL de `transitionTx` se publica como `already_closed`
+
+`transitionTx` convierte los errores de ejecución SQL en
+`ErrApprovalActionNotPending` y descarta un posible error de `RowsAffected`.
+
+**Reproducción (Codex):** aparcar una petición válida; instalar un trigger sobre
+`UPDATE OF state ON actions` con `RAISE(ABORT, 'forced driver failure')`;
+aprobar con el digest correcto. La transacción revierte y la acción sigue
+`PENDING_APPROVAL`, pero la API responde 409 `already_closed`. Al retirar el
+trigger, la misma petición sigue siendo aprobable.
+Ficheros: `internal/action/sqlite/approvals.go`, `internal/app/approvals_adapter.go`.
+
+### P2-10 · la pantalla no valida el protocolo de respuesta del POST
+
+Dos fallos relacionados. `not_found`, `unavailable`, `disabled` y
+`params_digest_mismatch` aparecen como «Respuesta que esta pantalla no reconoce»
+cuando llegan desde aprobar o rechazar. Y cualquier 200 cuyo `outcome` no sea
+exactamente `failed`, incluso ausente o `rejected`, se pinta como «Ejecutada».
+
+**Reproducción (Codex):** devolver desde `/approve` un 404
+`{"error":"not_found",...}` y después un 200
+`{"outcome":"rejected","receipt_id":"rcp_x"}`. La primera respuesta pierde su
+nombre registrado; la segunda afirma una ejecución.
+Fichero: `cmd/korvun-desktop/frontend/src/views/Approvals.tsx`.
+
+### P2-11 · la ceremonia no es verificable desde el commit
+
+El canto relata cuatro recibos, `chain intact` y dos verificaciones, pero el
+commit no lleva capturas, ledger, salida bruta, base de datos ni hashes que
+enlacen esas afirmaciones con ejecuciones reales. La captura que cita la
+especificación vive en una ruta local ignorada por git y es una maqueta visual,
+no evidencia de recibos.
+
+**Reproducción (Codex):** buscar en el árbol de `1817dd4` la evidencia de los
+cuatro recibos. Respuesta comprobable: «podrían corresponder a ejecuciones
+reales, pero este commit no permite demostrarlo».
+Ficheros: `docs/cantos/APPROVALS-MOCKUP-2026-09-13.md`,
+`docs/superpowers/specs/2026-09-13-approvals-screen-to-mockup-pretest.md`,
+`docs/releases/v0.15.0.md`.
+
+### P3-12 · aprobar y rechazar aceptan JSON sobrante
+
+**Reproducción (Codex):** enviar `{"digest":"<válido>","ignored":true}{"digest":"otro"}`.
+Se acepta el primer documento; ni los campos desconocidos ni el segundo valor
+JSON se rechazan.
+Ficheros: `internal/controlapi/approvals.go`, `internal/controlapi/mutation.go`.
+
+### P3-13 · lo que queda de los desajustes menores
+
+Curado en este tren: «Three defects» pasa a «Four defects» en
+`docs/releases/v0.15.0.md`, y README y web dejan de llamar «loopback» al servidor
+de administración sin decir «por defecto».
+
+Queda:
+
+- un comentario de `internal/action/sqlite/approvals_test.go` afirma que
+  `unknown_outcome` no tiene emisor alcanzable; el adaptador sí lo emite;
+- las cuatro salidas post-entrega de `webhook_call` están probadas en
+  `internal/tool`, pero falta cobertura de composición en las dos rutas.
+  **Reproducción (Codex):** eliminar el manejo de `ErrEffectDelivered` del
+  adaptador deja verdes sus pruebas.
+
+### Predicción del adversario del diff, no ejecutada · una autoridad movida por carrera real se narra como no-arranque benigno
+
+`nameClaim` (`internal/app/approvals_adapter.go`) no nombra
+`ErrApprovalNoLongerApproved`: cae a la escalera de relectura. Para las formas
+con trigger que prueba este tren, lo publicado es cierto — el rollback deja
+APPROVED/APPROVED con parámetros, y la ventana dice `not_started_params_held`
+(capturado por el adversario).
+
+**Reproducción (predicción, sin ejecutar):** una segunda conexión confirma
+`actions.state = 'REJECTED'` entre los prechecks de `ExecuteApprovedAction` y la
+transacción del claim, conservando parámetros. El claim rehúsa, pero el ledger
+queda con una aprobación APPROVED sobre una acción REJECTED y la ventana lo narra
+como un no-arranque benigno, la forma que
+`TestAdapter_aCorruptActionRecordIsNotABenignNonStart` prohíbe para otra
+corrupción. No se encontró cómo colocar esa escritura de forma determinista entre
+`store.Get` y `BeginTx`.
+
+### Hermana de la P1-2, hallada al curarla · `korvun approvals show` imprime los parámetros sin escapar
+
+La cura de la P1-2 amplió `escapeUntrusted`, que solo vive en la pantalla de
+aprobaciones. La CLI imprime los parámetros crudos con
+`fmt.Fprintf(c.stdout, "\nraw parameters:\n%s\n", string(params))` en
+`internal/cli/approvals.go`, sin ningún escape: un U+2060, un control C1 o una
+marca bidi llegan tal cual al terminal.
+
+**Reproducción (por lectura del código, no ejecutada):** aparcar dos peticiones
+cuyos parámetros solo difieran en `"pagar100 EUR"` y `"pagar\u2060100 EUR"` y
+pedir `korvun approvals show` de cada una. Los digests difieren; el texto que
+imprime el terminal no muestra ningún `<U+2060>`.
+
+**Curado en este tren, solo el literal:** la misma línea decía `raw parameters
+(loopback only):`, que es la frase falsa de la P2-7. Ahora dice `raw
+parameters:`.
+
 ## Fichado con prioridad para la v0.15.1 — el marcador tras un rebase (director, 2026-09-13)
 
 La punta de master quedó sin autorizar tras fusionar la #29 y la #30 por squash

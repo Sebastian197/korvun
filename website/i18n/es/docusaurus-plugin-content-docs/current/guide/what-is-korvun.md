@@ -52,7 +52,8 @@ Todo lo de esta página está en la release actual — nada es hoja de ruta:
 - **Memoria durable**: historial por conversación que sobrevive a
   reinicios (SQLite), opcional.
 - **Observabilidad**: logs estructurados, `/metrics` de Prometheus,
-  `/healthz` — en un servidor de administración solo-loopback por defecto.
+  `/healthz` — en un servidor de administración que escucha en loopback por
+  defecto.
 - **Releases firmadas**: cada artefacto cubierto por un manifiesto de
   checksums firmado con cosign más un SBOM, para seis plataformas.
 
