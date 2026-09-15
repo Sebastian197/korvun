@@ -181,7 +181,7 @@ aprobaciones. La CLI imprime los parámetros crudos con
 marca bidi llegan tal cual al terminal.
 
 **Reproducción (por lectura del código, no ejecutada):** aparcar dos peticiones
-cuyos parámetros solo difieran en `"pagar 100 EUR"` y `"pagar⁠100 EUR"` y
+cuyos parámetros solo difieran en `"pagar100 EUR"` y `"pagar\u2060100 EUR"` y
 pedir `korvun approvals show` de cada una. Los digests difieren; el texto que
 imprime el terminal no muestra ningún `<U+2060>`.
 
