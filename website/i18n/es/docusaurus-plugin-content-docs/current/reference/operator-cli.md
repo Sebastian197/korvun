@@ -211,8 +211,9 @@ korvun approvals show --config korvun.json apr_…
 EL DIGEST que apruebas, primero y bien visible; después el preview
 completo — propósito, actor y posición en la delegación, operación,
 recursos, qué datos salen, coste, clase de efecto y reversibilidad,
-la ley pineada — y los parámetros CRUDOS (solo loopback: no existen
-en ningún otro sitio).
+la ley pineada — y los parámetros CRUDOS. Solo se guardan en el almacén
+local, y la API de aprobaciones también los sirve, en la dirección del
+servidor de administración (`observability.addr`, loopback por defecto).
 
 ```sh
 korvun approvals approve --config korvun.json apr_…

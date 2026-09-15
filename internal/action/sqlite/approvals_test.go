@@ -1042,24 +1042,37 @@ func TestApprovalDigestTx_corruptDecisionFallsToHonestEmpty(t *testing.T) {
 	}
 }
 
+// TestClaimApprovalParams_branches — ELEVATED 2026-09-15. It claimed a PENDING
+// request and required the claim to win, which is the exact property P1-1 of
+// the v0.15.0 external review found false: a request that is not APPROVED must
+// never be consumed. It now approves first, and each branch demands its own
+// sentinel instead of the generic ErrNotFound or «some error».
+//
+// Probing mutation (executed, red, declared in the canto): answer the empty
+// column with ErrApprovalClaimSkipped ⇒ the second-claim row reddens.
 func TestClaimApprovalParams_branches(t *testing.T) {
 	t.Parallel()
 	store, _ := sealedStore(t)
 	ctx := context.Background()
 	a, _ := pendingRequest(t, store, "act_claim2")
+	env, ident := operatorDecisionEnv("approve", a.ApprovalID)
+	if _, err := store.decideApproval(ctx, a.ApprovalID, "approved",
+		a.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
 	params, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest)
 	if err != nil || len(params) == 0 {
 		t.Fatalf("first claim wins: %v %d", err, len(params))
 	}
-	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("second claim loses by name: %v", err)
+	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest); !errors.Is(err, ErrApprovalParamsEmpty) {
+		t.Fatalf("second claim: err = %v, want ErrApprovalParamsEmpty", err)
 	}
-	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, "apr_ghost", nil, "sha256:x"); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("ghost claim: %v", err)
+	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, "apr_ghost", nil, "sha256:x"); !errors.Is(err, ErrApprovalNotFound) {
+		t.Fatalf("ghost claim: err = %v, want ErrApprovalNotFound", err)
 	}
 	closed, _ := openTemp(t)
 	_ = closed.Close()
-	if _, _, err := closed.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest); err == nil {
-		t.Fatal("closed store must fail loud")
+	if _, _, err := closed.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest); !errors.Is(err, ErrApprovalUnreadable) {
+		t.Fatalf("closed store: err = %v, want ErrApprovalUnreadable", err)
 	}
 }

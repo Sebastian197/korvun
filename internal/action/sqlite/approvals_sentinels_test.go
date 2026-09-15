@@ -39,6 +39,7 @@ var approvalSentinels = map[string]error{
 	"ErrApprovalParamsDigestMismatch": ErrApprovalParamsDigestMismatch,
 	"ErrApprovalParamsUnaccounted":    ErrApprovalParamsUnaccounted,
 	"ErrApprovalActionNotPending":     ErrApprovalActionNotPending,
+	"ErrApprovalNoLongerApproved":     ErrApprovalNoLongerApproved,
 }
 
 // TestApprovalSentinels_noneIsReachableFromAnother is the direction, both ways,

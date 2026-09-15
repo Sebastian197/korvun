@@ -57,6 +57,13 @@ func approvedFlow(t *testing.T) (*actionsqlite.Store, *executor.Executor, *count
 
 func approvedFlowWithPath(t *testing.T) (*actionsqlite.Store, *executor.Executor, *countingTool, string, string) {
 	t.Helper()
+	return approvedFlowWithParams(t, `{"url":"https://a.example"}`)
+}
+
+// approvedFlowWithParams is approvedFlowWithPath over the given raw params, for
+// the moulds that execute a REAL tool and so need arguments it can parse.
+func approvedFlowWithParams(t *testing.T, rawParams string) (*actionsqlite.Store, *executor.Executor, *countingTool, string, string) {
+	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
 	app, err := Build(approvalsConfig(t, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))))
 	if err != nil {
@@ -68,11 +75,11 @@ func approvedFlowWithPath(t *testing.T) (*actionsqlite.Store, *executor.Executor
 	env := action.NewEnvelope("act_exec1", "env-exec",
 		action.Source{Kind: "agent_brain", Protocol: "text", Channel: "telegram"},
 		action.Operation{Namespace: "tool", Name: "webhook_call", Version: 1},
-		`{"url":"https://a.example"}`, time.Now().UTC())
+		rawParams, time.Now().UTC())
 	env.IntentID = action.RootIntentID
 	env.Principal = action.PrincipalRef{PrincipalID: "principal_brain_a"}
 	env.Effect = action.Effect{Class: string(action.EffectWriteIrreversible)}
-	approvalID, err := ar.RequestApproval(ctx, env, "require_approval", `{"url":"https://a.example"}`)
+	approvalID, err := ar.RequestApproval(ctx, env, "require_approval", rawParams)
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}

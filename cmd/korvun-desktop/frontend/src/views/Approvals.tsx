@@ -77,23 +77,27 @@ type Answer<T> =
 // Rendering of untrusted bytes (§6.2)
 // ---------------------------------------------------------------------------
 
-/** Controls, invisibles and bidi marks become visible escapes. Without this a
- * U+202E lets the document read "hooks.acme.io" while the digest seals
- * something else: the page would say one thing and the digest seal another.
- * Applied to EVERY field of uncontrolled origin, not to one block. */
+/** Code points a reader cannot see for what they are become visible escapes.
+ * Without this a U+202E lets the document read "hooks.acme.io" while the digest
+ * seals something else: the page would say one thing and the digest another.
+ *
+ * It judges by Unicode CLASS, not by a list: controls (Cc), format characters
+ * (Cf — the bidi marks, the zero-width joiners, U+2060, the tags), lone
+ * surrogates (Cs), every separator except the ASCII space (Zs, Zl, Zp), and
+ * whatever Unicode declares Default_Ignorable_Code_Point (U+034F, the variation
+ * selectors, U+3164). The list it replaced was cured once after the v0.15.0
+ * external review ("pagar100 EUR" and "pagar<U+2060>100 EUR" sealed different
+ * digests and read the same) and still missed eight members of the class.
+ *
+ * What it does NOT cover: characters that have a glyph, even a blank one
+ * (U+2800), and characters that look like other characters. Applied to EVERY
+ * field of uncontrolled origin, not to one block. */
+const UNSEEN = /^[\p{Cc}\p{Cf}\p{Cs}\p{Zs}\p{Zl}\p{Zp}\p{Default_Ignorable_Code_Point}]$/u
 function escapeUntrusted(s: string): string {
   let out = ''
   for (const ch of s) {
     const c = ch.codePointAt(0) ?? 0
-    const invisible =
-      c < 0x20 ||
-      c === 0x7f ||
-      c === 0x200b ||
-      c === 0x200c ||
-      c === 0x200d ||
-      c === 0xfeff ||
-      (c >= 0x202a && c <= 0x202e) ||
-      (c >= 0x2066 && c <= 0x2069)
+    const invisible = ch !== ' ' && UNSEEN.test(ch)
     out += invisible ? `<U+${c.toString(16).toUpperCase().padStart(4, '0')}>` : ch
   }
   return out
