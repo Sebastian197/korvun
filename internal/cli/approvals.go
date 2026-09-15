@@ -136,10 +136,11 @@ func (c *cli) approvalsShow(args []string) int {
 		p.Operation, p.Resources, p.DataEgress, p.CostLine, p.EffectClass,
 		p.Reversibility, p.ToolCage, p.PolicyVersion, p.PolicyDigest, p.RequiredRule,
 		a.ExpiresAt.UTC().Format(time.RFC3339))
-	// The RAW parameters — the operator's loopback right (ADR-0024:
-	// they appear ONLY on this surface and live only in the parked row).
+	// The RAW parameters. They live only in the parked row; this command is not
+	// the only surface that prints them — the approvals API serves them too, on
+	// the admin server's address (observability.addr, loopback by default).
 	if params, err := store.ApprovalParams(ctx, a.ApprovalID); err == nil {
-		_, _ = fmt.Fprintf(c.stdout, "\nraw parameters (loopback only):\n%s\n", string(params))
+		_, _ = fmt.Fprintf(c.stdout, "\nraw parameters:\n%s\n", string(params))
 	} else {
 		_, _ = fmt.Fprintln(c.stdout, "\nraw parameters: no longer held (decided or executed)")
 	}

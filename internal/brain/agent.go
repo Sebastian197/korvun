@@ -814,8 +814,15 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	// its own words — «the tool refused before any effect» — including for the
 	// cage's redirect refusal, which is raised over a response the host already
 	// answered.
+	//
+	// A bare context.DeadlineExceeded or context.Canceled also closes
+	// OUTCOME_UNKNOWN: a tool can produce its effect and then see its context
+	// end, and nothing in either error says the effect did not happen. The
+	// converse — a context that ended before anything was written, which this
+	// also closes unknown — is filed for v0.15.1.
 	closeState := action.StateFailed
-	if errors.Is(err, tool.ErrEffectDelivered) {
+	if errors.Is(err, tool.ErrEffectDelivered) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, context.Canceled) {
 		closeState = action.StateOutcomeUnknown
 	}
 
@@ -826,7 +833,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	if rule, breached := cageRule(err); breached {
 		a.logger.Warn("agent: tool denied by its cage",
 			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-			"rule", rule, "args_prefix", boundedArgs(args), "delivered", closeState == action.StateOutcomeUnknown)
+			"rule", rule, "args_prefix", boundedArgs(args), "delivered", errors.Is(err, tool.ErrEffectDelivered))
 		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: rule})
 		a.finishAction(ctx, actionID, closeState, "")
 		return fmt.Sprintf("tool %s failed: %v", name, err)

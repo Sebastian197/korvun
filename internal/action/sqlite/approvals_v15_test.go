@@ -492,10 +492,21 @@ func TestApprovalParams_tellsTheMissingRowFromTheEmptyColumn(t *testing.T) {
 //
 // Probing mutation: discard the error with `n, _ :=`, or name it
 // params_unaccounted over a row that keeps its params ⇒ this reddens.
+//
+// ELEVATED 2026-09-15: the row is APPROVED before the claim. On a PENDING row
+// the claim now refuses by authority, which is P1-1's cure; the zero-row name
+// this mould pins only exists for a request that may be claimed at all.
+// Probing mutation (executed, red, declared in the canto): name the zero-row
+// purge ErrApprovalNoLongerApproved over an approved row ⇒ this reddens.
 func TestClaimApprovalParams_propagatesTheRowsAffectedError(t *testing.T) {
 	t.Parallel()
-	store, _ := openTemp(t)
+	store, _ := sealedStore(t)
 	a := boundPark(t, store, "act_claim_3")
+	envD, identD := operatorDecisionEnv("approve", a.ApprovalID)
+	if _, err := store.decideApproval(context.Background(), a.ApprovalID, "approved",
+		a.RequestedAt.Add(time.Minute), envD, identD, ""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
 	ignoreUpdatesOn(t, store, "approvals")
 
 	_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest)
