@@ -97,6 +97,15 @@ function escapeUntrusted(s: string): string {
   let out = ''
   for (const ch of s) {
     const c = ch.codePointAt(0) ?? 0
+    // The alphabet reserves its own opening bracket. Every escape printed here
+    // reads `<U+XXXX>`, so untrusted bytes containing '<' can spell one: the
+    // literal text `<U+2060>` would read exactly like the escape of a real
+    // U+2060 and the operator could not tell the sealed bytes from the
+    // rendering. Escaping '<' itself leaves no such pair.
+    if (ch === '<') {
+      out += '<U+003C>'
+      continue
+    }
     const invisible = ch !== ' ' && UNSEEN.test(ch)
     out += invisible ? `<U+${c.toString(16).toUpperCase().padStart(4, '0')}>` : ch
   }
@@ -984,7 +993,7 @@ function RequestDetail({
 
           <section>
             <h2>LA LEY QUE LO EXIGIÓ</h2>
-            <p>{d.law_digest}</p>
+            <p data-testid="approval-law">{escapeUntrusted(d.law_digest)}</p>
             <p>{escapeUntrusted(d.required_rule)}</p>
             <p>{escapeUntrusted(d.tool_cage)}</p>
           </section>
@@ -1001,7 +1010,7 @@ function RequestDetail({
             ) : (
               <>
                 <p>{expiryLabel(expiry, now)}</p>
-                <p>{d.expires_at}</p>
+                <p data-testid="approval-expiry">{escapeUntrusted(d.expires_at)}</p>
               </>
             )}
           </section>

@@ -133,7 +133,7 @@ func TestClaim_lawValidatedInsideItsTransaction(t *testing.T) {
 	corruptCell(t, store, "approvals", "policy_digest", "approval_id",
 		a.ApprovalID, "sha256:law-changed-under-you")
 	_, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID,
-		&PolicyPin{Version: 7, Digest: "sha256:law"}, a.ActionDigest)
+		&PolicyPin{Version: 7, Digest: "sha256:law"}, a.ActionDigest, nil)
 	if err == nil {
 		t.Fatal("AUDIT R4-F2(f): the claim must judge the re-read row's law")
 	}

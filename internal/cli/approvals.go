@@ -13,9 +13,10 @@
 // store (the rotate-key mold), each leaving its E4 ink. approve fires
 // the lote-3 deferred execution — the claim, the digest belt, the one
 // Executor path — and reports the REAL outcome. show renders the full
-// §15.2 preview, the RAW parameters (the operator's loopback right,
-// ADR-0024: they exist only here and in the parked store row) and THE
-// DIGEST the human approves, prominently.
+// §15.2 preview, the RAW parameters — they live in the parked store row,
+// and this command is not their only surface: the approvals API serves
+// them too, on whatever address `observability.addr` binds (loopback by
+// default) — and THE DIGEST the human approves, prominently.
 package cli
 
 import (

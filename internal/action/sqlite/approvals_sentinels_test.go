@@ -40,6 +40,7 @@ var approvalSentinels = map[string]error{
 	"ErrApprovalParamsUnaccounted":    ErrApprovalParamsUnaccounted,
 	"ErrApprovalActionNotPending":     ErrApprovalActionNotPending,
 	"ErrApprovalNoLongerApproved":     ErrApprovalNoLongerApproved,
+	"ErrApprovalMovedUnderTheClaim":   ErrApprovalMovedUnderTheClaim,
 }
 
 // TestApprovalSentinels_noneIsReachableFromAnother is the direction, both ways,
@@ -112,7 +113,7 @@ func TestApprovalDoors_everyMissingRowNamesItself(t *testing.T) {
 			return err
 		},
 		"ClaimApprovalParamsUnderDigest": func(s *Store) error {
-			_, _, err := s.ClaimApprovalParamsUnderDigest(t.Context(), "apr_nope", nil, "sha256:x")
+			_, _, err := s.ClaimApprovalParamsUnderDigest(t.Context(), "apr_nope", nil, "sha256:x", nil)
 			return err
 		},
 		"ApprovalDetail": func(s *Store) error {

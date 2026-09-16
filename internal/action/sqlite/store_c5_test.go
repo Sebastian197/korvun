@@ -35,7 +35,7 @@ func TestRecovery_crashAfterClaimIsOutcomeUnknownNotFailed(t *testing.T) {
 	}
 	// The claim fires; the process dies before FinishWithResult — the
 	// external effect may or may not have happened. Nobody knows.
-	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest); err != nil {
+	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest, nil); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	_ = store.Close()

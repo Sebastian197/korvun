@@ -54,7 +54,11 @@ func TestBootRecovery_closesWithSignedReceipts(t *testing.T) {
 	defer func() { _ = ro.Close() }()
 	ctx := context.Background()
 	rec, err := ro.Get(ctx, "act_r3_crash")
-	if err != nil || rec.State != action.StateFailed || rec.RecoveryMarker != "crash_recovered" {
+	// ELEVATED 2026-09-16 (director's class cure): the orphan is AUTHORIZED —
+	// its tool was running when the previous life ended — so the honest close
+	// is OUTCOME_UNKNOWN. What R3 pins is that the close is SIGNED, and that is
+	// unchanged.
+	if err != nil || rec.State != action.StateOutcomeUnknown || rec.RecoveryMarker != "outcome_unknown" {
 		t.Fatalf("the crash orphan closes honestly: %v %v %q", err, rec.State, rec.RecoveryMarker)
 	}
 	// AUDIT R3: the close is IN THE LEDGER — a signed receipt, like
@@ -64,7 +68,7 @@ func TestBootRecovery_closesWithSignedReceipts(t *testing.T) {
 		t.Fatalf("no terminal is born unsigned — recovery's included: %v %d", err, len(receipts))
 	}
 	r := receipts[0]
-	if r.Outcome != string(action.StateFailed) || r.SigningKeyID == "" || r.Signature == "" {
+	if r.Outcome != string(action.StateOutcomeUnknown) || r.SigningKeyID == "" || r.Signature == "" {
 		t.Fatalf("the recovery receipt carries the outcome and the era's ink: %+v", r)
 	}
 }

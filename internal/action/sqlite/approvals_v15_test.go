@@ -439,7 +439,7 @@ func TestClaimApprovalParams_tellsItsThreeRefusalsApart(t *testing.T) {
 	t.Run("the row is not there", func(t *testing.T) {
 		t.Parallel()
 		store, _ := openTemp(t)
-		_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), "apr_nope", nil, "sha256:x")
+		_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), "apr_nope", nil, "sha256:x", nil)
 		if !errors.Is(err, ErrApprovalNotFound) {
 			t.Fatalf("err = %v, want ErrApprovalNotFound", err)
 		}
@@ -450,7 +450,7 @@ func TestClaimApprovalParams_tellsItsThreeRefusalsApart(t *testing.T) {
 		store, _ := openTemp(t)
 		a := boundPark(t, store, "act_claim_1")
 		corruptCell(t, store, "approvals", "canonical_params", "approval_id", a.ApprovalID, "")
-		_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest)
+		_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest, nil)
 		if !errors.Is(err, ErrApprovalParamsEmpty) {
 			t.Fatalf("err = %v, want ErrApprovalParamsEmpty — an empty column is not an absent row", err)
 		}
@@ -509,7 +509,7 @@ func TestClaimApprovalParams_propagatesTheRowsAffectedError(t *testing.T) {
 	}
 	ignoreUpdatesOn(t, store, "approvals")
 
-	_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest)
+	_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest, nil)
 	if !errors.Is(err, ErrApprovalClaimSkipped) {
 		t.Fatalf("err = %v, want ErrApprovalClaimSkipped — zero rows is not «already claimed»", err)
 	}
@@ -547,7 +547,7 @@ func TestClaimApprovalParamsUnderDigest_judgesTheTernaItReadItself(t *testing.T)
 	a := boundPark(t, store, "act_toctou")
 	corruptCell(t, store, "actions", "op_version", "action_id", "act_toctou", "2")
 
-	_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest)
+	_, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), a.ApprovalID, nil, a.ActionDigest, nil)
 	if !errors.Is(err, ErrApprovalParamsDigestMismatch) {
 		t.Fatalf("err = %v, want ErrApprovalParamsDigestMismatch", err)
 	}

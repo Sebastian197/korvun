@@ -815,16 +815,11 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	// cage's redirect refusal, which is raised over a response the host already
 	// answered.
 	//
-	// A bare context.DeadlineExceeded or context.Canceled also closes
-	// OUTCOME_UNKNOWN: a tool can produce its effect and then see its context
-	// end, and nothing in either error says the effect did not happen. The
-	// converse — a context that ended before anything was written, which this
-	// also closes unknown — is filed for v0.15.1.
-	closeState := action.StateFailed
-	if errors.Is(err, tool.ErrEffectDelivered) || errors.Is(err, context.DeadlineExceeded) ||
-		errors.Is(err, context.Canceled) {
-		closeState = action.StateOutcomeUnknown
-	}
+	// ONE function decides this, and the approvals path calls the same one:
+	// tool.CloseStateAfterRun. The two paths each grew their own copy of the
+	// rule and disagreed about a bare deadline until a second cure caught up —
+	// a rule with two homes is the defect, not the two homes' contents.
+	closeState := tool.CloseStateAfterRun(err)
 
 	// A cage/shield breach is a DENIAL rather than an executed-with-error use
 	// (ADR-0041 §4/§5): the tool's own rule refused it. The model still
@@ -949,11 +944,19 @@ func (a *AgentBrain) finishAction(ctx context.Context, actionID string, to actio
 	if a.actions == nil || actionID == "" {
 		return
 	}
+	// The close does NOT ride the caller's context, exactly as on the approvals
+	// path: the effect already happened, and a context that ended while the
+	// tool ran would take this record down with it — the store never sees the
+	// query, and the attempt is left AUTHORIZED over an effect that is out in
+	// the world. WithoutCancel drops the deadline too, so this call has no
+	// context bound of its own; a wait for a lock is bounded by the store's
+	// `busy_timeout(5000)` and by nothing else.
+	closeCtx := context.WithoutCancel(ctx)
 	var err error
 	if rr, ok := a.actions.(actionResultRecorder); ok {
-		err = rr.FinishWithResult(ctx, actionID, to, a.now(), resultDigest)
+		err = rr.FinishWithResult(closeCtx, actionID, to, a.now(), resultDigest)
 	} else {
-		err = a.actions.Finish(ctx, actionID, to, a.now())
+		err = a.actions.Finish(closeCtx, actionID, to, a.now())
 	}
 	if err != nil {
 		// SERIOUS noise (external-audit R4): the effect already happened

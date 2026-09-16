@@ -56,7 +56,7 @@ func TestClaim_storyVerifiedInsideItsTransaction(t *testing.T) {
 	corruptCell(t, store, "action_decisions", "policy_digest", "action_id",
 		a.ActionID, "sha256:moved-under-you")
 	_, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID,
-		&PolicyPin{Version: 7, Digest: "sha256:law"}, a.ActionDigest)
+		&PolicyPin{Version: 7, Digest: "sha256:law"}, a.ActionDigest, nil)
 	if err == nil {
 		t.Fatal("AUDIT R5-S2: the claim must judge the story inside its transaction")
 	}

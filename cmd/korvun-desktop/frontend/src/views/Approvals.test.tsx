@@ -569,6 +569,60 @@ describe('P2 · detalle', () => {
     expect(params.textContent).not.toMatch(/[\u200B\uFEFF]/)
   })
 
+  // The escape alphabet reserves its own opening bracket (director, 2026-09-16).
+  // Every escape this screen prints reads `<U+XXXX>`, so a '<' that arrives in
+  // untrusted bytes can spell one: the literal text `<U+2060>` would read on
+  // screen exactly like the escape of a real U+2060, and the operator cannot
+  // tell the sealed bytes from the rendering. A reserved alphabet has no such
+  // pair: '<' itself becomes `<U+003C>`.
+  //
+  // Probing mutation (executed, red, declared in the canto): drop the '<' arm
+  // from escapeUntrusted \u21d2 these rows redden.
+  it.each([
+    ['un menor suelto', '<', '<U+003C>'],
+    ['un escape falsificado', '<U+2060>', '<U+003C>U+2060>'],
+    ['una etiqueta', '<script>', '<U+003C>script>'],
+  ])('el alfabeto del escape se reserva \u00b7 %s', async (_label, raw, rendered) => {
+    await openDetail(
+      happy({
+        'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, parameters: `pagar ${raw} 100` }),
+      }),
+    )
+    const params = await screen.findByTestId('approval-parameters')
+    expect(params.textContent).toContain(`pagar ${rendered} 100`)
+  })
+
+  // The adversary's seventh finding of 2026-09-16: the godoc said EVERY field of
+  // uncontrolled origin goes through the escape, and two siblings of the
+  // parameters reached the DOM raw — the law digest and the readable expiry.
+  // Their provenance is the store and the local law pin rather than the model,
+  // so the attack needs a compromised store; the sentence was wider than the
+  // wire either way.
+  //
+  // Probing mutation (N15, executed, red, declared in the canto): print the law
+  // digest raw again ⇒ this row reddens.
+  //
+  // The readable expiry is escaped too, and it has NO row here on purpose: that
+  // branch only renders when parseExpiry accepted the string as an instant, and
+  // an instant cannot carry a '<' or an invisible. Its escape is defence in
+  // depth whose mutation cannot redden anything, and the canto says so rather
+  // than letting a passing row imply coverage. The ILLEGIBLE branch — the one
+  // that does carry arbitrary bytes — was already escaped before this train.
+  it.each([
+    [
+      'law_digest',
+      { law_digest: 'sha256:aa<U+2060>bb' },
+      'approval-law',
+      'sha256:aa<U+003C>U+2060>bb',
+    ],
+  ])('los campos hermanos tambien se escapan · %s', async (_label, patch, testid, rendered) => {
+    await openDetail(
+      happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, ...patch }) }),
+    )
+    const block = await screen.findByTestId(testid)
+    expect(block.textContent).toContain(rendered)
+  })
+
   // P1-2 of the v0.15.0 external review: "pagar100 EUR" and "pagar\u2060100 EUR"
   // seal different digests and read the same. escapeUntrusted judges by Unicode
   // class, and these rows SAMPLE each class, they do not enumerate it. Every

@@ -91,7 +91,7 @@ func TestClaim_refusesARowWhoseAuthorityMovedBeforeIt(t *testing.T) {
 				t.Fatalf("install the purge probe: %v", err)
 			}
 
-			params, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest)
+			params, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest, nil)
 			if !errors.Is(err, ErrApprovalNoLongerApproved) {
 				t.Fatalf("err = %v, want ErrApprovalNoLongerApproved", err)
 			}
