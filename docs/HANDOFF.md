@@ -1,5 +1,30 @@
 # HANDOFF — Korvun
 
+## Fichado — intermitente «hot promotion» en el e2e del builder (2026-09-13, reconfirmado 2026-09-16)
+
+`web/builder/e2e/governance-panel.spec.ts:57` — «hot promotion: Ensayo →
+Aplicar → shadow persisted → Permitir → Aplicar → allow» falla a veces sin que
+cambie un byte del árbol.
+
+**Evidencia capturada** (`gh run view 34771480517 --attempt 1 --log-failed`, el
+2026-09-16): ejecución 34771480517, workflow Frontend, rama `ensayo`, cabeza
+`d033121`.
+
+- **Intento 1:** el job `builder e2e (Playwright · mock control API)` falla. El
+  spec 57 cae dos veces, la primera y su `(retry #1)`, las dos con
+  `Test timeout of 30000ms exceeded.` / `Error: locator.click: Test timeout of
+  30000ms exceeded.`, en `governance-panel.spec.ts:75:37` y, por la otra traza,
+  en `loadAgentBrain` (`:53:37`, llamado desde `:64:3`). En la misma tanda, el
+  spec 85 pasa en 1,1 s.
+- **Intento 2:** verde sobre el mismo `d033121`, sin cambiar un byte. El
+  workflow figura hoy como `success` con `attempt 2`.
+
+No está diagnosticado. Lo que la evidencia sostiene es que el fallo es de
+espera, no de aserción: el clic no encuentra su objetivo dentro de los 30 s.
+Antes de tocar el test conviene mirar si `loadAgentBrain` espera por un estado
+que el panel solo alcanza tras una recarga del mock, porque un `retry` no lo
+arregla y una segunda ejecución sí.
+
 ## Tren de la v0.15.1 — lo que la pasada externa de Codex dejó sobre `1817dd4` (director, 2026-09-15)
 
 Codex juzgó el árbol completo fijado a `1817dd4ae4d510701c8035ac58888c7ec6eb16be`
