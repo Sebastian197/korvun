@@ -725,7 +725,7 @@ func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 		a3.RequestedAt.Add(time.Minute), env3, ident3, ""); err != nil {
 		t.Fatalf("approve 3: %v", err)
 	}
-	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a3.ApprovalID, nil, a3.ActionDigest); err != nil {
+	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a3.ApprovalID, nil, a3.ActionDigest, nil); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	_ = store.Close()
@@ -1060,19 +1060,19 @@ func TestClaimApprovalParams_branches(t *testing.T) {
 		a.RequestedAt.Add(time.Minute), env, ident, ""); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
-	params, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest)
+	params, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest, nil)
 	if err != nil || len(params) == 0 {
 		t.Fatalf("first claim wins: %v %d", err, len(params))
 	}
-	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest); !errors.Is(err, ErrApprovalParamsEmpty) {
+	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest, nil); !errors.Is(err, ErrApprovalParamsEmpty) {
 		t.Fatalf("second claim: err = %v, want ErrApprovalParamsEmpty", err)
 	}
-	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, "apr_ghost", nil, "sha256:x"); !errors.Is(err, ErrApprovalNotFound) {
+	if _, _, err := store.ClaimApprovalParamsUnderDigest(ctx, "apr_ghost", nil, "sha256:x", nil); !errors.Is(err, ErrApprovalNotFound) {
 		t.Fatalf("ghost claim: err = %v, want ErrApprovalNotFound", err)
 	}
 	closed, _ := openTemp(t)
 	_ = closed.Close()
-	if _, _, err := closed.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest); !errors.Is(err, ErrApprovalUnreadable) {
+	if _, _, err := closed.ClaimApprovalParamsUnderDigest(ctx, a.ApprovalID, nil, a.ActionDigest, nil); !errors.Is(err, ErrApprovalUnreadable) {
 		t.Fatalf("closed store: err = %v, want ErrApprovalUnreadable", err)
 	}
 }

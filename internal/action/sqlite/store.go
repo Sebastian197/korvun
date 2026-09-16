@@ -1053,13 +1053,27 @@ func (s *Store) RecoverPreviousLife(ctx context.Context) (skipped int, err error
 			predicate: claimedOrphanPredicate,
 		},
 		{
+			// AUTHORIZED is the state an attempt wears WHILE its tool runs: the
+			// record lands before the effect, the terminal close after. A process
+			// that died in between left the external world in an unknown state —
+			// the POST may have gone out, the file may have been written — and
+			// this pass closed every such row FAILED, which is the same definite
+			// claim the C5 comment calls «a FAILED lie», one state earlier.
+			query:     `SELECT action_id FROM actions WHERE state = ?`,
+			args:      []any{string(action.StateAuthorized)},
+			to:        action.StateOutcomeUnknown,
+			marker:    recoveryMarkerOutcomeUnknown,
+			predicate: authorizedOrphanPredicate,
+		},
+		{
 			query: `SELECT action_id FROM actions
-			         WHERE state NOT IN (?, ?, ?, ?, ?, ?, ?, ?)`,
+			         WHERE state NOT IN (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			args: []any{
 				string(action.StateDenied), string(action.StateShadowed),
 				string(action.StateSucceeded), string(action.StateFailed),
 				string(action.StateRejected), string(action.StatePendingApproval),
 				string(action.StateApproved), string(action.StateOutcomeUnknown),
+				string(action.StateAuthorized),
 			},
 			to:        action.StateFailed,
 			marker:    recoveryMarkerCrash,
@@ -1102,6 +1116,9 @@ const (
 		SELECT 1 FROM approvals
 		 WHERE approvals.action_id = actions.action_id
 		   AND approvals.canonical_params != '')`
+	// authorizedOrphanPredicate: still AUTHORIZED — the tool was running when
+	// the process died, so the external effect's fate is unknown, never failed.
+	authorizedOrphanPredicate = ` AND state = 'AUTHORIZED'`
 	// crashOrphanPredicate: still a non-terminal, non-exempt state.
 	crashOrphanPredicate = ` AND state NOT IN ('DENIED','SHADOWED','SUCCEEDED','FAILED',
 		'REJECTED','PENDING_APPROVAL','APPROVED','OUTCOME_UNKNOWN')`

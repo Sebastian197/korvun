@@ -85,6 +85,21 @@ var (
 	// parked action out of APPROVED inside its own transaction. The claim rolls
 	// back whole, so nothing was consumed and nothing was handed to an executor.
 	ErrApprovalNoLongerApproved = errors.New("action/sqlite: the approval or its action was not APPROVED inside the claim")
+
+	// ErrApprovalMovedUnderTheClaim is a claim whose transaction read an
+	// approval row that differs, in any column action.Approval carries, from
+	// the row the caller read before it. Two columns were checked before this;
+	// the rest of that struct — the digests, the law pin, the window, the
+	// decision fields — was read outside the transaction and never compared
+	// inside it.
+	//
+	// The two columns OUTSIDE the struct, canonical_preview and
+	// canonical_params, are not compared here and do not need to be: the same
+	// transaction re-parses the preview, re-validates its binding and
+	// re-derives the digest over the params, so a move in either fails closed
+	// with its own sentinel (ErrApprovalEvidenceCorrupt,
+	// ErrApprovalParamsDigestMismatch).
+	ErrApprovalMovedUnderTheClaim = errors.New("action/sqlite: the approval row moved between the caller's read and the claim")
 )
 
 // ParamsState is FR-UI-16's four values. `present` is the only one that lets
@@ -499,7 +514,63 @@ func (s *Store) Path() string { return s.path }
 // is the whole cure: handing back only the params would leave the caller free
 // to execute under a stale operation, which is the defect this function exists
 // to close.
-func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID string, law *PolicyPin, wantDigest string) ([]byte, action.Operation, error) {
+// approvalRowMoved names the FIRST column in which two reads of one approval
+// row differ, or "" when they are the same row. Times are compared by instant,
+// not by representation.
+//
+// It exists so the claim can judge every column action.Approval carries rather
+// than the two an external review happened to name: a comparison that
+// enumerates what to check is a list, and the next column added to the struct
+// is outside it. This one has to be extended when action.Approval grows, and
+// TestApprovalRowMoved_coversEveryColumn is the mould that makes that failure
+// loud instead of silent.
+//
+// It does NOT cover the two columns the struct does not carry —
+// canonical_preview and canonical_params — because the claim's own belts
+// re-parse and re-derive them inside the same transaction.
+func approvalRowMoved(seen, now action.Approval) string {
+	switch {
+	case seen.ApprovalID != now.ApprovalID:
+		return "approval_id"
+	case seen.SchemaVersion != now.SchemaVersion:
+		return "schema_version"
+	case seen.ActionID != now.ActionID:
+		return "action_id"
+	case seen.ActionDigest != now.ActionDigest:
+		return "action_digest"
+	case seen.PreviewDigest != now.PreviewDigest:
+		return "preview_digest"
+	case seen.RequestedFrom != now.RequestedFrom:
+		return "requested_from"
+	case seen.Reason != now.Reason:
+		return "reason"
+	case seen.RiskSummary != now.RiskSummary:
+		return "risk_summary"
+	case seen.PolicyVersion != now.PolicyVersion:
+		return "policy_version"
+	case seen.PolicyDigest != now.PolicyDigest:
+		return "policy_digest"
+	case !seen.RequestedAt.Equal(now.RequestedAt):
+		return "requested_at"
+	case !seen.ExpiresAt.Equal(now.ExpiresAt):
+		return "expires_at"
+	case seen.Status != now.Status:
+		return "status"
+	case seen.DecisionPrincipalID != now.DecisionPrincipalID:
+		return "decision_principal_id"
+	case seen.Decision != now.Decision:
+		return "decision"
+	case !seen.DecisionAt.Equal(now.DecisionAt):
+		return "decision_at"
+	case seen.Comment != now.Comment:
+		return "comment"
+	case seen.DecisionReceiptID != now.DecisionReceiptID:
+		return "decision_receipt_id"
+	}
+	return ""
+}
+
+func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID string, law *PolicyPin, wantDigest string, seen *action.Approval) ([]byte, action.Operation, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: begin claim: %w: %w", ErrApprovalUnreadable, err)
@@ -521,6 +592,16 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 			return nil, action.Operation{}, fmt.Errorf(
 				"action/sqlite: approval %q was parked under law v%d %s but the current law is v%d %s (%s): %w",
 				approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, dim, ErrApprovalInvalidated)
+		}
+	}
+	// The snapshot the caller read, against the row THIS transaction read. The
+	// caller's prechecks happen outside this transaction, so every column they
+	// judged is a stale read until it is compared here.
+	if seen != nil {
+		if column := approvalRowMoved(*seen, a); column != "" {
+			return nil, action.Operation{}, fmt.Errorf(
+				"action/sqlite: approval %q moved under the claim (%s): %w",
+				approvalID, column, ErrApprovalMovedUnderTheClaim)
 		}
 	}
 	var rawPreview, rawParams string

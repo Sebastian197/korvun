@@ -161,8 +161,12 @@ mockup + Chano's yes).
   transition commits before the observation returns to the model loop.
   After a crash+restart, no action row rests in a non-terminal state
   without being marked (recovery pass on Open: non-terminal rows from a
-  previous run are closed as `FAILED` with a `crash_recovered` marker —
-  honest, visible, never silently re-executed).
+  previous run are closed and marked — honest, visible, never silently
+  re-executed). **AMENDED 2026-09-16 (director's class cure):** the state
+  an attempt wears WHILE its tool runs, AUTHORIZED, is closed
+  `OUTCOME_UNKNOWN` with the `outcome_unknown` marker, because its
+  external effect may have fired and nobody observed it; `FAILED` with
+  `crash_recovered` remains for the other non-terminal states.
 - **FR-STORE-3** Resource bound (house invariant — no unbounded growth): a
   retention default prunes action rows beyond a configured cap at Open and
   periodically; see `[NEEDS CLARIFICATION]` 2 for the fork on the default.
@@ -223,8 +227,13 @@ mockup + Chano's yes).
   observation text is byte-identical to today's.
 - **AS-6 (crash recovery)** Given an action persisted AUTHORIZED whose
   process dies before the terminal write, When the store reopens, Then the
-  row is closed FAILED with the `crash_recovered` marker and nothing
-  re-executes.
+  row is closed and marked, and nothing re-executes. **AMENDED 2026-09-16
+  (director's class cure):** the close is `OUTCOME_UNKNOWN` with the
+  `outcome_unknown` marker, never `FAILED` — the tool was running, so the
+  effect's fate is unknown. Pinned by
+  `TestRecovery_anAuthorizedRowClosesUnknownNotFailed`; the `FAILED` +
+  `crash_recovered` path keeps its own mould in
+  `TestRecovery_aLegacyNonTerminalStillClosesFailed`.
 - **AS-7 (the outside does not move)** Given the pre-stage suite, When the
   whole gates run (channels, brains, sessions, desktop, governed tools,
   reload, B13 tests untouched), Then everything passes with zero test

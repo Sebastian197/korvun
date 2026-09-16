@@ -112,7 +112,11 @@ func TestTwoRecoveries_acrossRealConnections(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		id := fmt.Sprintf("act_s5b_%d", i)
 		rec, err := s1.Get(ctx, id)
-		if err != nil || rec.State != action.StateFailed || rec.RecoveryMarker != "crash_recovered" {
+		// ELEVATED 2026-09-16 (director's class cure): AUTHORIZED rows close
+		// OUTCOME_UNKNOWN. What this test pins — exactly one close and exactly
+		// one receipt whoever wins the race across two real connections — is
+		// unchanged.
+		if err != nil || rec.State != action.StateOutcomeUnknown || rec.RecoveryMarker != "outcome_unknown" {
 			t.Fatalf("%s closes exactly once: %v %v %q", id, err, rec.State, rec.RecoveryMarker)
 		}
 		receipts, _ := s1.ReceiptsByAction(ctx, id)

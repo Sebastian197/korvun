@@ -77,8 +77,14 @@ func TestOpen_recoveryClosesNonTerminalsAndNeverReexecutes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get(act_1): %v", err)
 	}
-	if crashed.State != action.StateFailed || crashed.RecoveryMarker != "crash_recovered" {
-		t.Fatalf("a non-terminal from a previous life closes FAILED+marker, got state=%s marker=%q",
+	// ELEVATED 2026-09-16 (director's class cure): an AUTHORIZED row is an
+	// attempt whose tool was RUNNING when the process died, so its external
+	// effect may have fired. It closes OUTCOME_UNKNOWN with the uncertainty
+	// named; FAILED here was a definite claim about an effect nobody observed.
+	// The crash pass keeps its own mould over a legacy non-terminal state in
+	// TestRecovery_aLegacyNonTerminalStillClosesFailed.
+	if crashed.State != action.StateOutcomeUnknown || crashed.RecoveryMarker != "outcome_unknown" {
+		t.Fatalf("an AUTHORIZED row from a previous life closes OUTCOME_UNKNOWN+marker, got state=%s marker=%q",
 			crashed.State, crashed.RecoveryMarker)
 	}
 	if crashed.FinishedAt == nil {

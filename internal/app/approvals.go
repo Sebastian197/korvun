@@ -184,7 +184,10 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 	// external UPDATE of op_version in that window passed every belt and fired
 	// an irreversible effect under an operation the row no longer declared. So
 	// the claim hands back the triple it judged, and that is the one that runs.
-	params, op, err := store.ClaimApprovalParamsUnderDigest(ctx, approvalID, &law, approvedDigest)
+	// The snapshot travels too: everything the prechecks above judged was read
+	// OUTSIDE the claiming transaction, so the claim compares that whole row
+	// against the row it reads itself and refuses if any column moved.
+	params, op, err := store.ClaimApprovalParamsUnderDigest(ctx, approvalID, &law, approvedDigest, &approval)
 	if err != nil {
 		return ApprovedExecution{}, fmt.Errorf("app: claim execution of %s: %w", approvalID, err)
 	}
@@ -192,44 +195,41 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 	conv := ""
 	result, _, execErr := exec.Run(ctx, toolName,
 		tool.Scope{Brain: "", Conversation: conv}, string(params))
-	outcome := action.StateSucceeded
+	// ONE function decides what this closes on, and the brain path calls the
+	// same one. The rule itself is unchanged: a delivered request whose answer
+	// was lost, and a context that ended, are uncertainty — closing them FAILED
+	// would put in the ledger a definite claim nobody can support, what the
+	// store's own C5 comment calls «a FAILED lie». Anything else is a tool that
+	// refused before its effect left, and FAILED is honest for that.
+	outcome := tool.CloseStateAfterRun(execErr)
 	resultDigest := action.HashCanonical(result)
-	// The producers of a genuinely unaccountable effect, named by TYPE. A
-	// deadline may have been delivered and its answer lost; so may a call the
-	// remote end ACCEPTED and then answered in a way we could not use — a body
-	// cut short, a body over the cap, a 3xx the cage will not follow, a 5xx
-	// from a receiver that had already read it.
-	//
-	// Two cures got here. The first classified only the deadline. The second
-	// added two of the four post-delivery branches and left the other two,
-	// because it guarded the class by TOOL NAME instead of by branch — so the
-	// commonest shape of all, an allow-listed host answering 500, still closed
-	// FAILED over a POST it had received. Matching the tool's error TEXT would
-	// be class (g); the tools wrap tool.ErrEffectDelivered, and an AST mould
-	// holds the rule at the site.
-	unknown := errors.Is(execErr, context.DeadlineExceeded) ||
-		errors.Is(execErr, tool.ErrEffectDelivered)
-	switch {
-	case unknown:
-		// Neither of these is a failure: the call may have been delivered and
-		// the answer lost. Closing it FAILED would put a definite claim in the
-		// ledger that nobody can support — the store's own C5 comment calls
-		// that «a FAILED lie», and OUTCOME_UNKNOWN exists for exactly this.
-		outcome = action.StateOutcomeUnknown
-		resultDigest = ""
-	case execErr != nil:
-		outcome = action.StateFailed
+	if outcome != action.StateSucceeded {
 		resultDigest = ""
 	}
-	if err := store.FinishWithResult(ctx, approval.ActionID, outcome, time.Now().UTC(), resultDigest); err != nil {
+	// The close does NOT ride the caller's context. Between the record and this
+	// line an irreversible effect happened; a context that ended meanwhile —
+	// a cancelled request, a shutdown — would take the close down with it,
+	// because database/sql refuses a query on a dead context before the driver
+	// ever sees it. The effect would have happened and the ledger kept none of
+	// What WithoutCancel drops is the cancellation AND the deadline: the close
+	// and the read-back below run with no context bound at all, and the only
+	// thing that bounds a wait for a lock is the store's own
+	// `busy_timeout(5000)` in its DSN. That is the trade this line makes on
+	// purpose — a bounded wait for the lock against an effect with no record —
+	// and it is written here so nobody reads a surviving deadline into it.
+	closeCtx := context.WithoutCancel(ctx)
+	if err := store.FinishWithResult(closeCtx, approval.ActionID, outcome, time.Now().UTC(), resultDigest); err != nil {
 		// The effect already happened or already failed; what could not be
 		// written is the close. That is a KNOWN effect with an unwritten
 		// record, never an unknown one.
 		return ApprovedExecution{}, fmt.Errorf("app: close executed action %s: %w: %w", approval.ActionID, ErrApprovalCloseFailed, err)
 	}
 	// The receipt identifiers are re-read: neither the decide nor the close
-	// returns them, and P4 and P5 print them.
-	after, _, rerr := store.GetApproval(ctx, approvalID)
+	// returns them, and P4 and P5 print them. On the SAME uncancellable context
+	// as the close: a read that dies with the caller would turn a landed close
+	// into «the executed action could not be closed», which is a false sentence
+	// about a ledger row that is right there.
+	after, _, rerr := store.GetApproval(closeCtx, approvalID)
 	if rerr != nil {
 		return ApprovedExecution{}, fmt.Errorf("app: read back the receipt of %s: %w: %w", approvalID, ErrApprovalCloseFailed, rerr)
 	}
@@ -244,7 +244,7 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		// The call may well have gone out and its answer been lost, so the
 		// effect's fate is genuinely unknown — which is what `unknown_outcome`
 		// is for, and until the deadline cure nothing produced it.
-		if unknown {
+		if outcome == action.StateOutcomeUnknown {
 			out.Unknown = true
 			out.FailureDetail = execErr.Error()
 			return out, nil

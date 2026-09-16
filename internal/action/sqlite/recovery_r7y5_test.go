@@ -49,7 +49,11 @@ func TestRecovery_busyIsCountedNeverSilent(t *testing.T) {
 		t.Fatalf("the next pass owns the orphan: skipped=%d err=%v", skipped, err)
 	}
 	rec, _ = s1.Get(ctx, "act_y5_orphan")
-	if rec.State != action.StateFailed || rec.RecoveryMarker != "crash_recovered" {
+	// ELEVATED 2026-09-16 (director's class cure): the orphan is AUTHORIZED —
+	// its tool was running — so the pass that owns it closes OUTCOME_UNKNOWN.
+	// What this test pins is the POSTPONEMENT being counted, and that is
+	// unchanged.
+	if rec.State != action.StateOutcomeUnknown || rec.RecoveryMarker != "outcome_unknown" {
 		t.Fatalf("closed by the next pass: %v %q", rec.State, rec.RecoveryMarker)
 	}
 }
