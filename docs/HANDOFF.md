@@ -1,5 +1,29 @@
 # HANDOFF — Korvun
 
+## Fichado — intermitente `TestEventHook_publishesReceivedThenSent` en macOS (2026-09-16)
+
+`internal/router/event_test.go` — el test exige que el hook publique
+`MessageReceived` y `ReplySent`; en macOS falla a veces viendo solo el primero.
+
+**Evidencia capturada (2026-09-16), toda sobre la MISMA cabeza `cc1b098`:**
+
+- PR #40, ejecución 35135481844, job `quality (macos-latest)`: **failure** —
+  `event_test.go:97: no ReplySent published; saw [{Type:message_received …}]`.
+- Ejecución 35135483152 (`Quality Gate` del push a `ensayo`, mismos bytes):
+  `quality (macos-latest)` **success**, y `internal/router` en verde también en
+  ubuntu y windows.
+- En local, `go test -race -count=20 -run TestEventHook_publishesReceivedThenSent
+  ./internal/router/`: `ok`, sin un solo fallo.
+
+**Por qué no es del tren que lo encontró:** ese tren es documental y su árbol Go
+es byte a byte el de `9af9ff2`, cuyo gate está verde y registrado.
+
+No está diagnosticado. Lo que la evidencia sostiene es que el segundo evento
+llega tarde en esa máquina: `eventuallyReplyDelivered` espera a la entrega de la
+respuesta, no a la publicación del evento, así que la aserción puede leer el
+snapshot del publicador antes de que el hook haya publicado `ReplySent`. Quien
+lo cure, que espere al EVENTO y no a su vecino.
+
 ## Fichado — intermitente «hot promotion» en el e2e del builder (2026-09-13, reconfirmado 2026-09-16)
 
 `web/builder/e2e/governance-panel.spec.ts:57` — «hot promotion: Ensayo →
