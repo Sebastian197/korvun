@@ -10,9 +10,9 @@
 // updated).
 export const releaseFacts = {
   /** The current public release, bare (install VERSION= lines). */
-  version: "0.14.1",
+  version: "0.15.0",
   /** The current public release, tagged (hrefs, visible copy). */
-  tag: "v0.14.1",
+  tag: "v0.15.0",
   /**
    * The release the landing demo video was recorded against — a fact
    * about the recorded artifact, which moves only when the video is
