@@ -341,6 +341,15 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 	// prune that never happened AND returned early, silently skipping
 	// the custody comparisons below. The two questions are now asked
 	// separately and each world has its own name.
+	// An intent LIFECYCLE receipt descends from a signed intent event, not from
+	// an action: there is no action row to find and never was. Reading its
+	// absence as retention's cascade printed a prune that never happened, and
+	// turned every intent act into a degraded check on a newborn store (the
+	// twenty-second pass, P2-9). It is not a degradation, so it is not a note:
+	// the coherence section simply does not apply.
+	if strings.HasPrefix(r.ActionID, action.IntentEventIDPrefix) {
+		return failures, notes
+	}
 	actionRow, decisionRow, perr := store.ActionRowsPresent(ctx, r.ActionID)
 	switch {
 	case perr != nil:

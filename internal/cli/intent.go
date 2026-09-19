@@ -15,8 +15,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,7 +37,7 @@ const operatorRule = "operator"
 // intentCmd dispatches the `intent` noun's verbs.
 func (c *cli) intentCmd(args []string) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprint(c.stderr, "korvun intent: expected a subcommand: create | activate | revoke | list | show\nRun 'korvun help' for usage.\n")
+		_, _ = fmt.Fprint(c.stderr, "korvun intent: expected a subcommand: create | activate | revoke | list | show | create-v2 | activate-v2 | expire-v2 | revoke-v2 | verify-v2 | bind | adopt-root | import-legacy\nRun 'korvun help' for usage.\n")
 		return 2
 	}
 	switch args[0] {
@@ -54,6 +56,22 @@ func (c *cli) intentCmd(args []string) int {
 		return c.intentList(args[1:])
 	case "show":
 		return c.intentShow(args[1:])
+	case "create-v2":
+		return c.intentCreateV2(args[1:])
+	case "activate-v2":
+		return c.intentTransitionV2(args[1:], "activate-v2", action.LifecycleActive)
+	case "expire-v2":
+		return c.intentTransitionV2(args[1:], "expire-v2", action.LifecycleExpired)
+	case "revoke-v2":
+		return c.intentTransitionV2(args[1:], "revoke-v2", action.LifecycleRevoked)
+	case "verify-v2":
+		return c.intentVerifyV2(args[1:])
+	case "bind":
+		return c.intentBind(args[1:])
+	case "adopt-root":
+		return c.intentImportLegacy(args[1:], true)
+	case "import-legacy":
+		return c.intentImportLegacy(args[1:], false)
 	default:
 		_, _ = fmt.Fprintf(c.stderr, "korvun intent: unknown subcommand %q\nRun 'korvun help' for usage.\n", args[0])
 		return 2
@@ -103,7 +121,238 @@ func openOperatorStoreSealed(configPath string) (*actionsqlite.Store, error) {
 	store.SetReceiptSealer(func(r action.Receipt) action.Receipt {
 		return action.SignReceipt(priv, r)
 	})
+	store.SetIntentV2Signer(func(contract action.IntentContractV2) action.SignedIntentContractV2 {
+		return action.SignIntentContractV2(priv, contract)
+	}, func(event action.IntentEventV1) action.SignedIntentEventV1 {
+		return action.SignIntentEventV1(priv, event)
+	})
 	return store, nil
+}
+
+func parseIntentVersion(raw string) (int, error) {
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("version must be a positive integer")
+	}
+	return v, nil
+}
+
+func (c *cli) intentCreateV2(args []string) int {
+	fs := flag.NewFlagSet("intent create-v2", flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
+	configPath := fs.String("config", "", "path to the korvun config")
+	file := fs.String("file", "", "strict IntentContractV2 JSON file")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *configPath == "" || *file == "" || fs.NArg() != 0 {
+		_, _ = fmt.Fprintln(c.stderr, "korvun intent create-v2: --config and --file are required")
+		return 2
+	}
+	raw, err := os.ReadFile(*file)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent create-v2: %v\n", err)
+		return 1
+	}
+	contract, err := action.ParseIntentContractV2(raw)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent create-v2: %v\n", err)
+		return 1
+	}
+	store, err := openOperatorStoreSealed(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent create-v2: %v\n", err)
+		return 1
+	}
+	defer func() { _ = store.Close() }()
+	// The operator's act leaves ITS OWN record too, exactly as the v1 verbs do
+	// and as this file's godoc promises. The eight v2 verbs used to skip it, so
+	// the phase about identity and intent recorded no principal for the human
+	// who acted (the twenty-second pass, P2-10).
+	if err = recordOperatorAct(context.Background(), store, "intent", "create-v2", contract.IntentID, func() error {
+		return store.CreateIntentV2(context.Background(), contract, action.OperatorPrincipal().PrincipalID, time.Now().UTC())
+	}); err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent create-v2: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(c.stdout, "intent %s version %d created (DRAFT, signed event)\n", contract.IntentID, contract.Version)
+	return 0
+}
+
+func (c *cli) intentTransitionV2(args []string, verb string, to action.LifecycleStatus) int {
+	fs := flag.NewFlagSet("intent "+verb, flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
+	configPath := fs.String("config", "", "path to the korvun config")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *configPath == "" || fs.NArg() < 1 || fs.NArg() > 2 {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: --config, intent id, and version for activation are required\n", verb)
+		return 2
+	}
+	store, err := openOperatorStoreSealed(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: %v\n", verb, err)
+		return 1
+	}
+	defer func() { _ = store.Close() }()
+	ctx := context.Background()
+	at := time.Now().UTC()
+	switch to {
+	case action.LifecycleActive:
+		if fs.NArg() != 2 {
+			return 2
+		}
+		v, e := parseIntentVersion(fs.Arg(1))
+		if e != nil {
+			_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: %v\n", verb, e)
+			return 2
+		}
+		err = recordOperatorAct(ctx, store, "intent", "activate-v2", fs.Arg(0), func() error {
+			return store.ActivateIntentV2(ctx, fs.Arg(0), v, action.OperatorPrincipal().PrincipalID, at)
+		})
+	case action.LifecycleExpired:
+		err = recordOperatorAct(ctx, store, "intent", "expire-v2", fs.Arg(0), func() error {
+			return store.ExpireIntentV2(ctx, fs.Arg(0), action.OperatorPrincipal().PrincipalID, at)
+		})
+	case action.LifecycleRevoked:
+		err = recordOperatorAct(ctx, store, "intent", "revoke-v2", fs.Arg(0), func() error {
+			return store.RevokeIntentV2(ctx, fs.Arg(0), action.OperatorPrincipal().PrincipalID, at)
+		})
+	}
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: %v\n", verb, err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(c.stdout, "intent %s %s\n", fs.Arg(0), to)
+	return 0
+}
+
+func (c *cli) intentVerifyV2(args []string) int {
+	fs := flag.NewFlagSet("intent verify-v2", flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
+	configPath := fs.String("config", "", "path to config")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *configPath == "" || fs.NArg() != 2 {
+		return 2
+	}
+	v, err := parseIntentVersion(fs.Arg(1))
+	if err != nil {
+		return 2
+	}
+	store, err := openOperatorStore(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent verify-v2: %v\n", err)
+		return 1
+	}
+	defer func() { _ = store.Close() }()
+	signed, err := store.GetIntentV2(context.Background(), fs.Arg(0), v)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent verify-v2: signed v2 intent unavailable: %v\n", err)
+		return 1
+	}
+	_, err = store.ResolveIntentV2(context.Background(), fs.Arg(0), v, signed.Digest, time.Now().UTC())
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent verify-v2: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(c.stdout, "intent %s version %d: OK\n", fs.Arg(0), v)
+	return 0
+}
+
+func (c *cli) intentBind(args []string) int {
+	fs := flag.NewFlagSet("intent bind", flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
+	configPath := fs.String("config", "", "path to config")
+	actor := fs.String("actor", "", "actor principal")
+	channel := fs.String("channel", "", "channel")
+	conversation := fs.String("conversation", "", "exact conversation id")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *configPath == "" || *actor == "" || *channel == "" || fs.NArg() != 2 {
+		return 2
+	}
+	v, err := parseIntentVersion(fs.Arg(1))
+	if err != nil {
+		return 2
+	}
+	store, err := openOperatorStoreSealed(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent bind: %v\n", err)
+		return 1
+	}
+	defer func() { _ = store.Close() }()
+	signed, err := store.GetIntentV2(context.Background(), fs.Arg(0), v)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent bind: signed v2 intent unavailable: %v\n", err)
+		return 1
+	}
+	b := action.ExecutionBinding{BindingID: "bind_" + action.NewID(), ActorPrincipalID: *actor, Channel: *channel, ConversationID: *conversation, IntentID: fs.Arg(0), IntentVersion: v, IntentDigest: signed.Digest, Revision: 1, Status: action.BindingActive}
+	if err = recordOperatorAct(context.Background(), store, "intent", "bind", b.IntentID, func() error {
+		return store.PutExecutionBinding(context.Background(), b)
+	}); err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent bind: %v\n", err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(c.stdout, "binding %s -> %s version %d ACTIVE\n", b.BindingID, b.IntentID, b.IntentVersion)
+	return 0
+}
+
+func (c *cli) intentImportLegacy(args []string, rootOnly bool) int {
+	verb := "import-legacy"
+	if rootOnly {
+		verb = "adopt-root"
+	}
+	fs := flag.NewFlagSet("intent "+verb, flag.ContinueOnError)
+	fs.SetOutput(c.stderr)
+	configPath := fs.String("config", "", "path to config")
+	profile := fs.String("profile", "", "profile identifier")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	id := action.RootIntentID
+	if !rootOnly {
+		if fs.NArg() != 1 {
+			return 2
+		}
+		id = fs.Arg(0)
+	} else if fs.NArg() != 0 {
+		return 2
+	}
+	if *configPath == "" || *profile == "" {
+		return 2
+	}
+	store, err := openOperatorStoreSealed(*configPath)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: %v\n", verb, err)
+		return 1
+	}
+	defer func() { _ = store.Close() }()
+	legacy, err := store.GetIntent(context.Background(), id)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: %v\n", verb, err)
+		return 1
+	}
+	contract, err := action.ImportLegacyIntentV2(legacy, *profile)
+	if err == nil {
+		err = recordOperatorAct(context.Background(), store, "intent", "import-legacy", contract.IntentID, func() error {
+			return store.CreateIntentV2(context.Background(), contract, action.OperatorPrincipal().PrincipalID, time.Now().UTC())
+		})
+	}
+	if err == nil {
+		err = recordOperatorAct(context.Background(), store, "intent", "adopt-root", contract.IntentID, func() error {
+			return store.ActivateIntentV2(context.Background(), contract.IntentID, contract.Version, action.OperatorPrincipal().PrincipalID, time.Now().UTC())
+		})
+	}
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: %v\n", verb, err)
+		return 1
+	}
+	_, _ = fmt.Fprintf(c.stdout, "intent %s adopted as signed version %d ACTIVE\n", id, contract.Version)
+	return 0
 }
 
 // recordOperatorAct wraps one CLI mutation in its receipt: the identified

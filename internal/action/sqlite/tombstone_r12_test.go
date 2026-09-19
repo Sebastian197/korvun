@@ -70,7 +70,7 @@ func TestMigrationV12_sweepClosedApprovalMigratesClean(t *testing.T) {
 		t.Fatalf("AUDIT R12-A1 (P1#1, normal use): a sweep-closed approval is the DOMAIN's truth and must migrate clean: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 12 {
+	if v := inspect(t, path, `SELECT version FROM action_schema`); v != schemaVersionCurrent {
 		t.Fatalf("v12 lands: %d", v)
 	}
 }
@@ -93,7 +93,7 @@ func TestMigrationV10Copy_sweepTombstoneMigratesCleanToV12(t *testing.T) {
 		t.Fatalf("AUDIT R12-P3-4: the v10 sweep tombstone is the domain's truth at that door too: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 12 {
+	if v := inspect(t, path, `SELECT version FROM action_schema`); v != schemaVersionCurrent {
 		t.Fatalf("v12 lands from v10: %d", v)
 	}
 	if _, _, err := store.ApprovalTombstoneByDigest(context.Background(), a.Digest()); err != nil {
@@ -252,7 +252,7 @@ func TestMigrationV12_bumpInterruptLeavesV11IntactAndRetryConverges(t *testing.T
 		t.Fatalf("the retry converges: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 12 {
+	if v := inspect(t, path, `SELECT version FROM action_schema`); v != schemaVersionCurrent {
 		t.Fatalf("v12 lands on retry: %d", v)
 	}
 }

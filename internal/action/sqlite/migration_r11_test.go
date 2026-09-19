@@ -85,7 +85,7 @@ func TestMigrationV12_revalidatesWithZeroWritesUnderAbortTriggers(t *testing.T) 
 		t.Fatalf("AUDIT R11-R1: v12 must complete WITH the abort triggers armed (zero writes): %v", err)
 	}
 	_ = store.Close()
-	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 12 {
+	if v := inspect(t, path, `SELECT version FROM action_schema`); v != schemaVersionCurrent {
 		t.Fatalf("the bump lands: %d", v)
 	}
 	db2, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(path)))
