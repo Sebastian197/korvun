@@ -1,5 +1,39 @@
 # HANDOFF — Korvun
 
+## Fichado — el tren de toolchain de los frontends (director, 2026-09-19)
+
+Tras v0.15.0 se cerraron sin fusionar tres grupos de Dependabot: #22
+(website-npm), #26 (desktop-frontend-npm) y #27 (builder-npm). Cada cierre
+lleva su motivo escrito en la propia PR. Los dos de frontend mueren en `npm ci`:
+`typescript` 7.0.2 queda fuera del rango peer de `typescript-eslint` 8.70.0
+(`>=4.8.4 <6.1.0`). Con TypeScript retenido en 5.9.3, el lint sigue rojo por
+las reglas nuevas de `eslint-plugin-react-hooks` 7 y de eslint 10, y curarlas
+cambia código de la UI.
+
+Ese trabajo queda fichado como un tren propio, con **una condición del
+director**: `@playwright/test` se fija a **1.61.x** hasta que Chano cambie de
+Mac. La 1.63.0 responde «Playwright does not support chromium on mac13» al
+instalar el navegador, y sin él no hay e2e local en la máquina de Chano.
+
+No se añade `ignore` en `.github/dependabot.yml`: los grupos siguen llegando y
+se trían en su cadencia. La migración de la web a Docusaurus 3.10 (#22 trae
+webpackbar 7.0.0, que `website/scripts/apply-webpackbar-compat.mjs` rechaza)
+queda aparcada con la web.
+
+## Anotado — el CLI de Codex, capacidad disponible y sin usar (2026-09-19)
+
+En la máquina de Chano hay dos binarios de Codex CLI, de versiones distintas
+(comprobado el 2026-09-19): el de la app,
+`/Applications/ChatGPT.app/Contents/Resources/codex` (`codex-cli
+0.155.0-alpha.9.2`), y un standalone que es el que resuelve `codex` en el
+`PATH`, `~/.local/bin/codex` → `~/.codex/packages/standalone/…/0.154.0…`
+(`codex-cli 0.154.0`). Los dos traen `codex review --base <rama>`.
+
+Queda anotado como capacidad, **no como procedimiento**: por orden del
+director (2026-09-19), el ejecutor no lanza la puerta externa ni elige a su
+propio revisor. Esa puerta la dispara Chano con el prompt del copiloto, y Codex
+juzga tags, no cada PR.
+
 ## Fichado — intermitente `TestEventHook_publishesReceivedThenSent` en macOS (2026-09-16)
 
 `internal/router/event_test.go` — el test exige que el hook publique

@@ -33,6 +33,35 @@ adapter over the framework-free `shell` package** (ADR-0035 §3a: the lifecycle
 logic itself never imports Wails). Explicitly NOT v3: `v3.0.0-alpha2.117` is
 pre-release with no announced stable date.
 
+> **AMENDED 2026-09-19 (Wails CLI train).** The pin is no longer `v2.13.0`.
+> Dependabot's go-dependencies group (#34, merged as `45d046b`) moved the
+> library to **`v2.15.0`**, and this train moves the build-time CLI that
+> `release-desktop.yml` installs to the same `v2.15.0`, so the library and
+> the CLI name one version again. Re-verified at source for `v2.15.0`: the
+> tag resolves to `713dc89694c789ee0a45355c2886cef1986e9a01`; its `go.mod`
+> still declares `go 1.25.0` (the repo is on Go 1.26.6). The library code
+> that moved between the two pins is two upstream changes: `v2.14.0` fixes a
+> nil-pointer crash and a swallowed network error in
+> `v2/internal/webview2runtime/webview2runtime.go` when the WebView2
+> bootstrapper download fails, a path the Windows desktop binary reaches
+> through `internal/wv2installer`'s default download strategy (derived from
+> the build tags, not executed); `v2.15.0` adds the opt-in macOS option
+> `EnableAutoplayWithoutUserAction`, default unchanged. Under `v2/cmd/wails`
+> only `internal/version.txt` differs, and
+> `internal/system/packagemanager/apt.go` is byte-identical to `v2.13.0`'s.
+> The MVS caveat in the maintenance axis was measured, not assumed:
+> `v2.15.0`'s `go.mod` requires 28 modules that ours also requires, and for
+> each of the 28 its version is at or below ours (`golang.org/x/sys`
+> v0.46.0 against v0.48.0, `golang.org/x/net` v0.56.0 against v0.57.0,
+> `github.com/google/uuid` v1.6.0 against v1.6.0), so the bump raised no
+> shared minimum. The headless binary's `go version -m` did change between
+> `ab9370e` and `3652601`: nine module versions moved and
+> `go.yaml.in/yaml/v2` left the list, each of the ten a module that #34's
+> own `go.mod` diff changes or drops, and no Wails module appears in that
+> list. The historical facts of this ADR (v2.13.0 as the July stable, the
+> `v2.13.x` pin in the risk axis, its 105-module count) are left as they
+> were verified then.
+
 **Verified facts the decision rests on:**
 
 - **v2.13.0 is the current stable release** (July 2026, active maintenance);
