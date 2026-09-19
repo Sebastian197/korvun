@@ -123,7 +123,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 12
+const schemaVersionCurrent = 13
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -373,6 +373,80 @@ CREATE TABLE approval_tombstones_v11 (
 	// revalidateTombstonesV11toV12; the step below is a no-op so the
 	// hybrid runner keeps its one-transaction shape.
 	11: `SELECT 1;`,
+	// v12->v13 (Piece 3, phase 2): signed, versioned intent terms and
+	// signed lifecycle evidence. The v1 intents table remains untouched
+	// and readable as legacy_unsigned; this step never signs old rows.
+	12: `
+CREATE TABLE IF NOT EXISTS intent_versions (
+    intent_id          TEXT    NOT NULL,
+    version            INTEGER NOT NULL CHECK(version > 0),
+    schema_version     INTEGER NOT NULL CHECK(schema_version = 2),
+    profile_id         TEXT    NOT NULL,
+    owner_principal_id TEXT    NOT NULL,
+    canonical_terms    BLOB    NOT NULL,
+    digest             TEXT    NOT NULL,
+    signing_key_id     TEXT,
+    signature          TEXT,
+    created_at         TEXT    NOT NULL,
+    PRIMARY KEY (intent_id, version),
+    UNIQUE (intent_id, digest),
+    FOREIGN KEY (signing_key_id) REFERENCES signing_keys(key_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS intent_events (
+    event_id             TEXT    NOT NULL PRIMARY KEY,
+    intent_id            TEXT    NOT NULL,
+    intent_version       INTEGER NOT NULL,
+    revision             INTEGER NOT NULL CHECK(revision > 0),
+    from_status          TEXT    NOT NULL,
+    to_status            TEXT    NOT NULL,
+    actor_principal_id   TEXT    NOT NULL,
+    evidence_digest      TEXT    NOT NULL DEFAULT '',
+    occurred_at          TEXT    NOT NULL,
+    previous_event_digest TEXT   NOT NULL DEFAULT '',
+    canonical_event      BLOB    NOT NULL,
+    digest               TEXT    NOT NULL,
+    signing_key_id       TEXT    NOT NULL,
+    signature            TEXT    NOT NULL,
+    UNIQUE (intent_id, revision),
+    FOREIGN KEY (intent_id, intent_version) REFERENCES intent_versions(intent_id, version),
+    FOREIGN KEY (signing_key_id) REFERENCES signing_keys(key_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS intent_heads (
+    intent_id        TEXT    NOT NULL PRIMARY KEY,
+    active_version   INTEGER NOT NULL,
+    revision         INTEGER NOT NULL CHECK(revision > 0),
+    last_event_digest TEXT   NOT NULL,
+    status           TEXT    NOT NULL CHECK(status IN ('DRAFT','ACTIVE','EXPIRED','REVOKED')),
+    FOREIGN KEY (intent_id, active_version) REFERENCES intent_versions(intent_id, version)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS execution_bindings (
+    binding_id        TEXT    NOT NULL PRIMARY KEY,
+    actor_principal_id TEXT   NOT NULL,
+    channel           TEXT    NOT NULL,
+    conversation_id   TEXT,
+    intent_id         TEXT    NOT NULL,
+    intent_version    INTEGER NOT NULL,
+    intent_digest     TEXT    NOT NULL,
+    revision          INTEGER NOT NULL CHECK(revision > 0),
+    status            TEXT    NOT NULL CHECK(status IN ('ACTIVE','REVOKED')),
+    FOREIGN KEY (intent_id, intent_version) REFERENCES intent_versions(intent_id, version)
+) WITHOUT ROWID;
+CREATE UNIQUE INDEX IF NOT EXISTS execution_bindings_active_selector
+ON execution_bindings(actor_principal_id, channel, ifnull(conversation_id, ''))
+WHERE status = 'ACTIVE';
+CREATE TABLE IF NOT EXISTS authorization_snapshots (
+    action_id             TEXT    NOT NULL PRIMARY KEY,
+    context_version       INTEGER NOT NULL,
+    requester_principal_id TEXT   NOT NULL,
+    actor_principal_id    TEXT    NOT NULL,
+    evidence_digest       TEXT    NOT NULL,
+    intent_id             TEXT    NOT NULL,
+    intent_version        INTEGER NOT NULL,
+    intent_digest         TEXT    NOT NULL,
+    canonical_context     BLOB    NOT NULL,
+    authorization_digest  TEXT    NOT NULL,
+    FOREIGN KEY (intent_id, intent_version) REFERENCES intent_versions(intent_id, version)
+) WITHOUT ROWID;`,
 }
 
 // migrationsPost holds the destructive tail of a hybrid step (R8-Z1):
@@ -877,7 +951,9 @@ type Store struct {
 	// sealer, when non-nil, signs and appends one receipt per terminal
 	// outcome INSIDE the recording transaction (Etapa 4, FR-LED). The app
 	// injects it with the active profile key; nil = pre-stage behavior.
-	sealer func(action.Receipt) action.Receipt
+	sealer               func(action.Receipt) action.Receipt
+	intentContractSigner func(action.IntentContractV2) action.SignedIntentContractV2
+	intentEventSigner    func(action.IntentEventV1) action.SignedIntentEventV1
 	// writes counts RecordAttempt commits toward the periodic prune;
 	// mutex-guarded because callers are concurrent brain workers (the DB
 	// pool serializes statements, not this counter).

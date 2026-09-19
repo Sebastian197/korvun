@@ -50,6 +50,20 @@ func NewGrantID() string {
 
 // NewReceiptID generates a fresh receipt identity ("rcpt_" + 16 random
 // bytes hex, the NewID mold).
+// IntentEventIDPrefix is the namespace of a signed intent LIFECYCLE event.
+// It is deliberately NOT the action namespace: an intent event is not an
+// action, has no action row, and a receipt that names one must be told apart
+// from a receipt whose action row retention pruned (the twenty-second pass,
+// P2-9 — the ledger verifier narrated a prune that never happened).
+const IntentEventIDPrefix = "iev_"
+
+// NewIntentEventID generates a fresh intent lifecycle event identity.
+func NewIntentEventID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return IntentEventIDPrefix + hex.EncodeToString(b)
+}
+
 func NewReceiptID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
