@@ -81,7 +81,7 @@ ARTIFACT_VERSION := $(patsubst v%,%,$(VERSION))
 # Windows (7b): -nsis emits the installer, -webview2 download is the ADR-0035 R4
 # bootstrap strategy; GNU make there is the Chocolatey install driven from Git
 # Bash, so pin SHELL to bash to keep the trap/function recipe identical.
-# Linux (7b): ubuntu-24.04 ships only webkit2gtk-4.1 — wails v2.13.0 gates its
+# Linux (7b): ubuntu-24.04 ships only webkit2gtk-4.1 — wails v2.15.0 gates its
 # pkg-config lines on the `webkit2_41` build tag (source-verified:
 # internal/frontend/desktop/linux/*.go `#cgo webkit2_41 pkg-config:
 # webkit2gtk-4.1`), so the tag rides DESKTOP_TAGS on Linux only.
