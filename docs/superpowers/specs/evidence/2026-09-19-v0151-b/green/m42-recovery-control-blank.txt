@@ -1,0 +1,28 @@
+# id: m42-recovery-control-blank
+# guard: P2-6 recovery control: blank the digest at closeCrashOrphan
+# date: 2026-09-19T16:56:36.864311+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/store.go
++++ b/internal/action/sqlite/store.go
+@@ -1197,6 +1197,7 @@
+ 	if err != nil {
+ 		return false, err
+ 	}
++	r.ApprovalDigest = "" // MUTATION
+ 	if err := s.appendReceiptTx(ctx, tx, r); err != nil {
+ 		return false, err
+ 	}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.498s
+FAIL
+# first failing assertion: v0151b_test.go:683: recovered receipt approval_digest = "", want the approval's real digest "sha256:0a6f0650cc95991ac0710c248e157330f226123bdee83e61f04c1e11215bf557"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.500s
+# exit (restored): 0

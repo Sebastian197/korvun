@@ -1,0 +1,71 @@
+# command: go test -race -count=1 -v -run TestV0151B ./internal/app/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# set aside for this run: nothing
+# date: 2026-09-19T12:12:07Z
+=== RUN   TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains
+=== RUN   TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains/detail
+    v0151b_test.go:149: current_law_digest = "sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a", want b's "sha256:7ac5e2cadcd8b2e7c2f184040adafacd7649a23df6d4e69183c3e3e1fde6d2da" (a "sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a", c "sha256:71a0c634fa2fc5fca24c2cb23b2ce89a9fee4b84a86582023aeade319c4a0493")
+=== RUN   TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains/approve
+    v0151b_test.go:149: current_law_digest = "sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a", want b's "sha256:7ac5e2cadcd8b2e7c2f184040adafacd7649a23df6d4e69183c3e3e1fde6d2da" (a "sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a", c "sha256:71a0c634fa2fc5fca24c2cb23b2ce89a9fee4b84a86582023aeade319c4a0493")
+--- FAIL: TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains (0.31s)
+    --- FAIL: TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains/detail (0.16s)
+    --- FAIL: TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains/approve (0.16s)
+=== RUN   TestV0151B_P2_9_aDriverFailureInsideTheTransitionIsNotAlreadyClosed
+    v0151b_test.go:197: err = approvals: this request is not awaiting execution: a driver failure published as already_closed
+--- FAIL: TestV0151B_P2_9_aDriverFailureInsideTheTransitionIsNotAlreadyClosed (0.17s)
+=== RUN   TestV0151B_P2_9_storeLevelTheDriverErrorIsNotTypedNotPending
+    v0151b_test.go:255: err = action/sqlite: approval "apr_cd60f8427ceca0a1b3e03c5cd7554fc3": action/sqlite: the parked action was no longer pending: action/sqlite: transition "act_p29s" PENDING_APPROVAL->APPROVED: constraint failed: forced driver failure (1811): a driver failure typed as «the action was no longer pending»
+--- FAIL: TestV0151B_P2_9_storeLevelTheDriverErrorIsNotTypedNotPending (0.17s)
+=== RUN   TestV0151B_P2_9_sister_rejectOverAMovedActionIsAlreadyClosed
+    v0151b_test.go:280: err = approvals: store unavailable, want ErrApprovalAlreadyClosed
+--- FAIL: TestV0151B_P2_9_sister_rejectOverAMovedActionIsAlreadyClosed (0.16s)
+=== RUN   TestV0151B_P2_6_aCorruptColumnIsEvidenceCorruptOnTheDecide
+=== RUN   TestV0151B_P2_6_aCorruptColumnIsEvidenceCorruptOnTheDecide/approved
+    v0151b_test.go:327: decide err = action/sqlite: parse approval requested_at: parsing time "ayer" as "2006-01-02T15:04:05.999999999Z07:00": cannot parse "ayer" as "2006", want ErrApprovalEvidenceCorrupt — the same bytes, the same name
+=== RUN   TestV0151B_P2_6_aCorruptColumnIsEvidenceCorruptOnTheDecide/rejected
+    v0151b_test.go:327: decide err = action/sqlite: parse approval requested_at: parsing time "ayer" as "2006-01-02T15:04:05.999999999Z07:00": cannot parse "ayer" as "2006", want ErrApprovalEvidenceCorrupt — the same bytes, the same name
+--- FAIL: TestV0151B_P2_6_aCorruptColumnIsEvidenceCorruptOnTheDecide (0.32s)
+    --- FAIL: TestV0151B_P2_6_aCorruptColumnIsEvidenceCorruptOnTheDecide/approved (0.16s)
+    --- FAIL: TestV0151B_P2_6_aCorruptColumnIsEvidenceCorruptOnTheDecide/rejected (0.16s)
+=== RUN   TestV0151B_P2_6_sister_theListNamesACorruptRow
+    v0151b_test.go:347: list err = action/sqlite: parse approval requested_at: parsing time "ayer" as "2006-01-02T15:04:05.999999999Z07:00": cannot parse "ayer" as "2006", want ErrApprovalEvidenceCorrupt
+--- FAIL: TestV0151B_P2_6_sister_theListNamesACorruptRow (0.16s)
+=== RUN   TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable
+--- PASS: TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable (0.18s)
+=== RUN   TestV0151B_P2_6_aCancelledRejectIsUnavailableNotCorrupt
+    v0151b_test.go:400: err = approvals: stored evidence does not verify: a cancelled request published as evidence_corrupt
+--- FAIL: TestV0151B_P2_6_aCancelledRejectIsUnavailableNotCorrupt (0.15s)
+=== RUN   TestV0151B_P2_7_noRouteServesOrDecidesForARemotePeer
+2026/09/19 13:12:11 INFO model wired brain=a provider=ollama model_id=m locality=local
+2026/09/19 13:12:11 INFO agent brain wired brain=a tools=[webhook_call] max_iterations=2
+2026/09/19 13:12:11 INFO admin server listening addr=[::]:57775
+2026/09/19 13:12:11 INFO channel started channel=telegram
+2026/09/19 13:12:11 INFO korvun is serving; send your bot a message
+    v0151b_test.go:556: GET /api/approvals from 192.168.68.106: 200 {"gate":{"approvals_enabled":true,"brains_total":1,"brains_can_park":1,"rows_skipped":0},"rows":[{"id":"apr_de1ffc4c8ca0a258e72ce8a5fd62dbd9","action_id":"act_p27","operation":"tool/webhook_call","effect_class":"write_irreversible","expires_at":"2026-09-19T13:12:11.313692Z","digest":"sha256:249374f8891a02e9c7213bb8c1e5d01e344d4a8975f9e53e6e2b60849f88e468","origin":"telegram"}]}, want 403 loopback_only
+    v0151b_test.go:559: GET /api/approvals from 192.168.68.106: the refusal carries stored data
+    v0151b_test.go:556: GET /api/approvals/apr_de1ffc4c8ca0a258e72ce8a5fd62dbd9 from 192.168.68.106: 200 {"id":"apr_de1ffc4c8ca0a258e72ce8a5fd62dbd9","action_id":"act_p27","operation":"tool/webhook_call","effect_class":"write_irreversible","expires_at":"2026-09-19T13:12:11.313692Z","digest":"sha256:249374f8891a02e9c7213bb8c1e5d01e344d4a8975f9e53e6e2b60849f88e468","origin":"telegram","purpose":"avisar al webhook de pedidos","principal_id":"principal_brain_a","reversibility":"write_irreversible — irreversible, no documented undo","tool_cage":"webhook_call","required_rule":"require_approval","law_digest":"sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a","parameters":"{\"a\":1}","parameters_state":"present"}, want 403 loopback_only
+    v0151b_test.go:559: GET /api/approvals/apr_de1ffc4c8ca0a258e72ce8a5fd62dbd9 from 192.168.68.106: the refusal carries stored data
+    v0151b_test.go:556: POST /api/approvals/apr_de1ffc4c8ca0a258e72ce8a5fd62dbd9/approve from 192.168.68.106: 200 {"outcome":"failed","digest":"sha256:249374f8891a02e9c7213bb8c1e5d01e344d4a8975f9e53e6e2b60849f88e468","result":"webhook_call: args must be a URL, a space, then the JSON body","receipt_id":"rcpt_4c8b32590f3272c50e086e759129f3b3"}, want 403 loopback_only
+    v0151b_test.go:559: POST /api/approvals/apr_de1ffc4c8ca0a258e72ce8a5fd62dbd9/approve from 192.168.68.106: the refusal carries stored data
+    v0151b_test.go:556: POST /api/approvals/apr_de1ffc4c8ca0a258e72ce8a5fd62dbd9/reject from 192.168.68.106: 409 {"error":"already_decided","message":"this request is no longer open to a decision, and nothing ran twice — the ledger says what closed it"}, want 403 loopback_only
+    v0151b_test.go:563: decision acts 0 -> 1: a remote peer's decision was recorded
+    v0151b_test.go:575: approval status = "APPROVED", want PENDING
+--- FAIL: TestV0151B_P2_7_noRouteServesOrDecidesForARemotePeer (0.28s)
+=== RUN   TestV0151B_P2_7_loopbackPeersStillReachTheSurface
+2026/09/19 13:12:11 INFO model wired brain=a provider=ollama model_id=m locality=local
+2026/09/19 13:12:11 INFO agent brain wired brain=a tools=[webhook_call] max_iterations=2
+2026/09/19 13:12:11 INFO admin server listening addr=[::]:57777
+2026/09/19 13:12:11 INFO channel started channel=telegram
+2026/09/19 13:12:11 INFO korvun is serving; send your bot a message
+--- PASS: TestV0151B_P2_7_loopbackPeersStillReachTheSurface (0.20s)
+=== RUN   TestV0151B_P2_6_sister_aCorruptApprovalRowNeverBlocksTheBoot
+2026/09/19 13:12:11 INFO model wired brain=a provider=ollama model_id=m locality=local
+2026/09/19 13:12:11 INFO agent brain wired brain=a tools=[webhook_call] max_iterations=2
+--- PASS: TestV0151B_P2_6_sister_aCorruptApprovalRowNeverBlocksTheBoot (0.21s)
+=== RUN   TestV0151B_P2_8_theClaimDoorNeverPublishesAnotherBrainsLaw
+    v0151b_test.go:697: current_law_digest = "sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a", want b's "sha256:4cfa7a338dbe865c54cfee2567a3aa9ea6f431d3ebbf6037bb336c941dff2465"
+--- FAIL: TestV0151B_P2_8_theClaimDoorNeverPublishesAnotherBrainsLaw (0.19s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	3.273s
+FAIL
+# exit: 1

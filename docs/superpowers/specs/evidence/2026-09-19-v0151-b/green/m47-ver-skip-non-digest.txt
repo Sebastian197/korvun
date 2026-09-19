@@ -1,0 +1,56 @@
+# id: m47-ver-skip-non-digest
+# guard: P2-6 verifiers: skip a non-sha256 value (a pruned row's mark read as absence)
+# date: 2026-09-19T16:57:10.241448+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_(theVerifiersFailNamingEachMark|aValueOutsideTheListFailsClosed|aPlainOrphanVerifiesClean)' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/receipt.go
++++ b/internal/cli/receipt.go
+@@ -221,7 +221,7 @@
+ 	// rows gone is retention (the tombstone carries the story); the
+ 	// action alone remaining makes the absence a failure.
+ 	approvalArm := r.SchemaVersion >= 2 && r.ApprovalDigest != ""
+-	if approvalArm && !sealedDigestShape.MatchString(r.ApprovalDigest) {
++	if false && approvalArm && !sealedDigestShape.MatchString(r.ApprovalDigest) { // MUTATION
+ 		// v0.15.1 block B, P2-6: a sealer that could not use the approval
+ 		// row seals ONE mark from a closed list instead of a digest. The
+ 		// mark is the whole story of this arm — nothing re-derives from it
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/intact-row (0.04s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/intact-row (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/pruned (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/pruned (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/intact-row (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/intact-row (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/pruned (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/pruned (0.07s)
+--- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/intact-row (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/pruned (0.10s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/intact-row (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/pruned (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/pruned (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row (0.12s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/intact-row (0.12s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/pruned (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/pruned (0.10s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/intact-row (0.12s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/pruned (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/intact-row (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/pruned (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/intact-row (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/intact-row (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/pruned (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/pruned (0.05s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	1.228s
+FAIL
+# first failing assertion: v0151b_test.go:617: failures = [approval_mismatch: receipt seals zzz:anything but the approval row re-derives sha256:4669088006d5f82ecf84b7568f25f9ca5198deff06a246e3820785bacdbc55cc], want exactly [approval_evidence_unknown_mark: …]
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	1.153s
+# exit (restored): 0

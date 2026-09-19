@@ -1,0 +1,136 @@
+# command: go test -race -count=1 -v -run TestV0151B ./internal/controlapi/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# set aside for this run: nothing
+# date: 2026-09-19T12:12:06Z
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/bidi_override
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/bidi_override
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/bidi_override
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/C1_control
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/C1_control
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/C1_control
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/upper-case_stem
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/upper-case_stem
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/upper-case_stem
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/upper-case_hex
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/upper-case_hex
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/upper-case_hex
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/short
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/short
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/short
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/action_id
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/action_id
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/action_id
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/quote_injected
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/quote_injected
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/quote_injected
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/word_joiner
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/word_joiner
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+=== RUN   TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/word_joiner
+    v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+--- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam (0.03s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/bidi_override (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/bidi_override (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/bidi_override (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/C1_control (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/C1_control (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/C1_control (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/upper-case_stem (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/upper-case_stem (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/upper-case_stem (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/upper-case_hex (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/upper-case_hex (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/upper-case_hex (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/short (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/short (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/short (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/action_id (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/action_id (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/action_id (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/quote_injected (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/quote_injected (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/quote_injected (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/word_joiner (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/approve/word_joiner (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/POST/reject/word_joiner (0.00s)
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_GET_/api/approvals
+    v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_GET_/api/approvals
+    v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_GET_/api/approvals
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_GET_/api/approvals
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_GET_/api/approvals/apr_abababababababababababababababab
+    v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_GET_/api/approvals/apr_abababababababababababababababab
+    v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_GET_/api/approvals/apr_abababababababababababababababab
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_GET_/api/approvals/apr_abababababababababababababababab
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_POST_/api/approvals/apr_abababababababababababababababab/approve
+    v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_POST_/api/approvals/apr_abababababababababababababababab/approve
+    v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_POST_/api/approvals/apr_abababababababababababababababab/approve
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_POST_/api/approvals/apr_abababababababababababababababab/approve
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_POST_/api/approvals/apr_abababababababababababababababab/reject
+    v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_POST_/api/approvals/apr_abababababababababababababababab/reject
+    v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_POST_/api/approvals/apr_abababababababababababababababab/reject
+=== RUN   TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_POST_/api/approvals/apr_abababababababababababababababab/reject
+--- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_GET_/api/approvals (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_GET_/api/approvals (0.00s)
+    --- PASS: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_GET_/api/approvals (0.00s)
+    --- PASS: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_GET_/api/approvals (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_GET_/api/approvals/apr_abababababababababababababababab (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_GET_/api/approvals/apr_abababababababababababababababab (0.00s)
+    --- PASS: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_GET_/api/approvals/apr_abababababababababababababababab (0.00s)
+    --- PASS: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_GET_/api/approvals/apr_abababababababababababababababab (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_POST_/api/approvals/apr_abababababababababababababababab/approve (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_POST_/api/approvals/apr_abababababababababababababababab/approve (0.00s)
+    --- PASS: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_POST_/api/approvals/apr_abababababababababababababababab/approve (0.00s)
+    --- PASS: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_POST_/api/approvals/apr_abababababababababababababababab/approve (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_POST_/api/approvals/apr_abababababababababababababababab/reject (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_POST_/api/approvals/apr_abababababababababababababababab/reject (0.00s)
+    --- PASS: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_POST_/api/approvals/apr_abababababababababababababababab/reject (0.00s)
+    --- PASS: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_POST_/api/approvals/apr_abababababababababababababababab/reject (0.00s)
+=== RUN   TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer
+=== RUN   TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/192.0.2.10:40000
+    v0151b_test.go:212: a non-loopback peer's message was dispatched (1)
+=== RUN   TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/[2001:db8::10]:40000
+    v0151b_test.go:212: a non-loopback peer's message was dispatched (1)
+=== RUN   TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/127.0.0.1:40000
+=== RUN   TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/[::1]:40000
+--- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer (0.00s)
+    --- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/192.0.2.10:40000 (0.00s)
+    --- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/[2001:db8::10]:40000 (0.00s)
+    --- PASS: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/127.0.0.1:40000 (0.00s)
+    --- PASS: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/[::1]:40000 (0.00s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/controlapi	0.523s
+FAIL
+# exit: 1

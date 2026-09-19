@@ -1,0 +1,47 @@
+# id: m13-p26-excl-scan-also-unreadable
+# guard: P2-6 exclusivity: a Scan-level corruption also unreadable
+# date: 2026-09-19T18:07:44.519969+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6|TestClaim_|TestApprovalDetail_|TestHistoryRow' ./internal/action/sqlite/ ./internal/app/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approval_rows.go
++++ b/internal/action/sqlite/approval_rows.go
+@@ -172,7 +172,7 @@
+ 	case errors.Is(err, sql.ErrNoRows):
+ 		return fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+ 	case errors.Is(err, errApprovalRowInvalid):
+-		return fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
++		return fmt.Errorf("action/sqlite: approval %q: %w: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, ErrApprovalUnreadable, err) // MUTATION
+ 	default:
+ 		return fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+ 	}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestClaim_aCorruptRowStaysCorruptEvidence (0.08s)
+--- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheSweep (0.05s)
+--- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheList (0.06s)
+--- FAIL: TestApprovalDetail_oneClassPerFailure (0.00s)
+    --- FAIL: TestApprovalDetail_oneClassPerFailure/conversion (0.14s)
+--- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt (0.00s)
+    --- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt/real-3.5/GetApproval (0.14s)
+    --- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt/blob-00ff/GetApproval (0.08s)
+    --- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt/blob-00ff/ListApprovals (0.08s)
+    --- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt/blob-00ff/decide-reject (0.08s)
+    --- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt/blob-00ff/decide-approve (0.12s)
+    --- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt/real-3.5/decide-reject (0.10s)
+    --- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt/real-3.5/ListApprovals (0.10s)
+    --- FAIL: TestV0151B_P2_6_aWrongKindCellIsEvidenceCorrupt/real-3.5/decide-approve (0.10s)
+--- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide (0.00s)
+    --- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/approved (0.07s)
+    --- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/rejected (0.06s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	5.104s
+ok  	github.com/Sebastian197/korvun/internal/app	1.434s
+FAIL
+# first failing assertion: v0151b_x1_claim_test.go:98: err = action/sqlite: approval "apr_d370f6637589dfd6038373abe7727be7": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: the approval could not be read: action/sqlite: the approval row does not convert: policy_version holds text that is not an integer: corrupt=true unreadable=true, want corrupt=true unreadable=false
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	4.518s
+ok  	github.com/Sebastian197/korvun/internal/app	1.436s
+# exit (restored): 0

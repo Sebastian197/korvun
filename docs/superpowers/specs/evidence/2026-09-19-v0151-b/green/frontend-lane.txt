@@ -1,0 +1,16 @@
+# base e030202 + uncommitted green tree; code tree 5176805b7ecc714a493fe72ac57a136e7060dc85 (the frontend lane ran here; the frontend has not changed since)
+# cwd cmd/korvun-desktop/frontend; web/builder built first as the CI lane does; dist placeholders restored after
+## npm_ci -> 0
+## npm_run_typecheck -> 0
+## npm_run_lint -> 0
+✖ 1 problem (0 errors, 1 warning)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+## npm_run_format_check -> 0
+All matched files use Prettier code style!
+## npm_run_coverage -> 0
+ Test Files  44 passed (44)
+      Tests  465 passed (465)
+## npm_run_build -> 0
+✓ built in 281ms
+## npm run e2e -> 0
+  49 passed (1.5m)

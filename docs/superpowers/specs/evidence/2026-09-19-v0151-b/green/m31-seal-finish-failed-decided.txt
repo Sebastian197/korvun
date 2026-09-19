@@ -1,0 +1,30 @@
+# id: m31-seal-finish-failed-decided
+# guard: P2-6 sealer: current == APPROVED || to == FAILED
+# date: 2026-09-19T16:55:18.146833+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -358,7 +358,7 @@
+ 	}
+ 	if s.sealer != nil {
+ 		// decided: the action this finish closes was APPROVED (v0.15.1 block B).
+-		receipt, err := s.receiptForFinish(ctx, tx, actionID, to, finishedAt, resultDigest, action.State(current) == action.StateApproved)
++		receipt, err := s.receiptForFinish(ctx, tx, actionID, to, finishedAt, resultDigest, action.State(current) == action.StateApproved || to == action.StateFailed) // MUTATION
+ 		if err != nil {
+ 			return err
+ 		}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-failed (0.13s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.878s
+FAIL
+# first failing assertion: v0151b_test.go:639: plain action receipt approval_digest = "corrupt:approval_missing", want "" (no approval in this life)
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.242s
+# exit (restored): 0

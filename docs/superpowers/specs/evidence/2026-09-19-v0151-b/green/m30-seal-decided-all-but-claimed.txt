@@ -1,0 +1,45 @@
+# id: m30-seal-decided-all-but-claimed
+# guard: P2-6 sealer (M2c): decided on every pass but the claimed-orphan one
+# date: 2026-09-19T16:55:09.205398+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx|TestV0151B_P2_6_sister_(theVerifiersFailNamingEachMark|aValueOutsideTheListFailsClosed|aPlainOrphanVerifiesClean)' ./internal/action/sqlite/ ./internal/cli/
+# --- mutation diff ---
+--- a/internal/action/sqlite/store.go
++++ b/internal/action/sqlite/store.go
+@@ -1193,7 +1193,7 @@
+ 	// the UPDATE turns this DEFERRED transaction into a reader that must
+ 	// promote, and under a concurrent writer the UPDATE gets SQLITE_BUSY and
+ 	// the orphan is skipped.
+-	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "", predicate == claimedOrphanPredicate)
++	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "", predicate != claimedOrphanPredicate) // MUTATION
+ 	if err != nil {
+ 		return false, err
+ 	}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-crash-orphan (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id-recovery (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-authorized-orphan (0.03s)
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/row-deleted (0.22s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-reset-pending (0.21s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	3.349s
+--- FAIL: TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/authorized-orphan (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/crash-orphan (0.14s)
+    --- FAIL: TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/reused-id-recovery (0.21s)
+--- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/pruned (0.29s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row (0.35s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	2.696s
+FAIL
+# first failing assertion: v0151b_test.go:639: plain action receipt approval_digest = "corrupt:approval_missing", want "" (no approval in this life)
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.405s
+ok  	github.com/Sebastian197/korvun/internal/cli	2.854s
+# exit (restored): 0

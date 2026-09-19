@@ -1,0 +1,674 @@
+# command: go test -race -count=1 -v -run TestV0151B ./internal/cli/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# set aside for this run: nothing
+# date: 2026-09-19T14:39:17Z
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore
+=== PAUSE TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore
+=== RUN   TestV0151B_sister_showEscapesTheRawParameters
+=== PAUSE TestV0151B_sister_showEscapesTheRawParameters
+=== RUN   TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen
+=== PAUSE TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen
+=== RUN   TestV0151B_P2_1_sister_showAndListEscapeEveryUntrustedField
+=== PAUSE TestV0151B_P2_1_sister_showAndListEscapeEveryUntrustedField
+=== RUN   TestV0151B_P2_1_sister_showEscapesThePurpose
+=== PAUSE TestV0151B_P2_1_sister_showEscapesThePurpose
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed
+=== RUN   TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean
+=== PAUSE TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean
+=== CONT  TestV0151B_P2_1_sister_showEscapesThePurpose
+=== CONT  TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed
+=== CONT  TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/intact-row
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/intact-row
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/pruned
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/pruned
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/intact-row
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/intact-row
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/pruned
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/pruned
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/intact-row
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/intact-row
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/pruned
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/pruned
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/intact-row
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/intact-row
+=== RUN   TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/pruned
+=== PAUSE TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/pruned
+=== CONT  TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean
+=== RUN   TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/authorized-orphan
+=== PAUSE TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/authorized-orphan
+=== RUN   TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/crash-orphan
+=== PAUSE TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/crash-orphan
+=== RUN   TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/reused-id-recovery
+=== PAUSE TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/reused-id-recovery
+=== CONT  TestV0151B_sister_showEscapesTheRawParameters
+=== RUN   TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/show
+    v0151b_test.go:286: malformed id: exit 1 stderr "korvun approvals show: action/sqlite: seal read-only connection \"/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen1811268087/002\": unable to open database file (14)\n", want 2 naming the approval id
+=== RUN   TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/approve
+    v0151b_test.go:286: malformed id: exit 1 stderr "korvun approvals approve: action/sqlite: seal probe connection \"/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen1811268087/002\": unable to open database file (14)\n", want 2 naming the approval id
+=== RUN   TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/reject
+    v0151b_test.go:286: malformed id: exit 1 stderr "korvun approvals reject: action/sqlite: seal probe connection \"/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen1811268087/002\": unable to open database file (14)\n", want 2 naming the approval id
+=== RUN   TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/execute
+    v0151b_test.go:286: malformed id: exit 1 stderr "korvun approvals execute: action/sqlite: seal probe connection \"/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen1811268087/002\": unable to open database file (14)\n", want 2 naming the approval id
+--- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen (0.01s)
+    --- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/show (0.00s)
+    --- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/approve (0.00s)
+    --- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/reject (0.00s)
+    --- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/execute (0.00s)
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/approvals_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/approvals_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/approvals_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/approvals_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/ledger_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/ledger_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/ledger_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/ledger_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/receipt_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/receipt_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/receipt_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/receipt_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/intent_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/intent_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/intent_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/intent_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/grant_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/grant_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/grant_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/grant_--help
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/pruned
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/pruned
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/pruned
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/pruned
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/pruned
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/pruned
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/pruned
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/pruned
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/intact-row
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/intact-row
+=== RUN   TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/pruned
+=== PAUSE TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/pruned
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_-help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_-h
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_-h
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_--help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_--help
+=== RUN   TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_-help
+=== PAUSE TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_-help
+=== CONT  TestV0151B_P2_1_sister_showAndListEscapeEveryUntrustedField
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/quote_injected
+=== NAME  TestV0151B_P2_1_sister_showEscapesThePurpose
+    v0151b_test.go:370: the purpose must print escaped; stdout = "APPROVING EXACTLY THIS — digest: sha256:e29471c63f9ccaa32adb4c0166c41f79678168c570a9818316367358edb14a47\n\nrequest:       apr_2ee291085a1358084a7ab52b9bdfce84 (PENDING)\npurpose:       pagar a\u202eproveedor\nactor:         principal_brain_a (grant -, depth 0)\noperation:     tool/calc\nresources:     [console]\ndata egress:   no declared data egress\ncost:          unbudgeted\neffect class:  pure\nreversibility: pure — reversible\ntool cage:     calc\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\nrequired by:   require_approval\nexpires:       2026-09-19T15:39:24Z\n\nraw parameters:\n7*6\n"
+--- FAIL: TestV0151B_P2_1_sister_showEscapesThePurpose (0.40s)
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/intact-row
+=== NAME  TestV0151B_P2_1_sister_showAndListEscapeEveryUntrustedField
+    v0151b_test.go:318: list printed a raw U+202E: "apr_40774565f0f187487829d741618cddb3\u202e  PENDING   pure — reversible\u202e     expires 2026-09-19T15:39:24Z\n"
+=== NAME  TestV0151B_sister_showEscapesTheRawParameters
+    v0151b_test.go:236: the raw U+2060 reached the terminal: "APPROVING EXACTLY THIS — digest: sha256:c79fae72655962a6d18263d22897c81fcc5282d532d157c8ad0b107c89e20188\n\nrequest:       apr_cdd9a86c708dedec841f08274f49e899 (PENDING)\npurpose:       escape\nactor:         principal_brain_a (grant -, depth 0)\noperation:     tool/calc\nresources:     [console]\ndata egress:   no declared data egress\ncost:          unbudgeted\neffect class:  pure\nreversibility: pure — reversible\ntool cage:     calc\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\nrequired by:   require_approval\nexpires:       2026-09-19T15:39:24Z\n\nraw parameters:\npagar\u2060100 EUR <U+2060>\n"
+--- FAIL: TestV0151B_sister_showEscapesTheRawParameters (0.40s)
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/intact-row
+--- FAIL: TestV0151B_P2_1_sister_showAndListEscapeEveryUntrustedField (0.39s)
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/intact-row
+=== NAME  TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/quote_injected
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/bidi_override
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/upper-case_stem
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/upper-case_hex
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/path_traversal
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/action_namespace
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/word_joiner
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/C1_control
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/short
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/path_traversal
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/action_namespace
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/quote_injected
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/C1_control
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/upper-case_hex
+=== NAME  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/intact-row
+    v0151b_test.go:617: failures = [approval_mismatch: receipt seals zzz:anything but the approval row re-derives sha256:70ff51eb7fef3f3b67119a8dc687d882cc786b18e2e349d038779b10046c7e09], want exactly [approval_evidence_unknown_mark: …]
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/pruned
+=== NAME  TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/upper-case_hex
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/short
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/word_joiner
+=== NAME  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/intact-row
+    v0151b_test.go:617: failures = [approval_mismatch: receipt seals unreadable:not_in_the_list but the approval row re-derives sha256:bb610fd3cec08776a07cba407bb38f36bc5538f381a0f3fea1aed42c3a014ffa], want exactly [approval_evidence_unknown_mark: …]
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/pruned
+=== NAME  TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/word_joiner
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/bidi_override
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/upper-case_stem
+=== NAME  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/intact-row
+    v0151b_test.go:617: failures = [approval_mismatch: receipt seals sha256:not-a-digest but the approval row re-derives sha256:a4c56ed8077bf521936a0631b9bfb4d32a12ea21deda776aebff99bad045cf2c], want exactly [approval_evidence_unknown_mark: …]
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/intact-row
+=== NAME  TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/upper-case_stem
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/word_joiner
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/short
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/path_traversal
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/quote_injected
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/bidi_override
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/C1_control
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/upper-case_stem
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/upper-case_hex
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/action_namespace
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/action_namespace
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/quote_injected
+=== NAME  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/pruned
+    v0151b_test.go:617: failures = [], want exactly [approval_evidence_unknown_mark: …]
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/pruned
+=== NAME  TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/quote_injected
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/C1_control
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/upper-case_stem
+=== NAME  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/pruned
+    v0151b_test.go:617: failures = [], want exactly [approval_evidence_unknown_mark: …]
+=== CONT  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/pruned
+=== NAME  TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/upper-case_stem
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/short
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/word_joiner
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/bidi_override
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/upper-case_hex
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+=== RUN   TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/path_traversal
+    v0151b_test.go:165: exit = 1, want 2 — a malformed id is a usage error judged at the door
+--- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore (1.96s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/quote_injected (0.02s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/bidi_override (0.01s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/upper-case_stem (0.01s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/upper-case_hex (0.01s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/path_traversal (0.01s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/action_namespace (0.03s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/word_joiner (0.01s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/C1_control (0.01s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/short (0.01s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/path_traversal (0.14s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/action_namespace (0.05s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/quote_injected (0.03s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/C1_control (0.06s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/upper-case_hex (0.09s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/short (0.06s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/word_joiner (0.03s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/bidi_override (0.07s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/approve/upper-case_stem (0.05s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/word_joiner (0.04s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/short (0.04s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/path_traversal (0.05s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/quote_injected (0.02s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/bidi_override (0.02s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/C1_control (0.05s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/upper-case_stem (0.04s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/upper-case_hex (0.05s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/reject/action_namespace (0.09s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/action_namespace (0.08s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/quote_injected (0.03s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/C1_control (0.03s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/upper-case_stem (0.05s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/short (0.03s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/word_joiner (0.04s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/bidi_override (0.07s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/upper-case_hex (0.04s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/execute/path_traversal (0.03s)
+=== CONT  TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/crash-orphan
+=== NAME  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/intact-row
+    v0151b_test.go:617: failures = [approval_mismatch: receipt seals corrupt:not_in_the_list but the approval row re-derives sha256:43c7226407752489c1d9f264e9a253308a725625efc3263fc03534b76eea2d9f], want exactly [approval_evidence_unknown_mark: …]
+=== CONT  TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/reused-id-recovery
+=== NAME  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/pruned
+    v0151b_test.go:617: failures = [], want exactly [approval_evidence_unknown_mark: …]
+=== CONT  TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/authorized-orphan
+=== NAME  TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/pruned
+    v0151b_test.go:617: failures = [], want exactly [approval_evidence_unknown_mark: …]
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/approvals_-h
+    v0151b_test.go:114: exit = 2, want 0
+--- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/intact-row (0.49s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/intact-row (0.60s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/intact-row (0.69s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/pruned (0.63s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/pruned (0.82s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/intact-row (0.89s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/pruned (0.55s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/pruned (0.55s)
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/grant_--help
+    v0151b_test.go:114: exit = 2, want 0
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/grant_-h
+    v0151b_test.go:114: exit = 2, want 0
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/intent_-h
+    v0151b_test.go:114: exit = 2, want 0
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/intent_--help
+    v0151b_test.go:114: exit = 2, want 0
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/receipt_-h
+    v0151b_test.go:114: exit = 2, want 0
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/receipt_--help
+    v0151b_test.go:114: exit = 2, want 0
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/ledger_-h
+    v0151b_test.go:114: exit = 2, want 0
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/approvals_--help
+    v0151b_test.go:114: exit = 2, want 0
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/ledger_--help
+    v0151b_test.go:114: exit = 2, want 0
+--- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/approvals_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/grant_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/grant_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/intent_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/intent_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/receipt_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/receipt_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/ledger_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/approvals_--help (0.01s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryFamilyNoun/ledger_--help (0.00s)
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/intact-row
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/pruned
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/intact-row
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/pruned
+--- PASS: TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean (0.00s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/crash-orphan (0.52s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/authorized-orphan (0.39s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainOrphanVerifiesClean/reused-id-recovery (0.62s)
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/intact-row
+    v0151b_test.go:517: sealed approval_digest = "", want exactly "corrupt:row_scan"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_12e9d9f5d09ed0b865cedc501f057b4c (seq 1): OK\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/pruned
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/pruned
+    v0151b_test.go:517: sealed approval_digest = "sha256:d62d67c7ed684c5d731c2a5560c593147b90afa0de9114b6837170d618294fd3", want exactly "corrupt:status"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_18216267f80e0b9f6c380d8fad94125f (seq 1): OK\nreceipt rcpt_18216267f80e0b9f6c380d8fad94125f (seq 1): NOTE approval_evidence_reconstructed: decision=approved by=principal_operator at=2026-09-19T14:39:27Z law=v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1 preview=sha256:3e084306c6d9bba3fadc80a382a02194c1d61e901f4e9326f5b5e1c679e61cd4 (digest re-derived from the tombstone and matches the seal)\nreceipt rcpt_18216267f80e0b9f6c380d8fad94125f (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 2 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/pruned
+    v0151b_test.go:517: sealed approval_digest = "", want exactly "unreadable:driver"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_732dadf12b682fb803ea109655c46edf (seq 1): OK\nreceipt rcpt_732dadf12b682fb803ea109655c46edf (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_unreadable
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 1 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_unreadable
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/intact-row
+    v0151b_test.go:517: sealed approval_digest = "", want exactly "unreadable:driver"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_629461fc885dca78222dcfcafc50f2aa (seq 1): OK\n" stderr "", want 1 with FAIL approval_evidence_unreadable
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_unreadable
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/pruned
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/pruned
+    v0151b_test.go:517: sealed approval_digest = "", want exactly "corrupt:approval_missing"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_59265395567851ea6be94de2b5b0e07f (seq 1): OK\nreceipt rcpt_59265395567851ea6be94de2b5b0e07f (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 1 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/intact-row
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row
+    v0151b_test.go:517: sealed approval_digest = "", want exactly "corrupt:approval_missing"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_d6725c626ff5dac1eb8ee1918ea92d5d (seq 1): OK\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/pruned
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row
+    v0151b_test.go:517: sealed approval_digest = "sha256:15595233c38537d37f88f4ebd4fa7dc1ecc59e24683945c2ec9bdcc3b2219146", want exactly "corrupt:status"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_95d4e032e808b5bc0856ecb0bfb9ab05 (seq 1): OK\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/pruned
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/pruned
+    v0151b_test.go:517: sealed approval_digest = "sha256:b4cb9584ad4965559e23d810bf211babd2a2923189469bf3b0c65dd467d6860d", want exactly "corrupt:decision_verb"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_acbc009b4b373657adad14ddd5955bc3 (seq 1): OK\nreceipt rcpt_acbc009b4b373657adad14ddd5955bc3 (seq 1): NOTE approval_row_absent: no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable (the digest-sealed receipt is the surviving evidence)\nreceipt rcpt_acbc009b4b373657adad14ddd5955bc3 (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 2 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/intact-row
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/intact-row
+    v0151b_test.go:517: sealed approval_digest = "sha256:f8c0dafcfcf5448b3a2d7adc5ed975469f39573b7c0e5cd7cb96bb10304833d4", want exactly "corrupt:decision_verb"
+    v0151b_test.go:521: receipt verify: exit 1 stdout "receipt rcpt_6a92fe33784e33c3fe8dfb093bf974c4 (seq 1): FAIL approval_mismatch: receipt seals sha256:f8c0dafcfcf5448b3a2d7adc5ed975469f39573b7c0e5cd7cb96bb10304833d4 but the approval row re-derives sha256:3a37858b9f6c13738d84186cc3e80bce88dce92ed658b78b82da6dfdf90d4f70\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 1 stdout "ledger main: FAIL at receipt rcpt_6a92fe33784e33c3fe8dfb093bf974c4 (seq 1): approval_mismatch: receipt seals sha256:f8c0dafcfcf5448b3a2d7adc5ed975469f39573b7c0e5cd7cb96bb10304833d4 but the approval row re-derives sha256:3a37858b9f6c13738d84186cc3e80bce88dce92ed658b78b82da6dfdf90d4f70\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/pruned
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/pruned
+    v0151b_test.go:517: sealed approval_digest = "sha256:3346dc1e1bdfe2f337b6638c8af62aaef67d07ed0f429a6b08eb2bb0ee993559", want exactly "corrupt:decision_principal"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_bd370306c522f41d8d099b26a5971582 (seq 1): OK\nreceipt rcpt_bd370306c522f41d8d099b26a5971582 (seq 1): NOTE approval_row_absent: no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable (the digest-sealed receipt is the surviving evidence)\nreceipt rcpt_bd370306c522f41d8d099b26a5971582 (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 2 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/intact-row
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/pruned
+    v0151b_test.go:517: sealed approval_digest = "sha256:f0ca81565bad7bbc8745f9afd21bd7c988c9d87436f5c1c1820ff373585ead2d", want exactly "corrupt:decision_at"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_335fa8c8307c2d373f7c2f44300e8deb (seq 1): OK\nreceipt rcpt_335fa8c8307c2d373f7c2f44300e8deb (seq 1): NOTE approval_row_absent: no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable (the digest-sealed receipt is the surviving evidence)\nreceipt rcpt_335fa8c8307c2d373f7c2f44300e8deb (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 2 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/intact-row
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/pruned
+    v0151b_test.go:517: sealed approval_digest = "sha256:1f6c55020192dc10424eeaca61ad3d886a5195e8b3f48e7b35d5fce28e85a2cb", want exactly "corrupt:decision_at"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_3ba0bbfc6ac721e40c18858352349556 (seq 1): OK\nreceipt rcpt_3ba0bbfc6ac721e40c18858352349556 (seq 1): NOTE approval_row_absent: no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable (the digest-sealed receipt is the surviving evidence)\nreceipt rcpt_3ba0bbfc6ac721e40c18858352349556 (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 2 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/pruned
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/intact-row
+    v0151b_test.go:517: sealed approval_digest = "sha256:88385663e70af74d1313dc6df7b0341e8a7afada3724cae7919b993337911f5f", want exactly "corrupt:decision_at"
+    v0151b_test.go:521: receipt verify: exit 1 stdout "receipt rcpt_d6a3d6379d5145937b922ad3198a5590 (seq 1): FAIL approval_mismatch: receipt seals sha256:88385663e70af74d1313dc6df7b0341e8a7afada3724cae7919b993337911f5f but the approval row re-derives sha256:1f2ea3cf900b9bc759fc277b0eb49bf64e0c05e3a3b99b4df1b9ff09c807b754\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 1 stdout "ledger main: FAIL at receipt rcpt_d6a3d6379d5145937b922ad3198a5590 (seq 1): approval_mismatch: receipt seals sha256:88385663e70af74d1313dc6df7b0341e8a7afada3724cae7919b993337911f5f but the approval row re-derives sha256:1f2ea3cf900b9bc759fc277b0eb49bf64e0c05e3a3b99b4df1b9ff09c807b754\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/pruned
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/intact-row
+    v0151b_test.go:517: sealed approval_digest = "sha256:d0804ab8c72c6d499c0db10cdb6ba9cdd5f96c5f17db41dc10196b02651b26f0", want exactly "corrupt:decision_principal"
+    v0151b_test.go:521: receipt verify: exit 1 stdout "receipt rcpt_72b74f849a30899baa339c158e8488e9 (seq 1): FAIL approval_mismatch: receipt seals sha256:d0804ab8c72c6d499c0db10cdb6ba9cdd5f96c5f17db41dc10196b02651b26f0 but the approval row re-derives sha256:773f42df34d111b61cb594f43e974421225615c8aae62b87b0a591dde96dd08b\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 1 stdout "ledger main: FAIL at receipt rcpt_72b74f849a30899baa339c158e8488e9 (seq 1): approval_mismatch: receipt seals sha256:d0804ab8c72c6d499c0db10cdb6ba9cdd5f96c5f17db41dc10196b02651b26f0 but the approval row re-derives sha256:773f42df34d111b61cb594f43e974421225615c8aae62b87b0a591dde96dd08b\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/intact-row
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/pruned
+    v0151b_test.go:517: sealed approval_digest = "sha256:d4919c140b12bde344c21ab6609e3f2dcf7ed31dde57e133218a4c698fe77aab", want exactly "corrupt:decision_at"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_0baf8ffcf999d410fde88855e0e0de64 (seq 1): OK\nreceipt rcpt_0baf8ffcf999d410fde88855e0e0de64 (seq 1): NOTE approval_row_absent: no tombstone with the sealed digest exists; legacy history, deletion, or a coherent rewrite are indistinguishable (the digest-sealed receipt is the surviving evidence)\nreceipt rcpt_0baf8ffcf999d410fde88855e0e0de64 (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 2 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_-h
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_-help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+=== CONT  TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_--help
+    v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path
+--- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_delegate_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_revoke_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/grant_issue_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_show_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_list_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_revoke_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_activate_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/intent_create_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_rotate-key_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/receipt_verify_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/ledger_check_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_execute_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_reject_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_approve_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_-h (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_show_--help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_-help (0.00s)
+    --- FAIL: TestV0151B_P2_2_helpIsAQueryOnEveryOperatorVerb/approvals_list_--help (0.00s)
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/intact-row
+    v0151b_test.go:517: sealed approval_digest = "sha256:914ef3137c82f0823b554754935fb6855399ed1b700bb91a124bc9161e9d4921", want exactly "corrupt:decision_at"
+    v0151b_test.go:521: receipt verify: exit 1 stdout "receipt rcpt_422024462153254b4e8962e5bf2e0c7f (seq 1): FAIL approval_mismatch: receipt seals sha256:914ef3137c82f0823b554754935fb6855399ed1b700bb91a124bc9161e9d4921 but the approval row re-derives sha256:694730cd85f905a0ab38deebc11a6517752e108a1337f98d7fe58636bce84f14\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 1 stdout "ledger main: FAIL at receipt rcpt_422024462153254b4e8962e5bf2e0c7f (seq 1): approval_mismatch: receipt seals sha256:914ef3137c82f0823b554754935fb6855399ed1b700bb91a124bc9161e9d4921 but the approval row re-derives sha256:694730cd85f905a0ab38deebc11a6517752e108a1337f98d7fe58636bce84f14\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/pruned
+    v0151b_test.go:517: sealed approval_digest = "", want exactly "corrupt:row_scan"
+    v0151b_test.go:521: receipt verify: exit 0 stdout "receipt rcpt_9c4b360a22bf081c384eb86b45e9e430 (seq 1): OK\nreceipt rcpt_9c4b360a22bf081c384eb86b45e9e430 (seq 1): NOTE action_row_absent: the action row for act_inbox1 and its decision row are both gone, which is the shape retention's cascade leaves; the digest-sealed receipt is the surviving evidence\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 0 stdout "ledger main: NOTE 1 degraded check(s) across the walk — each one named on its own receipt; the digest-sealed receipts stand\nledger main: 2 receipts, chain intact\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+=== NAME  TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/intact-row
+    v0151b_test.go:517: sealed approval_digest = "sha256:212e7dbcc27e37dce676049860dbb23ff53259cd848219ee9f9937185701e28c", want exactly "corrupt:decision_at"
+    v0151b_test.go:521: receipt verify: exit 1 stdout "receipt rcpt_5390cdd4e748176580063f810bbbf34a (seq 1): FAIL approval_mismatch: receipt seals sha256:212e7dbcc27e37dce676049860dbb23ff53259cd848219ee9f9937185701e28c but the approval row re-derives sha256:46de9a45541d5857d3f7dc2c10b81635490909dbdfbbb7f0de71d05cb7555bf6\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+    v0151b_test.go:533: ledger check: exit 1 stdout "ledger main: FAIL at receipt rcpt_5390cdd4e748176580063f810bbbf34a (seq 1): approval_mismatch: receipt seals sha256:212e7dbcc27e37dce676049860dbb23ff53259cd848219ee9f9937185701e28c but the approval row re-derives sha256:46de9a45541d5857d3f7dc2c10b81635490909dbdfbbb7f0de71d05cb7555bf6\n" stderr "", want 1 with FAIL … approval_evidence_corrupt
+--- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/intact-row (0.49s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/pruned (0.44s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/pruned (0.58s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/intact-row (0.63s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/pruned (0.43s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row (0.34s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row (0.38s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/pruned (0.33s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/intact-row (0.35s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/pruned (0.49s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/pruned (0.47s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/pruned (0.38s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/intact-row (0.46s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/intact-row (0.42s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/pruned (0.39s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/intact-row (0.44s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/pruned (0.38s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/intact-row (0.29s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	5.975s
+FAIL
+# exit: 1

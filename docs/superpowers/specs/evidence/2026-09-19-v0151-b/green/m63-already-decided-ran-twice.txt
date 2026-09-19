@@ -1,0 +1,30 @@
+# id: m63-already-decided-ran-twice
+# guard: Tone: the already_decided refusal claims nothing about executions
+# date: 2026-09-19T18:09:20.246304+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestApprovals_NamedOutcomes' ./internal/controlapi/
+# --- mutation diff ---
+--- a/internal/controlapi/approvals.go
++++ b/internal/controlapi/approvals.go
+@@ -184,7 +184,7 @@
+ 	// about executions, and a restore of the parameters after the claim commits
+ 	// can make one request run twice (block A's canto, §5, open for v0.15.2).
+ 	ErrApprovalAlreadyDecided: {http.StatusConflict, OutcomeAlreadyDecided,
+-		"this request is no longer open to a decision — the ledger says what closed it"},
++		"this request is no longer open to a decision, and nothing ran twice — the ledger says what closed it" /* MUTATION */},
+ 	ErrApprovalExpired: {http.StatusConflict, OutcomeExpired,
+ 		"this request expired before the decision touched it — it never executes"},
+ 	ErrApprovalDigestMismatch: {http.StatusConflict, OutcomeDigestMismatch,
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestApprovals_NamedOutcomes (0.01s)
+    --- FAIL: TestApprovals_NamedOutcomes/already_decided (0.00s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/controlapi	0.514s
+FAIL
+# first failing assertion: approvals_test.go:358: already decided: the TEXT is the contract too — an operator reads it before an irreversible yes.
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/controlapi	0.516s
+# exit (restored): 0

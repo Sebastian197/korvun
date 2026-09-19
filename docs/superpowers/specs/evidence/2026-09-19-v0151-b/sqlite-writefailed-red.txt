@@ -1,0 +1,11 @@
+# command: go test -count=1 -run TestV0151B_P2_9\|TestApprovalSentinels ./internal/action/sqlite/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# set aside for this run: nothing
+# date: 2026-09-19T13:23:50Z
+# github.com/Sebastian197/korvun/internal/action/sqlite [github.com/Sebastian197/korvun/internal/action/sqlite.test]
+internal/action/sqlite/approvals_sentinels_test.go:48:28: undefined: ErrApprovalWriteFailed
+internal/action/sqlite/v0151b_writefailed_test.go:45:23: undefined: ErrApprovalWriteFailed
+internal/action/sqlite/v0151b_writefailed_test.go:78:21: undefined: ErrApprovalWriteFailed
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite [build failed]
+FAIL
+# exit: 1

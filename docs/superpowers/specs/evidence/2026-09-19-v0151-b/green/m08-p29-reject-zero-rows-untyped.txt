@@ -1,0 +1,32 @@
+# id: m08-p29-reject-zero-rows-untyped
+# guard: P2-9 zero rows: leave the reject path's zero rows untyped
+# date: 2026-09-19T18:06:34.139197+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_9' ./internal/app/ ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -820,6 +820,9 @@
+ 		// mould: modernc.org/sqlite v1.58.0's RowsAffected never errors.
+ 		return fmt.Errorf("action/sqlite: transition %q %s->%s: rows affected unavailable: %w: %w", actionID, from, to, ErrApprovalWriteFailed, err)
+ 	}
++	if n == 0 && to == action.StateRejected { // MUTATION
++		return fmt.Errorf("action/sqlite: transition %q %s->%s: row not in expected state", actionID, from, to)
++	}
+ 	if n == 0 {
+ 		return fmt.Errorf("action/sqlite: transition %q %s->%s: row not in expected state: %w", actionID, from, to, ErrApprovalActionNotPending)
+ 	}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_9_sister_rejectOverAMovedActionIsAlreadyClosed (0.02s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	1.291s
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.584s
+FAIL
+# first failing assertion: v0151b_test.go:280: err = approvals: store unavailable, want ErrApprovalAlreadyClosed
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/app	1.304s
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.569s
+# exit (restored): 0

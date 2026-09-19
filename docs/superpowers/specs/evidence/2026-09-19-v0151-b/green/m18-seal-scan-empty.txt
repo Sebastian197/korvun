@@ -1,0 +1,60 @@
+# id: m18-seal-scan-empty
+# guard: P2-6 sealer: return "" on the scan (conversion) error
+# date: 2026-09-19T16:53:35.904904+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -254,17 +254,17 @@
+ 	}{{&a.ApprovalID, 0}, {&a.ActionDigest, 1}, {&a.PreviewDigest, 2}, {&a.PolicyDigest, 4}}
+ 	for _, t := range texts {
+ 		if *t.dst, _, err = approvalRawText(vals[t.i], "approval column", false); err != nil {
+-			return MarkCorruptRowScan
++			return "" /* MUTATION */
+ 		}
+ 	}
+ 	if a.PolicyVersion, err = approvalRawInt(vals[3], "policy_version"); err != nil {
+-		return MarkCorruptRowScan
++		return "" /* MUTATION */
+ 	}
+ 	principal, _, perr := approvalRawText(vals[5], "decision_principal_id", true)
+ 	verb, _, verr := approvalRawText(vals[6], "decision", true)
+ 	status, _, serr := approvalRawText(vals[8], "status", false)
+ 	if perr != nil || verr != nil || serr != nil {
+-		return MarkCorruptRowScan
++		return "" /* MUTATION */
+ 	}
+ 	switch action.ApprovalStatus(status) {
+ 	case action.ApprovalPending:
+@@ -278,7 +278,7 @@
+ 	}
+ 	decisionAt, _, derr := approvalRawText(vals[7], "decision_at", true)
+ 	if derr != nil {
+-		return MarkCorruptRowScan
++		return "" /* MUTATION */
+ 	}
+ 	if decisionAt == "" {
+ 		return MarkCorruptDecisionAt
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/scan (0.03s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/hostile-bytes (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row_scan (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row_scan (0.20s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row_scan (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row_scan (0.06s)
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/scan (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/hostile-bytes (0.14s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.035s
+FAIL
+# first failing assertion: v0151b_test.go:341: recovered receipt approval_digest = [""], want exactly "corrupt:row_scan"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.927s
+# exit (restored): 0

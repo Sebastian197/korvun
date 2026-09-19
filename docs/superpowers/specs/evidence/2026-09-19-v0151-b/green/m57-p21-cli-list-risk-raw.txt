@@ -1,0 +1,29 @@
+# id: m57-p21-cli-list-risk-raw
+# guard: P2-1 sister: print list's risk summary raw
+# date: 2026-09-19T18:09:17.198406+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_1_sister_showAndListEscapeEveryUntrustedField' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/approvals.go
++++ b/internal/cli/approvals.go
+@@ -103,7 +103,7 @@
+ 			// writes to disk, R14).
+ 			// Stored bytes: printed in the screen's escape alphabet (P2-1).
+ 			_, _ = fmt.Fprintf(c.stdout, "%-38s %-9s %-22s %s\n",
+-				escapeUntrusted(a.ApprovalID), a.EffectiveStatusAt(time.Now().UTC()), escapeUntrusted(a.RiskSummary), expiry)
++				escapeUntrusted(a.ApprovalID), a.EffectiveStatusAt(time.Now().UTC()), a.RiskSummary /* MUTATION */, expiry)
+ 			total++
+ 		}
+ 	}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_1_sister_showAndListEscapeEveryUntrustedField (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.688s
+FAIL
+# first failing assertion: v0151b_test.go:318: list printed a raw U+202E: "apr_0d3d1f48e2c6f6e4ca7025e8a6e34032<U+202E> PENDING   pure — reversible\u202e     expires 2026-09-19T19:09:14Z\n"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	0.675s
+# exit (restored): 0

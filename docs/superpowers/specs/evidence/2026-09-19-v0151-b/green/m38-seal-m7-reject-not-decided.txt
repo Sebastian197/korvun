@@ -1,0 +1,37 @@
+# id: m38-seal-m7-reject-not-decided
+# guard: P2-6 sealer (M7): decided=false on the reject path
+# date: 2026-09-19T18:08:47.982002+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -395,7 +395,7 @@
+ 		return fmt.Errorf("action/sqlite: stamp finish %q: %w", actionID, err)
+ 	}
+ 	// decided: the parked action leaves PENDING_APPROVAL through a decision.
+-	r, err := s.receiptForFinish(ctx, tx, actionID, action.StateRejected, at, "", true)
++	r, err := s.receiptForFinish(ctx, tx, actionID, action.StateRejected, at, "", false) // MUTATION
+ 	if err != nil {
+ 		return err
+ 	}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row-deleted (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-reset-pending (0.12s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-reset-pending (0.10s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row-deleted (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-reset-pending (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row-deleted (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-reset-pending (0.14s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row-deleted (0.17s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.212s
+FAIL
+# first failing assertion: v0151b_test.go:573: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.914s
+# exit (restored): 0

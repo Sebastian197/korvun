@@ -56,12 +56,16 @@ var (
 	// with corruption.
 	ErrApprovalInvalidated = errors.New("action/sqlite: the law moved under this approval")
 
-	// ErrApprovalEvidenceCorrupt is any belt or evidence parse refusing.
-	// Permanent: no profile repairs it.
+	// ErrApprovalEvidenceCorrupt is any belt or evidence parse refusing,
+	// including an approval row that was read and does not convert
+	// (v0.15.1 block B, classifyApprovalRead). Permanent: no profile repairs it.
 	ErrApprovalEvidenceCorrupt = errors.New("action/sqlite: the approval's stored evidence no longer verifies")
 
-	// ErrApprovalUnreadable is a DRIVER failure, and only that. It is the
-	// single transient class of this file; everything else fails closed.
+	// ErrApprovalUnreadable is the store not answering, and only that: a
+	// driver failure, a cancelled or expired context, a closed store, a
+	// statement that cannot be prepared — never a row that was read (v0.15.1
+	// block B). It is the single transient class of this file; everything
+	// else fails closed.
 	ErrApprovalUnreadable = errors.New("action/sqlite: the approval could not be read")
 
 	// ErrApprovalParamsDigestMismatch is the stored terna and params no
@@ -312,14 +316,11 @@ func (s *Store) approvalDetail(ctx context.Context, approvalID string, law *Poli
 		`SELECT `+approvalColumns+`, canonical_preview, canonical_params
 		   FROM approvals WHERE approval_id = ?`, approvalID)
 	a, rawPreview, rawParams, err := scanApprovalDetail(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
-	}
 	if err != nil {
-		// A column that will not parse is corruption of the evidence, not a
-		// disk that did not answer. Sending it to the transient residual is
-		// how a permanent fault gets told "retry".
-		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+		// A column that will not convert is corruption of the evidence; a
+		// store that did not answer is not (v0.15.1 block B, P2-4). Exactly
+		// one class.
+		return ApprovalDetailRow{}, classifyApprovalRead(approvalID, err)
 	}
 
 	out := ApprovalDetailRow{Approval: a, Params: []byte(rawParams)}
@@ -382,32 +383,21 @@ func (s *Store) approvalDetail(ctx context.Context, approvalID string, law *Poli
 }
 
 func scanApprovalDetail(row scanner) (action.Approval, string, string, error) {
-	var (
-		a           action.Approval
-		status      string
-		requestedAt string
-		expiresAt   sql.NullString
-		decisionAt  sql.NullString
-		rawPreview  string
-		rawParams   string
-	)
-	if err := row.Scan(&a.ApprovalID, &a.SchemaVersion, &a.ActionID, &a.ActionDigest,
-		&a.PreviewDigest, &a.RequestedFrom, &a.Reason, &a.RiskSummary,
-		&a.PolicyVersion, &a.PolicyDigest, &requestedAt, &expiresAt, &status,
-		&a.DecisionPrincipalID, &a.Decision, &decisionAt, &a.Comment,
-		&a.DecisionReceiptID, &rawPreview, &rawParams); err != nil {
+	vals, err := scanRawApproval(row, 2)
+	if err != nil {
 		return action.Approval{}, "", "", err
 	}
-	a.Status = action.ApprovalStatus(status)
-	var err error
-	if a.RequestedAt, err = time.Parse(time.RFC3339Nano, requestedAt); err != nil {
-		return action.Approval{}, "", "", fmt.Errorf("parse approval requested_at: %w", err)
+	a, err := approvalFromRaw(vals[:approvalColumnCount])
+	if err != nil {
+		return action.Approval{}, "", "", err
 	}
-	if a.ExpiresAt, err = parseNullTime(expiresAt); err != nil {
-		return action.Approval{}, "", "", fmt.Errorf("parse approval expires_at: %w", err)
+	rawPreview, _, err := approvalRawText(vals[approvalColumnCount], "canonical_preview", false)
+	if err != nil {
+		return action.Approval{}, "", "", err
 	}
-	if a.DecisionAt, err = parseNullTime(decisionAt); err != nil {
-		return action.Approval{}, "", "", fmt.Errorf("parse approval decision_at: %w", err)
+	rawParams, _, err := approvalRawText(vals[approvalColumnCount+1], "canonical_params", false)
+	if err != nil {
+		return action.Approval{}, "", "", err
 	}
 	return a, rawPreview, rawParams, nil
 }
@@ -614,14 +604,14 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 	defer func() { _ = tx.Rollback() }()
 
 	a, err := s.approvalTx(ctx, tx, approvalID)
-	if errors.Is(err, ErrApprovalNotFound) {
-		// Propagated, not re-mapped: re-wrapping here would make the door's own
-		// sentinel decorative — any door could go back to the generic error and
-		// nothing would notice.
-		return nil, action.Operation{}, err
-	}
 	if err != nil {
-		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+		// Propagated, not re-mapped (X1, v0.15.1 block B): approvalTx names
+		// exactly one class — absent, corrupt (the row was read and does not
+		// convert) or unreadable (the store did not answer). Wrapping every
+		// non-absent error as corrupt published a store that did not answer
+		// as damaged evidence and, once approvalTx typed its errors, stacked
+		// both sentinels on one error.
+		return nil, action.Operation{}, err
 	}
 	// The snapshot the caller read, against the row THIS transaction read. The
 	// caller's prechecks happen outside this transaction, so every column they
@@ -851,11 +841,10 @@ func (s *Store) approvalTx0(ctx context.Context, approvalID string) (action.Appr
 	row := s.db.QueryRowContext(ctx,
 		`SELECT `+approvalColumns+` FROM approvals WHERE approval_id = ?`, approvalID)
 	a, err := scanApproval(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
-	}
 	if err != nil {
-		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+		// One class (v0.15.1 block B, X1's sister): a store that did not
+		// answer is unreadable, never corrupt.
+		return action.Approval{}, classifyApprovalRead(approvalID, err)
 	}
 	return a, nil
 }

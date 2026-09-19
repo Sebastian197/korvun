@@ -1,0 +1,39 @@
+# date: 2026-09-19T12:10:17.559992Z
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# mutated file: internal/action/sqlite/approvals_v15.go
+# --- mutation diff ---
+diff --git a/internal/action/sqlite/approvals_v15.go b/internal/action/sqlite/approvals_v15.go
+index 0e2de28..d144db3 100644
+--- a/internal/action/sqlite/approvals_v15.go
++++ b/internal/action/sqlite/approvals_v15.go
+@@ -585,7 +585,7 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
+ 		return nil, action.Operation{}, err
+ 	}
+ 	if err != nil {
+-		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
++		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+ 	}
+ 	if law != nil {
+ 		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+
+# --- command (mutated): go test -count=1 -v -run 'TestClaim_aCorruptRowStaysCorruptEvidence' ./internal/action/sqlite/
+=== RUN   TestClaim_aCorruptRowStaysCorruptEvidence
+=== PAUSE TestClaim_aCorruptRowStaysCorruptEvidence
+=== CONT  TestClaim_aCorruptRowStaysCorruptEvidence
+    v0151b_x1_claim_test.go:96: err = action/sqlite: approval "apr_a825148a1e984cbb5053b749d173a51a": action/sqlite: the approval could not be read: sql: Scan error on column index 8, name "policy_version": converting driver.Value type string ("x") to a int64: invalid syntax: corrupt=false unreadable=true, want corrupt=true unreadable=false
+--- FAIL: TestClaim_aCorruptRowStaysCorruptEvidence (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.476s
+FAIL
+
+# exit (mutated): 1
+# restored: git diff --quiet -- internal/action/sqlite/approvals_v15.go exit 0 (byte for byte)
+# --- command (restored): go test -count=1 -v -run 'TestClaim_aCorruptRowStaysCorruptEvidence' ./internal/action/sqlite/
+=== RUN   TestClaim_aCorruptRowStaysCorruptEvidence
+=== PAUSE TestClaim_aCorruptRowStaysCorruptEvidence
+=== CONT  TestClaim_aCorruptRowStaysCorruptEvidence
+--- PASS: TestClaim_aCorruptRowStaysCorruptEvidence (0.03s)
+PASS
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.483s
+
+# exit (restored): 0

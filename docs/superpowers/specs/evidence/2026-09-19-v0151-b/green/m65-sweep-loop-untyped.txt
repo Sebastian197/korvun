@@ -1,0 +1,30 @@
+# id: m65-sweep-loop-untyped
+# guard: P2-a: the sweep loop's ctx.Err() wraps without a sentinel
+# date: 2026-09-19T18:05:56.354494+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_(aCancelledContextIsNeverCorruption|aDriverFailureIsNeverCorruption)' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -711,7 +711,7 @@
+ 		// operator decided between the SELECT and this close is SKIPPED
+ 		// with a note — never a boot-fatal for losing a clean race.
+ 		if err := ctx.Err(); err != nil {
+-			return swept, skipped, fmt.Errorf("action/sqlite: expiry sweep interrupted: %w: %w", ErrApprovalUnreadable, err)
++			return swept, skipped, fmt.Errorf("action/sqlite: expiry sweep interrupted: %w", err) // MUTATION
+ 		}
+ 		won, err := s.sweepExpiredOne(ctx, id, at)
+ 		if err != nil {
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption (0.00s)
+    --- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption/sweep-loop (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.671s
+FAIL
+# first failing assertion: v0151b_test.go:202: err = action/sqlite: expiry sweep interrupted: context canceled, want ErrApprovalUnreadable — transient, by name
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.699s
+# exit (restored): 0

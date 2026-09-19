@@ -1,0 +1,35 @@
+# id: m16b-x1-claim-blanket-corrupt
+# guard: X1 queued rows: keep the claim's blanket corrupt wrap
+# date: 2026-09-19T18:08:15.659478+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestClaim_' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals_v15.go
++++ b/internal/action/sqlite/approvals_v15.go
+@@ -611,7 +611,7 @@
+ 		// non-absent error as corrupt published a store that did not answer
+ 		// as damaged evidence and, once approvalTx typed its errors, stacked
+ 		// both sentinels on one error.
+-		return nil, action.Operation{}, err
++		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err) // MUTATION
+ 	}
+ 	// The snapshot the caller read, against the row THIS transaction read. The
+ 	// caller's prechecks happen outside this transaction, so every column they
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence (0.05s)
+--- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt (0.00s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/rename-column (0.06s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/ctx-cancelled-after-4 (0.09s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/drop-column (0.08s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/ctx-cancelled-after-6 (0.06s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/ctx-cancelled-after-5 (0.05s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.394s
+FAIL
+# first failing assertion: v0151b_x1_claim_test.go:72: err = action/sqlite: approval "apr_46dcd155a55198eec783319e4a90b215": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: approval "apr_46dcd155a55198eec783319e4a90b215": action/sqlite: the approval could not be read: SQL logic error: no such table: approvals (1): corrupt=true unreadable=true, want corrupt=false unreadable=true — the store did not answer
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.547s
+# exit (restored): 0

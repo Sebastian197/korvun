@@ -1,0 +1,58 @@
+# id: m27-seal-missing-as-empty
+# guard: P2-6 sealer: keep mapping ErrNoRows / a non-decided status to ""
+# date: 2026-09-19T16:54:40.358177+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -239,10 +239,7 @@
+ 	}
+ 	if err := row.Scan(ptrs...); err != nil {
+ 		if errors.Is(err, sql.ErrNoRows) {
+-			if decided {
+-				return MarkCorruptApprovalMissing
+-			}
+-			return ""
++			return "" // MUTATION
+ 		}
+ 		return MarkUnreadableDriver
+ 	}
+@@ -268,10 +265,7 @@
+ 	}
+ 	switch action.ApprovalStatus(status) {
+ 	case action.ApprovalPending:
+-		if decided {
+-			return MarkCorruptApprovalMissing
+-		}
+-		return ""
++		return "" // MUTATION
+ 	case action.ApprovalApproved, action.ApprovalRejected, action.ApprovalExpired, action.ApprovalCancelled:
+ 	default:
+ 		return MarkCorruptStatus
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-reset-pending (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/row-deleted (0.10s)
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/row-deleted (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-reset-pending (0.07s)
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-reset-pending (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row-deleted (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row-deleted (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-reset-pending (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-reset-pending (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row-deleted (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row-deleted (0.24s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-reset-pending (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.022s
+FAIL
+# first failing assertion: v0151b_test.go:341: recovered receipt approval_digest = [""], want exactly "corrupt:approval_missing"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.954s
+# exit (restored): 0

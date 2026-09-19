@@ -1,0 +1,15 @@
+# finding (filed for v0.15.2): the CLI prints a store error to stderr with stored bytes raw
+# base e030202 + uncommitted green tree; code tree before the probe: 3f120aa0f51d65aea9d31bc6f751caa975f1f448
+# probe: a temporary in-package test file (internal/cli/zz_capture_stderr_test.go), written, run once and deleted; code tree after deletion: 3f120aa0f51d65aea9d31bc6f751caa975f1f448 (equal = true)
+# setup: parkedRequest (a real parked request in a real store file); then, through a second real connection:
+#   UPDATE approvals SET action_digest = action_digest || char(8238) WHERE approval_id = ?
+# act: korvun approvals show --config <cfg> <approval id>   (in-process CLI, Run over buffers)
+# command: go test -count=1 -v -run TestZZCaptureShowStderrOverARewrittenDigest ./internal/cli/
+# go version go1.26.6 darwin/amd64; 2026-09-19T18:28:00Z
+# go test exit: 0
+CAPTURE exit=1
+CAPTURE stdout=""
+CAPTURE stderr="korvun approvals show: action/sqlite: approval \"apr_cd033243a0da06e1e3d59467902964ef\": action/sqlite: the approval's stored evidence no longer verifies: preview_args_mismatch: the preview shows args sha256:e29471c63f9ccaa32adb4c0166c41f79678168c570a9818316367358edb14a47 but the approval binds sha256:e29471c63f9ccaa32adb4c0166c41f79678168c570a9818316367358edb14a47\u202e\n"
+CAPTURE stderr-contains-raw-U+202E=true
+--- PASS: TestZZCaptureShowStderrOverARewrittenDigest (0.02s)
+ok  	github.com/Sebastian197/korvun/internal/cli	0.614s

@@ -1,0 +1,31 @@
+# id: m03-p27-drop-console-route
+# guard: P2-7 route: drop the peer check from the console /message route
+# date: 2026-09-19T16:51:26.839177+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_7' ./internal/controlapi/
+# --- mutation diff ---
+--- a/internal/controlapi/console.go
++++ b/internal/controlapi/console.go
+@@ -108,7 +108,7 @@
+ 	// message it dispatches enters the core as the console channel, whose
+ 	// provenance is «loopback, in-process». A peer that is not loopback is
+ 	// refused before the bearer and before any dispatch.
+-	m.Handle("POST /api/conversations/{key}/message", loopbackOnlyConsole(auth(userMessageHandler(op))))
++	m.Handle("POST /api/conversations/{key}/message", auth(userMessageHandler(op)))
+ }
+ 
+ // userMessageHandler is the direct-chat send (FR-CONS-3): a USER envelope —
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer (0.00s)
+    --- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/192.0.2.10:40000 (0.00s)
+    --- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/[2001:db8::10]:40000 (0.00s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/controlapi	0.461s
+FAIL
+# first failing assertion: v0151b_test.go:212: a non-loopback peer's message was dispatched (1)
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/controlapi	0.442s
+# exit (restored): 0

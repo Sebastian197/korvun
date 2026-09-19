@@ -1,0 +1,8 @@
+# base e030202 + uncommitted green tree; code tree 50b53bec6d1d1a1ad85d7c55b53e1720245e2c07 (codetree: HEAD tree + working tree via a throwaway index; node_modules, dist, test output, the evidence folder and the canto excluded); go version go1.26.6 darwin/amd64; 2026-09-19T18:33:22Z
+# command: govulncheck $GO_PKGS (the pruned list, 41 packages); exit 0
+No vulnerabilities found.
+# Go: go1.26.6
+# Scanner: govulncheck@v1.7.0
+# DB: https://vuln.go.dev
+# DB updated: 2026-09-16 18:00:43 +0000 UTC
+# 

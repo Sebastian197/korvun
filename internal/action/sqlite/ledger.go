@@ -170,33 +170,137 @@ func (s *Store) receiptForRecord(ctx context.Context, tx *sql.Tx, env action.Env
 	}
 }
 
-// approvalDigestTx resolves the DECIDED approval's decision digest for
-// one action. R5-S1 REVOKED the old "honest empty for unapproved
-// outcomes": under the F4 cascade the refused approval's row dies with
-// retention, so the receipt is the ONLY evidence that survives — for
-// the NO exactly as for the YES. Every decided status (APPROVED,
-// REJECTED, EXPIRED, CANCELLED) seals; "" remains honest only when no
-// approval ever existed for the action. Receipts sealed by pre-S1
-// binaries carry "" on refused outcomes — a declared historical fact
-// (SECURITY.md), never rewritten.
-func (s *Store) approvalDigestTx(ctx context.Context, tx *sql.Tx, actionID string) string {
-	// C2: the decision digest also seals what the human READ and the
-	// law it was read under — preview_digest and the policy pin ride in.
+// The approval marks (v0.15.1 block B, director 2026-09-19). A receipt sealed
+// over an approval row the sealer cannot use carries exactly one of these in
+// approval_digest — never "" (which every verifier reads as «no approval ever
+// existed») and never a digest the row does not re-derive. The list is CLOSED:
+// the code after the prefix is one of these constants, never err.Error() and
+// never a cell's bytes.
+const (
+	// MarkCorruptRowScan: the row was read and a column does not convert.
+	MarkCorruptRowScan = "corrupt:row_scan"
+	// MarkCorruptDecisionAt: a decided row whose decision instant does not
+	// parse, is empty or is NULL.
+	MarkCorruptDecisionAt = "corrupt:decision_at"
+	// MarkCorruptDecisionPrincipal: the origin rule broken — a human verb
+	// without a principal, or the clock verb with one.
+	MarkCorruptDecisionPrincipal = "corrupt:decision_principal"
+	// MarkCorruptDecisionVerb: a verb outside the decision set.
+	MarkCorruptDecisionVerb = "corrupt:decision_verb"
+	// MarkCorruptApprovalMissing: the row is gone or no longer decided while
+	// the closing door proves a decision existed.
+	MarkCorruptApprovalMissing = "corrupt:approval_missing"
+	// MarkCorruptStatus: a status outside the approval status set.
+	MarkCorruptStatus = "corrupt:status"
+	// MarkUnreadableDriver: the store could not read the row.
+	MarkUnreadableDriver = "unreadable:driver"
+)
+
+// ApprovalMarkClass reports whether d is one of the closed-list marks and, if
+// so, its class: "corrupt" or "unreadable".
+func ApprovalMarkClass(d string) (class string, ok bool) {
+	switch d {
+	case MarkCorruptRowScan, MarkCorruptDecisionAt, MarkCorruptDecisionPrincipal,
+		MarkCorruptDecisionVerb, MarkCorruptApprovalMissing, MarkCorruptStatus:
+		return "corrupt", true
+	case MarkUnreadableDriver:
+		return "unreadable", true
+	}
+	return "", false
+}
+
+// approvalDigestTx resolves what a closing receipt seals about the action's
+// approval: the consumed decision digest, "" when the action had no approval
+// in this life, or a closed-list mark when the row cannot be used.
+//
+// `decided` is handed by the closing door and says a decision provably
+// existed: FinishWithResult passes current == APPROVED, closeCrashOrphan
+// passes «this close was owned by the claimed-orphan pass», the reject path
+// passes true. It is never derived here from the target state or from a
+// tombstone looked up by action_id (a later plain life reusing the id would
+// inherit an earlier life's decision). A missing or non-decided row is a mark
+// only when `decided` is true; a plain life keeps "".
+//
+// R5-S1 still holds: every decided status (APPROVED, REJECTED, EXPIRED,
+// CANCELLED) seals, for the NO exactly as for the YES. Not detectable here, by
+// design (R11): a coherent rewrite of a decided row to another valid instant,
+// principal and verb re-derives a valid digest.
+func (s *Store) approvalDigestTx(ctx context.Context, tx *sql.Tx, actionID string, decided bool) string {
+	// C2: the decision digest also seals what the human READ and the law it
+	// was read under — preview_digest and the policy pin ride in.
 	row := tx.QueryRowContext(ctx,
 		`SELECT approval_id, action_digest, preview_digest, policy_version,
-		        policy_digest, decision_principal_id, decision, decision_at
-		   FROM approvals WHERE action_id = ? AND status != ?`,
-		actionID, string(action.ApprovalPending))
+		        policy_digest, decision_principal_id, decision, decision_at, status
+		   FROM approvals WHERE action_id = ?`, actionID)
+	vals := make([]any, 9)
+	ptrs := make([]any, len(vals))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	if err := row.Scan(ptrs...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if decided {
+				return MarkCorruptApprovalMissing
+			}
+			return ""
+		}
+		return MarkUnreadableDriver
+	}
 	var a action.Approval
-	var decisionAt sql.NullString
-	if err := row.Scan(&a.ApprovalID, &a.ActionDigest, &a.PreviewDigest,
-		&a.PolicyVersion, &a.PolicyDigest, &a.DecisionPrincipalID,
-		&a.Decision, &decisionAt); err != nil {
+	var err error
+	texts := []struct {
+		dst *string
+		i   int
+	}{{&a.ApprovalID, 0}, {&a.ActionDigest, 1}, {&a.PreviewDigest, 2}, {&a.PolicyDigest, 4}}
+	for _, t := range texts {
+		if *t.dst, _, err = approvalRawText(vals[t.i], "approval column", false); err != nil {
+			return MarkCorruptRowScan
+		}
+	}
+	if a.PolicyVersion, err = approvalRawInt(vals[3], "policy_version"); err != nil {
+		return MarkCorruptRowScan
+	}
+	principal, _, perr := approvalRawText(vals[5], "decision_principal_id", true)
+	verb, _, verr := approvalRawText(vals[6], "decision", true)
+	status, _, serr := approvalRawText(vals[8], "status", false)
+	if perr != nil || verr != nil || serr != nil {
+		return MarkCorruptRowScan
+	}
+	switch action.ApprovalStatus(status) {
+	case action.ApprovalPending:
+		if decided {
+			return MarkCorruptApprovalMissing
+		}
 		return ""
+	case action.ApprovalApproved, action.ApprovalRejected, action.ApprovalExpired, action.ApprovalCancelled:
+	default:
+		return MarkCorruptStatus
 	}
-	if t, err := parseNullTime(decisionAt); err == nil {
-		a.DecisionAt = t
+	decisionAt, _, derr := approvalRawText(vals[7], "decision_at", true)
+	if derr != nil {
+		return MarkCorruptRowScan
 	}
+	if decisionAt == "" {
+		return MarkCorruptDecisionAt
+	}
+	if a.DecisionAt, err = time.Parse(time.RFC3339Nano, decisionAt); err != nil {
+		return MarkCorruptDecisionAt
+	}
+	// The origin rule (judgeTombstoneOrigin): a human verb requires a
+	// principal, the clock verb requires none.
+	switch {
+	case action.IsHumanDecision(verb):
+		if principal == "" {
+			return MarkCorruptDecisionPrincipal
+		}
+	case verb == action.DecisionClock:
+		if principal != "" {
+			return MarkCorruptDecisionPrincipal
+		}
+	default:
+		return MarkCorruptDecisionVerb
+	}
+	a.DecisionPrincipalID, a.Decision = principal, verb
 	return a.Digest()
 }
 
@@ -253,7 +357,8 @@ func (s *Store) FinishWithResult(ctx context.Context, actionID string, to action
 		return fmt.Errorf("action/sqlite: finish %q: %w", actionID, err)
 	}
 	if s.sealer != nil {
-		receipt, err := s.receiptForFinish(ctx, tx, actionID, to, finishedAt, resultDigest)
+		// decided: the action this finish closes was APPROVED (v0.15.1 block B).
+		receipt, err := s.receiptForFinish(ctx, tx, actionID, to, finishedAt, resultDigest, action.State(current) == action.StateApproved)
 		if err != nil {
 			return err
 		}
@@ -269,7 +374,7 @@ func (s *Store) FinishWithResult(ctx context.Context, actionID string, to action
 
 // receiptForFinish reifies one executed outcome from its stored row,
 // inside the closing transaction.
-func (s *Store) receiptForFinish(ctx context.Context, tx *sql.Tx, actionID string, to action.State, finishedAt time.Time, resultDigest string) (action.Receipt, error) {
+func (s *Store) receiptForFinish(ctx context.Context, tx *sql.Tx, actionID string, to action.State, finishedAt time.Time, resultDigest string, decided bool) (action.Receipt, error) {
 	var (
 		paramsDigest string
 		effectClass  string
@@ -298,7 +403,7 @@ func (s *Store) receiptForFinish(ctx context.Context, tx *sql.Tx, actionID strin
 	}
 	return action.Receipt{
 		SchemaVersion:  2,
-		ApprovalDigest: s.approvalDigestTx(ctx, tx, actionID),
+		ApprovalDigest: s.approvalDigestTx(ctx, tx, actionID, decided),
 		ReceiptID:      action.NewReceiptID(),
 		ActionID:       actionID,
 		IntentDigest:   s.intentDigestTx(ctx, tx, intentID.String),

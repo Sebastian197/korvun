@@ -1,0 +1,1724 @@
+# command: npx vitest run src/views/Approvals.v0151b.test.tsx  (cwd cmd/korvun-desktop/frontend)
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# date: 2026-09-19T12:12:19Z
+npm warn config init.author.email Use `--init-author-email` instead.
+npm warn config init.author.name Use `--init-author-name` instead.
+npm warn config init.license Use `--init-license` instead.
+npm warn Unknown user config "init.licence". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown user config "init.name". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm notice run korvun-desktop-chrome@0.0.0 npx
+npm notice run 'vitest' run src/views/Approvals.v0151b.test.tsx
+
+ RUN  v4.1.11 /Users/sebastianmorenosaavedra/Desktop/korvun-v0151-b.nosync/cmd/korvun-desktop/frontend
+
+stderr | src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con result numérico: el literal de respuesta no reconocida, nada afirmado
+An error occurred in the <DecisionState> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+
+ ❯ src/views/Approvals.v0151b.test.tsx (30 tests | 28 failed) 7337ms
+     × P2-10 · not_found desde approve: su literal aprobado, exacto; nada afirmado 239ms
+     × P2-10 · unavailable desde approve: su literal aprobado, exacto; nada afirmado 88ms
+     × P2-10 · disabled desde approve: su literal aprobado, exacto; nada afirmado 83ms
+     × P2-10 · params_digest_mismatch desde approve: su literal aprobado, exacto; nada afirmado 83ms
+     × P2-10 · loopback_only desde approve: su literal aprobado, exacto; nada afirmado 80ms
+     × P2-10 · not_found desde reject: su literal aprobado, exacto; nada afirmado 63ms
+     × P2-10 · unavailable desde reject: su literal aprobado, exacto; nada afirmado 63ms
+     × P2-10 · disabled desde reject: su literal aprobado, exacto; nada afirmado 63ms
+     × P2-10 · params_digest_mismatch desde reject: su literal aprobado, exacto; nada afirmado 64ms
+     × P2-10 · loopback_only desde reject: su literal aprobado, exacto; nada afirmado 65ms
+     × P2-10 · approve con outcome «rejected»: el literal de respuesta no reconocida, nada afirmado 73ms
+     × P2-10 · approve con outcome ausente: el literal de respuesta no reconocida, nada afirmado 75ms
+     × P2-10 · approve con outcome «EXECUTED»: el literal de respuesta no reconocida, nada afirmado 77ms
+     × P2-10 · approve con result numérico: el literal de respuesta no reconocida, nada afirmado 1124ms
+     × P2-10 · approve con receipt_id ausente: el literal de respuesta no reconocida, nada afirmado 74ms
+     × P2-10 · approve con receipt_id numérico: el literal de respuesta no reconocida, nada afirmado 74ms
+     × P2-10 · approve con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 72ms
+     × P2-10 · approve con un 202 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 74ms
+     × P2-10 · reject con outcome «executed»: el literal de respuesta no reconocida, nada afirmado 63ms
+     × P2-10 · reject con receipt_id ausente: el literal de respuesta no reconocida, nada afirmado 64ms
+     × P2-10 · reject con receipt_id numérico: el literal de respuesta no reconocida, nada afirmado 63ms
+     × P2-10 · reject con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 66ms
+     × P2-1 · la fila imprime el id por el alfabeto de escape 1066ms
+     × P2-1 · una fila con id mal formado (path traversal) se lista con su literal y no se abre 1056ms
+     × P2-1 · una fila con id mal formado (query) se lista con su literal y no se abre 1069ms
+     × P2-1 · una fila con id mal formado (upper-case) se lista con su literal y no se abre 1084ms
+     × P2-1 · la línea «korvun approvals show <id>» escapa el id que sirvió el detalle 65ms
+     × P2-1 · hermana: el recibo tras una decisión se imprime por el alfabeto de escape 64ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 28 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · not_found desde approve: su literal aprobado, exacto; nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · not_found desde reject: su literal aprobado, exacto; nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: No hay ninguna petición con ese identificador.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mRespuesta que esta pantalla no reconoce.[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0m404[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mnot_found[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mx[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:178:23
+    176|       it(`P2-10 · ${name} desde ${verb}: su literal aprobado, exacto; …
+    177|         await decide(verb, () => json(status, { error: name, message: …
+    178|         expect(screen.getByText(literal)).toBeInTheDocument()
+       |                       ^
+    179|         expect(screen.queryByText(UNKNOWN)).toBeNull()
+    180|         neverAffirmed()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · unavailable desde approve: su literal aprobado, exacto; nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · unavailable desde reject: su literal aprobado, exacto; nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: El almacén no se pudo leer en este instante. Es transitorio y no dice nada sobre la evidencia.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mRespuesta que esta pantalla no reconoce.[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0m503[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0munavailable[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mx[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:178:23
+    176|       it(`P2-10 · ${name} desde ${verb}: su literal aprobado, exacto; …
+    177|         await decide(verb, () => json(status, { error: name, message: …
+    178|         expect(screen.getByText(literal)).toBeInTheDocument()
+       |                       ^
+    179|         expect(screen.queryByText(UNKNOWN)).toBeNull()
+    180|         neverAffirmed()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · disabled desde approve: su literal aprobado, exacto; nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · disabled desde reject: su literal aprobado, exacto; nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: APROBACIONES APAGADAS EN ESTE PERFIL. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mRespuesta que esta pantalla no reconoce.[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0m409[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mdisabled[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mx[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:178:23
+    176|       it(`P2-10 · ${name} desde ${verb}: su literal aprobado, exacto; …
+    177|         await decide(verb, () => json(status, { error: name, message: …
+    178|         expect(screen.getByText(literal)).toBeInTheDocument()
+       |                       ^
+    179|         expect(screen.queryByText(UNKNOWN)).toBeNull()
+    180|         neverAffirmed()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · params_digest_mismatch desde approve: su literal aprobado, exacto; nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · params_digest_mismatch desde reject: su literal aprobado, exacto; nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: No se ejecutó nada. Lo que se iba a ejecutar ya no coincide con lo que leíste: la huella cambió entre tu lectura y tu decisión. Vuelve a abrir la petición y léela de nuevo; si decides, será sobre la versión nueva.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mRespuesta que esta pantalla no reconoce.[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0m409[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mparams_digest_mismatch[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mx[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:178:23
+    176|       it(`P2-10 · ${name} desde ${verb}: su literal aprobado, exacto; …
+    177|         await decide(verb, () => json(status, { error: name, message: …
+    178|         expect(screen.getByText(literal)).toBeInTheDocument()
+       |                       ^
+    179|         expect(screen.queryByText(UNKNOWN)).toBeNull()
+    180|         neverAffirmed()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · loopback_only desde approve: su literal aprobado, exacto; nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · loopback_only desde reject: su literal aprobado, exacto; nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: Esta decisión solo puede tomarse desde la misma máquina que ejecuta Korvun. La petición llegó desde otro origen y se rechazó sin tocar nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mRespuesta que esta pantalla no reconoce.[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0m403[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mloopback_only[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mx[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:178:23
+    176|       it(`P2-10 · ${name} desde ${verb}: su literal aprobado, exacto; …
+    177|         await decide(verb, () => json(status, { error: name, message: …
+    178|         expect(screen.getByText(literal)).toBeInTheDocument()
+       |                       ^
+    179|         expect(screen.queryByText(UNKNOWN)).toBeNull()
+    180|         neverAffirmed()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con outcome «rejected»: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con outcome ausente: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con outcome «EXECUTED»: el literal de respuesta no reconocida, nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mEjecutada[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m/>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mRecibo rcp_x[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:228:21
+    226|     it(`P2-10 · ${verb} con ${label}: el literal de respuesta no recon…
+    227|       await decide(verb, () => json(status, body))
+    228|       expect(screen.getByText(L_UNRECOGNISED)).toBeInTheDocument()
+       |                     ^
+    229|       neverAffirmed()
+    230|       expect(screen.queryByText(/Recibo (undefined|7)$/)).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con result numérico: el literal de respuesta no reconocida, nada afirmado
+TestingLibraryElementError: Unable to find role="button" and name "Volver a pendientes"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div />[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div />[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ decide src/views/Approvals.v0151b.test.tsx:153:16
+    151|   // «Volver a pendientes» is on every terminal state (UX v36 §8): a s…
+    152|   // that blanks never shows it.
+    153|   await screen.findByRole('button', { name: 'Volver a pendientes' })
+       |                ^
+    154| }
+    155| /** The three state titles that affirm an outcome: executed, rejected,…
+ ❯ src/views/Approvals.v0151b.test.tsx:227:7
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con receipt_id ausente: el literal de respuesta no reconocida, nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mEjecutada[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mok[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mRecibo undefined[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:228:21
+    226|     it(`P2-10 · ${verb} con ${label}: el literal de respuesta no recon…
+    227|       await decide(verb, () => json(status, body))
+    228|       expect(screen.getByText(L_UNRECOGNISED)).toBeInTheDocument()
+       |                     ^
+    229|       neverAffirmed()
+    230|       expect(screen.queryByText(/Recibo (undefined|7)$/)).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con receipt_id numérico: el literal de respuesta no reconocida, nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mEjecutada[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mok[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mRecibo 7[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:228:21
+    226|     it(`P2-10 · ${verb} con ${label}: el literal de respuesta no recon…
+    227|       await decide(verb, () => json(status, body))
+    228|       expect(screen.getByText(L_UNRECOGNISED)).toBeInTheDocument()
+       |                     ^
+    229|       neverAffirmed()
+    230|       expect(screen.queryByText(/Recibo (undefined|7)$/)).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con un 202 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mEjecutada[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mok[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mRecibo rcp_x[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:228:21
+    226|     it(`P2-10 · ${verb} con ${label}: el literal de respuesta no recon…
+    227|       await decide(verb, () => json(status, body))
+    228|       expect(screen.getByText(L_UNRECOGNISED)).toBeInTheDocument()
+       |                     ^
+    229|       neverAffirmed()
+    230|       expect(screen.queryByText(/Recibo (undefined|7)$/)).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · reject con outcome «executed»: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · reject con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mRechazada. La acción aparcada se cierra con su recibo sellado.[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mRecibo rcp_x[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:228:21
+    226|     it(`P2-10 · ${verb} con ${label}: el literal de respuesta no recon…
+    227|       await decide(verb, () => json(status, body))
+    228|       expect(screen.getByText(L_UNRECOGNISED)).toBeInTheDocument()
+       |                     ^
+    229|       neverAffirmed()
+    230|       expect(screen.queryByText(/Recibo (undefined|7)$/)).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · reject con receipt_id ausente: el literal de respuesta no reconocida, nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mRechazada. La acción aparcada se cierra con su recibo sellado.[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mRecibo undefined[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:228:21
+    226|     it(`P2-10 · ${verb} con ${label}: el literal de respuesta no recon…
+    227|       await decide(verb, () => json(status, body))
+    228|       expect(screen.getByText(L_UNRECOGNISED)).toBeInTheDocument()
+       |                     ^
+    229|       neverAffirmed()
+    230|       expect(screen.queryByText(/Recibo (undefined|7)$/)).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · reject con receipt_id numérico: el literal de respuesta no reconocida, nada afirmado
+TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-bar"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn-secondary"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0m← Pendientes[0m
+      [36m</button>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-state"[39m
+      [33mrole[39m=[32m"alert"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-state-title"[39m
+      [36m>[39m
+        [0mRechazada. La acción aparcada se cierra con su recibo sellado.[0m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"approvals-state-line"[39m
+      [36m>[39m
+        [0mRecibo 7[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mVolver a pendientes[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/views/Approvals.v0151b.test.tsx:228:21
+    226|     it(`P2-10 · ${verb} con ${label}: el literal de respuesta no recon…
+    227|       await decide(verb, () => json(status, body))
+    228|       expect(screen.getByText(L_UNRECOGNISED)).toBeInTheDocument()
+       |                     ^
+    229|       neverAffirmed()
+    230|       expect(screen.queryByText(/Recibo (undefined|7)$/)).toBeNull()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · la fila imprime el id por el alfabeto de escape
+TestingLibraryElementError: Unable to find an element with the text: Esta fila lleva un identificador que Korvun no puede leer. No se abre ni se decide desde aquí. Las demás filas no se ven afectadas.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-list"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mActualizar[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"approvals-rows"[39m
+      [36m>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/webhook_call[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab⁠[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0ma3f91c7d…9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+      [36m</ul>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-list"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mActualizar[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"approvals-rows"[39m
+      [36m>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/webhook_call[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab⁠[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0ma3f91c7d…9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+      [36m</ul>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/views/Approvals.v0151b.test.tsx:242:30
+    240|     stubFetch(router([{ ...ROW, id: ID + '\u2060' }], DETAIL, {}))
+    241|     render(<Approvals onGoHome={() => undefined} />)
+    242|     const row = await screen.findByText(L_MALFORMED_ROW)
+       |                              ^
+    243|     expect(document.body.textContent).toContain('<U+2060>')
+    244|     expect(document.body.textContent).not.toContain('\u2060')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · una fila con id mal formado (path traversal) se lista con su literal y no se abre
+TestingLibraryElementError: Unable to find an element with the text: Esta fila lleva un identificador que Korvun no puede leer. No se abre ni se decide desde aquí. Las demás filas no se ven afectadas.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-list"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mActualizar[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mrole[39m=[32m"status"[39m
+      [36m>[39m
+        [0mDos peticiones muestran la misma cola de digest; aquí van enteros[0m
+      [36m</p>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"approvals-rows"[39m
+      [36m>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/webhook_call[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_x/../../reject[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/otra[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+      [36m</ul>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-list"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mActualizar[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mrole[39m=[32m"status"[39m
+      [36m>[39m
+        [0mDos peticiones muestran la misma cola de digest; aquí van enteros[0m
+      [36m</p>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"approvals-rows"[39m
+      [36m>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/webhook_call[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_x/../../reject[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/otra[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+      [36m</ul>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/views/Approvals.v0151b.test.tsx:265:27
+    263|       )
+    264|       render(<Approvals onGoHome={() => undefined} />)
+    265|       expect(await screen.findByText(L_MALFORMED_ROW)).toBeInTheDocume…
+       |                           ^
+    266|       // The healthy row stays openable: «Las demás filas no se ven af…
+    267|       expect(screen.getByRole('button', { name: /tool\/otra/ })).toBeI…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · una fila con id mal formado (query) se lista con su literal y no se abre
+TestingLibraryElementError: Unable to find an element with the text: Esta fila lleva un identificador que Korvun no puede leer. No se abre ni se decide desde aquí. Las demás filas no se ven afectadas.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-list"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mActualizar[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mrole[39m=[32m"status"[39m
+      [36m>[39m
+        [0mDos peticiones muestran la misma cola de digest; aquí van enteros[0m
+      [36m</p>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"approvals-rows"[39m
+      [36m>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/webhook_call[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab?x=1[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/otra[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+      [36m</ul>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-list"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mActualizar[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mrole[39m=[32m"status"[39m
+      [36m>[39m
+        [0mDos peticiones muestran la misma cola de digest; aquí van enteros[0m
+      [36m</p>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"approvals-rows"[39m
+      [36m>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/webhook_call[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab?x=1[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/otra[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+      [36m</ul>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/views/Approvals.v0151b.test.tsx:265:27
+    263|       )
+    264|       render(<Approvals onGoHome={() => undefined} />)
+    265|       expect(await screen.findByText(L_MALFORMED_ROW)).toBeInTheDocume…
+       |                           ^
+    266|       // The healthy row stays openable: «Las demás filas no se ven af…
+    267|       expect(screen.getByRole('button', { name: /tool\/otra/ })).toBeI…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · una fila con id mal formado (upper-case) se lista con su literal y no se abre
+TestingLibraryElementError: Unable to find an element with the text: Esta fila lleva un identificador que Korvun no puede leer. No se abre ni se decide desde aquí. Las demás filas no se ven afectadas.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-list"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mActualizar[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mrole[39m=[32m"status"[39m
+      [36m>[39m
+        [0mDos peticiones muestran la misma cola de digest; aquí van enteros[0m
+      [36m</p>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"approvals-rows"[39m
+      [36m>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/webhook_call[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mAPR_ABABABABABABABABABABABABABABABAB[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/otra[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+      [36m</ul>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"approvals-list"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"approvals-actions"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"btn-secondary"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mActualizar[0m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<p[39m
+        [33mrole[39m=[32m"status"[39m
+      [36m>[39m
+        [0mDos peticiones muestran la misma cola de digest; aquí van enteros[0m
+      [36m</p>[39m
+      [36m<ul[39m
+        [33mclass[39m=[32m"approvals-rows"[39m
+      [36m>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/webhook_call[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mAPR_ABABABABABABABABABABABABABABABAB[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+        [36m<li>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"approvals-row"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-op"[39m
+            [36m>[39m
+              [0mtool/otra[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-class"[39m
+            [36m>[39m
+              [0mIRREVERSIBLE[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-origin"[39m
+            [36m>[39m
+              [0mtelegram[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-id"[39m
+            [36m>[39m
+              [0mapr_abababababababababababababababab[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-digest"[39m
+            [36m>[39m
+              [0msha256:a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"approvals-row-expiry"[39m
+            [36m>[39m
+              [0mcaduca · 14:31:00Z[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</li>[39m
+      [36m</ul>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/views/Approvals.v0151b.test.tsx:265:27
+    263|       )
+    264|       render(<Approvals onGoHome={() => undefined} />)
+    265|       expect(await screen.findByText(L_MALFORMED_ROW)).toBeInTheDocume…
+       |                           ^
+    266|       // The healthy row stays openable: «Las demás filas no se ven af…
+    267|       expect(screen.getByRole('button', { name: /tool\/otra/ })).toBeI…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · la línea «korvun approvals show <id>» escapa el id que sirvió el detalle
+AssertionError: expected 'korvun approvals show apr_abababababa…' to contain '<U+202E>'
+
+Expected: "<U+202E>"
+Received: "korvun approvals show apr_abababababababababababababababab‮"
+
+ ❯ src/views/Approvals.v0151b.test.tsx:285:30
+    283|     )
+    284|     const line = await screen.findByText(/korvun approvals show/)
+    285|     expect(line.textContent).toContain('<U+202E>')
+       |                              ^
+    286|     expect(line.textContent).not.toContain('\u202e')
+    287|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/28]⎯
+
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · hermana: el recibo tras una decisión se imprime por el alfabeto de escape
+AssertionError: expected 'Recibo rcp_\u202ex' to contain '<U+202E>'
+
+Expected: "<U+202E>"
+Received: "Recibo rcp_‮x"
+
+ ❯ src/views/Approvals.v0151b.test.tsx:297:33
+    295|     fireEvent.click(rejectBtn())
+    296|     const receipt = await screen.findByText(/^Recibo /)
+    297|     expect(receipt.textContent).toContain('<U+202E>')
+       |                                 ^
+    298|     expect(receipt.textContent).not.toContain('\u202e')
+    299|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/28]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯ Uncaught Exception ⎯⎯⎯⎯⎯
+TypeError: s is not iterable
+ ❯ escapeUntrusted src/views/Approvals.tsx:98:20
+     96| function escapeUntrusted(s: string): string {
+     97|   let out = ''
+     98|   for (const ch of s) {
+       |                    ^
+     99|     const c = ch.codePointAt(0) ?? 0
+    100|     // The alphabet reserves its own opening bracket. Every escape pri…
+ ❯ DecisionState src/views/Approvals.tsx:1348:32
+ ❯ Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+ ❯ renderRootSync node_modules/react-dom/cjs/react-dom-client.development.js:17450:11
+
+This error originated in "src/views/Approvals.v0151b.test.tsx" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "P2-10 · approve con result numérico: el literal de respuesta no reconocida, nada afirmado". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed (1)
+      Tests  28 failed | 2 passed (30)
+     Errors  1 error
+   Start at  13:12:20
+   Duration  8.50s (transform 144ms, setup 85ms, import 204ms, tests 7.34s, environment 710ms)
+
+# exit: 1

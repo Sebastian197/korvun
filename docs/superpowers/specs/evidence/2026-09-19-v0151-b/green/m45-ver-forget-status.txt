@@ -1,0 +1,31 @@
+# id: m45-ver-forget-status
+# guard: P2-6 verifiers: know only some codes (corrupt:status forgotten)
+# date: 2026-09-19T16:56:57.154194+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_(theVerifiersFailNamingEachMark|aValueOutsideTheListFailsClosed|aPlainOrphanVerifiesClean)' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -201,7 +201,7 @@
+ func ApprovalMarkClass(d string) (class string, ok bool) {
+ 	switch d {
+ 	case MarkCorruptRowScan, MarkCorruptDecisionAt, MarkCorruptDecisionPrincipal,
+-		MarkCorruptDecisionVerb, MarkCorruptApprovalMissing, MarkCorruptStatus:
++		MarkCorruptDecisionVerb, MarkCorruptApprovalMissing: // MUTATION: corrupt:status forgotten
+ 		return "corrupt", true
+ 	case MarkUnreadableDriver:
+ 		return "unreadable", true
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/pruned (0.14s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row (0.15s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	1.211s
+FAIL
+# first failing assertion: v0151b_test.go:521: receipt verify: exit 1 stdout "receipt rcpt_65cac724dcb9ca658780245eabd72474 (seq 1): FAIL approval_evidence_unknown_mark: the receipt seals \"corrupt:status\", which is neither a sha256 digest nor a listed mark\n" stderr "", want 1 with FAIL approval_evidence_corrupt
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	1.317s
+# exit (restored): 0

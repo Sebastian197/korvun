@@ -60,6 +60,10 @@ const (
 	OutcomeDisabled       OutcomeName = "disabled"
 	OutcomeExpired        OutcomeName = "expired"
 
+	// A peer that did not reach the core over loopback (v0.15.1 block B,
+	// P2-7, director 2026-09-19: always refused, no opt-in).
+	OutcomeLoopbackOnly OutcomeName = "loopback_only"
+
 	// The two belts that refuse before anything is decided.
 	OutcomeDigestMismatch       OutcomeName = "digest_mismatch"
 	OutcomeParamsDigestMismatch OutcomeName = "params_digest_mismatch"
@@ -89,7 +93,7 @@ const (
 // directions: a name without a literal and an orphan anchor both redden.
 var ApprovalOutcomeNames = []OutcomeName{
 	OutcomeAlreadyDecided, OutcomeNotFound, OutcomeUnavailable, OutcomeForbidden,
-	OutcomeDisabled, OutcomeExpired,
+	OutcomeDisabled, OutcomeExpired, OutcomeLoopbackOnly,
 	OutcomeDigestMismatch, OutcomeParamsDigestMismatch,
 	OutcomeInvalidated, OutcomeEvidenceCorrupt, OutcomeBrainGone,
 	OutcomeNotStartedParamsHeld, OutcomeNotStartedParamsGone, OutcomeParamsUnaccounted,
@@ -102,7 +106,10 @@ var ApprovalOutcomeNames = []OutcomeName{
 // sentinel — FR-API-21 and FR-API-25 say which ambiguities stay ambiguous and
 // why the literals never name an actor the evidence cannot prove.
 var (
-	ErrApprovalsDisabled      = errors.New("approvals: disabled in this profile")
+	ErrApprovalsDisabled = errors.New("approvals: disabled in this profile")
+	// ErrApprovalLoopbackOnly: the request reached the core from a peer that
+	// is not loopback. Refused before the seam, always.
+	ErrApprovalLoopbackOnly   = errors.New("approvals: only a loopback peer may use this surface")
 	ErrApprovalsUnavailable   = errors.New("approvals: store unavailable")
 	ErrApprovalNotFound       = errors.New("approvals: no such request")
 	ErrApprovalAlreadyDecided = errors.New("approvals: already decided")
@@ -173,8 +180,11 @@ var outcomes = map[error]outcome{
 	// written by the clock, and CANCELLED, a withdrawal before any decision —
 	// have no first decision to stand. Asserting an actor that may not exist is
 	// the same defect the screen's decided_evidence_corrupt literal had.
+	// Nor «nothing ran twice» (v0.15.1 block B): this refusal says nothing
+	// about executions, and a restore of the parameters after the claim commits
+	// can make one request run twice (block A's canto, §5, open for v0.15.2).
 	ErrApprovalAlreadyDecided: {http.StatusConflict, OutcomeAlreadyDecided,
-		"this request is no longer open to a decision, and nothing ran twice — the ledger says what closed it"},
+		"this request is no longer open to a decision — the ledger says what closed it"},
 	ErrApprovalExpired: {http.StatusConflict, OutcomeExpired,
 		"this request expired before the decision touched it — it never executes"},
 	ErrApprovalDigestMismatch: {http.StatusConflict, OutcomeDigestMismatch,
@@ -187,6 +197,8 @@ var outcomes = map[error]outcome{
 		"approvals are switched off in this profile — there is no pending list, which is not the same as an empty one"},
 	ErrApprovalForbidden: {http.StatusUnauthorized, OutcomeForbidden,
 		"the window could not authenticate against the core — no decision has left it"},
+	ErrApprovalLoopbackOnly: {http.StatusForbidden, OutcomeLoopbackOnly,
+		"this decision can only be made from the machine that runs Korvun — the request came from another origin and was refused without touching anything"},
 
 	ErrApprovalParamsDigestMismatch: {http.StatusConflict, OutcomeParamsDigestMismatch,
 		"the stored parameters do not re-derive this request's digest — this is permanent and nothing was executed"},
@@ -297,10 +309,10 @@ type Approvals interface {
 // RegisterApprovals mounts the four routes behind the bearer.
 func RegisterApprovals(m Mounter, token string, a Approvals) {
 	auth := approvalsAuth(token)
-	m.Handle("GET /api/approvals", auth(listApprovalsHandler(a)))
-	m.Handle("GET /api/approvals/{id}", auth(approvalDetailHandler(a)))
-	m.Handle("POST /api/approvals/{id}/approve", auth(approveHandler(a)))
-	m.Handle("POST /api/approvals/{id}/reject", auth(rejectHandler(a)))
+	m.Handle("GET /api/approvals", loopbackOnlyApprovals(auth(listApprovalsHandler(a))))
+	m.Handle("GET /api/approvals/{id}", loopbackOnlyApprovals(auth(approvalDetailHandler(a))))
+	m.Handle("POST /api/approvals/{id}/approve", loopbackOnlyApprovals(auth(approveHandler(a))))
+	m.Handle("POST /api/approvals/{id}/reject", loopbackOnlyApprovals(auth(rejectHandler(a))))
 }
 
 // approvalsAuth is the same gate as bearerAuth with this surface's 401 body.
@@ -380,6 +392,9 @@ func listApprovalsHandler(a Approvals) http.Handler {
 
 func approvalDetailHandler(a Approvals) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !validApprovalIDOrNotFound(w, r.PathValue("id")) {
+			return
+		}
 		detail, err := a.Detail(r.Context(), r.PathValue("id"))
 		if err != nil {
 			writeApprovalError(w, err)
@@ -391,6 +406,9 @@ func approvalDetailHandler(a Approvals) http.Handler {
 
 func approveHandler(a Approvals) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !validApprovalIDOrNotFound(w, r.PathValue("id")) {
+			return
+		}
 		var body struct {
 			Digest string `json:"digest"`
 		}
@@ -412,6 +430,9 @@ func approveHandler(a Approvals) http.Handler {
 
 func rejectHandler(a Approvals) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !validApprovalIDOrNotFound(w, r.PathValue("id")) {
+			return
+		}
 		var body struct {
 			Comment string `json:"comment"`
 		}

@@ -131,9 +131,9 @@ func TestApprovals_EveryRouteRequiresBearer(t *testing.T) {
 	srv := approvalsServer(t, f)
 	for _, tc := range []struct{ method, path, body string }{
 		{"GET", "/api/approvals", ""},
-		{"GET", "/api/approvals/apr_1", ""},
-		{"POST", "/api/approvals/apr_1/approve", `{"digest":"sha256:x"}`},
-		{"POST", "/api/approvals/apr_1/reject", `{"comment":"no"}`},
+		{"GET", "/api/approvals/apr_00000000000000000000000000000001", ""},
+		{"POST", "/api/approvals/apr_00000000000000000000000000000001/approve", `{"digest":"sha256:x"}`},
+		{"POST", "/api/approvals/apr_00000000000000000000000000000001/reject", `{"comment":"no"}`},
 	} {
 		for _, token := range []string{"", "wrong-token"} {
 			res := doReq(t, tc.method, srv.URL+tc.path, token, tc.body)
@@ -167,7 +167,7 @@ func TestApprovals_DetailCarriesTheDigest(t *testing.T) {
 	// from the DTO (a constant informs nobody); and the detail gains brain_gone.
 	f := &fakeApprovals{detail: controlapi.ApprovalDetail{
 		ApprovalRow: controlapi.ApprovalRow{
-			ID: "apr_1", ActionID: "act_1", EffectClass: "write_irreversible",
+			ID: "apr_00000000000000000000000000000001", ActionID: "act_1", EffectClass: "write_irreversible",
 			Operation: "tool/webhook_call", ExpiresAt: "2026-09-08T13:00:00Z",
 			Digest: "sha256:1bd8ce23a4e52cca4d77efa8ed3e37536aa2ee950c5fa3214a28839bc180a479",
 			Origin: "telegram",
@@ -177,7 +177,7 @@ func TestApprovals_DetailCarriesTheDigest(t *testing.T) {
 		LawDigest:       "sha256:aab9b0d7",
 	}}
 	srv := approvalsServer(t, f)
-	res := doReq(t, "GET", srv.URL+"/api/approvals/apr_1", approvalsToken, "")
+	res := doReq(t, "GET", srv.URL+"/api/approvals/apr_00000000000000000000000000000001", approvalsToken, "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("detail must be 200, got %d", res.StatusCode)
 	}
@@ -194,7 +194,7 @@ func TestApprovals_DetailCarriesTheDigest(t *testing.T) {
 	// Change 12 of the RED's own kind: the raw JSON keys are asserted, not just
 	// the Go fields — decoding into the same types would let any label pass
 	// (FR-API-12).
-	rawBody := decodeMap(t, doReq(t, "GET", srv.URL+"/api/approvals/apr_1", approvalsToken, ""))
+	rawBody := decodeMap(t, doReq(t, "GET", srv.URL+"/api/approvals/apr_00000000000000000000000000000001", approvalsToken, ""))
 	for _, key := range []string{
 		"id", "action_id", "operation", "effect_class", "expires_at", "digest", "origin",
 		"purpose", "principal_id", "reversibility", "tool_cage", "required_rule",
@@ -219,11 +219,11 @@ func TestApprovals_DetailCarriesBrainGoneOnThe200(t *testing.T) {
 	// terminal state — which would leave the request unclosable, when rejecting
 	// it still works because reject does not consult the law.
 	f := &fakeApprovals{detail: controlapi.ApprovalDetail{
-		ApprovalRow: controlapi.ApprovalRow{ID: "apr_1", Digest: "sha256:abc"},
+		ApprovalRow: controlapi.ApprovalRow{ID: "apr_00000000000000000000000000000001", Digest: "sha256:abc"},
 		BrainGone:   true,
 	}}
 	srv := approvalsServer(t, f)
-	got := decode[controlapi.ApprovalDetail](t, doReq(t, "GET", srv.URL+"/api/approvals/apr_1", approvalsToken, ""))
+	got := decode[controlapi.ApprovalDetail](t, doReq(t, "GET", srv.URL+"/api/approvals/apr_00000000000000000000000000000001", approvalsToken, ""))
 	if !got.BrainGone {
 		t.Fatalf("brain_gone must travel as a field of the 200")
 	}
@@ -235,7 +235,7 @@ func TestApprovals_ApproveCarriesTheDigestTheOperatorSaw(t *testing.T) {
 	t.Parallel()
 	f := &fakeApprovals{}
 	srv := approvalsServer(t, f)
-	res := doReq(t, "POST", srv.URL+"/api/approvals/apr_1/approve", approvalsToken,
+	res := doReq(t, "POST", srv.URL+"/api/approvals/apr_00000000000000000000000000000001/approve", approvalsToken,
 		`{"digest":"sha256:abc"}`)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("approve must be 200, got %d", res.StatusCode)
@@ -258,7 +258,7 @@ func TestApprovals_ApproveWithoutADigestIsRefused(t *testing.T) {
 	f := &fakeApprovals{}
 	srv := approvalsServer(t, f)
 	for _, body := range []string{`{}`, `{"digest":""}`, `{"digest":"   "}`} {
-		res := doReq(t, "POST", srv.URL+"/api/approvals/apr_1/approve", approvalsToken, body)
+		res := doReq(t, "POST", srv.URL+"/api/approvals/apr_00000000000000000000000000000001/approve", approvalsToken, body)
 		if res.StatusCode != http.StatusBadRequest {
 			t.Fatalf("approving without the digest is the whole point of G2: want 400 for %s, got %d", body, res.StatusCode)
 		}
@@ -295,7 +295,7 @@ func namedOutcomes() []struct {
 		text   string
 	}{
 		{"already decided", controlapi.ErrApprovalAlreadyDecided, http.StatusConflict, "already_decided",
-			"this request is no longer open to a decision, and nothing ran twice — the ledger says what closed it"},
+			"this request is no longer open to a decision — the ledger says what closed it"},
 		{"expired", controlapi.ErrApprovalExpired, http.StatusConflict, "expired",
 			"this request expired before the decision touched it — it never executes"},
 		{"digest mismatch", controlapi.ErrApprovalDigestMismatch, http.StatusConflict, "digest_mismatch",
@@ -345,7 +345,7 @@ func TestApprovals_NamedOutcomes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeApprovals{approveErr: tc.err}
 			srv := approvalsServer(t, f)
-			res := doReq(t, "POST", srv.URL+"/api/approvals/apr_1/approve", approvalsToken,
+			res := doReq(t, "POST", srv.URL+"/api/approvals/apr_00000000000000000000000000000001/approve", approvalsToken,
 				`{"digest":"sha256:abc"}`)
 			if res.StatusCode != tc.status {
 				t.Fatalf("%s: want status %d, got %d", tc.name, tc.status, res.StatusCode)
@@ -375,7 +375,10 @@ func TestApprovals_EveryNameIsInTheRegistry(t *testing.T) {
 		}
 		registry[string(n)] = true
 	}
-	emitted := map[string]bool{"forbidden": true} // proved on the bearer route
+	// CHANGED 2026-09-19 (v0.15.1 block B, director's authorisation):
+	// loopback_only joins forbidden as a name the ROUTE emits before the seam
+	// (proved by TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer).
+	emitted := map[string]bool{"forbidden": true, "loopback_only": true} // proved on the bearer and peer routes
 	for _, tc := range namedOutcomes() {
 		emitted[tc.error_] = true
 		if !registry[tc.error_] {
@@ -396,8 +399,9 @@ func TestApprovals_EveryNameIsInTheRegistry(t *testing.T) {
 	// §12-ter of 22 rows that by then had 21 — two false numbers three lines
 	// above the assert that contradicted them. The count that governs is the
 	// one FR-TEST-6 executes against the document.
-	if len(registry) != 21 {
-		t.Fatalf("the registry is the closed set: want 21 names, got %d", len(registry))
+	// TWENTY-TWO since 2026-09-19: loopback_only (v0.15.1 block B, P2-7).
+	if len(registry) != 22 {
+		t.Fatalf("the registry is the closed set: want 22 names, got %d", len(registry))
 	}
 }
 
@@ -410,7 +414,7 @@ func TestApprovals_InvalidatedCarriesTheCurrentLawDigest(t *testing.T) {
 	const current = "sha256:31c0f7ae00000000000000000000000000000000000000000000000000000000"
 	f := &fakeApprovals{approveErr: controlapi.LawMoved(current)}
 	srv := approvalsServer(t, f)
-	res := doReq(t, "POST", srv.URL+"/api/approvals/apr_1/approve", approvalsToken, `{"digest":"sha256:abc"}`)
+	res := doReq(t, "POST", srv.URL+"/api/approvals/apr_00000000000000000000000000000001/approve", approvalsToken, `{"digest":"sha256:abc"}`)
 	if res.StatusCode != http.StatusConflict {
 		t.Fatalf("invalidated is a 409, got %d", res.StatusCode)
 	}
@@ -453,12 +457,12 @@ func TestApprovals_RejectCarriesTheComment(t *testing.T) {
 	t.Parallel()
 	f := &fakeApprovals{}
 	srv := approvalsServer(t, f)
-	res := doReq(t, "POST", srv.URL+"/api/approvals/apr_2/reject", approvalsToken,
+	res := doReq(t, "POST", srv.URL+"/api/approvals/apr_00000000000000000000000000000002/reject", approvalsToken,
 		`{"comment":"no en la ceremonia"}`)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("reject must be 200, got %d", res.StatusCode)
 	}
-	if f.rejectedID != "apr_2" || f.rejectedNote != "no en la ceremonia" {
+	if f.rejectedID != "apr_00000000000000000000000000000002" || f.rejectedNote != "no en la ceremonia" {
 		t.Fatalf("the rejection carries its id and its comment: %q %q", f.rejectedID, f.rejectedNote)
 	}
 	if f.approvedID != "" {
@@ -530,7 +534,7 @@ func TestApprovals_RejectCommentIsBounded(t *testing.T) {
 	f := &fakeApprovals{}
 	srv := approvalsServer(t, f)
 	huge := `{"comment":"` + repeatByte('a', 100_000) + `"}`
-	res := doReq(t, "POST", srv.URL+"/api/approvals/apr_1/reject", approvalsToken, huge)
+	res := doReq(t, "POST", srv.URL+"/api/approvals/apr_00000000000000000000000000000001/reject", approvalsToken, huge)
 	// Change 6 (FR-API-13): one name per attack. The old mould accepted 413 OR
 	// 400, which hides that one of the two is unreachable.
 	if res.StatusCode != http.StatusRequestEntityTooLarge {
@@ -570,6 +574,7 @@ var sentinelOf = map[controlapi.OutcomeName]string{
 	controlapi.OutcomeExpired:              "ErrApprovalExpired",
 	controlapi.OutcomeDigestMismatch:       "ErrApprovalDigestMismatch",
 	controlapi.OutcomeForbidden:            "ErrApprovalForbidden",
+	controlapi.OutcomeLoopbackOnly:         "ErrApprovalLoopbackOnly", // CHANGED 2026-09-19, v0.15.1 block B
 	controlapi.OutcomeDisabled:             "ErrApprovalsDisabled",
 	controlapi.OutcomeUnavailable:          "ErrApprovalsUnavailable",
 	controlapi.OutcomeNotFound:             "ErrApprovalNotFound",
@@ -832,12 +837,13 @@ func TestApprovals_theSetIsClosed_countsInsteadOfClaiming(t *testing.T) {
 	if len(distinct) != len(namedOutcomes()) {
 		t.Fatalf("namedOutcomes has %d rows over %d distinct names", len(namedOutcomes()), len(distinct))
 	}
-	// forbidden is the one name this table cannot drive: it is refused by the
-	// bearer route, before the seam under test is reached.
-	if distinct["forbidden"] {
-		t.Fatal("forbidden is proved on the bearer route, not here")
+	// forbidden and loopback_only are the two names this table cannot drive:
+	// the bearer route and the peer route refuse before the seam under test is
+	// reached. (CHANGED 2026-09-19, v0.15.1 block B: loopback_only added.)
+	if distinct["forbidden"] || distinct["loopback_only"] {
+		t.Fatal("forbidden and loopback_only are proved on their routes, not here")
 	}
-	if got, want := len(distinct)+1, len(controlapi.ApprovalOutcomeNames); got != want {
-		t.Errorf("this table drives %d names and forbidden makes %d, against a registry of %d", len(distinct), got, want)
+	if got, want := len(distinct)+2, len(controlapi.ApprovalOutcomeNames); got != want {
+		t.Errorf("this table drives %d names and forbidden + loopback_only make %d, against a registry of %d", len(distinct), got, want)
 	}
 }
