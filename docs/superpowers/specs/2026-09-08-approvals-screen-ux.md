@@ -1930,7 +1930,9 @@ Escenarios de primera clase, con DOS actores reales. Ninguno es in-process.
 
 ## 12-ter. El registro de nombres y sus anclas (FR-TEST-6)
 
-> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». `params_not_canonical` y `params_belt_failed` SALEN del registro: verificado por `grep` sobre el árbol entero, ningún camino de producción podía emitirlos. El registro cerrado es de **21** nombres. La cifra va en dígitos a propósito: el molde de FR-TEST-6 la lee de esta frase y la cruza contra las filas de la tabla y contra `ApprovalOutcomeNames`, porque escrita en letra decía **veinte** sobre una tabla de veintiuna filas y nadie lo enrojecía. `parameters_state: "unavailable"` sale por lo mismo, de FR-UI-16.
+> **AMPLIADO el 2026-09-19** (v0.15.1 bloque B, P2-7, autorizado por el director): entra `loopback_only`, el rechazo a un par que no es loopback, con el literal aprobado ese día por el copiloto bajo la orden de velocidad del director (Chano puede vetarlo después): «Esta decisión solo puede tomarse desde la misma máquina que ejecuta Korvun. La petición llegó desde otro origen y se rechazó sin tocar nada.» El registro pasa de 21 a 22 nombres.
+>
+> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». `params_not_canonical` y `params_belt_failed` SALEN del registro: verificado por `grep` sobre el árbol entero, ningún camino de producción podía emitirlos. El registro cerrado es de **22** nombres (21 hasta la ampliación del 2026-09-19). La cifra va en dígitos a propósito: el molde de FR-TEST-6 la lee de esta frase y la cruza contra las filas de la tabla y contra `ApprovalOutcomeNames`, porque escrita en letra decía **veinte** sobre una tabla de veintiuna filas y nadie lo enrojecía. `parameters_state: "unavailable"` sale por lo mismo, de FR-UI-16.
 
 
 Cada fila lleva su marcador estable. El molde de FR-TEST-6 cruza
@@ -1942,6 +1944,7 @@ Cada fila lleva su marcador estable. El molde de FR-TEST-6 cruza
 | <!-- outcome:not_found --> `not_found` | E9 |
 | <!-- outcome:unavailable --> `unavailable` | E9 |
 | <!-- outcome:forbidden --> `forbidden` | E9 |
+| <!-- outcome:loopback_only --> `loopback_only` | E9 — «Esta decisión solo puede tomarse desde la misma máquina que ejecuta Korvun. La petición llegó desde otro origen y se rechazó sin tocar nada.» |
 | <!-- outcome:disabled --> `disabled` | E3 |
 | <!-- outcome:expired --> `expired` | E5 |
 | <!-- outcome:digest_mismatch --> `digest_mismatch` | E6 |

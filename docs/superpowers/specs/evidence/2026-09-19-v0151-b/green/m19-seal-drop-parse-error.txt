@@ -1,0 +1,40 @@
+# id: m19-seal-drop-parse-error
+# guard: P2-6 sealer: drop the decision_at parse error again
+# date: 2026-09-19T16:53:42.810087+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -283,9 +283,7 @@
+ 	if decisionAt == "" {
+ 		return MarkCorruptDecisionAt
+ 	}
+-	if a.DecisionAt, err = time.Parse(time.RFC3339Nano, decisionAt); err != nil {
+-		return MarkCorruptDecisionAt
+-	}
++	a.DecisionAt, _ = time.Parse(time.RFC3339Nano, decisionAt) // MUTATION
+ 	// The origin rule (judgeTombstoneOrigin): a human verb requires a
+ 	// principal, the clock verb requires none.
+ 	switch {
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/parse (0.10s)
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/parse (0.25s)
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-garbage (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-garbage (0.04s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-garbage (0.18s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-garbage (0.07s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.129s
+FAIL
+# first failing assertion: approvals_test.go:1061: approval_digest = "sha256:be2d457c661b3f46d9297a693b3d4fb77329904b4270b483608bc4d0c330ae83", want exactly "corrupt:decision_at"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.987s
+# exit (restored): 0

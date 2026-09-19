@@ -53,6 +53,11 @@ func (c *cli) ledgerCmd(args []string) int {
 		return 2
 	}
 	switch args[0] {
+	case "-h", "--help":
+		// A query, not a usage error (ADR-0032 «Exit codes»): the noun's usage
+		// to stdout, exit 0 (v0.15.1 block B, P2-2).
+		_, _ = fmt.Fprint(c.stdout, "Usage: korvun ledger <check> [flags]\n\nRun 'korvun ledger <verb> -h' for the flags of one verb.\n")
+		return 0
 	case "check":
 		return c.ledgerCheck(args[1:])
 	default:
@@ -67,8 +72,8 @@ func (c *cli) ledgerCheck(args []string) int {
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
 	partition := fs.String("partition", "main", "chain partition to check")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" {
 		_, _ = fmt.Fprint(c.stderr, "korvun ledger check: --config is required\n")

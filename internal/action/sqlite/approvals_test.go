@@ -1019,7 +1019,26 @@ func TestApprovalByAction_branches(t *testing.T) {
 	}
 }
 
-func TestApprovalDigestTx_corruptDecisionFallsToHonestEmpty(t *testing.T) {
+// TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark — CHANGED 2026-09-19
+// by the director's authorisation (v0.15.1 block B, P2-6 sealer sister).
+//
+// Before: TestApprovalDigestTx_corruptDecisionFallsToHonestEmpty required only
+// that the finish land and one receipt exist, and its comment called the
+// resulting digest «the honest empty». It was neither: with decision_at
+// unparseable, parseNullTime's error was dropped and the receipt sealed the
+// digest of the approval over a ZERO decision instant — a history no row
+// re-derives — and with a Scan-level corruption it sealed "", which every
+// verifier reads as «no approval ever existed».
+//
+// After: the finish still lands (the known effect is recorded, nothing blocks)
+// and the receipt carries the explicit corruption mark, so the corruption is
+// never disguised as absence nor as another history.
+//
+// Evidence: real sealed store, in-process (the corruption goes through the
+// store's own pool, the corruptCell helper this test always used).
+// Probing mutation (planned, declared in the canto): drop parseNullTime's error
+// again ⇒ red.
+func TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark(t *testing.T) {
 	t.Parallel()
 	store, _ := sealedStore(t)
 	ctx := context.Background()
@@ -1030,8 +1049,6 @@ func TestApprovalDigestTx_corruptDecisionFallsToHonestEmpty(t *testing.T) {
 		t.Fatalf("approve: %v", err)
 	}
 	corruptCell(t, store, "approvals", "decision_at", "approval_id", a.ApprovalID, "garbage")
-	// The finish still lands; the unresolvable approval digest falls to
-	// the honest empty rather than blocking the terminal close.
 	if err := store.FinishWithResult(ctx, "act_corrd", action.StateSucceeded,
 		a.RequestedAt.Add(2*time.Minute), "sha256:r"); err != nil {
 		t.Fatalf("finish: %v", err)
@@ -1039,6 +1056,9 @@ func TestApprovalDigestTx_corruptDecisionFallsToHonestEmpty(t *testing.T) {
 	receipts, _ := store.ReceiptsByAction(ctx, "act_corrd")
 	if len(receipts) != 1 {
 		t.Fatalf("one receipt: %d", len(receipts))
+	}
+	if receipts[0].ApprovalDigest != "corrupt:decision_at" {
+		t.Fatalf("approval_digest = %q, want exactly %q", receipts[0].ApprovalDigest, "corrupt:decision_at")
 	}
 }
 

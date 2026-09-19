@@ -266,15 +266,18 @@ func TestReceiptVerify_approvalCoherence(t *testing.T) {
 
 func TestApprovals_moreErrorPaths(t *testing.T) {
 	t.Parallel()
-	// Ghost ids fail loud on every verb.
+	// Ghost ids fail loud on every verb. The ghost has the minted shape (v0.15.1
+	// block B, P2-1: a malformed id is refused by shape before the store, exit
+	// 2), so what fails here is the store's answer: no such request.
+	const ghost = "apr_00000000000000000000000000000000"
 	cfgPath, _, _ := parkedRequest(t)
-	if code, _, stderr := runIntentCLI(t, "approvals", "show", "--config", cfgPath, "apr_ghost"); code != 1 || !strings.Contains(stderr, "apr_ghost") {
+	if code, _, stderr := runIntentCLI(t, "approvals", "show", "--config", cfgPath, ghost); code != 1 || !strings.Contains(stderr, ghost) {
 		t.Fatalf("ghost show: %d %q", code, stderr)
 	}
-	if code, _, _ := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, "apr_ghost"); code != 1 {
+	if code, _, _ := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, ghost); code != 1 {
 		t.Fatal("ghost approve must fail")
 	}
-	if code, _, _ := runIntentCLI(t, "approvals", "reject", "--config", cfgPath, "apr_ghost"); code != 1 {
+	if code, _, _ := runIntentCLI(t, "approvals", "reject", "--config", cfgPath, ghost); code != 1 {
 		t.Fatal("ghost reject must fail")
 	}
 	// Usage paths.

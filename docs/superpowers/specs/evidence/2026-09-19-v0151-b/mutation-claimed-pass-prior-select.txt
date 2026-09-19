@@ -1,0 +1,302 @@
+# date: 2026-09-19T15:49:38.821756Z
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# mutated file: internal/action/sqlite/store.go
+# --- mutation diff ---
+diff --git a/internal/action/sqlite/store.go b/internal/action/sqlite/store.go
+index c28e2c1..fd40ee9 100644
+--- a/internal/action/sqlite/store.go
++++ b/internal/action/sqlite/store.go
+@@ -1165,6 +1165,10 @@ func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action
+ 		return false, fmt.Errorf("action/sqlite: begin crash close %q: %w", actionID, err)
+ 	}
+ 	defer func() { _ = tx.Rollback() }()
++	if predicate == claimedOrphanPredicate { // MUTATION: a prior SELECT on the claimed pass
++		var st string
++		_ = tx.QueryRowContext(ctx, `SELECT state FROM actions WHERE action_id = ?`, actionID).Scan(&st)
++	}
+ 	res, err := tx.ExecContext(ctx,
+ 		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
+ 		  WHERE action_id = ?`+predicate, // #nosec G202 -- predicate is one of two package constants
+
+# --- command (mutated): go test -count=30 -v -run 'TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter' ./internal/action/sqlite/
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (2.53s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.29s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.59s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (1.13s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.06s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.09s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.34s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.23s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.09s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.22s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.10s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.06s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.12s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.10s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.17s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.41s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.03s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.03s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.09s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.03s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.07s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.07s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.07s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.08s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+    v0151b_test.go:778: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	7.846s
+FAIL
+
+# exit (mutated): 1
+# restored: git diff --quiet -- internal/action/sqlite/store.go exit 0 (byte for byte)
+# --- command (restored): go test -count=30 -v -run 'TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter' ./internal/action/sqlite/
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.11s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.22s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.11s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.09s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.30s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.06s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.43s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.16s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.07s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.21s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.26s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.34s)
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.06s)
+PASS
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	6.497s
+
+# exit (restored): 0

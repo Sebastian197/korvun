@@ -1,0 +1,117 @@
+# id: m20-seal-cure-only-finish
+# guard: P2-6 sealer: cure only the finish door (recovery and reject seal "" over a mark)
+# date: 2026-09-19T18:08:40.762439+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx|TestV0151B_P2_6_sister_(theVerifiersFailNamingEachMark|aValueOutsideTheListFailsClosed|aPlainOrphanVerifiesClean)' ./internal/action/sqlite/ ./internal/cli/
+# --- mutation diff ---
+--- a/internal/action/sqlite/store.go
++++ b/internal/action/sqlite/store.go
+@@ -1197,6 +1197,9 @@
+ 	if err != nil {
+ 		return false, err
+ 	}
++	if _, isMark := ApprovalMarkClass(r.ApprovalDigest); isMark { // MUTATION
++		r.ApprovalDigest = ""
++	}
+ 	if err := s.appendReceiptTx(ctx, tx, r); err != nil {
+ 		return false, err
+ 	}
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -398,6 +398,9 @@
+ 	r, err := s.receiptForFinish(ctx, tx, actionID, action.StateRejected, at, "", true)
+ 	if err != nil {
+ 		return err
++	}
++	if _, isMark := ApprovalMarkClass(r.ApprovalDigest); isMark { // MUTATION
++		r.ApprovalDigest = ""
+ 	}
+ 	return s.appendReceiptTx(ctx, tx, r)
+ }
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/human-verb-on-clock-row (0.03s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision-verb-unknown (0.03s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-null (0.04s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision-verb-unknown (0.04s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-empty (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-garbage (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-reset-pending (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row-deleted (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row_scan (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/clock-with-principal (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-unknown (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/clock-verb-with-principal (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-null (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/human-without-principal (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision-verb-unknown (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-garbage (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-empty (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-reset-pending (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row-deleted (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-unknown (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/human-verb-on-clock-row (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row_scan (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision-verb-unknown (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-null (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-empty (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-garbage (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-reset-pending (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/clock-with-principal (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row-deleted (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-unknown (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row_scan (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/clock-verb-with-principal (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/human-without-principal (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-unknown (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-empty (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-null (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-garbage (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row-deleted (0.16s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-reset-pending (0.17s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row_scan (0.20s)
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/scan (0.16s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/clock-verb-on-approved (0.23s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/hostile-bytes (0.25s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/unreadable (0.25s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-unknown (0.24s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/row-deleted (0.23s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-verb-unknown (0.20s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-reset-pending (0.21s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-null (0.24s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-principal-empty (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-empty (0.22s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/parse (0.25s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	3.058s
+--- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/intact-row (0.21s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/pruned (0.37s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/intact-row (0.38s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/pruned (0.42s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/pruned (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row (0.21s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/pruned (0.21s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/intact-row (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/pruned (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/pruned (0.29s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/intact-row (0.29s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/pruned (0.32s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/intact-row (0.31s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/intact-row (0.20s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/pruned (0.21s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/intact-row (0.19s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/pruned (0.07s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	2.832s
+FAIL
+# first failing assertion: v0151b_test.go:573: REJECTED receipt approval_digest = "", want exactly "corrupt:decision_principal"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.249s
+ok  	github.com/Sebastian197/korvun/internal/cli	2.650s
+# exit (restored): 0

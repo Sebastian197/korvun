@@ -1,0 +1,38 @@
+# date: 2026-09-19T14:38:13.576886Z
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# mutated file: internal/action/sqlite/store.go
+# --- mutation diff ---
+diff --git a/internal/action/sqlite/store.go b/internal/action/sqlite/store.go
+index c28e2c1..ebe5177 100644
+--- a/internal/action/sqlite/store.go
++++ b/internal/action/sqlite/store.go
+@@ -1179,6 +1179,7 @@ func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action
+ 	if err != nil {
+ 		return false, err
+ 	}
++	r.ApprovalDigest = "" // MUTATION: blank the sealed approval digest
+ 	if err := s.appendReceiptTx(ctx, tx, r); err != nil {
+ 		return false, err
+ 	}
+
+# --- command (mutated): go test -count=1 -v -run 'TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact' ./internal/action/sqlite/
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+    v0151b_test.go:681: recovered receipt approval_digest = "", want the approval's real digest "sha256:9ce3b0a233dff3343dad03a659c4c8055241c50e59628c927d750308e8e93092"
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact (0.02s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.080s
+FAIL
+
+# exit (mutated): 1
+# restored: git diff --quiet -- internal/action/sqlite/store.go exit 0 (byte for byte)
+# --- command (restored): go test -count=1 -v -run 'TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact' ./internal/action/sqlite/
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+--- PASS: TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact (0.02s)
+PASS
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.248s
+
+# exit (restored): 0

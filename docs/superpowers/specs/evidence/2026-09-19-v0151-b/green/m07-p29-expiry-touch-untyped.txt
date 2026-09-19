@@ -1,0 +1,29 @@
+# id: m07-p29-expiry-touch-untyped
+# guard: P2-9: leave the expiry touch untyped
+# date: 2026-09-19T18:06:25.620456+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_9' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -251,7 +251,7 @@
+ 			return action.RuleApprovalAlreadyDecided, nil
+ 		}
+ 		if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
+-			return "", err
++			return "", errors.New(err.Error()) // MUTATION
+ 		}
+ 		if err := tx.Commit(); err != nil {
+ 			return "", fmt.Errorf("action/sqlite: commit expiry close: %w", err)
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_9_theExpiryTouchInsideADecideIsWriteFailedToo (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.562s
+FAIL
+# first failing assertion: v0151b_writefailed_test.go:79: err = action/sqlite: transition "act_wf_expiry" PENDING_APPROVAL->REJECTED: action/sqlite: writing the approval's action transition failed: constraint failed: forced driver failure (1811), want ErrApprovalWriteFailed
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.560s
+# exit (restored): 0

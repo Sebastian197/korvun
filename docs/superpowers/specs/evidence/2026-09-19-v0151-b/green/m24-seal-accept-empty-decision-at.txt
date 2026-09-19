@@ -1,0 +1,46 @@
+# id: m24-seal-accept-empty-decision-at
+# guard: P2-6 sealer: accept an empty/NULL decision_at on a decided row
+# date: 2026-09-19T16:54:19.934313+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -280,8 +280,9 @@
+ 	if derr != nil {
+ 		return MarkCorruptRowScan
+ 	}
+-	if decisionAt == "" {
+-		return MarkCorruptDecisionAt
++	if decisionAt == "" { // MUTATION
++		a.DecisionPrincipalID, a.Decision = principal, verb
++		return a.Digest()
+ 	}
+ 	if a.DecisionAt, err = time.Parse(time.RFC3339Nano, decisionAt); err != nil {
+ 		return MarkCorruptDecisionAt
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-empty (0.25s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-null (0.26s)
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-null (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-empty (0.09s)
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-null (0.10s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-empty (0.10s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-null (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-empty (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-null (0.10s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-empty (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-empty (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-null (0.13s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.086s
+FAIL
+# first failing assertion: v0151b_test.go:341: recovered receipt approval_digest = ["sha256:3b3d5e0110f52629054ecde7205ead6019e81b112629b20641955bcf740c8320"], want exactly "corrupt:decision_at"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.989s
+# exit (restored): 0

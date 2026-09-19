@@ -1,0 +1,60 @@
+# id: m40x30
+# guard: P2-6 wire: a prior SELECT before closeCrashOrphan's UPDATE on the claimed pass
+# date: 2026-09-19T16:59:58.969013+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -race -count=30 -run 'TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/store.go
++++ b/internal/action/sqlite/store.go
+@@ -1170,6 +1170,10 @@
+ 		return false, fmt.Errorf("action/sqlite: begin crash close %q: %w", actionID, err)
+ 	}
+ 	defer func() { _ = tx.Rollback() }()
++	if predicate == claimedOrphanPredicate { // MUTATION: a prior SELECT on the claimed pass
++		var st string
++		_ = tx.QueryRowContext(ctx, `SELECT state FROM actions WHERE action_id = ?`, actionID).Scan(&st)
++	}
+ 	res, err := tx.ExecContext(ctx,
+ 		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
+ 		  WHERE action_id = ?`+predicate, // #nosec G202 -- predicate is one of three package constants
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.32s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.33s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.32s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.34s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.33s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.52s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.38s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.33s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.30s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.33s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.30s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.43s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.30s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.37s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.33s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.33s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.33s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.32s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.37s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.31s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.33s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	10.599s
+FAIL
+# first failing assertion: v0151b_test.go:801: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	12.303s
+# exit (restored): 0

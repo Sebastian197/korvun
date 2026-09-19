@@ -1,0 +1,43 @@
+# date: 2026-09-19T11:40:15.655809Z
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# mutated file: internal/action/sqlite/approvals.go
+# --- mutation diff ---
+diff --git a/internal/action/sqlite/approvals.go b/internal/action/sqlite/approvals.go
+index 19fcc29..ec60725 100644
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -341,6 +341,10 @@ func (s *Store) approvalTx(ctx context.Context, tx *sql.Tx, approvalID string) (
+ 	if errors.Is(err, sql.ErrNoRows) {
+ 		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+ 	}
++	if err != nil {
++		// SIMULATION of B's approvalTx typing (red-phase instrument, reverted).
++		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
++	}
+ 	return a, err
+ }
+ 
+
+# --- command (mutated): go test -count=1 -v -run 'TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence' ./internal/action/sqlite/
+=== RUN   TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+=== PAUSE TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+=== CONT  TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+    v0151b_x1_claim_test.go:70: err = action/sqlite: approval "apr_4c1ef2ecb068338844dab842f3d57713": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: approval "apr_4c1ef2ecb068338844dab842f3d57713": action/sqlite: the approval could not be read: SQL logic error: no such table: approvals (1): corrupt=true unreadable=true, want corrupt=false unreadable=true — the store did not answer
+--- FAIL: TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence (0.02s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.013s
+FAIL
+
+# exit (mutated): 1
+# restored: git diff --quiet -- internal/action/sqlite/approvals.go exit 0 (byte for byte)
+# --- command (restored): go test -count=1 -v -run 'TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence' ./internal/action/sqlite/
+=== RUN   TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+=== PAUSE TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+=== CONT  TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+    v0151b_x1_claim_test.go:70: err = action/sqlite: approval "apr_dc0527d4537f8331685c7baed8226be6": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such table: approvals (1): corrupt=true unreadable=false, want corrupt=false unreadable=true — the store did not answer
+--- FAIL: TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence (0.02s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.243s
+FAIL
+
+# exit (restored): 1

@@ -33,6 +33,13 @@ import (
 // ErrUnknownDecision reports a decision verb outside the finite set.
 var ErrUnknownDecision = errors.New("action/sqlite: unknown decision verb")
 
+// ErrApprovalWriteFailed is a driver failure while a decide wrote the parked
+// action's transition: nothing was decided (the transaction rolled back) and
+// the request stays decidable once the failure is gone. It is NOT
+// ErrApprovalActionNotPending, which is reserved for an action that genuinely
+// moved (director, 2026-09-19).
+var ErrApprovalWriteFailed = errors.New("action/sqlite: writing the approval's action transition failed")
+
 // maxApprovalParamsBytes caps the raw params a request may park (C6,
 // the resource-bound invariant): 64 KiB holds any reasonable tool call
 // and refuses the unbounded blob.
@@ -199,7 +206,7 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return "", fmt.Errorf("action/sqlite: begin decision: %w", err)
+		return "", fmt.Errorf("action/sqlite: begin decision: %w: %w", ErrApprovalUnreadable, err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -306,12 +313,11 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	}
 	if decision == action.DecisionApproved {
 		if err := transitionTx(ctx, tx, a.ActionID, action.StatePendingApproval, action.StateApproved); err != nil {
-			// The parked action moved out from under this decision. The whole
-			// transaction rolls back: nothing was decided and no effect ran,
-			// so the name says THAT. Sending it to an unnamed failure would
-			// let the operator read "we do not know whether the effect
-			// happened" over a transaction that did nothing at all.
-			return "", fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalActionNotPending, err)
+			// transitionTx names the two cases itself: the parked action moved
+			// (ErrApprovalActionNotPending) or the write failed
+			// (ErrApprovalWriteFailed). Either way the whole transaction rolls
+			// back and nothing was decided.
+			return "", fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 		}
 	} else {
 		if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
@@ -338,10 +344,12 @@ func (s *Store) approvalTx(ctx context.Context, tx *sql.Tx, approvalID string) (
 		        decision_at, comment, decision_receipt_id
 		   FROM approvals WHERE approval_id = ?`, approvalID)
 	a, err := scanApproval(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+	if err != nil {
+		// v0.15.1 block B (P2-6): exactly one class — corrupt when the row was
+		// read and does not convert, unreadable when the store did not answer.
+		return action.Approval{}, classifyApprovalRead(approvalID, err)
 	}
-	return a, err
+	return a, nil
 }
 
 // closeApprovalTx closes an approval into a terminal status (the
@@ -386,7 +394,8 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 		at.UTC().Format(time.RFC3339Nano), actionID); err != nil {
 		return fmt.Errorf("action/sqlite: stamp finish %q: %w", actionID, err)
 	}
-	r, err := s.receiptForFinish(ctx, tx, actionID, action.StateRejected, at, "")
+	// decided: the parked action leaves PENDING_APPROVAL through a decision.
+	r, err := s.receiptForFinish(ctx, tx, actionID, action.StateRejected, at, "", true)
 	if err != nil {
 		return err
 	}
@@ -692,14 +701,17 @@ func (s *Store) SweepExpiredApprovals(ctx context.Context, at time.Time) (swept,
 		    AND expires_at <= ?`,
 		string(action.ApprovalPending), at.UTC().Format(time.RFC3339Nano))
 	if err != nil {
-		return 0, 0, fmt.Errorf("action/sqlite: expiry sweep: %w", err)
+		// The first read is a SELECT over the store: its only failures are
+		// the store not answering (a cancelled context, a closed store, a
+		// table that cannot be read), never a row that was read (P2-6).
+		return 0, 0, fmt.Errorf("action/sqlite: expiry sweep: %w: %w", ErrApprovalUnreadable, err)
 	}
 	for _, id := range ids {
 		// R4-F3: real errors (a dead context included) abort; a row an
 		// operator decided between the SELECT and this close is SKIPPED
 		// with a note — never a boot-fatal for losing a clean race.
 		if err := ctx.Err(); err != nil {
-			return swept, skipped, fmt.Errorf("action/sqlite: expiry sweep: %w", err)
+			return swept, skipped, fmt.Errorf("action/sqlite: expiry sweep interrupted: %w: %w", ErrApprovalUnreadable, err)
 		}
 		won, err := s.sweepExpiredOne(ctx, id, at)
 		if err != nil {
@@ -728,7 +740,7 @@ func (s *Store) SweepExpiredApprovals(ctx context.Context, at time.Time) (swept,
 func (s *Store) sweepExpiredOne(ctx context.Context, approvalID string, at time.Time) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return false, fmt.Errorf("action/sqlite: begin expiry sweep %q: %w", approvalID, err)
+		return false, fmt.Errorf("action/sqlite: begin expiry sweep %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	a, err := s.approvalTx(ctx, tx, approvalID)
@@ -788,7 +800,10 @@ func (s *Store) recordDecisionActTx(ctx context.Context, tx *sql.Tx, env action.
 }
 
 // transitionTx validates the domain edge and applies the single-state
-// UPDATE — the only mutation path the approvals flow owns.
+// UPDATE — the only mutation path the approvals flow owns. It names both ways
+// it can refuse (v0.15.1 block B, P2-9): a failed write is
+// ErrApprovalWriteFailed (driver failure, nothing decided, retry); zero rows
+// is ErrApprovalActionNotPending (the action genuinely moved).
 func transitionTx(ctx context.Context, tx *sql.Tx, actionID string, from, to action.State) error {
 	if err := action.Transition(from, to); err != nil {
 		return err
@@ -797,10 +812,16 @@ func transitionTx(ctx context.Context, tx *sql.Tx, actionID string, from, to act
 		`UPDATE actions SET state = ? WHERE action_id = ? AND state = ?`,
 		string(to), actionID, string(from))
 	if err != nil {
-		return fmt.Errorf("action/sqlite: transition %q %s->%s: %w", actionID, from, to, err)
+		return fmt.Errorf("action/sqlite: transition %q %s->%s: %w: %w", actionID, from, to, ErrApprovalWriteFailed, err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("action/sqlite: transition %q %s->%s: row not in expected state", actionID, from, to)
+	n, err := res.RowsAffected()
+	if err != nil {
+		// A count nobody obtained is not a count of zero. Declared without a
+		// mould: modernc.org/sqlite v1.58.0's RowsAffected never errors.
+		return fmt.Errorf("action/sqlite: transition %q %s->%s: rows affected unavailable: %w: %w", actionID, from, to, ErrApprovalWriteFailed, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("action/sqlite: transition %q %s->%s: row not in expected state: %w", actionID, from, to, ErrApprovalActionNotPending)
 	}
 	return nil
 }
@@ -833,15 +854,14 @@ func (s *Store) GetApproval(ctx context.Context, approvalID string) (action.Appr
 		        decision_at, comment, decision_receipt_id
 		   FROM approvals WHERE approval_id = ?`, approvalID)
 	a, err := scanApproval(row)
-	if errors.Is(err, sql.ErrNoRows) {
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
-	}
 	if err != nil {
-		// A column that will not parse is corruption of the evidence, not a
-		// disk that did not answer. Left bare, this refusal fell through the
-		// caller's switch and was published as «transient, retry» on the door
-		// that precedes an irreversible effect.
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+		// A column that will not convert is corruption of the evidence; a store
+		// that did not answer (a cancelled context, a closed store, a
+		// statement that cannot be prepared) is not, and is published
+		// unreadable. database/sql defers a query's error to Scan, so wrapping
+		// every Scan error as corrupt published a cancelled request as
+		// permanent damage (v0.15.1 block B, P2-6).
+		return action.Approval{}, action.ActionPreview{}, classifyApprovalRead(approvalID, err)
 	}
 	var rawPreview string
 	if err := s.db.QueryRowContext(ctx,
@@ -894,19 +914,19 @@ func (s *Store) ListApprovals(ctx context.Context, status action.ApprovalStatus)
 		        decision_at, comment, decision_receipt_id
 		   FROM approvals WHERE status = ? ORDER BY requested_at DESC`, string(status))
 	if err != nil {
-		return nil, fmt.Errorf("action/sqlite: list approvals: %w", err)
+		return nil, fmt.Errorf("action/sqlite: list approvals: %w: %w", ErrApprovalUnreadable, err)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []action.Approval
 	for rows.Next() {
 		a, err := scanApproval(rows)
 		if err != nil {
-			return nil, err
+			return nil, classifyApprovalRead("(list)", err)
 		}
 		out = append(out, a)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("action/sqlite: iterate approvals: %w", err)
+		return nil, fmt.Errorf("action/sqlite: iterate approvals: %w: %w", ErrApprovalUnreadable, err)
 	}
 	return out, nil
 }
@@ -914,34 +934,15 @@ func (s *Store) ListApprovals(ctx context.Context, status action.ApprovalStatus)
 // scanner covers *sql.Row and *sql.Rows.
 type scanner interface{ Scan(dest ...any) error }
 
-// scanApproval shares the row shape across every approval read.
+// scanApproval shares the row shape across every approval read. Its error
+// is a store failure (from Scan) or errApprovalRowInvalid (from the
+// conversion) — never both; classifyApprovalRead names it.
 func scanApproval(row scanner) (action.Approval, error) {
-	var (
-		a           action.Approval
-		status      string
-		requestedAt string
-		expiresAt   sql.NullString
-		decisionAt  sql.NullString
-	)
-	if err := row.Scan(&a.ApprovalID, &a.SchemaVersion, &a.ActionID, &a.ActionDigest,
-		&a.PreviewDigest, &a.RequestedFrom, &a.Reason, &a.RiskSummary,
-		&a.PolicyVersion, &a.PolicyDigest, &requestedAt, &expiresAt, &status,
-		&a.DecisionPrincipalID, &a.Decision, &decisionAt, &a.Comment,
-		&a.DecisionReceiptID); err != nil {
+	vals, err := scanRawApproval(row, 0)
+	if err != nil {
 		return action.Approval{}, err
 	}
-	a.Status = action.ApprovalStatus(status)
-	var err error
-	if a.RequestedAt, err = time.Parse(time.RFC3339Nano, requestedAt); err != nil {
-		return action.Approval{}, fmt.Errorf("action/sqlite: parse approval requested_at: %w", err)
-	}
-	if a.ExpiresAt, err = parseNullTime(expiresAt); err != nil {
-		return action.Approval{}, fmt.Errorf("action/sqlite: parse approval expires_at: %w", err)
-	}
-	if a.DecisionAt, err = parseNullTime(decisionAt); err != nil {
-		return action.Approval{}, fmt.Errorf("action/sqlite: parse approval decision_at: %w", err)
-	}
-	return a, nil
+	return approvalFromRaw(vals)
 }
 
 // timeCol renders a nullable time column ("" stays NULL).

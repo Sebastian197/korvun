@@ -29,6 +29,21 @@ export const PERMANENT_LINE = 'Esto no es transitorio. Guarda el identificador y
 export const UNREADABLE_TITLE = 'El núcleo no ha contestado nada legible.'
 export const UNKNOWN_NAME_TITLE = 'Respuesta que esta pantalla no reconoce.'
 
+/** v0.15.1 block B: the four literals the copilot approved on 2026-09-19
+ * under the director's speed order (Chano may veto them). */
+/** P2-10: params_digest_mismatch arriving from approve or reject. */
+export const POST_PARAMS_MISMATCH =
+  'No se ejecutó nada. Lo que se iba a ejecutar ya no coincide con lo que leíste: la huella cambió entre tu lectura y tu decisión. Vuelve a abrir la petición y léela de nuevo; si decides, será sobre la versión nueva.'
+/** P2-10: a 2xx to approve or reject that is not the exact success shape. */
+export const UNRECOGNISED_SUCCESS =
+  'El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.'
+/** P2-1: a list row whose id does not have the minted shape. */
+export const MALFORMED_ROW_ID =
+  'Esta fila lleva un identificador que Korvun no puede leer. No se abre ni se decide desde aquí. Las demás filas no se ven afectadas.'
+/** P2-7: loopback_only (§12-ter). */
+export const LOOPBACK_ONLY =
+  'Esta decisión solo puede tomarse desde la misma máquina que ejecuta Korvun. La petición llegó desde otro origen y se rechazó sin tocar nada.'
+
 /** The nine belt names E8 can print. The screen prints whatever comes without
  * presuming this list — it exists only to document what the store can say. */
 export const SURFACE_NOT_MOUNTED =

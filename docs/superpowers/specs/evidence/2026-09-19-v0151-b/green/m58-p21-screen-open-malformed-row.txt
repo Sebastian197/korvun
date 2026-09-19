@@ -1,0 +1,36 @@
+# id: m58-p21-screen-open-malformed-row
+# guard: P2-1: open the malformed row (screen)
+# date: 2026-09-19T17:03:54.940997+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 5176805b7ecc714a493fe72ac57a136e7060dc85
+# command (cwd cmd/korvun-desktop/frontend): npx vitest run src/views/Approvals.v0151b.test.tsx
+# --- mutation diff ---
+--- a/cmd/korvun-desktop/frontend/src/views/Approvals.tsx
++++ b/cmd/korvun-desktop/frontend/src/views/Approvals.tsx
+@@ -692,7 +692,7 @@
+         {rows.map((r) => {
+           const banner = classBanner(r.effect_class)
+           const whole = !isDigest(r.digest) || collided.has(tailOf(r.digest))
+-          if (!isApprovalID(r.id)) {
++          if (false && !isApprovalID(r.id)) { // MUTATION
+             // P2-1: listed, so the operator sees it exists; not a button, so it
+             // is neither opened nor decided, and no URL is built from its id.
+             return (
+# --- mutated run (FAIL/ok lines) ---
+     × P2-1 · la fila imprime el id por el alfabeto de escape 1071ms
+     × P2-1 · una fila con id mal formado (path traversal) se lista con su literal y no se abre 1068ms
+     × P2-1 · una fila con id mal formado (query) se lista con su literal y no se abre 1070ms
+     × P2-1 · una fila con id mal formado (upper-case) se lista con su literal y no se abre 1078ms
+ Test Files  1 failed (1)
+      Tests  4 failed | 26 passed (30)
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · la fila imprime el id por el alfabeto de escape
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · una fila con id mal formado (path traversal) se lista con su literal y no se abre
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · una fila con id mal formado (query) se lista con su literal y no se abre
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-1 · el identificador de la aprobación > P2-1 · una fila con id mal formado (upper-case) se lista con su literal y no se abre
+# first failing assertion: TestingLibraryElementError: Unable to find an element with the text: Esta fila lleva un identificador que Korvun no puede leer. No se abre ni se decide desde aquí. Las demás filas no se ven afectadas.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 5176805b7ecc714a493fe72ac57a136e7060dc85 (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ Test Files  1 passed (1)
+      Tests  30 passed (30)
+# exit (restored): 0

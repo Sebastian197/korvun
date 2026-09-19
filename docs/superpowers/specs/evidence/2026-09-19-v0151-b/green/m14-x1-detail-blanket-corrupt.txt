@@ -1,0 +1,32 @@
+# id: m14-x1-detail-blanket-corrupt
+# guard: X1 / ApprovalDetail: keep the blanket corrupt wrap
+# date: 2026-09-19T18:07:55.689403+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestApprovalDetail_|TestV0151B_P2_6' ./internal/action/sqlite/ ./internal/app/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals_v15.go
++++ b/internal/action/sqlite/approvals_v15.go
+@@ -320,7 +320,7 @@
+ 		// A column that will not convert is corruption of the evidence; a
+ 		// store that did not answer is not (v0.15.1 block B, P2-4). Exactly
+ 		// one class.
+-		return ApprovalDetailRow{}, classifyApprovalRead(approvalID, err)
++		return ApprovalDetailRow{}, classifyApprovalRead(approvalID, fmt.Errorf("%w: %w", errApprovalRowInvalid, err)) // MUTATION
+ 	}
+ 
+ 	out := ApprovalDetailRow{Approval: a, Params: []byte(rawParams)}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestApprovalDetail_oneClassPerFailure (0.00s)
+    --- FAIL: TestApprovalDetail_oneClassPerFailure/driver (0.08s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	3.147s
+ok  	github.com/Sebastian197/korvun/internal/app	1.204s
+FAIL
+# first failing assertion: v0151b_x1_claim_test.go:131: err = action/sqlite: approval "apr_b380e4192fbde06515b027341975ee75": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: the approval row does not convert: SQL logic error: no such table: approvals (1): corrupt=true unreadable=false, want corrupt=false unreadable=true
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.661s
+ok  	github.com/Sebastian197/korvun/internal/app	1.436s
+# exit (restored): 0

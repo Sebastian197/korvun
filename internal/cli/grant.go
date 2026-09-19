@@ -33,6 +33,11 @@ func (c *cli) grantCmd(args []string) int {
 		return 2
 	}
 	switch args[0] {
+	case "-h", "--help":
+		// A query, not a usage error (ADR-0032 «Exit codes»): the noun's usage
+		// to stdout, exit 0 (v0.15.1 block B, P2-2).
+		_, _ = fmt.Fprint(c.stdout, "Usage: korvun grant <issue|delegate|revoke> [flags]\n\nRun 'korvun grant <verb> -h' for the flags of one verb.\n")
+		return 0
 	case "issue":
 		return c.grantIssue(args[1:])
 	case "delegate":
@@ -108,8 +113,8 @@ func parseCeilingFlag(raw string) (action.EffectClass, error) {
 func (c *cli) grantIssue(args []string) int {
 	gf := newGrantFlags("grant issue", c)
 	intentID := gf.fs.String("intent", "", "the intent the grant lives under (required)")
-	if err := gf.fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(gf.fs, args); done {
+		return code
 	}
 	if *gf.configPath == "" || *intentID == "" || *gf.subject == "" || *gf.operations == "" {
 		_, _ = fmt.Fprint(c.stderr, "korvun grant issue: --config, --intent, --subject and --operations are required\n")
@@ -209,8 +214,8 @@ func (c *cli) buildGrantFromFlags(gf *grantFlags, intentID, issuer string, now t
 func (c *cli) grantDelegate(args []string) int {
 	gf := newGrantFlags("grant delegate", c)
 	parentID := gf.fs.String("parent", "", "the parent grant id (required)")
-	if err := gf.fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(gf.fs, args); done {
+		return code
 	}
 	if *gf.configPath == "" || *parentID == "" || *gf.subject == "" || *gf.operations == "" {
 		_, _ = fmt.Fprint(c.stderr, "korvun grant delegate: --config, --parent, --subject and --operations are required\n")
@@ -286,8 +291,8 @@ func (c *cli) grantRevoke(args []string) int {
 	fs := flag.NewFlagSet("grant revoke", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" || fs.NArg() != 1 {
 		_, _ = fmt.Fprint(c.stderr, "korvun grant revoke: usage: korvun grant revoke --config <path> <grant-id>\n")

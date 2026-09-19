@@ -1,0 +1,43 @@
+# id: m44-ver-second-failure
+# guard: P2-6 verifiers: name a second failure beside the mark
+# date: 2026-09-19T16:56:50.068548+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_(theVerifiersFailNamingEachMark|aValueOutsideTheListFailsClosed|aPlainOrphanVerifiesClean)' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/receipt.go
++++ b/internal/cli/receipt.go
+@@ -229,7 +229,7 @@
+ 		// rest of the arm is skipped: one receipt, one approval failure.
+ 		// Anything that is neither a well-formed digest nor a listed mark
+ 		// (a sha256: prefix of the wrong shape included) fails closed.
+-		approvalArm = false
++		// MUTATION: the rest of the arm still runs
+ 		switch class, ok := actionsqlite.ApprovalMarkClass(r.ApprovalDigest); {
+ 		case ok && class == "corrupt":
+ 			fail("approval_evidence_corrupt", "the receipt seals %s: the approval row could not be used when it was sealed", r.ApprovalDigest)
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/row_scan/intact-row (0.04s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/driver/intact-row (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/status/intact-row (0.04s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/approval_missing/intact-row (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_verb/intact-row (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_principal/intact-row (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-null/intact-row (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-empty/intact-row (0.10s)
+    --- FAIL: TestV0151B_P2_6_sister_theVerifiersFailNamingEachMark/decision_at-unparseable/intact-row (0.11s)
+--- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/zzz:anything/intact-row (0.11s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/intact-row (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/intact-row (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/intact-row (0.08s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	1.197s
+FAIL
+# first failing assertion: v0151b_test.go:529: receipt verify names 2 failures for one receipt, want exactly 1: "receipt rcpt_4ad10cb8e0d8b67ca4d29370a721255f (seq 1): FAIL approval_evidence_corrupt: the receipt seals corrupt:row_scan: the approval row could not be used when it was sealed\nreceipt rcpt_4ad10cb8e0d8b67ca4d29370a721255f (seq 1): FAIL approval_mismatch: receipt seals corrupt:row_scan but the approval row re-derives sha256:27ec5e7c1f7f76565c7d0ae89bcac8ebdd3d765fb89e89fc763c4cebc527a33d\n"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	1.399s
+# exit (restored): 0

@@ -1,0 +1,71 @@
+# id: m41b-loose-observer-x30
+# guard: Pass-13 P3 (a): the same production mutation with the observation loosened to ANY goroutine (instrument mutation) — must ESCAPE (green): the sibling is what the recovery-tied observation exists to reject
+# date: 2026-09-19T17:01:01.494405+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=30 -run 'TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/store.go
++++ b/internal/action/sqlite/store.go
+@@ -1170,6 +1170,10 @@
+ 		return false, fmt.Errorf("action/sqlite: begin crash close %q: %w", actionID, err)
+ 	}
+ 	defer func() { _ = tx.Rollback() }()
++	if predicate == claimedOrphanPredicate { // MUTATION: a prior SELECT on the claimed pass
++		var st string
++		_ = tx.QueryRowContext(ctx, `SELECT state FROM actions WHERE action_id = ?`, actionID).Scan(&st)
++	}
+ 	res, err := tx.ExecContext(ctx,
+ 		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
+ 		  WHERE action_id = ?`+predicate, // #nosec G202 -- predicate is one of three package constants
+--- a/internal/action/sqlite/v0151b_test.go
++++ b/internal/action/sqlite/v0151b_test.go
+@@ -774,7 +774,7 @@
+ 	// Observe: the RECOVERY's own goroutine blocked in the busy wait, or the
+ 	// recovery already returned.
+ 	var res *result
+-	observed := waitForBusyFrame(t, func(id string) bool { return id == recoveryID }, func() bool {
++	observed := waitForBusyFrame(t, func(string) bool { _ = recoveryID; return true /* INSTRUMENT MUTATION: any goroutine */ }, func() bool {
+ 		select {
+ 		case r := <-done:
+ 			res = &r
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.06s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.13s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.11s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.05s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+--- FAIL: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.04s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.973s
+FAIL
+# first failing assertion: v0151b_test.go:801: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.108s
+# exit (restored): 0

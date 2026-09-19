@@ -1,0 +1,35 @@
+# date: 2026-09-19T11:08:16.182886Z
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# mutated file: internal/action/sqlite/approvals.go
+# --- mutation diff ---
+diff --git a/internal/action/sqlite/approvals.go b/internal/action/sqlite/approvals.go
+index 19fcc29..796da7e 100644
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -379,7 +379,7 @@ func (s *Store) closeApprovalTx(ctx context.Context, tx *sql.Tx, a action.Approv
+ // every terminal outcome receipts or the whole close fails).
+ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID string, at time.Time) error {
+ 	if err := transitionTx(ctx, tx, actionID, action.StatePendingApproval, action.StateRejected); err != nil {
+-		return err
++		return fmt.Errorf("MUTATION: %w: %w", ErrApprovalActionNotPending, err)
+ 	}
+ 	if _, err := tx.ExecContext(ctx,
+ 		`UPDATE actions SET finished_at = ? WHERE action_id = ?`,
+
+# --- command (mutated): go test -count=1 -v -run 'TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable' ./internal/app/
+=== RUN   TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable
+    v0151b_test.go:373: err = approvals: this request is not awaiting execution: a driver failure published as already_closed
+--- FAIL: TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.630s
+FAIL
+
+# exit (mutated): 1
+# restored: git diff --quiet -- internal/action/sqlite/approvals.go exit 0 (byte for byte)
+# --- command (restored): go test -count=1 -v -run 'TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable' ./internal/app/
+=== RUN   TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable
+--- PASS: TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable (0.03s)
+PASS
+ok  	github.com/Sebastian197/korvun/internal/app	0.634s
+
+# exit (restored): 0

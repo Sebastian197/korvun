@@ -39,6 +39,11 @@ func (c *cli) intentCmd(args []string) int {
 		return 2
 	}
 	switch args[0] {
+	case "-h", "--help":
+		// A query, not a usage error (ADR-0032 «Exit codes»): the noun's usage
+		// to stdout, exit 0 (v0.15.1 block B, P2-2).
+		_, _ = fmt.Fprint(c.stdout, "Usage: korvun intent <create|activate|revoke|list|show> [flags]\n\nRun 'korvun intent <verb> -h' for the flags of one verb.\n")
+		return 0
 	case "create":
 		return c.intentCreate(args[1:])
 	case "activate":
@@ -192,8 +197,8 @@ func (c *cli) intentCreate(args []string) int {
 	maxActions := fs.Int("max-actions", 0, "total action budget (0 = unlimited)")
 	validFrom := fs.String("valid-from", "", "window start, RFC3339 (default: now)")
 	expires := fs.String("expires", "", "window end, RFC3339 (default: no expiry)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" || *purpose == "" || *operations == "" {
 		_, _ = fmt.Fprint(c.stderr, "korvun intent create: --config, --purpose and --operations are required\n")
@@ -263,8 +268,8 @@ func (c *cli) intentTransition(args []string, verb string, to action.LifecycleSt
 	fs := flag.NewFlagSet("intent "+verb, flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" || fs.NArg() != 1 {
 		_, _ = fmt.Fprintf(c.stderr, "korvun intent %s: usage: korvun intent %s --config <path> <intent-id>\n", verb, verb)
@@ -294,8 +299,8 @@ func (c *cli) intentList(args []string) int {
 	fs := flag.NewFlagSet("intent list", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" {
 		_, _ = fmt.Fprint(c.stderr, "korvun intent list: --config is required\n")
@@ -328,8 +333,8 @@ func (c *cli) intentShow(args []string) int {
 	fs := flag.NewFlagSet("intent show", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" || fs.NArg() != 1 {
 		_, _ = fmt.Fprint(c.stderr, "korvun intent show: usage: korvun intent show --config <path> <intent-id>\n")

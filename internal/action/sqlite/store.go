@@ -1187,7 +1187,13 @@ func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action
 	if n == 0 {
 		return false, nil
 	}
-	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "")
+	// decided (v0.15.1 block B): owned by the claimed-orphan pass. The
+	// predicate itself proved, inside this one UPDATE with n == 1, that the
+	// action was an APPROVED claimed orphan. No prior SELECT: a read before
+	// the UPDATE turns this DEFERRED transaction into a reader that must
+	// promote, and under a concurrent writer the UPDATE gets SQLITE_BUSY and
+	// the orphan is skipped.
+	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "", predicate == claimedOrphanPredicate)
 	if err != nil {
 		return false, err
 	}

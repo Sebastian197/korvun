@@ -1,0 +1,31 @@
+# id: m15-x1-tx0-blanket-corrupt
+# guard: X1 / approvalTx0: keep the blanket corrupt wrap
+# date: 2026-09-19T18:08:09.537754+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestClaim_|TestReReadParams_|TestV0151B_P2_6' ./internal/action/sqlite/ ./internal/app/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals_v15.go
++++ b/internal/action/sqlite/approvals_v15.go
+@@ -844,7 +844,7 @@
+ 	if err != nil {
+ 		// One class (v0.15.1 block B, X1's sister): a store that did not
+ 		// answer is unreadable, never corrupt.
+-		return action.Approval{}, classifyApprovalRead(approvalID, err)
++		return action.Approval{}, classifyApprovalRead(approvalID, fmt.Errorf("%w: %w", errApprovalRowInvalid, err)) // MUTATION
+ 	}
+ 	return a, nil
+ }
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestReReadParams_aStoreThatCannotBeReadIsNotCorrupt (0.06s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	4.525s
+ok  	github.com/Sebastian197/korvun/internal/app	1.367s
+FAIL
+# first failing assertion: v0151b_x1_claim_test.go:159: err = action/sqlite: approval "apr_47581f98a621fcad8fae8ea8892063fc": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: the approval row does not convert: SQL logic error: no such column: decision_at (1): corrupt=true unreadable=false, want corrupt=false unreadable=true
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	4.836s
+ok  	github.com/Sebastian197/korvun/internal/app	1.304s
+# exit (restored): 0

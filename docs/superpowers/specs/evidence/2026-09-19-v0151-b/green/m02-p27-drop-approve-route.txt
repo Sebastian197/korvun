@@ -1,0 +1,35 @@
+# id: m02-p27-drop-approve-route
+# guard: P2-7 route: drop the peer check from the approve route
+# date: 2026-09-19T16:51:23.955471+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_7' ./internal/controlapi/ ./internal/app/
+# --- mutation diff ---
+--- a/internal/controlapi/approvals.go
++++ b/internal/controlapi/approvals.go
+@@ -308,7 +308,7 @@
+ 	auth := approvalsAuth(token)
+ 	m.Handle("GET /api/approvals", loopbackOnlyApprovals(auth(listApprovalsHandler(a))))
+ 	m.Handle("GET /api/approvals/{id}", loopbackOnlyApprovals(auth(approvalDetailHandler(a))))
+-	m.Handle("POST /api/approvals/{id}/approve", loopbackOnlyApprovals(auth(approveHandler(a))))
++	m.Handle("POST /api/approvals/{id}/approve", auth(approveHandler(a)))
+ 	m.Handle("POST /api/approvals/{id}/reject", loopbackOnlyApprovals(auth(rejectHandler(a))))
+ }
+ 
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_192.0.2.10:40000_POST_/api/approvals/apr_abababababababababababababababab/approve (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/remote_[2001:db8::10]:40000_POST_/api/approvals/apr_abababababababababababababababab/approve (0.00s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/controlapi	0.610s
+--- FAIL: TestV0151B_P2_7_noRouteServesOrDecidesForARemotePeer (0.05s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.679s
+FAIL
+# first failing assertion: v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/controlapi	0.457s
+ok  	github.com/Sebastian197/korvun/internal/app	0.745s
+# exit (restored): 0

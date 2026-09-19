@@ -1,0 +1,51 @@
+# scratch copy: base 61ae582 + B's uncommitted moulds + block A's CURRENT internal/ files (tracked edits and new tests) from /Users/sebastianmorenosaavedra/Desktop/korvun-v0151-a.nosync
+# set aside: v0151b_writefailed_test.go removed; approvals_sentinels_test.go at HEAD (both need the undeclared ErrApprovalWriteFailed)
+# B's production cures NOT applied (red phase): this measures A's real files against B's moulds
+# command: go test -race -count=1 -v -run 'TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence|TestClaim_aCorruptRowStaysCorruptEvidence|TestApprovalDetail_oneClassPerFailure|TestReReadParams_aStoreThatCannotBeReadIsNotCorrupt|TestHistoryRow_conversionFailureIsCorruptOnBsDoors' ./internal/action/sqlite/
+# date: 2026-09-19T13:23:13Z
+=== RUN   TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+=== PAUSE TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+=== RUN   TestClaim_aCorruptRowStaysCorruptEvidence
+=== PAUSE TestClaim_aCorruptRowStaysCorruptEvidence
+=== RUN   TestApprovalDetail_oneClassPerFailure
+=== PAUSE TestApprovalDetail_oneClassPerFailure
+=== RUN   TestReReadParams_aStoreThatCannotBeReadIsNotCorrupt
+=== PAUSE TestReReadParams_aStoreThatCannotBeReadIsNotCorrupt
+=== RUN   TestHistoryRow_conversionFailureIsCorruptOnBsDoors
+=== PAUSE TestHistoryRow_conversionFailureIsCorruptOnBsDoors
+=== CONT  TestClaim_aCorruptRowStaysCorruptEvidence
+=== CONT  TestReReadParams_aStoreThatCannotBeReadIsNotCorrupt
+=== CONT  TestApprovalDetail_oneClassPerFailure
+=== CONT  TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+=== RUN   TestApprovalDetail_oneClassPerFailure/driver
+=== PAUSE TestApprovalDetail_oneClassPerFailure/driver
+=== RUN   TestApprovalDetail_oneClassPerFailure/conversion
+=== PAUSE TestApprovalDetail_oneClassPerFailure/conversion
+=== CONT  TestApprovalDetail_oneClassPerFailure/conversion
+=== CONT  TestHistoryRow_conversionFailureIsCorruptOnBsDoors
+=== RUN   TestHistoryRow_conversionFailureIsCorruptOnBsDoors/decide-reject
+=== PAUSE TestHistoryRow_conversionFailureIsCorruptOnBsDoors/decide-reject
+=== RUN   TestHistoryRow_conversionFailureIsCorruptOnBsDoors/get
+=== PAUSE TestHistoryRow_conversionFailureIsCorruptOnBsDoors/get
+=== CONT  TestApprovalDetail_oneClassPerFailure/driver
+--- PASS: TestClaim_aCorruptRowStaysCorruptEvidence (0.32s)
+=== CONT  TestHistoryRow_conversionFailureIsCorruptOnBsDoors/get
+=== NAME  TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence
+    v0151b_x1_claim_test.go:70: err = action/sqlite: approval "apr_eeb8924644ab045af0e9a77dca0ab987": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such table: approvals (1): corrupt=true unreadable=false, want corrupt=false unreadable=true — the store did not answer
+--- FAIL: TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence (0.33s)
+=== CONT  TestHistoryRow_conversionFailureIsCorruptOnBsDoors/decide-reject
+=== NAME  TestReReadParams_aStoreThatCannotBeReadIsNotCorrupt
+    v0151b_x1_claim_test.go:157: err = action/sqlite: approval "apr_c1ce94ac1a27fea456350ad9ce09cab6": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such column: decision_at (1): corrupt=true unreadable=false, want corrupt=false unreadable=true
+--- FAIL: TestReReadParams_aStoreThatCannotBeReadIsNotCorrupt (0.37s)
+=== NAME  TestApprovalDetail_oneClassPerFailure/driver
+    v0151b_x1_claim_test.go:129: err = action/sqlite: approval "apr_4173665499a28274ee82e04c79f2af09": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such table: approvals (1): corrupt=true unreadable=false, want corrupt=false unreadable=true
+--- FAIL: TestApprovalDetail_oneClassPerFailure (0.00s)
+    --- PASS: TestApprovalDetail_oneClassPerFailure/conversion (0.31s)
+    --- FAIL: TestApprovalDetail_oneClassPerFailure/driver (0.22s)
+--- PASS: TestHistoryRow_conversionFailureIsCorruptOnBsDoors (0.00s)
+    --- PASS: TestHistoryRow_conversionFailureIsCorruptOnBsDoors/get (0.27s)
+    --- PASS: TestHistoryRow_conversionFailureIsCorruptOnBsDoors/decide-reject (0.26s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.216s
+FAIL
+# exit: 1

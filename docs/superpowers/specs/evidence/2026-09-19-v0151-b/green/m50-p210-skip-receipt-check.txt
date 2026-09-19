@@ -1,0 +1,36 @@
+# id: m50-p210-skip-receipt-check
+# guard: P2-10: skip the receipt_id check
+# date: 2026-09-19T17:03:31.863989+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 5176805b7ecc714a493fe72ac57a136e7060dc85
+# command (cwd cmd/korvun-desktop/frontend): npx vitest run src/views/Approvals.v0151b.test.tsx
+# --- mutation diff ---
+--- a/cmd/korvun-desktop/frontend/src/views/Approvals.tsx
++++ b/cmd/korvun-desktop/frontend/src/views/Approvals.tsx
+@@ -147,7 +147,7 @@
+   if (status !== 200 || typeof body !== 'object' || body === null) return null
+   const b = body as Record<string, unknown>
+   const optional = (v: unknown): v is string | undefined => v === undefined || typeof v === 'string'
+-  if (typeof b.outcome !== 'string' || typeof b.receipt_id !== 'string') return null
++  if (typeof b.outcome !== 'string' /* MUTATION */) return null
+   if (!optional(b.digest) || !optional(b.result)) return null
+   const receipt = b.receipt_id
+   if (verb === 'reject') return b.outcome === 'rejected' ? { kind: 'rejected', receipt } : null
+# --- mutated run (FAIL/ok lines) ---
+     × P2-10 · approve con receipt_id ausente: el literal de respuesta no reconocida, nada afirmado 1123ms
+     × P2-10 · approve con receipt_id numérico: el literal de respuesta no reconocida, nada afirmado 1124ms
+     × P2-10 · reject con receipt_id ausente: el literal de respuesta no reconocida, nada afirmado 1105ms
+     × P2-10 · reject con receipt_id numérico: el literal de respuesta no reconocida, nada afirmado 1122ms
+ Test Files  1 failed (1)
+      Tests  4 failed | 26 passed (30)
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con receipt_id ausente: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con receipt_id numérico: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · reject con receipt_id ausente: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · reject con receipt_id numérico: el literal de respuesta no reconocida, nada afirmado
+# first failing assertion: TestingLibraryElementError: Unable to find role="button" and name "Volver a pendientes"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 5176805b7ecc714a493fe72ac57a136e7060dc85 (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ Test Files  1 passed (1)
+      Tests  30 passed (30)
+# exit (restored): 0
