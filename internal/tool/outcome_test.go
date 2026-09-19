@@ -35,7 +35,7 @@ func TestCloseStateAfterRun_namesEveryClass(t *testing.T) {
 		want action.State
 	}{
 		{"nothing failed", nil, action.StateSucceeded},
-		{"the request reached the wire and its answer did not come back",
+		{"the receiver answered and the answer was not a usable success (label corrected in v0.15.1 block A)",
 			fmt.Errorf("webhook_call: %w", ErrEffectDelivered), action.StateOutcomeUnknown},
 		{"the deadline fired", fmt.Errorf("webhook_call: %w", context.DeadlineExceeded), action.StateOutcomeUnknown},
 		{"the context was cancelled", fmt.Errorf("webhook_call: %w", context.Canceled), action.StateOutcomeUnknown},

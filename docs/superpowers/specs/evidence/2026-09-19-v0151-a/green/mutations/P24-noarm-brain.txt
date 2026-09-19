@@ -1,0 +1,33 @@
+# mutation P24-noarm-brain: drop the ErrNotSent arm (brain path)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:22:02Z
+## diff of the mutation
+--- internal/tool/outcome.go
++++ internal/tool/outcome.go (mutated)
+@@ -48,8 +48,6 @@
+ 	case errors.Is(err, ErrEffectDelivered),
+ 		errors.Is(err, ErrDeliveryUnknown):
+ 		return action.StateOutcomeUnknown
+-	case errors.Is(err, ErrNotSent):
+-		return action.StateFailed
+ 	case errors.Is(err, context.DeadlineExceeded),
+ 		errors.Is(err, context.Canceled):
+ 		return action.StateOutcomeUnknown
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestRunTool_anEndBeforeAConnectionClosesFailed ./internal/brain/
+--- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed (0.00s)
+    --- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed/the_caller_cancels_during_the_handshake (0.00s)
+        agent_v0151_a_test.go:165: finishes = [OUTCOME_UNKNOWN], want exactly [FAILED] — no connection was obtained
+    --- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed/the_tool's_deadline_fires_during_the_handshake (0.30s)
+        agent_v0151_a_test.go:165: finishes = [OUTCOME_UNKNOWN], want exactly [FAILED] — no connection was obtained
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/brain	1.987s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestRunTool_anEndBeforeAConnectionClosesFailed ./internal/brain/
+ok  	github.com/Sebastian197/korvun/internal/brain	2.697s
+# exit: 0

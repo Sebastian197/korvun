@@ -1,0 +1,30 @@
+# mutation X2-null: wrap the incomplete history branch unreadable
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:26:59Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -512,7 +512,7 @@
+ 		return fmt.Errorf("read the decision of %q: %w: %w", a.ActionID, ErrApprovalUnreadable, err)
+ 	}
+ 	if !outcomeRaw.Valid || !ruleRaw.Valid || !polVersionRaw.Valid || !polDigestRaw.Valid {
+-		return fmt.Errorf("the decision row for %q is incomplete: %w", a.ActionID, ErrApprovalEvidenceCorrupt)
++		return fmt.Errorf("the decision row for %q is incomplete: %w", a.ActionID, ErrApprovalUnreadable)
+ 	}
+ 	polVersion, perr := strconv.ParseInt(polVersionRaw.String, 10, 64)
+ 	if perr != nil {
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_anIncompleteHistoryRowIsCorruptEvidence ./internal/action/sqlite/
+--- FAIL: TestClaim_anIncompleteHistoryRowIsCorruptEvidence (1.11s)
+    claim_classification_v0151_test.go:198: err = action/sqlite: approval "apr_877b2d45f61296271d4264612557569f": the decision row for "act_x2_null" is incomplete: action/sqlite: the approval could not be read: corrupt=false unreadable=true, want corrupt=true unreadable=false
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	4.846s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_anIncompleteHistoryRowIsCorruptEvidence ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	4.048s
+# exit: 0

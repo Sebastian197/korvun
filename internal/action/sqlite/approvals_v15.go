@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
@@ -415,27 +416,41 @@ func scanApprovalDetail(row scanner) (action.Approval, string, string, error) {
 // JOIN, so an approvals row whose actions row was destroyed reads as CORRUPT
 // and never as absent.
 func ternaOf(ctx context.Context, q rowQuerier, actionID string) (action.Operation, action.State, error) {
+	// op_version is scanned WITHOUT type conversion and parsed here (v0.15.1):
+	// a typed Scan failed on text in the column and that failure was wrapped
+	// unreadable, publishing bytes that are there and never verify as a
+	// transient store failure. Now only a failed Scan — the driver — is
+	// unreadable; a value that does not parse is corrupt evidence.
 	var (
-		ns      sql.NullString
-		name    sql.NullString
-		version sql.NullInt64
-		state   sql.NullString
+		ns         sql.NullString
+		name       sql.NullString
+		versionRaw sql.NullString
+		state      sql.NullString
 	)
 	err := q.QueryRowContext(ctx,
 		`SELECT a.op_namespace, a.op_name, a.op_version, a.state
 		   FROM actions a WHERE a.action_id = ?`, actionID).
-		Scan(&ns, &name, &version, &state)
+		Scan(&ns, &name, &versionRaw, &state)
 	if errors.Is(err, sql.ErrNoRows) {
 		return action.Operation{}, "", fmt.Errorf("the actions row for %q is gone: %w", actionID, ErrApprovalEvidenceCorrupt)
 	}
 	if err != nil {
 		return action.Operation{}, "", fmt.Errorf("read the actions row for %q: %w: %w", actionID, ErrApprovalUnreadable, err)
 	}
-	if !ns.Valid || !name.Valid || !version.Valid {
+	if !ns.Valid || !name.Valid || !versionRaw.Valid || !state.Valid {
 		return action.Operation{}, "", fmt.Errorf("the actions row for %q is incomplete: %w", actionID, ErrApprovalEvidenceCorrupt)
 	}
+	version, err := strconv.Atoi(versionRaw.String)
+	if err != nil {
+		return action.Operation{}, "", fmt.Errorf("the actions row for %q carries op_version %q: %w", actionID, versionRaw.String, ErrApprovalEvidenceCorrupt)
+	}
+	if !knownActionState[action.State(state.String)] {
+		// A state outside the domain is a value that is there and wrong, not a
+		// legitimate move of the action (v0.15.1).
+		return action.Operation{}, "", fmt.Errorf("the actions row for %q carries state %q, outside the domain: %w", actionID, state.String, ErrApprovalEvidenceCorrupt)
+	}
 	return action.Operation{
-		Namespace: ns.String, Name: name.String, Version: int(version.Int64),
+		Namespace: ns.String, Name: name.String, Version: version,
 	}, action.State(state.String), nil
 }
 
@@ -446,19 +461,32 @@ func ternaOf(ctx context.Context, q rowQuerier, actionID string) (action.Operati
 // and the caller had to guess. Here sql.ErrNoRows is corruption — the row is
 // gone and nothing repairs it — and only a driver error is transient.
 func verifyApprovalStoryTyped(ctx context.Context, q rowQuerier, a action.Approval, p action.ActionPreview) error {
-	var (
-		effectClass, opNS, opName string
-		principal                 sql.NullString
-	)
+	// effect_class, op_namespace and op_name are scanned without conversion
+	// (v0.15.1): a NULL in any of them is a value that is there and wrong —
+	// corrupt — and only a failed Scan is unreadable. principal_id stays
+	// nullable BY DESIGN: an action may carry no principal, and the comparison
+	// with the preview's principal judges it.
+	var effectCell, opNSCell, opNameCell, principal sql.NullString
 	err := q.QueryRowContext(ctx,
 		`SELECT effect_class, op_namespace, op_name, principal_id
 		   FROM actions WHERE action_id = ?`, a.ActionID).
-		Scan(&effectClass, &opNS, &opName, &principal)
+		Scan(&effectCell, &opNSCell, &opNameCell, &principal)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("the actions row for %q is gone: %w", a.ActionID, ErrApprovalEvidenceCorrupt)
 	}
 	if err != nil {
 		return fmt.Errorf("read the story of %q: %w: %w", a.ActionID, ErrApprovalUnreadable, err)
+	}
+	if !effectCell.Valid || !opNSCell.Valid || !opNameCell.Valid {
+		return fmt.Errorf("the actions row for %q carries a NULL effect class or operation: %w", a.ActionID, ErrApprovalEvidenceCorrupt)
+	}
+	effectClass, opNS, opName := effectCell.String, opNSCell.String, opNameCell.String
+	if !storedEffectClassInDomain(effectClass) {
+		// The empty string or a value outside the stored domain is a value
+		// that is there and wrong (v0.15.1). The preview comparison alone does
+		// not catch it: the same hand can rewrite the preview and its digest
+		// to agree with the cell.
+		return fmt.Errorf("the actions row for %q carries effect class %q, outside the domain: %w", a.ActionID, effectClass, ErrApprovalEvidenceCorrupt)
 	}
 	if effectClass != string(p.EffectClass) {
 		return fmt.Errorf("preview_effect_mismatch: the preview shows %s but the action row carries %s: %w", p.EffectClass, effectClass, ErrApprovalEvidenceCorrupt)
@@ -469,20 +497,28 @@ func verifyApprovalStoryTyped(ctx context.Context, q rowQuerier, a action.Approv
 	if principal.String != p.PrincipalID {
 		return fmt.Errorf("preview_principal_mismatch: the preview shows %q but the action row carries %q: %w", p.PrincipalID, principal.String, ErrApprovalEvidenceCorrupt)
 	}
-	var (
-		outcome, rule, polDigest string
-		polVersion               int64
-	)
+	// Scanned WITHOUT type conversion and parsed here (v0.15.1, X2): only a
+	// failed Scan — the driver — is unreadable; a value that is there and does
+	// not parse is corrupt evidence, never a transient failure.
+	var outcomeRaw, ruleRaw, polVersionRaw, polDigestRaw sql.NullString
 	err = q.QueryRowContext(ctx,
 		`SELECT outcome, rule, policy_version, policy_digest
 		   FROM action_decisions WHERE action_id = ?`, a.ActionID).
-		Scan(&outcome, &rule, &polVersion, &polDigest)
+		Scan(&outcomeRaw, &ruleRaw, &polVersionRaw, &polDigestRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("the decision row for %q is gone: %w", a.ActionID, ErrApprovalEvidenceCorrupt)
 	}
 	if err != nil {
 		return fmt.Errorf("read the decision of %q: %w: %w", a.ActionID, ErrApprovalUnreadable, err)
 	}
+	if !outcomeRaw.Valid || !ruleRaw.Valid || !polVersionRaw.Valid || !polDigestRaw.Valid {
+		return fmt.Errorf("the decision row for %q is incomplete: %w", a.ActionID, ErrApprovalEvidenceCorrupt)
+	}
+	polVersion, perr := strconv.ParseInt(polVersionRaw.String, 10, 64)
+	if perr != nil {
+		return fmt.Errorf("the decision row for %q carries policy_version %q: %w", a.ActionID, polVersionRaw.String, ErrApprovalEvidenceCorrupt)
+	}
+	outcome, rule, polDigest := outcomeRaw.String, ruleRaw.String, polDigestRaw.String
 	if outcome != a.Reason || rule != a.Reason {
 		return fmt.Errorf("decision_outcome_mismatch: the request was born from %q but the decision row says outcome %q rule %q: %w", a.Reason, outcome, rule, ErrApprovalEvidenceCorrupt)
 	}
@@ -587,16 +623,12 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 	if err != nil {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	}
-	if law != nil {
-		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
-			return nil, action.Operation{}, fmt.Errorf(
-				"action/sqlite: approval %q was parked under law v%d %s but the current law is v%d %s (%s): %w",
-				approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, dim, ErrApprovalInvalidated)
-		}
-	}
 	// The snapshot the caller read, against the row THIS transaction read. The
 	// caller's prechecks happen outside this transaction, so every column they
-	// judged is a stale read until it is compared here.
+	// judged is a stale read until it is compared here. It is compared BEFORE
+	// the law (v0.15.1): a row that moved under the caller is the more
+	// specific fact, and naming it `invalidated` told the operator that
+	// rejecting it still works.
 	if seen != nil {
 		if column := approvalRowMoved(*seen, a); column != "" {
 			return nil, action.Operation{}, fmt.Errorf(
@@ -604,15 +636,28 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 				approvalID, column, ErrApprovalMovedUnderTheClaim)
 		}
 	}
-	var rawPreview, rawParams string
+	if law != nil {
+		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+			return nil, action.Operation{}, fmt.Errorf(
+				"action/sqlite: approval %q was parked under law v%d %s but the current law is v%d %s (%s): %w",
+				approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, dim, ErrApprovalInvalidated)
+		}
+	}
+	// Scanned without conversion (v0.15.1): a NULL in either cell is a value
+	// that is there and wrong — corrupt — and only a failed Scan is unreadable.
+	var previewCell, paramsCell sql.NullString
 	if err := tx.QueryRowContext(ctx,
 		`SELECT canonical_preview, canonical_params FROM approvals WHERE approval_id = ?`,
-		approvalID).Scan(&rawPreview, &rawParams); err != nil {
+		approvalID).Scan(&previewCell, &paramsCell); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
 		}
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: claim read %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
+	if !previewCell.Valid || !paramsCell.Valid {
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q carries a NULL preview or parameters cell: %w", approvalID, ErrApprovalEvidenceCorrupt)
+	}
+	rawPreview, rawParams := previewCell.String, paramsCell.String
 	p, err := action.ParseCanonicalPreview([]byte(rawPreview))
 	if err != nil {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q preview: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
@@ -673,6 +718,33 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 	if n == 0 {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalClaimSkipped)
 	}
+	if n != 1 {
+		// approval_id is the primary key; more than one row is a store that
+		// no longer holds its own schema (reachable by rebuilding the table
+		// without the key — moulded). Corrupt evidence, and the claim rolls
+		// back.
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: claim %q purged %d rows: %w", approvalID, n, ErrApprovalEvidenceCorrupt)
+	}
+	// The purge must hold INSIDE this transaction (v0.15.1 A1): it is re-read
+	// here, before the commit, and must have left the empty string. A trigger
+	// that restores the column after the purge makes RowsAffected report one
+	// row over parameters that are still there, and the next claim would
+	// consume them again. The store did not hold its own write: that is
+	// corrupt evidence, and the whole claim rolls back. What this does NOT
+	// cover: another connection restoring the column AFTER this commit, while
+	// the action is still APPROVED — filed for v0.15.2.
+	//
+	// Scanned without type conversion: a NULL left in the cell is a value that
+	// is there and wrong (corrupt), not a store that failed to answer. Only a
+	// failed Scan — the driver — is unreadable.
+	var after sql.NullString
+	if err := tx.QueryRowContext(ctx,
+		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&after); err != nil {
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: re-read the purge of %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	if !after.Valid || after.String != "" {
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: the purge did not hold inside its own transaction: %w", approvalID, ErrApprovalEvidenceCorrupt)
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: commit claim: %w: %w", ErrApprovalUnreadable, err)
 	}
@@ -683,14 +755,25 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 // not APPROVED as its own transaction sees them. An unreadable row fails
 // closed with its own name; it is never read as a moved state.
 func claimAuthorityTx(ctx context.Context, tx *sql.Tx, approvalID, actionID string) error {
-	var status string
+	var statusCell sql.NullString
 	err := tx.QueryRowContext(ctx,
-		`SELECT status FROM approvals WHERE approval_id = ?`, approvalID).Scan(&status)
+		`SELECT status FROM approvals WHERE approval_id = ?`, approvalID).Scan(&statusCell)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("action/sqlite: approval %q is gone inside its claim: %w", approvalID, ErrApprovalEvidenceCorrupt)
 	}
 	if err != nil {
 		return fmt.Errorf("action/sqlite: claim authority %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	if !statusCell.Valid {
+		// A NULL status is a value that is there and wrong, not a legitimate
+		// loss of authority and not a store that failed to answer (v0.15.1).
+		return fmt.Errorf("action/sqlite: approval %q carries a NULL status inside its claim: %w", approvalID, ErrApprovalEvidenceCorrupt)
+	}
+	status := statusCell.String
+	if !knownApprovalStatus[action.ApprovalStatus(status)] {
+		// A status outside the domain is a value that is there and wrong, not a
+		// legitimate loss of authority (v0.15.1).
+		return fmt.Errorf("action/sqlite: approval %q carries status %q, outside the domain: %w", approvalID, status, ErrApprovalEvidenceCorrupt)
 	}
 	_, state, err := ternaOf(ctx, tx, actionID)
 	if err != nil {
@@ -775,4 +858,43 @@ func (s *Store) approvalTx0(ctx context.Context, approvalID string) (action.Appr
 		return action.Approval{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
 	}
 	return a, nil
+}
+
+// knownApprovalStatus and knownActionState are the domains a status or a state
+// read back must fall in, for every door that reads them through
+// claimAuthorityTx (the claim) and ternaOf (the claim, ReReadParams,
+// claimAuthorityTx and approvalDetail — the operator's Detail): anything else
+// in the cell is corrupt evidence (v0.15.1 block A).
+var (
+	knownApprovalStatus = map[action.ApprovalStatus]bool{
+		action.ApprovalPending: true, action.ApprovalApproved: true,
+		action.ApprovalRejected: true, action.ApprovalExpired: true,
+		action.ApprovalCancelled: true,
+	}
+	knownActionState = map[action.State]bool{
+		action.StateReceived: true, action.StateNormalized: true,
+		action.StateDenied: true, action.StateShadowed: true,
+		action.StateAuthorized: true, action.StateSucceeded: true,
+		action.StateFailed: true, action.StatePendingApproval: true,
+		action.StateRejected: true, action.StateApproved: true,
+		action.StatePreparing: true, action.StatePrepareFailed: true,
+		action.StatePrepared: true, action.StateCommitting: true,
+		action.StateOutcomeUnknown: true, action.StateCompensating: true,
+		action.StateCompensated: true, action.StateCompensationFailed: true,
+	}
+)
+
+// unclassifiedEffect is the E1 effect placeholder. It is a LEGITIMATE stored
+// value, not corruption: action.NewEnvelope writes it into every envelope it
+// builds, and brain.classifyEffect returns it when no effect classifier is
+// wired, so an action — and an approval parked over it — can carry it
+// (internal/action/effect.go ranks it above critical, fail-closed).
+const unclassifiedEffect = "unclassified"
+
+// storedEffectClassInDomain reports whether a stored effect_class is one the
+// store can have written: one of the sealed classes of action.EffectClass, or
+// the E1 placeholder. The empty string and anything else are corrupt evidence
+// (v0.15.1 block A, director's decision).
+func storedEffectClassInDomain(class string) bool {
+	return action.EffectClass(class).Known() || class == unclassifiedEffect
 }

@@ -1,0 +1,22 @@
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aPurgeThatDoesNotHoldConsumesNothing|TestRecovery_theCrashCloseRefusesARowThatBecameAuthorized|TestClaim_aMovedRowIsNamedBeforeAMovedLaw|TestClaim_aCorruptHistoryRowIsCorruptEvidence|TestClaim_aHistoryTableThatCannotBeReadIsUnreadable|TestClaim_ternaOfNamesConversionAndDriverApart ./internal/action/sqlite/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (red-phase moulds in the worktree, no production change; delivered_effect_test.go modified by the director's decision)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T11:56:19Z
+--- FAIL: TestRecovery_theCrashCloseRefusesARowThatBecameAuthorized (0.20s)
+    recovery_predicate_v0151_test.go:81: the crash close owned a row that had become AUTHORIZED (RowsAffected 1, want 0)
+--- FAIL: TestClaim_aCorruptHistoryRowIsCorruptEvidence (0.21s)
+    claim_classification_v0151_test.go:66: err = action/sqlite: approval "apr_b0962ce003755fcb93f980e3ec6d2b84": read the decision of "act_x2_history": action/sqlite: the approval could not be read: sql: Scan error on column index 2, name "policy_version": converting driver.Value type string ("x") to a int64: invalid syntax: corrupt=false unreadable=true, want corrupt=true unreadable=false — the b
+--- FAIL: TestClaim_aMovedRowIsNamedBeforeAMovedLaw (0.21s)
+    claim_single_consumption_v0151_test.go:180: err = action/sqlite: approval "apr_ca591e0cb804e3afb1ff2403be3c4735" was parked under law v7 sha256:law but the current law is v8 sha256:another-law (policy): action/sqlite: the law moved under this approval, want ErrApprovalMovedUnderTheClaim — the row moved before the law was judged
+--- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart (0.00s)
+    --- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart/op_version_holds_text_(conversion) (0.19s)
+        claim_classification_v0151_test.go:163: err = action/sqlite: approval "apr_2d5bbbc4cc2b20291da32bb00101a84a": read the actions row for "act_terna": action/sqlite: the approval could not be read: sql: Scan error on column index 2, name "op_version": converting driver.Value type string ("x") to a int64: invalid syntax: corrupt=false unreadable=true, want corrupt=true unreadable=false
+--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing (0.00s)
+    --- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_the_same_bytes (0.20s)
+        claim_single_consumption_v0151_test.go:95: first claim (#1): err = <nil>, params = "{\"a\":1}", want ErrApprovalEvidenceCorrupt (claims that handed parameters so far: 1)
+    --- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_different_bytes_with_the_same_digest (0.27s)
+        claim_single_consumption_v0151_test.go:95: first claim (#1): err = <nil>, params = "{\"a\":1}", want ErrApprovalEvidenceCorrupt (claims that handed parameters so far: 1)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.132s
+FAIL
+# exit: 1

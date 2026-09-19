@@ -1,0 +1,30 @@
+# mutation BR-cap: drop ErrEffectDelivered from the cap branch
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:25:11Z
+## diff of the mutation
+--- internal/tool/webhookcall.go
++++ internal/tool/webhookcall.go (mutated)
+@@ -216,7 +216,7 @@
+ 		return "", fmt.Errorf("webhook_call: read response: %w: %w", ErrEffectDelivered, err)
+ 	}
+ 	if int64(len(respBody)) > w.maxBytes {
+-		return "", fmt.Errorf("webhook_call: response exceeds the %d-byte cap: %w: %w", w.maxBytes, ErrEffectDelivered, ErrCageViolation)
++		return "", fmt.Errorf("webhook_call: response exceeds the %d-byte cap: %w", w.maxBytes, ErrCageViolation)
+ 	}
+ 	if len(respBody) == 0 {
+ 		return fmt.Sprintf("HTTP %d", resp.StatusCode), nil
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_aCappedAnswerIsStillADeliveredPost ./internal/tool/
+--- FAIL: TestWebhookCall_aCappedAnswerIsStillADeliveredPost (0.00s)
+    delivered_effect_test.go:132: the POST was ACCEPTED before the cap fired, and the error does not say so: webhook_call: response exceeds the 8-byte cap: tool: cage violation
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	1.866s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_aCappedAnswerIsStillADeliveredPost ./internal/tool/
+ok  	github.com/Sebastian197/korvun/internal/tool	4.954s
+# exit: 0

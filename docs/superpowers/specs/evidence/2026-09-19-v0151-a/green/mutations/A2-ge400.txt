@@ -1,0 +1,55 @@
+# mutation A2-ge400: restore StatusCode >= 400 as the only non-success test (tool)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:20:18Z
+## diff of the mutation
+--- internal/tool/webhookcall.go
++++ internal/tool/webhookcall.go (mutated)
+@@ -202,7 +202,7 @@
+ 	// the client did not follow (any without a Location; 300, 304, 305, 306
+ 	// even with one), a 4xx or a 5xx: the receiver answered and did not say
+ 	// it succeeded, so this is an answer that is not a usable success.
+-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
++	if resp.StatusCode >= 400 {
+ 		return "", fmt.Errorf("webhook_call: HTTP %d from %s: %w", resp.StatusCode, u.Host, ErrEffectDelivered)
+ 	}
+ 	// Past this line the POST has been ACCEPTED with a 2xx. Every error from
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_onlyA2xxIsSuccess ./internal/tool/
+--- FAIL: TestWebhookCall_onlyA2xxIsSuccess (0.00s)
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/301_without_Location (0.01s)
+        webhookcall_v0151_a_test.go:178: HTTP 301 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/306_with_Location_(not_followed) (0.01s)
+        webhookcall_v0151_a_test.go:178: HTTP 306 (Location "http://elsewhere.invalid/x"): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 300 (Location "http://elsewhere.invalid/x"): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/308_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 308 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/399_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 399 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_with_Location_(not_followed) (0.01s)
+        webhookcall_v0151_a_test.go:178: HTTP 304 (Location "http://elsewhere.invalid/x"): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/305_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 305 (Location "http://elsewhere.invalid/x"): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/307_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 307 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 304 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/303_without_Location (0.01s)
+        webhookcall_v0151_a_test.go:178: HTTP 303 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_without_Location (0.01s)
+        webhookcall_v0151_a_test.go:178: HTTP 300 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/302_without_Location (0.02s)
+        webhookcall_v0151_a_test.go:178: HTTP 302 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/a_raw_101_Switching_Protocols (0.21s)
+        webhookcall_v0151_a_test.go:207: HTTP 101: state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	1.085s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_onlyA2xxIsSuccess ./internal/tool/
+ok  	github.com/Sebastian197/korvun/internal/tool	1.945s
+# exit: 0

@@ -124,11 +124,16 @@ func (w *webhookCallTool) ArgsFromCall(fields map[string]any) (string, error) {
 // dial validated against private address space. Cage and shield breaches wrap
 // their sentinels; a malformed payload is an ordinary tool error.
 //
-// EVERY refusal raised once the request body has reached the wire also wraps
-// ErrEffectDelivered — an HTTP error status included, which this godoc used to
-// call "an ordinary tool error". Whether the body reached the wire is not
-// guessed from the error's shape: it is OBSERVED, by httptrace, and the
-// observation is what the ledger closes on.
+// Every error past the Do call carries exactly ONE delivery class (v0.15.1
+// block A), and none is guessed from the error's shape:
+//
+//   - the receiver answered and the answer is not a usable success (status
+//     < 200 or > 299, a redirect the cage refuses, an unreadable or oversized
+//     2xx body): ErrEffectDelivered;
+//   - httptrace GotConn fired and no response was read: ErrDeliveryUnknown —
+//     a clean WroteRequest is NOT proof of delivery, it fires before the
+//     transport's final flush;
+//   - GotConn never fired: ErrNotSent — no request byte can leave before it.
 func (w *webhookCallTool) Execute(ctx context.Context, args string) (string, error) {
 	parts := strings.SplitN(strings.TrimSpace(args), " ", 2)
 	if len(parts) < 2 || strings.TrimSpace(parts[1]) == "" {
@@ -151,27 +156,16 @@ func (w *webhookCallTool) Execute(ctx context.Context, args string) (string, err
 
 	callCtx, cancel := context.WithTimeout(ctx, w.timeout)
 	defer cancel()
-	// The post-delivery frontier, OBSERVED rather than inferred.
-	//
-	// Two cures tried to locate it by reasoning about which errors mean what,
-	// and both were wrong in the same direction: the first said the frontier
-	// was the response, the second said it was the end of Do's error handling.
-	// http.Client.Do returns an error for ANY failure after the body is on the
-	// wire — the host reads the whole POST and closes without answering, a
-	// reset mid-response, a plain EOF — and each of those closed the ledger
-	// FAILED over an effect that had already left.
-	//
-	// WroteRequest fires when a request body has been written in full, and
-	// info.Err says whether that write itself failed. It cannot be reasoned
-	// wrong: it is the wire reporting on itself. Redirects and retries fire it
-	// once per attempt, so "fired cleanly at least once" is the question.
-	var delivered atomic.Bool
+	// The frontier, OBSERVED rather than inferred: GotConn fires only once a
+	// connection — TLS handshake included — has been handed to this request
+	// (Go 1.26.6 net/http, Transport.getConn after dialConn/addTLS), and no
+	// request byte is written before it. Nothing else the trace offers proves
+	// more: WroteRequest fires from Request.write's defer, BEFORE writeLoop's
+	// final flush, so a clean WroteRequest can precede a write that sends
+	// zero bytes.
+	var connObtained atomic.Bool
 	callCtx = httptrace.WithClientTrace(callCtx, &httptrace.ClientTrace{
-		WroteRequest: func(info httptrace.WroteRequestInfo) {
-			if info.Err == nil {
-				delivered.Store(true)
-			}
-		},
+		GotConn: func(httptrace.GotConnInfo) { connObtained.Store(true) },
 	})
 	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, u.String(), strings.NewReader(body))
 	if err != nil {
@@ -181,13 +175,20 @@ func (w *webhookCallTool) Execute(ctx context.Context, args string) (string, err
 
 	resp, err := w.client.Do(req)
 	if err != nil {
-		// A dial that never connects, the shield refusing the address, a DNS
-		// failure: nothing was written, and the trace says so. A body that
-		// reached the host and then lost its answer: the trace says that too,
-		// and it is the SAME fact whether the failure wore a cage sentinel or
-		// a bare EOF.
-		if delivered.Load() {
+		switch {
+		case errors.Is(err, ErrRedirectRefused):
+			// CheckRedirect runs over a RESPONSE: the receiver answered (a 3xx).
 			err = fmt.Errorf("%w: %w", ErrEffectDelivered, err)
+		case connObtained.Load():
+			// A connection was handed to the request and no answer was read: a
+			// host that read the POST and hung up and a pooled connection that
+			// died with nothing written look the same from here.
+			err = fmt.Errorf("%w: %w", ErrDeliveryUnknown, err)
+		default:
+			// No connection was ever obtained: a refused dial, a handshake that
+			// never completed, the shield refusing the address, a context that
+			// ended first. Nothing left.
+			err = fmt.Errorf("%w: %w", ErrNotSent, err)
 		}
 		if errors.Is(err, ErrShieldViolation) || errors.Is(err, ErrCageViolation) {
 			return "", fmt.Errorf("webhook_call: %w", err)
@@ -195,24 +196,21 @@ func (w *webhookCallTool) Execute(ctx context.Context, args string) (string, err
 		return "", fmt.Errorf("webhook_call: request failed: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // read-only body
-	// Past here a response exists, so the body reached the host. The trace
-	// agrees; this assert is here because a disagreement would mean the
-	// frontier moved under us again, and that is worth a loud failure rather
-	// than a quiet FAILED in somebody's ledger.
-	if !delivered.Load() {
-		return "", fmt.Errorf("webhook_call: a response arrived for a request the wire never reported writing: %w", ErrEffectDelivered)
-	}
-	if resp.StatusCode >= 400 {
-		// The receiver read the body and answered. Whatever it did with the
-		// POST before answering 500 is not ours to claim either way, so this
-		// is a delivered request with an unusable answer — never a refusal
-		// that stopped the effect.
+	// Past here a response exists: the receiver ANSWERED — which does not prove
+	// it read the whole request (an early 413 after the headers is an answer
+	// too). Only a 2xx is a success. A 1xx handed back as final, every 3xx
+	// the client did not follow (any without a Location; 300, 304, 305, 306
+	// even with one), a 4xx or a 5xx: the receiver answered and did not say
+	// it succeeded, so this is an answer that is not a usable success.
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return "", fmt.Errorf("webhook_call: HTTP %d from %s: %w", resp.StatusCode, u.Host, ErrEffectDelivered)
 	}
-	// Past this line the POST has been ACCEPTED. Every error from here wraps
-	// ErrEffectDelivered, because closing it as a plain failure tells the
-	// operator the call did not happen. TestWebhookCall_everyBranchAfterDo
-	// reads this function's AST and holds that rule by SITE.
+	// Past this line the POST has been ACCEPTED with a 2xx. Every error from
+	// here wraps ErrEffectDelivered: a response was read, so closing it as a
+	// plain failure would tell the operator the call did not happen.
+	// TestWebhookCall_everyBranchAfterDo reads this function's AST and holds
+	// the classing of every post-Do return syntactically; the behavioural
+	// moulds named in its godoc hold each branch's class.
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, w.maxBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("webhook_call: read response: %w: %w", ErrEffectDelivered, err)

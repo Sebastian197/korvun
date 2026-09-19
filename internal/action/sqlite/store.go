@@ -1119,9 +1119,14 @@ const (
 	// authorizedOrphanPredicate: still AUTHORIZED — the tool was running when
 	// the process died, so the external effect's fate is unknown, never failed.
 	authorizedOrphanPredicate = ` AND state = 'AUTHORIZED'`
-	// crashOrphanPredicate: still a non-terminal, non-exempt state.
+	// crashOrphanPredicate: still a non-terminal, non-exempt state. It excludes
+	// the SAME nine states as the crash pass's SELECT: AUTHORIZED was missing
+	// (v0.15.1 A3), so a row that became AUTHORIZED between the SELECT and
+	// this UPDATE — a tool now running — was closed FAILED with a crash
+	// receipt. The exclusion lives in the UPDATE's own WHERE, the one
+	// statement SQLite runs atomically.
 	crashOrphanPredicate = ` AND state NOT IN ('DENIED','SHADOWED','SUCCEEDED','FAILED',
-		'REJECTED','PENDING_APPROVAL','APPROVED','OUTCOME_UNKNOWN')`
+		'REJECTED','PENDING_APPROVAL','APPROVED','OUTCOME_UNKNOWN','AUTHORIZED')`
 )
 
 // isBusyClass reports the SQLITE_BUSY family across its spellings —
@@ -1167,12 +1172,19 @@ func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action
 	defer func() { _ = tx.Rollback() }()
 	res, err := tx.ExecContext(ctx,
 		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
-		  WHERE action_id = ?`+predicate, // #nosec G202 -- predicate is one of two package constants
+		  WHERE action_id = ?`+predicate, // #nosec G202 -- predicate is one of three package constants
 		string(to), marker, at.Format(time.RFC3339Nano), actionID)
 	if err != nil {
 		return false, fmt.Errorf("action/sqlite: crash close %q: %w", actionID, err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		// A count that was never obtained is not a count of zero (v0.15.1,
+		// declared without a mould: modernc does not fail RowsAffected on a
+		// completed statement, so no red can force this branch).
+		return false, fmt.Errorf("action/sqlite: crash close %q: rows affected unavailable: %w", actionID, err)
+	}
+	if n == 0 {
 		return false, nil
 	}
 	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "")

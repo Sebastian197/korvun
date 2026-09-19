@@ -803,9 +803,14 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	}
 	result, latency, err := a.exec.Run(ctx, name, tool.Scope{Brain: a.name, Conversation: conv}, args)
 
-	// Did the request reach the wire before it failed? The tool says so with
-	// tool.ErrEffectDelivered, and the answer governs the STATE this attempt
-	// closes on — here exactly as on the approvals path.
+	// What did the wire establish before the run failed? Past its Do call,
+	// webhook_call says so with exactly one class — tool.ErrEffectDelivered (the receiver answered,
+	// not with a usable success), tool.ErrDeliveryUnknown (a connection, no
+	// answer) or tool.ErrNotSent (no connection); before Do (a scheme or
+	// allow-list refusal, a body that is not JSON) it wraps none, nor does a
+	// tool that does not observe the wire, and the error alone decides. Either way the class
+	// governs the STATE this attempt closes on, here exactly as on the
+	// approvals path.
 	//
 	// The approvals path is not the only way an irreversible tool runs: when
 	// the gate does not park (approvals off, no ceiling, a class below the
@@ -828,7 +833,7 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 	if rule, breached := cageRule(err); breached {
 		a.logger.Warn("agent: tool denied by its cage",
 			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-			"rule", rule, "args_prefix", boundedArgs(args), "delivered", errors.Is(err, tool.ErrEffectDelivered))
+			"rule", rule, "args_prefix", boundedArgs(args), "delivery", deliveryOf(err))
 		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: rule})
 		a.finishAction(ctx, actionID, closeState, "")
 		return fmt.Sprintf("tool %s failed: %v", name, err)
@@ -1088,4 +1093,20 @@ func (a *AgentBrain) persistPair(ctx context.Context, key conversation.Key, user
 		return
 	}
 	a.metrics.ObserveTurnsPersisted(len(turns))
+}
+
+// deliveryOf names, for the log, what the tool could establish about the
+// wire — never more. A boolean «delivered» field read false for a connection
+// obtained with no answer, which is a claim nobody can make (v0.15.1 block A).
+func deliveryOf(err error) string {
+	switch {
+	case errors.Is(err, tool.ErrEffectDelivered):
+		return "response_read"
+	case errors.Is(err, tool.ErrDeliveryUnknown):
+		return "unknown"
+	case errors.Is(err, tool.ErrNotSent):
+		return "not_sent"
+	default:
+		return "not_observed"
+	}
 }

@@ -1,0 +1,59 @@
+# mutation BR-status: drop the sentinel from the status branch
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:24:57Z
+## diff of the mutation
+--- internal/tool/webhookcall.go
++++ internal/tool/webhookcall.go (mutated)
+@@ -203,7 +203,7 @@
+ 	// even with one), a 4xx or a 5xx: the receiver answered and did not say
+ 	// it succeeded, so this is an answer that is not a usable success.
+ 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+-		return "", fmt.Errorf("webhook_call: HTTP %d from %s: %w", resp.StatusCode, u.Host, ErrEffectDelivered)
++		return "", fmt.Errorf("webhook_call: HTTP %d from %s", resp.StatusCode, u.Host)
+ 	}
+ 	// Past this line the POST has been ACCEPTED with a 2xx. Every error from
+ 	// here wraps ErrEffectDelivered: a response was read, so closing it as a
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_anErrorStatusIsStillADeliveredPost|TestWebhookCall_onlyA2xxIsSuccess ./internal/tool/
+--- FAIL: TestWebhookCall_anErrorStatusIsStillADeliveredPost (0.00s)
+    delivered_effect_test.go:621: the receiver READ the body before answering 500, and the error does not say so: webhook_call: HTTP 500 from 127.0.0.1:51178
+--- FAIL: TestWebhookCall_onlyA2xxIsSuccess (0.01s)
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/a_raw_101_Switching_Protocols (0.01s)
+        webhookcall_v0151_a_test.go:207: HTTP 101: state = FAILED (err webhook_call: HTTP 101 from 127.0.0.1:51183), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/308_without_Location (0.02s)
+        webhookcall_v0151_a_test.go:178: HTTP 308 (Location ""): state = FAILED (err webhook_call: HTTP 308 from 127.0.0.1:51181), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/307_without_Location (0.02s)
+        webhookcall_v0151_a_test.go:178: HTTP 307 (Location ""): state = FAILED (err webhook_call: HTTP 307 from 127.0.0.1:51182), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/306_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 306 (Location "http://elsewhere.invalid/x"): state = FAILED (err webhook_call: HTTP 306 from 127.0.0.1:51194), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/500 (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 500 (Location ""): state = FAILED (err webhook_call: HTTP 500 from 127.0.0.1:51188), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 304 (Location "http://elsewhere.invalid/x"): state = FAILED (err webhook_call: HTTP 304 from 127.0.0.1:51196), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 300 (Location "http://elsewhere.invalid/x"): state = FAILED (err webhook_call: HTTP 300 from 127.0.0.1:51198), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/399_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 399 (Location ""): state = FAILED (err webhook_call: HTTP 399 from 127.0.0.1:51199), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/303_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 303 (Location ""): state = FAILED (err webhook_call: HTTP 303 from 127.0.0.1:51204), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/305_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 305 (Location "http://elsewhere.invalid/x"): state = FAILED (err webhook_call: HTTP 305 from 127.0.0.1:51202), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 304 (Location ""): state = FAILED (err webhook_call: HTTP 304 from 127.0.0.1:51206), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/301_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 301 (Location ""): state = FAILED (err webhook_call: HTTP 301 from 127.0.0.1:51208), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:178: HTTP 300 (Location ""): state = FAILED (err webhook_call: HTTP 300 from 127.0.0.1:51215), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/302_without_Location (0.01s)
+        webhookcall_v0151_a_test.go:178: HTTP 302 (Location ""): state = FAILED (err webhook_call: HTTP 302 from 127.0.0.1:51210), want OUTCOME_UNKNOWN
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	4.501s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_anErrorStatusIsStillADeliveredPost|TestWebhookCall_onlyA2xxIsSuccess ./internal/tool/
+ok  	github.com/Sebastian197/korvun/internal/tool	2.997s
+# exit: 0

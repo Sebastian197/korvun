@@ -1,0 +1,11 @@
+# mutation M-decorative: a GotConn hook storing into a := defined atomic.Bool that nothing reads (internal/tool/webhookcall.go, temporary, restored)
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef + the current guard (delivered_effect_test.go as of Delta 7)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T11:56:04Z
+# command: go test -race -count=1 -run TestWebhookCall_everyBranchAfterDo ./internal/tool/
+--- FAIL: TestWebhookCall_everyBranchAfterDo (0.00s)
+    delivered_effect_test.go:254: Execute's GotConn hook stores "connObtained" and no identifier use outside the hook reads it. This guard pins that syntactic read only; whether the read decides the sentinel is pinned by the behavioural moulds of this godoc's branch table
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	0.468s
+FAIL
+# exit: 1

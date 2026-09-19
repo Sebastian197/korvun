@@ -1,0 +1,30 @@
+# mutation T7g: ErrNotSent in the read-response branch
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:24:28Z
+## diff of the mutation
+--- internal/tool/webhookcall.go
++++ internal/tool/webhookcall.go (mutated)
+@@ -213,7 +213,7 @@
+ 	// moulds named in its godoc hold each branch's class.
+ 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, w.maxBytes+1))
+ 	if err != nil {
+-		return "", fmt.Errorf("webhook_call: read response: %w: %w", ErrEffectDelivered, err)
++		return "", fmt.Errorf("webhook_call: read response: %w: %w", ErrNotSent, err)
+ 	}
+ 	if int64(len(respBody)) > w.maxBytes {
+ 		return "", fmt.Errorf("webhook_call: response exceeds the %d-byte cap: %w: %w", w.maxBytes, ErrEffectDelivered, ErrCageViolation)
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure|TestWebhookCall_everyBranchAfterDo ./internal/tool/
+--- FAIL: TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure (0.00s)
+    delivered_effect_test.go:96: the POST was ACCEPTED and the answer lost, and the error does not say so: webhook_call: read response: tool: no connection was obtained; nothing was sent: unexpected EOF
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	1.029s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure|TestWebhookCall_everyBranchAfterDo ./internal/tool/
+ok  	github.com/Sebastian197/korvun/internal/tool	5.208s
+# exit: 0

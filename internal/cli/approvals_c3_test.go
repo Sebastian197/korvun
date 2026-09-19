@@ -83,7 +83,10 @@ func TestApprovalsExecute_neverTwiceAndNeverPending(t *testing.T) {
 	if code, _, stderr := runIntentCLI(t, "approvals", "execute", "--config", cfgPath, approvalID); code != 0 {
 		t.Fatalf("first execute: %d %q", code, stderr)
 	}
-	// The second execute reports honestly — the claim is one-shot.
+	// The second execute reports honestly — the claim consumed the
+	// parameters and nothing restored them. (It is one-shot against a restore
+	// inside its own transaction, not against another connection restoring
+	// them after it commits: docs/cantos/V0151-A-2026-09-19.md §5.)
 	code, _, stderr := runIntentCLI(t, "approvals", "execute", "--config", cfgPath, approvalID)
 	if code == 0 {
 		t.Fatal("a consumed approval must not execute twice")

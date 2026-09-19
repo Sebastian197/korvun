@@ -1,0 +1,18 @@
+# command: go test -race -count=1 -timeout 300s -run TestRunTool_onlyA2xxIsSuccess|TestRunTool_anEndBeforeAConnectionClosesFailed|TestRunTool_aResetDuringTheBodyIsUnknown ./internal/brain/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (red-phase moulds in the worktree, no production change; delivered_effect_test.go modified by the director's decision)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T11:56:09Z
+--- FAIL: TestRunTool_onlyA2xxIsSuccess (0.00s)
+    --- FAIL: TestRunTool_onlyA2xxIsSuccess/301_without_Location (0.00s)
+        agent_v0151_a_test.go:88: HTTP 301: finishes = [SUCCEEDED], want exactly [OUTCOME_UNKNOWN]
+--- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed (0.00s)
+    --- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed/the_caller_cancels_during_the_handshake (0.00s)
+        agent_v0151_a_test.go:169: finishes = [OUTCOME_UNKNOWN], want exactly [FAILED] — no connection was obtained
+    --- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed/the_tool's_deadline_fires_during_the_handshake (0.30s)
+        agent_v0151_a_test.go:169: finishes = [OUTCOME_UNKNOWN], want exactly [FAILED] — no connection was obtained
+--- FAIL: TestRunTool_aResetDuringTheBodyIsUnknown (1.33s)
+    agent_v0151_a_test.go:241: finishes = [FAILED], want exactly [OUTCOME_UNKNOWN]
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/brain	1.977s
+FAIL
+# exit: 1

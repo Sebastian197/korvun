@@ -47,33 +47,43 @@ var ErrShieldViolation = errors.New("tool: private network shield violation")
 // irreversible effect nobody can account for.
 var ErrRedirectRefused = errors.New("tool: redirect refused by the cage")
 
-// ErrEffectDelivered marks a tool error raised AFTER the request left and the
-// remote end accepted it. What it asserts is OUR side of the wire and nothing
-// more: the bytes were delivered. Whether the receiver acted on them is not
-// knowable from here — a listener can accept a body and drop it — so the
-// sentinel means «this may have happened», never «this happened». It is a typed marker on purpose: the only other way to
-// tell these apart is matching the error TEXT, which is class (g) of the
-// known-classes checklist and rots on the first rewording.
+// ErrEffectDelivered marks a tool error raised over a RESPONSE: the receiver
+// ANSWERED, and the answer is not a usable success — a status outside 2xx, a
+// redirect the cage refuses to follow (a 3xx answer), a 2xx body that cannot
+// be read or exceeds the cap. That the receiver answered is all it asserts: an
+// early answer (a 413 after the headers) proves the receiver saw the start of
+// the request, not that it read the whole of it. Its name predates v0.15.1 and
+// is kept; its text says only what is true of every member. Whether the
+// receiver acted on the request is not knowable from here, so the sentinel
+// means «this may have happened», never «this happened». It is a typed marker
+// on purpose: matching the error TEXT is class (g) of the known-classes
+// checklist and rots on the first rewording.
 //
-// The distinction is not academic. internal/app closes a deferred approved
-// execution FAILED for any error that is not a deadline, and its own comment
-// said «the tool ran and said no. That is a DECIDED outcome with its receipt.»
-// For a webhook_call whose POST was accepted and whose body then failed to
-// read, that is a definite claim about an irreversible effect that nobody can
-// support — the store calls the same shape «a FAILED lie». An error wrapping
-// this sentinel closes OUTCOME_UNKNOWN instead.
+// An error wrapping it closes OUTCOME_UNKNOWN (CloseStateAfterRun): closing it
+// FAILED would be a definite claim about an irreversible effect nobody can
+// support — the store calls the same shape «a FAILED lie».
 //
-// It does NOT mean the operation succeeded, and it says nothing about what the
-// receiver did with what it got: the guarantee is about OUR side of the wire —
-// the request left and the remote end accepted it — and not a word more.
-//
-// It does not downgrade a SHIELD breach, which fires at the dial. It DOES
-// travel with the cage's redirect refusal (ErrRedirectRefused), because that
-// one is raised over a response, after the host already has the body. This
-// comment used to say "it never downgrades a cage or shield breach: those fire
-// before anything is sent", and the redirect refusal is the counterexample the
-// seventh adversarial pass drove through a real loopback server.
-var ErrEffectDelivered = errors.New("tool: the request was delivered and its answer was not read")
+// It never travels with ErrDeliveryUnknown or ErrNotSent: one error, one
+// class. It DOES travel with the cage's redirect refusal (ErrRedirectRefused),
+// because that refusal is raised over a response: the receiver answered with a
+// 3xx.
+var ErrEffectDelivered = errors.New("tool: the receiver answered and the answer was not a usable success")
+
+// ErrDeliveryUnknown marks a tool error raised after a connection was handed
+// to the request (httptrace GotConn fired) and before any response was read.
+// Bytes may or may not have left — a pooled connection can die with nothing
+// written, a receiver can read the whole POST and hang up — and the client
+// cannot tell those apart, so its text claims neither. It closes
+// OUTCOME_UNKNOWN.
+var ErrDeliveryUnknown = errors.New("tool: a connection was obtained and no answer was read; whether the request left is not known")
+
+// ErrNotSent marks a tool error raised before any connection was handed to the
+// request (httptrace GotConn never fired): the dial failed, the TLS handshake
+// never completed, the shield refused the address, or the context ended first.
+// No request byte can leave before GotConn (Go 1.26.6 net/http: getConn fires
+// it only once dialConn — handshake included — returned a connection), so it
+// closes FAILED.
+var ErrNotSent = errors.New("tool: no connection was obtained; nothing was sent")
 
 // Attrs are the HOUSE-DEFAULT gate attributes of a built-in tool (ADR-0041
 // §4, R-2): the declared inputs the policy gate routes on. The operator may

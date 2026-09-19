@@ -7,7 +7,10 @@
 // as the belt, through the one Executor Registry path — and the real
 // outcome closes the parked action with its era's E4 receipt. The
 // belts: approving twice never executes twice; executing twice never
-// executes twice; a tampered stored request never executes (digest
+// executes twice when nothing restores the parameters (a restore inside the
+// claim's transaction is refused; one by another connection AFTER the claim
+// commits is not prevented — docs/cantos/V0151-A-2026-09-19.md §5, filed for
+// v0.15.2); a tampered stored request never executes (digest
 // belt); a rejected or expired request never executes; -race over the
 // full request→decision→execution flow. Approved-red contract.
 

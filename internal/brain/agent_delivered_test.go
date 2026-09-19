@@ -99,8 +99,9 @@ func TestRunTool_aDeliveredPostNeverClosesFailed(t *testing.T) {
 // «the tool refused before any effect» and whose close was FAILED.
 //
 // Both facts are true at once and the record carries both: the CAGE refused it
-// — the audit rule is still "cage" — and the POST was delivered, so the state
-// is the honest unknown.
+// — the audit rule is still "cage" — and the receiver answered (it read the
+// POST before its 3xx, in this test), so the state is the honest unknown.
+// (Wording corrected in v0.15.1 block A; assertions unchanged.)
 //
 // Probing mutation (executed, red, declared in the canto): judge the state by
 // `breached` instead of by delivery ⇒ this reddens.

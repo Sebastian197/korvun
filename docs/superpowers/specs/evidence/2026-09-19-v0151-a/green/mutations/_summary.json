@@ -1,0 +1,493 @@
+[
+ {
+  "id": "A1-del-app",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestExecuteApprovedAction_aPurgeThatDoesNotHoldIsRefused (3.50s)",
+   "--- FAIL: TestExecuteApprovedAction_aPurgeThatDoesNotHoldIsRefused/attacked:_the_trigger_restores_the_parameters (2.58s)"
+  ]
+ },
+ {
+  "id": "A1-del-store",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing (0.00s)",
+   "--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_different_bytes_with_the_same_digest (0.65s)",
+   "--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_the_same_bytes (0.70s)"
+  ]
+ },
+ {
+  "id": "A1-n1-drop",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aPurgeOfMoreThanOneRowIsCorruptEvidence (0.80s)"
+  ]
+ },
+ {
+  "id": "A1-null-string",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aNullLeftByThePurgeIsCorruptEvidence (0.62s)"
+  ]
+ },
+ {
+  "id": "A2-ge300",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/a_raw_101_Switching_Protocols (0.20s)"
+  ]
+ },
+ {
+  "id": "A2-ge400-app",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestExecuteApprovedAction_onlyA2xxIsSuccess (3.16s)",
+   "--- FAIL: TestExecuteApprovedAction_onlyA2xxIsSuccess/301_without_Location (1.95s)"
+  ]
+ },
+ {
+  "id": "A2-ge400-brain",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestRunTool_onlyA2xxIsSuccess (0.00s)",
+   "--- FAIL: TestRunTool_onlyA2xxIsSuccess/301_without_Location (0.00s)"
+  ]
+ },
+ {
+  "id": "A2-ge400",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/301_without_Location (0.01s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/306_with_Location_(not_followed) (0.01s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_with_Location_(not_followed) (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/308_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/399_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_with_Location_(not_followed) (0.01s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/305_with_Location_(not_followed) (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/307_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/303_without_Location (0.01s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_without_Location (0.01s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/302_without_Location (0.02s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/a_raw_101_Switching_Protocols (0.21s)"
+  ]
+ },
+ {
+  "id": "A3",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestRecovery_theCrashCloseRefusesARowThatBecameAuthorized (0.21s)"
+  ]
+ },
+ {
+  "id": "BR-cap",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aCappedAnswerIsStillADeliveredPost (0.00s)"
+  ]
+ },
+ {
+  "id": "BR-read",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure (0.00s)"
+  ]
+ },
+ {
+  "id": "BR-redirect",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aRefusedRedirectIsStillADeliveredPost (0.00s)"
+  ]
+ },
+ {
+  "id": "BR-status",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_anErrorStatusIsStillADeliveredPost (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess (0.01s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/a_raw_101_Switching_Protocols (0.01s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/308_without_Location (0.02s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/307_without_Location (0.02s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/306_with_Location_(not_followed) (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/500 (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_with_Location_(not_followed) (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_with_Location_(not_followed) (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/399_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/303_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/305_with_Location_(not_followed) (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/301_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_without_Location (0.00s)",
+   "--- FAIL: TestWebhookCall_onlyA2xxIsSuccess/302_without_Location (0.01s)"
+  ]
+ },
+ {
+  "id": "DLV-all",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestDeliveryOf_namesEveryClass (0.00s)",
+   "--- FAIL: TestRunTool_theCageDenialLogsWhatTheWireEstablished (0.00s)",
+   "--- FAIL: TestRunTool_theCageDenialLogsWhatTheWireEstablished/a_host_off_the_allow-list:_the_wire_was_never_observed (0.00s)",
+   "--- FAIL: TestRunTool_theCageDenialLogsWhatTheWireEstablished/the_shield_refuses_the_dial:_nothing_was_sent (0.00s)"
+  ]
+ },
+ {
+  "id": "DLV-unknown",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestDeliveryOf_namesEveryClass (0.00s)"
+  ]
+ },
+ {
+  "id": "DOMAIN-state-detail",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestDetail_anOutOfDomainActionStateIsCorrupt (0.23s)"
+  ]
+ },
+ {
+  "id": "DOMAIN-state",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence (0.00s)",
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/the_action_state_leaves_its_domain_after_the_purge (0.49s)"
+  ]
+ },
+ {
+  "id": "DOMAIN-status",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence (0.00s)",
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/the_approval_status_leaves_its_domain_after_the_purge (0.55s)"
+  ]
+ },
+ {
+  "id": "DU-state",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost (0.00s)",
+   "--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.00s)",
+   "--- FAIL: TestWebhookCall_aResetDuringTheBodyIsUnknown (5.04s)"
+  ]
+ },
+ {
+  "id": "ED-text",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_anEarlyAnswerIsNotADeliveryClaim (10.42s)"
+  ]
+ },
+ {
+  "id": "EFFECT-domain",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aStoryCellWithACoherentPreviewIsStillCorrupt (0.00s)",
+   "--- FAIL: TestClaim_aStoryCellWithACoherentPreviewIsStillCorrupt/effect_class_out_of_domain,_preview_agrees_\u00b7_detail_under_a_moved_law (0.77s)",
+   "--- FAIL: TestClaim_aStoryCellWithACoherentPreviewIsStillCorrupt/effect_class_empty,_preview_effect_\"\"_\u00b7_detail_under_a_moved_law (1.04s)",
+   "--- FAIL: TestClaim_aStoryCellWithACoherentPreviewIsStillCorrupt/effect_class_empty,_preview_effect_\"\"_\u00b7_claim (1.05s)",
+   "--- FAIL: TestClaim_aStoryCellWithACoherentPreviewIsStillCorrupt/effect_class_out_of_domain,_preview_agrees_\u00b7_claim (0.96s)"
+  ]
+ },
+ {
+  "id": "EFFECT-enum-only",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_anUnclassifiedStoryStillClaims (0.28s)",
+   "--- FAIL: TestApproval_moreBranches (0.45s)",
+   "--- FAIL: TestApproval_deepErrorBranches (0.66s)"
+  ]
+ },
+ {
+  "id": "F3-WroteHeaders",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aLongURLWhoseStartWasReadStaysUnknown (2.14s)"
+  ]
+ },
+ {
+  "id": "F3-WroteRequest-any",
+  "mutated_exit": 0,
+  "restored_exit": 0,
+  "failing": []
+ },
+ {
+  "id": "F3-WroteRequest-clean",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aLongURLWhoseStartWasReadStaysUnknown (5.06s)",
+   "--- FAIL: TestWebhookCall_anEndAfterTheHeadersLeftStaysUnknown (10.20s)",
+   "--- FAIL: TestWebhookCall_aResetDuringTheBodyIsUnknown (10.63s)"
+  ]
+ },
+ {
+  "id": "F4-ctxonly-brain",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestRunTool_aResetDuringTheBodyIsUnknown (3.78s)"
+  ]
+ },
+ {
+  "id": "F4-ctxonly",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aResetDuringTheBodyIsUnknown (2.99s)"
+  ]
+ },
+ {
+  "id": "G-decorative",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_everyBranchAfterDo (0.00s)"
+  ]
+ },
+ {
+  "id": "G-nohook",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.00s)",
+   "--- FAIL: TestWebhookCall_aLongURLWhoseStartWasReadStaysUnknown (1.46s)",
+   "--- FAIL: TestWebhookCall_everyBranchAfterDo (0.07s)",
+   "--- FAIL: TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost (0.00s)",
+   "--- FAIL: TestWebhookCall_aResetDuringTheBodyIsUnknown (3.53s)",
+   "--- FAIL: TestWebhookCall_anEndAfterTheHeadersLeftStaysUnknown (3.27s)"
+  ]
+ },
+ {
+  "id": "N2",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aDialThatNeverConnectsDeliveredNothing (0.00s)",
+   "--- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure (0.00s)",
+   "--- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure/the_caller_cancels_during_the_handshake (0.00s)",
+   "--- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure/the_tool's_deadline_fires_during_the_handshake (0.30s)"
+  ]
+ },
+ {
+  "id": "NULL-params",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence (0.00s)",
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/the_parameters_cell_is_NULL_before_the_purge (0.89s)"
+  ]
+ },
+ {
+  "id": "NULL-state",
+  "mutated_exit": 0,
+  "restored_exit": 0,
+  "failing": []
+ },
+ {
+  "id": "NULL-status-scan",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence (0.00s)",
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/the_approval_status_turns_NULL_after_the_purge (0.80s)"
+  ]
+ },
+ {
+  "id": "NULL-status",
+  "mutated_exit": 0,
+  "restored_exit": 0,
+  "failing": []
+ },
+ {
+  "id": "NULL-story-scan",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence (0.00s)",
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/effect_class_is_NULL_(the_story's_first_read) (0.54s)",
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/op_name_is_NULL_(the_story's_first_read) (0.60s)",
+   "--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/op_namespace_is_NULL_(the_story's_first_read) (1.26s)"
+  ]
+ },
+ {
+  "id": "NULL-story",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aStoryCellWithACoherentPreviewIsStillCorrupt (0.00s)",
+   "--- FAIL: TestClaim_aStoryCellWithACoherentPreviewIsStillCorrupt/op_name_NULL,_preview_operation_\"<ns>/\"_\u00b7_detail_under_a_moved_law (0.84s)",
+   "--- FAIL: TestClaim_aStoryCellWithACoherentPreviewIsStillCorrupt/op_namespace_NULL,_preview_operation_\"/<name>\"_\u00b7_detail_under_a_moved_law (0.56s)"
+  ]
+ },
+ {
+  "id": "P24-noarm-app",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestExecuteApprovedAction_anEndBeforeAConnectionClosesFailed (1.44s)",
+   "--- FAIL: TestExecuteApprovedAction_anEndBeforeAConnectionClosesFailed/the_tool's_deadline_fires_during_the_handshake (1.00s)",
+   "--- FAIL: TestExecuteApprovedAction_anEndBeforeAConnectionClosesFailed/the_caller_cancels_during_the_handshake (0.44s)"
+  ]
+ },
+ {
+  "id": "P24-noarm-brain",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed (0.00s)",
+   "--- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed/the_caller_cancels_during_the_handshake (0.00s)",
+   "--- FAIL: TestRunTool_anEndBeforeAConnectionClosesFailed/the_tool's_deadline_fires_during_the_handshake (0.30s)"
+  ]
+ },
+ {
+  "id": "P24-noarm-tool",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure (0.00s)",
+   "--- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure/the_caller_cancels_during_the_handshake (0.00s)",
+   "--- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure/the_tool's_deadline_fires_during_the_handshake (0.30s)"
+  ]
+ },
+ {
+  "id": "SIS",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aMovedRowIsNamedBeforeAMovedLaw (0.21s)"
+  ]
+ },
+ {
+  "id": "T-join",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aRefusedRedirectIsStillADeliveredPost (0.00s)",
+   "--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.00s)",
+   "--- FAIL: TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost (0.00s)",
+   "--- FAIL: TestWebhookCall_anEndAfterTheHeadersLeftStaysUnknown (3.82s)",
+   "--- FAIL: TestWebhookCall_aResetDuringTheBodyIsUnknown (3.83s)"
+  ]
+ },
+ {
+  "id": "T7g",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure (0.00s)"
+  ]
+ },
+ {
+  "id": "TERNA-conv",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart (0.00s)",
+   "--- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart/op_version_holds_text_(conversion) (0.72s)"
+  ]
+ },
+ {
+  "id": "TERNA-driver",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart (0.00s)",
+   "--- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart/op_version_dropped_(driver) (1.92s)"
+  ]
+ },
+ {
+  "id": "TXT",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.00s)"
+  ]
+ },
+ {
+  "id": "U1",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost (0.02s)",
+   "--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.02s)"
+  ]
+ },
+ {
+  "id": "W1-app",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestExecuteApprovedAction_aPurgeThatDoesNotHoldIsRefused (0.80s)",
+   "--- FAIL: TestExecuteApprovedAction_aPurgeThatDoesNotHoldIsRefused/attacked:_the_trigger_restores_the_parameters (0.41s)"
+  ]
+ },
+ {
+  "id": "W1-store",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing (0.00s)",
+   "--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_different_bytes_with_the_same_digest (2.44s)",
+   "--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_the_same_bytes (2.49s)"
+  ]
+ },
+ {
+  "id": "W4",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing (0.00s)",
+   "--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_different_bytes_with_the_same_digest (0.23s)"
+  ]
+ },
+ {
+  "id": "X2-conv",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aCorruptHistoryRowIsCorruptEvidence (0.20s)"
+  ]
+ },
+ {
+  "id": "X2-driver-WX2a",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_aHistoryTableThatCannotBeReadIsUnreadable (0.48s)"
+  ]
+ },
+ {
+  "id": "X2-null",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "failing": [
+   "--- FAIL: TestClaim_anIncompleteHistoryRowIsCorruptEvidence (1.11s)"
+  ]
+ }
+]

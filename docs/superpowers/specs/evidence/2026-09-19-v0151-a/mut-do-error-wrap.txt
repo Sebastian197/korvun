@@ -1,0 +1,13 @@
+# mutation do-error-wrap: drop the delivered wrap from Do's error block (the base's redirect and hang-up arm) (internal/tool/webhookcall.go at base, temporary, restored)
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T10:57:47Z
+# command: go test -race -count=1 -run 'TestWebhookCall_aRefusedRedirectIsStillADeliveredPost|TestWebhookCall_everyBranchAfterDo' ./internal/tool/
+--- FAIL: TestWebhookCall_aRefusedRedirectIsStillADeliveredPost (0.00s)
+    delivered_effect_test.go:479: the host HAS the payload and the error does not say so: webhook_call: Post "/hook/": more than 0 redirects: tool: redirect refused by the cage: tool: cage violation
+--- FAIL: TestWebhookCall_everyBranchAfterDo (0.05s)
+    delivered_effect_test.go:185: Execute installs no GotConn trace hook that stores an observation — delivery is being inferred from the error's shape again
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	0.666s
+FAIL
+# exit: 1
