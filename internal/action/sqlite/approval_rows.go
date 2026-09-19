@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -47,11 +48,13 @@ func scanRawApproval(row scanner, extra int) ([]any, error) {
 // accepted before this file existed (convertAssign): a text column takes text,
 // bytes or a number; an integer column takes an integer or text that parses as
 // one; NULL is accepted only where the previous destination was a NullString.
-// Everything else is a row that does not convert. One difference, declared and
-// not moulded: the typed Scan also took an integral REAL (3.0) into an integer
-// field, and approvalRawInt names it corrupt. The approval columns are INTEGER
-// affinity, which stores such a value as an integer, so it reaches this reader
-// only from a column rebuilt without that affinity.
+// Everything else is a row that does not convert. Two differences, declared:
+// the typed Scan also took an integral REAL (3.0) into an integer field, and
+// approvalRawInt names it corrupt (not moulded: the approval columns are
+// INTEGER affinity, which stores such a value as an integer, so it reaches
+// this reader only from a column rebuilt without that affinity); and
+// approvalRawIntAsInt names a schema_version outside the int32 range corrupt
+// where the typed Scan took any value that fit the platform's int.
 func approvalRawText(v any, name string, nullable bool) (string, bool, error) {
 	switch x := v.(type) {
 	case nil:
@@ -159,9 +162,19 @@ func approvalFromRaw(v []any) (action.Approval, error) {
 	return a, nil
 }
 
+// approvalRawIntAsInt narrows a stored integer to int. A value outside the
+// int32 range is corrupt evidence: no schema_version this store writes comes
+// near it, and the bound keeps the conversion exact on any platform whose int
+// is 32 bits wide instead of silently truncating the stored value.
 func approvalRawIntAsInt(v any, name string) (int, error) {
 	n, err := approvalRawInt(v, name)
-	return int(n), err
+	if err != nil {
+		return 0, err
+	}
+	if n < math.MinInt32 || n > math.MaxInt32 {
+		return 0, fmt.Errorf("%w: %s holds %d, outside the int32 range", errApprovalRowInvalid, name, n)
+	}
+	return int(n), nil
 }
 
 // classifyApprovalRead names a failed read of one approval row, with exactly
