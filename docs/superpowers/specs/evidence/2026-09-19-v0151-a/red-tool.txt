@@ -1,0 +1,50 @@
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_ ./internal/tool/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (red-phase moulds in the worktree, no production change; delivered_effect_test.go modified by the director's decision)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T11:56:06Z
+--- FAIL: TestWebhookCall_aDialThatNeverConnectsDeliveredNothing (0.00s)
+    delivered_effect_test.go:746: err webhook_call: request failed: Post "http://127.0.0.1:52751": dial tcp 127.0.0.1:52751: connect: connection refused is not ErrNotSent ("red-phase placeholder: tool.ErrNotSent is not declared yet"), or ErrNotSent's text is not "tool: no connection was obtained; nothing was sent"
+--- FAIL: TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost (0.00s)
+    delivered_effect_test.go:693: a connection was obtained and no answer came, and the error is not ErrDeliveryUnknown: webhook_call: request failed: tool: the request was delivered and its answer was not read: Post "http://127.0.0.1:52752": EOF
+--- FAIL: TestWebhookCall_everyBranchAfterDo (0.00s)
+    delivered_effect_test.go:251: Execute installs no GotConn trace hook that stores an observation — delivery is being inferred from the error's shape again
+--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.01s)
+    webhookcall_v0151_a_test.go:692: err webhook_call: request failed: tool: the request was delivered and its answer was not read: Post "http://127.0.0.1:52775": dial tcp: connection refused claims delivery (ErrEffectDelivered) over a request that wrote zero bytes
+--- FAIL: TestWebhookCall_onlyA2xxIsSuccess (0.00s)
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/a_raw_101_Switching_Protocols (0.20s)
+        webhookcall_v0151_a_test.go:208: HTTP 101: state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/306_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 306 (Location "http://elsewhere.invalid/x"): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/305_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 305 (Location "http://elsewhere.invalid/x"): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 304 (Location "http://elsewhere.invalid/x"): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_with_Location_(not_followed) (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 300 (Location "http://elsewhere.invalid/x"): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/308_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 308 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/307_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 307 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/304_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 304 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/399_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 399 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/302_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 302 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/301_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 301 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/303_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 303 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+    --- FAIL: TestWebhookCall_onlyA2xxIsSuccess/300_without_Location (0.00s)
+        webhookcall_v0151_a_test.go:179: HTTP 300 (Location ""): state = SUCCEEDED (err <nil>), want OUTCOME_UNKNOWN
+--- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure (0.00s)
+    --- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure/the_caller_cancels_during_the_handshake (0.00s)
+        webhookcall_v0151_a_test.go:310: err webhook_call: request failed: Post "https://127.0.0.1:52781": context canceled is not ErrNotSent ("red-phase placeholder: tool.ErrNotSent is not declared yet"), or ErrNotSent's text is not "tool: no connection was obtained; nothing was sent"
+    --- FAIL: TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure/the_tool's_deadline_fires_during_the_handshake (0.30s)
+        webhookcall_v0151_a_test.go:310: err webhook_call: request failed: Post "https://127.0.0.1:52783": context deadline exceeded is not ErrNotSent ("red-phase placeholder: tool.ErrNotSent is not declared yet"), or ErrNotSent's text is not "tool: no connection was obtained; nothing was sent"
+--- FAIL: TestWebhookCall_aResetDuringTheBodyIsUnknown (1.25s)
+    webhookcall_v0151_a_test.go:550: state = FAILED (err webhook_call: request failed: Post "http://127.0.0.1:52778/trigger": readfrom tcp 127.0.0.1:52824->127.0.0.1:52778: write tcp 127.0.0.1:52824->127.0.0.1:52778: use of closed network connection), want OUTCOME_UNKNOWN — the headers reached the receiver
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	1.770s
+FAIL
+# exit: 1

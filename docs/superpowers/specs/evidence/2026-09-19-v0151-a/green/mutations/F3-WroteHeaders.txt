@@ -1,0 +1,30 @@
+# mutation F3-WroteHeaders: key the frontier on WroteHeaders instead of GotConn
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:22:40Z
+## diff of the mutation
+--- internal/tool/webhookcall.go
++++ internal/tool/webhookcall.go (mutated)
+@@ -165,7 +165,7 @@
+ 	// zero bytes.
+ 	var connObtained atomic.Bool
+ 	callCtx = httptrace.WithClientTrace(callCtx, &httptrace.ClientTrace{
+-		GotConn: func(httptrace.GotConnInfo) { connObtained.Store(true) },
++		WroteHeaders: func() { connObtained.Store(true) },
+ 	})
+ 	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, u.String(), strings.NewReader(body))
+ 	if err != nil {
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_aLongURLWhoseStartWasReadStaysUnknown|TestWebhookCall_anEndAfterTheHeadersLeftStaysUnknown ./internal/tool/
+--- FAIL: TestWebhookCall_aLongURLWhoseStartWasReadStaysUnknown (2.14s)
+    webhookcall_v0151_a_test.go:468: the error carries ErrNotSent as well as its own class: webhook_call: request failed: tool: no connection was obtained; nothing was sent: Post "http://127.0.0.1:50516/trigger?x=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	4.634s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_aLongURLWhoseStartWasReadStaysUnknown|TestWebhookCall_anEndAfterTheHeadersLeftStaysUnknown ./internal/tool/
+ok  	github.com/Sebastian197/korvun/internal/tool	6.900s
+# exit: 0

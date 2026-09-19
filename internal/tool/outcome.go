@@ -5,11 +5,15 @@
 // 2026-09-16). Both execution paths — the approved one in internal/app and
 // the brain's own in internal/brain — call this and nothing else.
 //
-// It lives here because the frontier it reads is the tools' own: the caged
-// tools wrap ErrEffectDelivered past the point where the request reached the
-// wire, and this package owns that sentinel. Two copies of the rule is the
-// defect this replaces: the v0.15.0 train cured the paths one at a time and
-// they disagreed about a bare deadline until the second cure caught up.
+// It lives here because the classes it reads are the tools' own: past its Do
+// call, webhook_call wraps exactly one of ErrEffectDelivered (the receiver
+// answered, not with a usable success), ErrDeliveryUnknown (a connection was
+// obtained, no answer) and ErrNotSent (no connection was obtained), and this
+// package owns those sentinels. Before Do — a scheme or allow-list refusal, a
+// body that is not JSON — it wraps none, and such an error, like any tool's
+// that wraps none, is classified by the error alone. Two copies of the rule
+// is the defect this replaces: the v0.15.0 train cured the paths one at a time
+// and they disagreed about a bare deadline until the second cure caught up.
 package tool
 
 import (
@@ -20,26 +24,33 @@ import (
 )
 
 // CloseStateAfterRun names the state an attempt closes on, given the error its
-// tool returned.
+// tool returned. One table, checked in this order (v0.15.1 block A):
 //
 //   - nil: the tool answered. SUCCEEDED.
-//   - ErrEffectDelivered: the request reached the wire and its answer was not
-//     read. The effect may have happened; nobody can say it did not.
-//   - a context that ended (deadline or cancellation): the tool may have
-//     produced its effect and then lost its context. Same uncertainty.
-//   - anything else: the tool refused before anything left — a host off the
-//     allow-list, a shield refusal at the dial, a malformed body, a failed
-//     dial. That is a DECIDED outcome, and FAILED is the honest word for it.
-//
-// What it does NOT decide: whether a context that ended did so BEFORE the
-// request was written. That case closes unknown here too, and it is filed for
-// v0.15.1 on both paths alike rather than guessed at.
+//   - ErrEffectDelivered: the receiver answered and the answer is not a
+//     usable success (a status outside 2xx, a refused redirect, an unreadable
+//     or oversized body). The effect may have happened. OUTCOME_UNKNOWN.
+//   - ErrDeliveryUnknown: a connection was obtained and no response was read.
+//     Whether anything left is not known. OUTCOME_UNKNOWN.
+//   - ErrNotSent: no connection was ever obtained, so no request byte left —
+//     even when the run ended on a deadline or a cancellation. FAILED.
+//   - a context that ended (deadline or cancellation) and carries none of the
+//     three classes:
+//     a tool that does not observe the wire may have produced its effect.
+//     OUTCOME_UNKNOWN.
+//   - anything else: a tool that refused before it acted — a host off the
+//     allow-list, a malformed body. That is a DECIDED outcome, and FAILED is
+//     the honest word for it.
 func CloseStateAfterRun(err error) action.State {
 	switch {
 	case err == nil:
 		return action.StateSucceeded
 	case errors.Is(err, ErrEffectDelivered),
-		errors.Is(err, context.DeadlineExceeded),
+		errors.Is(err, ErrDeliveryUnknown):
+		return action.StateOutcomeUnknown
+	case errors.Is(err, ErrNotSent):
+		return action.StateFailed
+	case errors.Is(err, context.DeadlineExceeded),
 		errors.Is(err, context.Canceled):
 		return action.StateOutcomeUnknown
 	default:

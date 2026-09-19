@@ -1,0 +1,36 @@
+# mutation A1-null-string: scan the re-read back into a string (a NULL becomes a Scan failure, published unreadable)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:28:19Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -737,11 +737,12 @@
+ 	// Scanned without type conversion: a NULL left in the cell is a value that
+ 	// is there and wrong (corrupt), not a store that failed to answer. Only a
+ 	// failed Scan — the driver — is unreadable.
+-	var after sql.NullString
++	var after struct{ Valid bool; String string }
+ 	if err := tx.QueryRowContext(ctx,
+-		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&after); err != nil {
++		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&after.String); err != nil {
+ 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: re-read the purge of %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+ 	}
++	after.Valid = true
+ 	if !after.Valid || after.String != "" {
+ 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: the purge did not hold inside its own transaction: %w", approvalID, ErrApprovalEvidenceCorrupt)
+ 	}
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aNullLeftByThePurgeIsCorruptEvidence ./internal/action/sqlite/
+--- FAIL: TestClaim_aNullLeftByThePurgeIsCorruptEvidence (0.62s)
+    claim_single_consumption_v0151_test.go:232: err = action/sqlite: re-read the purge of "apr_dd37e3984005be15edf47ff3a1576d71": action/sqlite: the approval could not be read: sql: Scan error on column index 0, name "canonical_params": converting NULL to string is unsupported: corrupt=false unreadable=true, want corrupt=true unreadable=false
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	9.757s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aNullLeftByThePurgeIsCorruptEvidence ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	5.295s
+# exit: 0

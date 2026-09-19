@@ -1,0 +1,35 @@
+# X3 — block B's P2-8 trigger under block A's planned cure. Source kept: x3_probe_test.go.txt
+## base (no production change)
+# command: go test -count=1 -run TestX3Probe -v ./internal/app/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef + base (no production change)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T11:35:18Z
+    x3_probe_test.go:68: decide: rule="" err=<nil>
+    x3_probe_test.go:70: GetApproval after decide: err=<nil>
+    x3_probe_test.go:72: CLAIM RESULT: app: claim execution of apr_fb556d3e3241ac365f66d52342e36778: action/sqlite: approval "apr_fb556d3e3241ac365f66d52342e36778" was parked under law v1 sha256:attacker but the current law is v1 sha256:test-seam (policy): action/sqlite: the law moved under this approval
+    x3_probe_test.go:83:   errors.Is(ErrApprovalInvalidated) = true
+    x3_probe_test.go:83:   errors.Is(ErrApprovalMovedUnderTheClaim) = false
+    x3_probe_test.go:83:   errors.Is(ErrApprovalEvidenceCorrupt) = false
+    x3_probe_test.go:83:   errors.Is(ErrApprovalUnreadable) = false
+    x3_probe_test.go:83:   errors.Is(ErrApprovalNoLongerApproved) = false
+    x3_probe_test.go:85: exec runs = 0
+--- PASS: TestX3Probe (0.03s)
+ok  	github.com/Sebastian197/korvun/internal/app	0.631s
+# exit: 0
+## planned cure: snapshot compared before the law (scratch-only edit of approvals_v15.go)
+# command: go test -count=1 -run TestX3Probe -v ./internal/app/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef + planned cure: snapshot compared before the law (scratch-only edit of approvals_v15.go)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T11:35:21Z
+    x3_probe_test.go:68: decide: rule="" err=<nil>
+    x3_probe_test.go:70: GetApproval after decide: err=<nil>
+    x3_probe_test.go:72: CLAIM RESULT: app: claim execution of apr_d3ee5443800759de9de33f7f7419a5ea: action/sqlite: approval "apr_d3ee5443800759de9de33f7f7419a5ea" was parked under law v1 sha256:attacker but the current law is v1 sha256:test-seam (policy): action/sqlite: the law moved under this approval
+    x3_probe_test.go:83:   errors.Is(ErrApprovalInvalidated) = true
+    x3_probe_test.go:83:   errors.Is(ErrApprovalMovedUnderTheClaim) = false
+    x3_probe_test.go:83:   errors.Is(ErrApprovalEvidenceCorrupt) = false
+    x3_probe_test.go:83:   errors.Is(ErrApprovalUnreadable) = false
+    x3_probe_test.go:83:   errors.Is(ErrApprovalNoLongerApproved) = false
+    x3_probe_test.go:85: exec runs = 0
+--- PASS: TestX3Probe (0.03s)
+ok  	github.com/Sebastian197/korvun/internal/app	0.788s
+# exit: 0

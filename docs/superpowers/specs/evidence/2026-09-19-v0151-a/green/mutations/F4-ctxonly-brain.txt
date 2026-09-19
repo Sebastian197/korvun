@@ -1,0 +1,30 @@
+# mutation F4-ctxonly-brain: restrict the after-GotConn arm to ended contexts (brain)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:23:31Z
+## diff of the mutation
+--- internal/tool/webhookcall.go
++++ internal/tool/webhookcall.go (mutated)
+@@ -179,7 +179,7 @@
+ 		case errors.Is(err, ErrRedirectRefused):
+ 			// CheckRedirect runs over a RESPONSE: the receiver answered (a 3xx).
+ 			err = fmt.Errorf("%w: %w", ErrEffectDelivered, err)
+-		case connObtained.Load():
++		case connObtained.Load() && (errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)):
+ 			// A connection was handed to the request and no answer was read: a
+ 			// host that read the POST and hung up and a pooled connection that
+ 			// died with nothing written look the same from here.
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestRunTool_aResetDuringTheBodyIsUnknown ./internal/brain/
+--- FAIL: TestRunTool_aResetDuringTheBodyIsUnknown (3.78s)
+    agent_v0151_a_test.go:237: finishes = [FAILED], want exactly [OUTCOME_UNKNOWN]
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/brain	5.411s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestRunTool_aResetDuringTheBodyIsUnknown ./internal/brain/
+ok  	github.com/Sebastian197/korvun/internal/brain	4.142s
+# exit: 0

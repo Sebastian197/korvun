@@ -1,0 +1,30 @@
+# mutation A3: drop AUTHORIZED from crashOrphanPredicate
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:19:13Z
+## diff of the mutation
+--- internal/action/sqlite/store.go
++++ internal/action/sqlite/store.go (mutated)
+@@ -1126,7 +1126,7 @@
+ 	// receipt. The exclusion lives in the UPDATE's own WHERE, the one
+ 	// statement SQLite runs atomically.
+ 	crashOrphanPredicate = ` AND state NOT IN ('DENIED','SHADOWED','SUCCEEDED','FAILED',
+-		'REJECTED','PENDING_APPROVAL','APPROVED','OUTCOME_UNKNOWN','AUTHORIZED')`
++		'REJECTED','PENDING_APPROVAL','APPROVED','OUTCOME_UNKNOWN')`
+ )
+ 
+ // isBusyClass reports the SQLITE_BUSY family across its spellings —
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestRecovery_theCrashCloseRefusesARowThatBecameAuthorized ./internal/action/sqlite/
+--- FAIL: TestRecovery_theCrashCloseRefusesARowThatBecameAuthorized (0.21s)
+    recovery_predicate_v0151_test.go:81: the crash close owned a row that had become AUTHORIZED (RowsAffected 1, want 0)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.568s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestRecovery_theCrashCloseRefusesARowThatBecameAuthorized ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.631s
+# exit: 0

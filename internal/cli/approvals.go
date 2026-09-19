@@ -232,10 +232,13 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 // resume act for an APPROVED request whose deferred execution never
 // happened — a crash between the decision and the execution leaves
 // the approval consumed and the params held, and this verb picks it
-// up through the SAME one-executor path (the atomic claim hands the
-// params to exactly one executor START — whether a crashed start
-// reached its effect is C5's OUTCOME_UNKNOWN territory, named, never
-// guessed; a consumed one reports honestly instead of re-running).
+// up through the SAME executor path. The claim refuses a purge that does
+// not hold inside its own transaction; it does NOT prevent another
+// connection from restoring the params after the claim commits while the
+// action is still APPROVED, and then a second START can happen (filed for
+// v0.15.2). Whether a crashed start reached its effect is C5's
+// OUTCOME_UNKNOWN territory, named, never guessed; a consumed one reports
+// honestly instead of re-running.
 func (c *cli) approvalsExecute(args []string) int {
 	fs := flag.NewFlagSet("approvals execute", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)

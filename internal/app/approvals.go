@@ -127,9 +127,12 @@ func (a *App) recorderForTest() brain.ActionRecorder {
 // ExecuteApprovedAction runs the EXACT stored envelope of an APPROVED
 // request through the one Executor Registry path (spec FR-EXEC, sealed
 // NC-2: identity, never equivalence): claim the canonical params
-// atomically (exactly one caller obtains them, so at most one executor
-// START ever happens; C7 honesty: what a crashed start did to the
-// external world is OUTCOME_UNKNOWN, not a claim this function makes),
+// atomically (the claim's own transaction proves its purge held before it
+// commits, so a restore INSIDE that transaction is refused; a restore by
+// another connection AFTER the commit, while the action is still APPROVED,
+// is NOT prevented and can start the executor again — filed for v0.15.2.
+// C7 honesty: what a crashed start did to the external world is
+// OUTCOME_UNKNOWN, not a claim this function makes),
 // re-verify them against the approved digest as the
 // belt, execute, and close the parked action with its era's E4 receipt
 // and the on-the-fly result digest. A request that is not APPROVED —
@@ -196,11 +199,13 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 	result, _, execErr := exec.Run(ctx, toolName,
 		tool.Scope{Brain: "", Conversation: conv}, string(params))
 	// ONE function decides what this closes on, and the brain path calls the
-	// same one. The rule itself is unchanged: a delivered request whose answer
-	// was lost, and a context that ended, are uncertainty — closing them FAILED
-	// would put in the ledger a definite claim nobody can support, what the
-	// store's own C5 comment calls «a FAILED lie». Anything else is a tool that
-	// refused before its effect left, and FAILED is honest for that.
+	// same one (tool.CloseStateAfterRun). An answer that is not a usable
+	// success, and a connection obtained with no answer, are uncertainty —
+	// closing them FAILED would put in the ledger a definite claim nobody can
+	// support, what the store's own C5 comment calls «a FAILED lie». A run that
+	// never obtained a connection closes FAILED even when its context ended:
+	// nothing left. For a tool that does not observe the wire, a context that
+	// ended is uncertainty and any other error is a refusal before it acted.
 	outcome := tool.CloseStateAfterRun(execErr)
 	resultDigest := action.HashCanonical(result)
 	if outcome != action.StateSucceeded {
@@ -240,30 +245,28 @@ func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec 
 		Operation:    op,
 	}
 	if execErr != nil {
-		// Neither a deadline nor a delivered-and-unread answer is a refusal.
-		// The call may well have gone out and its answer been lost, so the
-		// effect's fate is genuinely unknown — which is what `unknown_outcome`
-		// is for, and until the deadline cure nothing produced it.
+		// The classifier said OUTCOME_UNKNOWN: a response that is not a success,
+		// a connection obtained with no answer read, or — for a tool that does
+		// not observe the wire — a context that ended. The effect's fate is
+		// genuinely unknown, which is what `unknown_outcome` is for.
 		if outcome == action.StateOutcomeUnknown {
 			out.Unknown = true
 			out.FailureDetail = execErr.Error()
 			return out, nil
 		}
-		// Anything else: the tool refused BEFORE anything left — a host off the
-		// allow-list, a shield refusal at the dial, a malformed payload, a
-		// failed dial. That is a DECIDED outcome with its receipt, and it
+		// The classifier said FAILED: for webhook_call, no connection was ever
+		// obtained (tool.ErrNotSent — a refused dial, a handshake that never
+		// completed, a shield refusal, a context that ended first); for any
+		// tool, a refusal before it acted — a host off the allow-list, a
+		// malformed payload. That is a DECIDED outcome with its receipt, and it
 		// travels as one; knowing the attempt failed is a different fact from
 		// not knowing what happened.
 		//
-		// This comment listed «an HTTP error status» among them, and that was
-		// false: a status comes from a receiver that already read the body. So
-		// did the cage's redirect refusal, raised over a response. Both wrap
-		// tool.ErrEffectDelivered now and route above.
-		//
-		// It also cited a mould by a name that existed NOWHERE but in this
-		// sentence. The rule is held by TestWebhookCall_everyBranchAfterDo,
-		// which reads the tool's AST and requires the sentinel on every error
-		// return past the point where a response exists.
+		// A reset, a broken pipe or a hang-up AFTER a connection was obtained
+		// is not here: it classes tool.ErrDeliveryUnknown and routes to the
+		// unknown branch. Which error class each wire fact carries is held by
+		// the behavioural moulds named in TestWebhookCall_everyBranchAfterDo's
+		// godoc (internal/tool).
 		out.Failed = true
 		out.FailureDetail = execErr.Error()
 		return out, nil
@@ -284,8 +287,10 @@ type ApprovedExecution struct {
 	ReceiptID    string
 	Operation    action.Operation
 	Failed       bool
-	// Unknown is a deadline or a delivered request whose answer was lost: the call may have been delivered and the answer
-	// lost, so nobody can say whether the effect happened.
+	// Unknown is an outcome nobody can decide: a response that is not a
+	// success, a connection obtained with no answer read, or a context that
+	// ended in a tool that does not observe the wire. The effect may or may
+	// not have happened.
 	Unknown       bool
 	FailureDetail string
 }

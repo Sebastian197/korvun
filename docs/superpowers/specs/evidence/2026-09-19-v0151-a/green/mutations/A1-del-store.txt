@@ -1,0 +1,39 @@
+# mutation A1-del-store: delete the post-purge re-read (store mould)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:16:57Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -737,14 +737,6 @@
+ 	// Scanned without type conversion: a NULL left in the cell is a value that
+ 	// is there and wrong (corrupt), not a store that failed to answer. Only a
+ 	// failed Scan — the driver — is unreadable.
+-	var after sql.NullString
+-	if err := tx.QueryRowContext(ctx,
+-		`SELECT canonical_params FROM approvals WHERE approval_id = ?`, approvalID).Scan(&after); err != nil {
+-		return nil, action.Operation{}, fmt.Errorf("action/sqlite: re-read the purge of %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+-	}
+-	if !after.Valid || after.String != "" {
+-		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: the purge did not hold inside its own transaction: %w", approvalID, ErrApprovalEvidenceCorrupt)
+-	}
+ 	if err := tx.Commit(); err != nil {
+ 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: commit claim: %w: %w", ErrApprovalUnreadable, err)
+ 	}
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aPurgeThatDoesNotHoldConsumesNothing ./internal/action/sqlite/
+--- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing (0.00s)
+    --- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_different_bytes_with_the_same_digest (0.65s)
+        claim_single_consumption_v0151_test.go:101: first claim (#1): err = <nil>, params = "{\"a\":1}", want ErrApprovalEvidenceCorrupt (claims that handed parameters so far: 1)
+    --- FAIL: TestClaim_aPurgeThatDoesNotHoldConsumesNothing/the_trigger_restores_the_same_bytes (0.70s)
+        claim_single_consumption_v0151_test.go:101: first claim (#1): err = <nil>, params = "{\"a\":1}", want ErrApprovalEvidenceCorrupt (claims that handed parameters so far: 1)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.511s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aPurgeThatDoesNotHoldConsumesNothing ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.932s
+# exit: 0

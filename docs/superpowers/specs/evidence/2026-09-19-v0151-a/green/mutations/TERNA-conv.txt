@@ -1,0 +1,31 @@
+# mutation TERNA-conv: route ternaOf conversion back through the Unreadable wrap
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:19:51Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -442,7 +442,7 @@
+ 	}
+ 	version, err := strconv.Atoi(versionRaw.String)
+ 	if err != nil {
+-		return action.Operation{}, "", fmt.Errorf("the actions row for %q carries op_version %q: %w", actionID, versionRaw.String, ErrApprovalEvidenceCorrupt)
++		return action.Operation{}, "", fmt.Errorf("the actions row for %q carries op_version %q: %w", actionID, versionRaw.String, ErrApprovalUnreadable)
+ 	}
+ 	if !knownActionState[action.State(state.String)] {
+ 		// A state outside the domain is a value that is there and wrong, not a
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_ternaOfNamesConversionAndDriverApart ./internal/action/sqlite/
+--- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart (0.00s)
+    --- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart/op_version_holds_text_(conversion) (0.72s)
+        claim_classification_v0151_test.go:167: err = action/sqlite: approval "apr_c9f3f92e1c00821d4b1c76049fcbae12": the actions row for "act_terna" carries op_version "x": action/sqlite: the approval could not be read: corrupt=false unreadable=true, want corrupt=true unreadable=false
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.487s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_ternaOfNamesConversionAndDriverApart ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.714s
+# exit: 0

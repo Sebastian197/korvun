@@ -1,0 +1,35 @@
+# mutation DU-state: drop ErrDeliveryUnknown from the UNKNOWN arm (hangs-up state assertion)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:22:22Z
+## diff of the mutation
+--- internal/tool/outcome.go
++++ internal/tool/outcome.go (mutated)
+@@ -45,8 +45,7 @@
+ 	switch {
+ 	case err == nil:
+ 		return action.StateSucceeded
+-	case errors.Is(err, ErrEffectDelivered),
+-		errors.Is(err, ErrDeliveryUnknown):
++	case errors.Is(err, ErrEffectDelivered):
+ 		return action.StateOutcomeUnknown
+ 	case errors.Is(err, ErrNotSent):
+ 		return action.StateFailed
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost|TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered|TestWebhookCall_aResetDuringTheBodyIsUnknown ./internal/tool/
+--- FAIL: TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost (0.00s)
+    delivered_effect_test.go:710: state = FAILED, want OUTCOME_UNKNOWN — the host read the POST
+--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.00s)
+    webhookcall_v0151_a_test.go:688: state = FAILED (err webhook_call: request failed: tool: a connection was obtained and no answer was read; whether the request left is not known: Post "http://127.0.0.1:50501": dial tcp: connection refused), want OUTCOME_UNKNOWN — a connection was obtained
+--- FAIL: TestWebhookCall_aResetDuringTheBodyIsUnknown (5.04s)
+    webhookcall_v0151_a_test.go:549: state = FAILED (err webhook_call: request failed: tool: a connection was obtained and no answer was read; whether the request left is not known: Post "http://127.0.0.1:50503/trigger": readfrom tcp 127.0.0.1:50508->127.0.0.1:50503: write tcp 127.0.0.1:50508->127.0.0.1:50503: use of closed network connection), want OUTCOME_UNKNOWN — the headers reached the receiv
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	6.472s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost|TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered|TestWebhookCall_aResetDuringTheBodyIsUnknown ./internal/tool/
+ok  	github.com/Sebastian197/korvun/internal/tool	6.949s
+# exit: 0

@@ -1,0 +1,19 @@
+# command: go test -race -count=1 -timeout 300s -run TestExecuteApprovedAction_aPurgeThatDoesNotHoldIsRefused|TestExecuteApprovedAction_onlyA2xxIsSuccess|TestExecuteApprovedAction_anEndBeforeAConnectionClosesFailed ./internal/app/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (red-phase moulds in the worktree, no production change; delivered_effect_test.go modified by the director's decision)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T11:56:13Z
+--- FAIL: TestExecuteApprovedAction_aPurgeThatDoesNotHoldIsRefused (0.46s)
+    --- FAIL: TestExecuteApprovedAction_aPurgeThatDoesNotHoldIsRefused/attacked:_the_trigger_restores_the_parameters (0.25s)
+        approvals_v0151_a_test.go:116: first claim: err = app: close executed action act_exec1: app: the executed action could not be closed: action/sqlite: finish "act_exec1": action: invalid state transition SUCCEEDED -> SUCCEEDED, want ErrApprovalEvidenceCorrupt (runs=2, competitor err=<nil>)
+--- FAIL: TestExecuteApprovedAction_onlyA2xxIsSuccess (0.42s)
+    --- FAIL: TestExecuteApprovedAction_onlyA2xxIsSuccess/301_without_Location (0.22s)
+        approvals_v0151_a_test.go:221: HTTP 301: Unknown = false, want true (detail "")
+--- FAIL: TestExecuteApprovedAction_anEndBeforeAConnectionClosesFailed (0.71s)
+    --- FAIL: TestExecuteApprovedAction_anEndBeforeAConnectionClosesFailed/the_tool's_deadline_fires_during_the_handshake (0.51s)
+        approvals_v0151_a_test.go:317: Unknown = true over a request that never obtained a connection: webhook_call: request failed: Post "https://127.0.0.1:52839": context deadline exceeded
+    --- FAIL: TestExecuteApprovedAction_anEndBeforeAConnectionClosesFailed/the_caller_cancels_during_the_handshake (0.20s)
+        approvals_v0151_a_test.go:317: Unknown = true over a request that never obtained a connection: webhook_call: request failed: Post "https://127.0.0.1:52841": context canceled
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	2.379s
+FAIL
+# exit: 1

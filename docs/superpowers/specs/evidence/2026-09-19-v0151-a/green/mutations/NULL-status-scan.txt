@@ -1,0 +1,38 @@
+# mutation NULL-status-scan: scan the approval status back into a plain string (base shape)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:30:45Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -755,9 +755,13 @@
+ // not APPROVED as its own transaction sees them. An unreadable row fails
+ // closed with its own name; it is never read as a moved state.
+ func claimAuthorityTx(ctx context.Context, tx *sql.Tx, approvalID, actionID string) error {
+-	var statusCell sql.NullString
++	var statusCell struct {
++		Valid  bool
++		String string
++	}
+ 	err := tx.QueryRowContext(ctx,
+-		`SELECT status FROM approvals WHERE approval_id = ?`, approvalID).Scan(&statusCell)
++		`SELECT status FROM approvals WHERE approval_id = ?`, approvalID).Scan(&statusCell.String)
++	statusCell.Valid = true
+ 	if errors.Is(err, sql.ErrNoRows) {
+ 		return fmt.Errorf("action/sqlite: approval %q is gone inside its claim: %w", approvalID, ErrApprovalEvidenceCorrupt)
+ 	}
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence ./internal/action/sqlite/
+--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence (0.00s)
+    --- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/the_approval_status_turns_NULL_after_the_purge (0.80s)
+        claim_single_consumption_v0151_test.go:345: err = action/sqlite: claim authority "apr_91f1e0b692157f6ec11a8b581a763f00": action/sqlite: the approval could not be read: sql: Scan error on column index 0, name "status": converting NULL to string is unsupported: corrupt=false unreadable=true, want corrupt=true unreadable=false
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.542s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.784s
+# exit: 0

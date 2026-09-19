@@ -95,6 +95,11 @@ func TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure(t *testing.T) {
 	if !errors.Is(execErr, ErrEffectDelivered) {
 		t.Fatalf("the POST was ACCEPTED and the answer lost, and the error does not say so: %v", execErr)
 	}
+	// Class exclusivity (Delta 6): a delivered-or-unknown error never ALSO
+	// carries the not-sent class, which closes FAILED.
+	if errors.Is(execErr, errNotSent) {
+		t.Fatalf("the error carries ErrNotSent as well as its own class: %v", execErr)
+	}
 }
 
 // TestWebhookCall_aCappedAnswerIsStillADeliveredPost is the other post-delivery
@@ -126,6 +131,11 @@ func TestWebhookCall_aCappedAnswerIsStillADeliveredPost(t *testing.T) {
 	if !errors.Is(execErr, ErrEffectDelivered) {
 		t.Fatalf("the POST was ACCEPTED before the cap fired, and the error does not say so: %v", execErr)
 	}
+	// Class exclusivity (Delta 6): a delivered-or-unknown error never ALSO
+	// carries the not-sent class, which closes FAILED.
+	if errors.Is(execErr, errNotSent) {
+		t.Fatalf("the error carries ErrNotSent as well as its own class: %v", execErr)
+	}
 }
 
 // TestWebhookCall_everyBranchAfterDo holds the post-delivery rule BY SITE.
@@ -154,9 +164,78 @@ func TestWebhookCall_aCappedAnswerIsStillADeliveredPost(t *testing.T) {
 // results — fails loudly instead of passing. A guard that cannot see a shape
 // must say so; that is the whole lesson of the two before it.
 //
-// Probing mutations (executed, red, declared in the canto): drop the sentinel
-// from any branch; drop the WroteRequest hook; add an untyped branch past the
-// Do call, as an inline return, via a one-result helper, or as a naked return.
+// Probing mutations of the pre-2026-09-19 shape (executed then, declared in
+// that canto): drop the WroteRequest hook; add an untyped branch past the Do
+// call, as an inline return, via a one-result helper, or as a naked return.
+// «Drop the sentinel from any branch» was NOT true of every branch: an earlier
+// assignment accounts every later return of the same variable, so the
+// read-response branch could lose its sentinel with this guard green (found
+// 2026-09-19; the behavioural test named in this godoc's branch table is
+// what reddens).
+//
+// ELEVATED 2026-09-19 (v0.15.1 block A, director's decision): the observation
+// that decides is now httptrace's GotConn — a clean WroteRequest fires before
+// the transport's final flush and proves nothing (Go 1.26.6,
+// net/http/request.go Request.write and net/http/transport.go writeLoop). The
+// guard used to require a WroteRequest hook, which a decorative hook would
+// satisfy; it now requires a GotConn hook whose observation is READ outside
+// the hook, and it accepts as accounting the three sentinels of the one table
+// (ErrEffectDelivered, ErrDeliveryUnknown, ErrNotSent) or that observation.
+// WHAT THIS GUARD PINS, and nothing wider: (1) a GotConn hook that stores an
+// observation; (2) that observation READ outside the hook — an identifier use
+// that is not an assignment target, so a `:=` define does not count (the
+// decorative hook, executed red 2026-09-19); (3) every post-Do error return
+// syntactically carrying a table sentinel, the observation, or a variable
+// assigned from one. It is NOT flow analysis: one assignment accounts every
+// later return of that variable, so the per-branch sentinel is pinned by
+// BEHAVIOUR, branch by branch:
+//
+//	branch (post-Do / Do error block)     behavioural test that reddens when it loses its sentinel
+//	no connection obtained (ErrNotSent)   TestWebhookCall_anEndBeforeAConnectionIsADecidedFailure
+//	connection, no answer (DeliveryUnknown) TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost,
+//	                                      TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered,
+//	                                      TestWebhookCall_aResetDuringTheBodyIsUnknown
+//	refused redirect (ErrRedirectRefused) TestWebhookCall_aRefusedRedirectIsStillADeliveredPost
+//	HTTP status outside 2xx               TestWebhookCall_anErrorStatusIsStillADeliveredPost,
+//	                                      the non-2xx rows of TestWebhookCall_onlyA2xxIsSuccess
+//	read response                         TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure
+//	byte cap                              TestWebhookCall_aCappedAnswerIsStillADeliveredPost
+//
+// The base's «a response arrived for a request the wire never reported
+// writing» assertion has no row: no test reddens when it changes class, so
+// the cure DROPS it (a response implies GotConn fired; the assertion guarded a
+// WroteRequest observation the cure removes).
+//
+// Also syntactic, and declared to its width: a post-Do return whose ONLY
+// accounting is ErrNotSent is accepted only inside an if whose condition
+// mentions the observation. A return that also names a variable assigned
+// earlier from a delivered/unknown sentinel is accepted by that assignment,
+// whatever else it names — so ErrNotSent joined onto the read-response
+// branch's `err` passes this guard (the adversary's T7g, exit 0). That case is
+// caught by BEHAVIOUR: the POSITIVE assertion errors.Is(execErr,
+// ErrEffectDelivered) of TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure
+// is the line T7g reddens; its exclusivity assertion guards the join form. Class
+// EXCLUSIVITY in general (never two classes on one error) is pinned by the
+// behavioural moulds: every delivered/unknown mould asserts !errors.Is(err,
+// ErrNotSent), every not-sent mould asserts neither ErrDeliveryUnknown nor
+// ErrEffectDelivered and, positively, ErrNotSent. What this guard does NOT
+// catch — a read by name that decides nothing (`_ = c`, `_ = c.Load()`, an
+// `if false`), a shadowed name, a read inside another hook, a trace that is
+// built and never installed on the request — the behavioural moulds of the
+// table catch. A correct cure that keeps the observation in a struct field or
+// behind a pointer the hook does not `.Store` into by name false-reds this
+// guard: it fails CLOSED, and the guard is adjusted with it.
+//
+// Executed at base 2026-09-19 (evidence folder of v0.15.1 block A): dropping
+// ErrEffectDelivered from the read-response wrap reddens its test
+// (mut-read-response.txt); dropping the delivered wrap of Do's error block
+// reddens the refused-redirect test (mut-do-error-wrap.txt). The ErrNotSent
+// and ErrDeliveryUnknown arms do not exist before the cure; their reds are
+// executed after green.
+//
+// Planned probing mutations of this guard (after green): drop the GotConn
+// hook; keep it with a `:=`-defined store nobody reads (executed red already
+// against base with the hook added, mut-guard-decorative-hook.txt).
 func TestWebhookCall_everyBranchAfterDo(t *testing.T) {
 	t.Parallel()
 	fset := token.NewFileSet()
@@ -167,9 +246,13 @@ func TestWebhookCall_everyBranchAfterDo(t *testing.T) {
 	fn := executeDecl(t, file)
 
 	// Without the observation there is no frontier at all, only the guessing
-	// the two previous shapes did.
-	if !mentions(fn, "WroteRequest") {
-		t.Fatal("Execute installs no WroteRequest trace hook — delivery is being inferred from the error's shape again, and that was wrong twice")
+	// the earlier shapes did. And an observation nobody reads is decoration.
+	observed := gotConnObservation(fn)
+	if observed == "" {
+		t.Fatal("Execute installs no GotConn trace hook that stores an observation — delivery is being inferred from the error's shape again")
+	}
+	if !readOutsideHook(fn, observed) {
+		t.Fatalf("Execute's GotConn hook stores %q and no identifier use outside the hook reads it. This guard pins that syntactic read only; whether the read decides the sentinel is pinned by the behavioural moulds of this godoc's branch table", observed)
 	}
 
 	var doPos token.Pos
@@ -203,8 +286,8 @@ func TestWebhookCall_everyBranchAfterDo(t *testing.T) {
 			return true // a successful answer says nothing about delivery
 		}
 		checked++
-		if !accountsForDelivery(fn, ret) {
-			t.Errorf("%s: an error return past the Do call neither carries ErrEffectDelivered nor consults the delivery observation — if the body reached the wire, this closes somebody's ledger FAILED over an effect that already left",
+		if !accountsForDelivery(fn, ret, observed) {
+			t.Errorf("%s: an error return past the Do call carries neither ErrEffectDelivered, ErrDeliveryUnknown, the GotConn observation nor a variable assigned from them (an ErrNotSent that is the return's only accounting counts only inside a condition that consults the observation) — a connection may have been obtained, and this would close somebody's ledger FAILED",
 				fset.Position(ret.Pos()))
 		}
 		return true
@@ -217,8 +300,30 @@ func TestWebhookCall_everyBranchAfterDo(t *testing.T) {
 // accountsForDelivery reports whether one error return has been through the
 // delivery question: the sentinel in the returned expression, the observation
 // consulted in it, or a variable it returns that was assigned either.
-func accountsForDelivery(fn *ast.FuncDecl, ret *ast.ReturnStmt) bool {
-	if mentions(ret, "ErrEffectDelivered") || mentions(ret, "delivered") {
+func accountsForDelivery(fn *ast.FuncDecl, ret *ast.ReturnStmt, observed string) bool {
+	// ErrNotSent closes FAILED, so when it is a return's ONLY accounting it is
+	// accepted only inside an if whose condition MENTIONS the observation. The
+	// condition's polarity is not checked here (the adversary's G3 passes this
+	// guard); polarity is pinned by behaviour. A return that also carries a
+	// variable accounted by an earlier assignment passes regardless; that is
+	// behavioural too
+	// (TestWebhookCall_anAcceptedPostThatCannotBeReadIsNotAFailure).
+	notSentGuarded := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		is, ok := n.(*ast.IfStmt)
+		if !ok || !mentions(is.Cond, observed) {
+			return true
+		}
+		if ret.Pos() >= is.Body.Pos() && ret.End() <= is.Body.End() {
+			notSentGuarded = true
+		}
+		return true
+	})
+	accounts := func(n ast.Node) bool {
+		return mentions(n, "ErrEffectDelivered") || mentions(n, "ErrDeliveryUnknown") ||
+			mentions(n, observed) || (notSentGuarded && mentions(n, "ErrNotSent"))
+	}
+	if accounts(ret) {
 		return true
 	}
 	// The error may be built earlier and returned through a variable. Collect
@@ -243,7 +348,7 @@ func accountsForDelivery(fn *ast.FuncDecl, ret *ast.ReturnStmt) bool {
 				continue
 			}
 			for _, rhs := range as.Rhs {
-				if mentions(rhs, "ErrEffectDelivered") || mentions(rhs, "delivered") {
+				if accounts(rhs) {
 					accounted = true
 				}
 			}
@@ -251,6 +356,97 @@ func accountsForDelivery(fn *ast.FuncDecl, ret *ast.ReturnStmt) bool {
 		return true
 	})
 	return accounted
+}
+
+// gotConnObservation returns the name of the identifier the GotConn hook
+// stores into — `x.Store(…)` or `x = …` inside the function literal keyed
+// GotConn — or "" when there is no such hook.
+func gotConnObservation(fn *ast.FuncDecl) string {
+	name := ""
+	ast.Inspect(fn, func(n ast.Node) bool {
+		kv, ok := n.(*ast.KeyValueExpr)
+		if !ok {
+			return true
+		}
+		key, ok := kv.Key.(*ast.Ident)
+		if !ok || key.Name != "GotConn" {
+			return true
+		}
+		lit, ok := kv.Value.(*ast.FuncLit)
+		if !ok {
+			return true
+		}
+		ast.Inspect(lit.Body, func(m ast.Node) bool {
+			switch x := m.(type) {
+			case *ast.CallExpr:
+				if sel, ok := x.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Store" {
+					if id, ok := sel.X.(*ast.Ident); ok {
+						name = id.Name
+					}
+				}
+			case *ast.AssignStmt:
+				if id, ok := x.Lhs[0].(*ast.Ident); ok {
+					name = id.Name
+				}
+			}
+			return name == ""
+		})
+		return false
+	})
+	return name
+}
+
+// readOutsideHook reports whether `name` is READ anywhere in fn outside the
+// GotConn literal that stores into it. A read is an identifier use that is not
+// the target of an assignment: a `var` declaration, a `:=` define and a plain
+// `=` to the name are all writes, never reads — otherwise
+// `x := &atomic.Bool{}` alone would count as consulting the observation.
+func readOutsideHook(fn *ast.FuncDecl, name string) bool {
+	targets := map[*ast.Ident]bool{}
+	ast.Inspect(fn, func(n ast.Node) bool {
+		if as, ok := n.(*ast.AssignStmt); ok {
+			for _, lhs := range as.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok && id.Name == name {
+					targets[id] = true
+				}
+			}
+		}
+		return true
+	})
+	var skip []ast.Node
+	ast.Inspect(fn, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.KeyValueExpr:
+			if key, ok := x.Key.(*ast.Ident); ok && key.Name == "GotConn" {
+				skip = append(skip, x)
+				return false
+			}
+		case *ast.ValueSpec:
+			for _, id := range x.Names {
+				if id.Name == name {
+					skip = append(skip, x)
+					return false
+				}
+			}
+		}
+		return true
+	})
+	inside := func(n ast.Node) bool {
+		for _, sk := range skip {
+			if n.Pos() >= sk.Pos() && n.End() <= sk.End() {
+				return true
+			}
+		}
+		return false
+	}
+	found := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if id, ok := n.(*ast.Ident); ok && id.Name == name && !inside(id) && !targets[id] {
+			found = true
+		}
+		return !found
+	})
+	return found
 }
 
 // executeDecl returns the declaration of (*webhookCallTool).Execute.
@@ -283,7 +479,7 @@ func mentions(n ast.Node, name string) bool {
 // the class OPEN. The catalog is read out of effects.go, not typed here: the
 // defect this train kept repeating is curing one door and calling the class
 // cured, so a NEW tool declared write_irreversible or critical reddens this
-// until someone writes its post-delivery attack above.
+// until someone writes its post-delivery attack in this file.
 func TestBuiltins_everyIrreversibleToolHasADriverForItsPostDeliveryBranch(t *testing.T) {
 	t.Parallel()
 	src, err := os.ReadFile("effects.go")
@@ -295,7 +491,8 @@ func TestBuiltins_everyIrreversibleToolHasADriverForItsPostDeliveryBranch(t *tes
 	if len(names) < 4 {
 		t.Fatalf("read only %d catalog arms — the scan is broken, not the catalog", len(names))
 	}
-	// The tools whose post-delivery branches are held BY SITE above. A name
+	// The tools whose post-delivery branches are held BY SITE in this file (by
+	// TestWebhookCall_everyBranchAfterDo for webhook_call). A name
 	// belongs here only once a mould reads that tool's own Execute; this map
 	// is the index of those moulds, never the guarantee itself — the guarantee
 	// is TestWebhookCall_everyBranchAfterDo, and the defect this map had on its
@@ -327,6 +524,15 @@ func TestBuiltins_everyIrreversibleToolHasADriverForItsPostDeliveryBranch(t *tes
 //
 // Probing mutation (executed, red, declared in the canto): drop
 // ErrEffectDelivered from the ErrRedirectRefused arm of Do's error block.
+//
+// Corrected 2026-09-19: at that base there was no ErrRedirectRefused arm in
+// Do's error block; the delivery came from the WroteRequest observation's
+// wrap, and dropping THAT wrap is what reddens this test
+// (mut-do-error-wrap.txt, v0.15.1 block A evidence). The v0.15.1 cure adds
+// the explicit arm — errors.Is(err, ErrRedirectRefused) ⇒ ErrEffectDelivered,
+// because a refused redirect is a RESPONSE: the receiver answered with a 3xx.
+// (In THIS test the host also reads the whole body before answering, which is
+// why its failure message can say it has the payload.)
 func TestWebhookCall_aRefusedRedirectIsStillADeliveredPost(t *testing.T) {
 	t.Parallel()
 	delivered := make(chan string, 1)
@@ -366,6 +572,11 @@ func TestWebhookCall_aRefusedRedirectIsStillADeliveredPost(t *testing.T) {
 	}
 	if !errors.Is(execErr, ErrEffectDelivered) {
 		t.Fatalf("the host HAS the payload and the error does not say so: %v", execErr)
+	}
+	// Class exclusivity (Delta 6): a delivered-or-unknown error never ALSO
+	// carries the not-sent class, which closes FAILED.
+	if errors.Is(execErr, errNotSent) {
+		t.Fatalf("the error carries ErrNotSent as well as its own class: %v", execErr)
 	}
 }
 
@@ -409,6 +620,11 @@ func TestWebhookCall_anErrorStatusIsStillADeliveredPost(t *testing.T) {
 	if !errors.Is(execErr, ErrEffectDelivered) {
 		t.Fatalf("the receiver READ the body before answering 500, and the error does not say so: %v", execErr)
 	}
+	// Class exclusivity (Delta 6): a delivered-or-unknown error never ALSO
+	// carries the not-sent class, which closes FAILED.
+	if errors.Is(execErr, errNotSent) {
+		t.Fatalf("the error carries ErrNotSent as well as its own class: %v", execErr)
+	}
 }
 
 // TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost is the eighth pass's
@@ -419,8 +635,22 @@ func TestWebhookCall_anErrorStatusIsStillADeliveredPost(t *testing.T) {
 // It is the plainest shape of the whole class: a receiver that takes the
 // request and dies. The ledger closed FAILED over it twice.
 //
-// Probing mutation (executed, red, declared in the canto): remove the
-// WroteRequest hook, or the `if delivered.Load()` wrap in Do's error block.
+// ELEVATED 2026-09-19 (v0.15.1 block A, director's decision): from the client
+// this case cannot be told apart from a pooled connection that died with zero
+// bytes out — no answer arrived either way, and a clean WroteRequest fires
+// before the transport's final flush. So the error may not claim delivery:
+// its sentinel is ErrDeliveryUnknown, not ErrEffectDelivered. The test had no
+// state assertion; it now has one — OUTCOME_UNKNOWN through
+// CloseStateAfterRun, the state both paths close on. The name keeps «delivered»
+// because the HOST did read the POST; the claim that the tool can prove it is
+// what moved.
+//
+// Planned probing mutations (after green), each named by the assertion it
+// reddens (the first Fatalf stops the test, so one mutation observes one
+// assertion): remove the GotConn hook or the connection-obtained arm of Do's
+// error block ⇒ the SENTINEL assertion reddens; drop ErrDeliveryUnknown from
+// CloseStateAfterRun's OUTCOME_UNKNOWN arm (internal/tool/outcome.go) ⇒ the
+// STATE assertion reddens with FAILED. Both captured after green.
 func TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost(t *testing.T) {
 	t.Parallel()
 	read := make(chan string, 1)
@@ -465,14 +695,26 @@ func TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost(t *testing.T) {
 	if errors.Is(execErr, ErrCageViolation) || errors.Is(execErr, context.DeadlineExceeded) {
 		t.Fatalf("this branch must be the bare transport error, or it is not the one under test: %v", execErr)
 	}
-	if !errors.Is(execErr, ErrEffectDelivered) {
-		t.Fatalf("the host READ the whole POST and the error does not say so: %v", execErr)
+	if !errors.Is(execErr, errDeliveryUnknown) {
+		t.Fatalf("a connection was obtained and no answer came, and the error is not ErrDeliveryUnknown: %v", execErr)
+	}
+	if errors.Is(execErr, ErrEffectDelivered) {
+		t.Fatalf("the error claims a delivery the client cannot prove (no answer was read): %v", execErr)
+	}
+	// Class exclusivity (Delta 6): a delivered-or-unknown error never ALSO
+	// carries the not-sent class, which closes FAILED.
+	if errors.Is(execErr, errNotSent) {
+		t.Fatalf("the error carries ErrNotSent as well as its own class: %v", execErr)
+	}
+	if got := CloseStateAfterRun(execErr); got != action.StateOutcomeUnknown {
+		t.Fatalf("state = %v, want OUTCOME_UNKNOWN — the host read the POST", got)
 	}
 }
 
 // TestWebhookCall_aDialThatNeverConnectsDeliveredNothing is the other
 // direction, and it is the one that keeps the cure honest: without it, wrapping
-// every Do error in the sentinel would pass every test above while telling the
+// every Do error in the sentinel would pass every delivered-post test of this
+// file while telling the
 // operator «we do not know» about a call that never left the machine.
 //
 // Probing mutation (executed, red, declared in the canto): wrap Do's error
@@ -498,5 +740,16 @@ func TestWebhookCall_aDialThatNeverConnectsDeliveredNothing(t *testing.T) {
 	}
 	if errors.Is(execErr, ErrEffectDelivered) {
 		t.Fatalf("nothing reached the wire and the error claims delivery: %v", execErr)
+	}
+	// Class exclusivity (Delta 6): a not-sent error never ALSO carries a
+	// delivered or delivery-unknown class.
+	if errors.Is(execErr, errDeliveryUnknown) || errors.Is(execErr, ErrEffectDelivered) {
+		t.Fatalf("a not-sent error also carries a delivered/unknown class: %v", execErr)
+	}
+	// The POSITIVE class assertion (Delta 7): it IS ErrNotSent, carrying its
+	// exact text. Without it, a stand-in left unswitched — or a cure with no
+	// ErrNotSent at all — passes every exclusivity assertion.
+	if !errors.Is(execErr, errNotSent) || errNotSent.Error() != notSentText {
+		t.Fatalf("err %v is not ErrNotSent (%q), or ErrNotSent's text is not %q", execErr, errNotSent, notSentText)
 	}
 }

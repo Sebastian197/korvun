@@ -1,0 +1,45 @@
+# mutation NULL-story-scan: scan the story's first read back into plain strings (base shape): a NULL becomes a Scan failure, published unreadable
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:30:29Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -466,11 +466,16 @@
+ 	// corrupt — and only a failed Scan is unreadable. principal_id stays
+ 	// nullable BY DESIGN: an action may carry no principal, and the comparison
+ 	// with the preview's principal judges it.
+-	var effectCell, opNSCell, opNameCell, principal sql.NullString
++	var effectCell, opNSCell, opNameCell struct {
++		Valid  bool
++		String string
++	}
++	var principal sql.NullString
+ 	err := q.QueryRowContext(ctx,
+ 		`SELECT effect_class, op_namespace, op_name, principal_id
+ 		   FROM actions WHERE action_id = ?`, a.ActionID).
+-		Scan(&effectCell, &opNSCell, &opNameCell, &principal)
++		Scan(&effectCell.String, &opNSCell.String, &opNameCell.String, &principal)
++	effectCell.Valid, opNSCell.Valid, opNameCell.Valid = true, true, true
+ 	if errors.Is(err, sql.ErrNoRows) {
+ 		return fmt.Errorf("the actions row for %q is gone: %w", a.ActionID, ErrApprovalEvidenceCorrupt)
+ 	}
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence ./internal/action/sqlite/
+--- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence (0.00s)
+    --- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/effect_class_is_NULL_(the_story's_first_read) (0.54s)
+        claim_single_consumption_v0151_test.go:345: err = action/sqlite: approval "apr_6999bf86b1ca863b246046c873889bc6": read the story of "act_null_cell": action/sqlite: the approval could not be read: sql: Scan error on column index 0, name "effect_class": converting NULL to string is unsupported: corrupt=false unreadable=true, want corrupt=true unreadable=false
+    --- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/op_name_is_NULL_(the_story's_first_read) (0.60s)
+        claim_single_consumption_v0151_test.go:345: err = action/sqlite: approval "apr_9d94c3015fb774a7651caa86a5d9ec5b": read the story of "act_null_cell": action/sqlite: the approval could not be read: sql: Scan error on column index 2, name "op_name": converting NULL to string is unsupported: corrupt=false unreadable=true, want corrupt=true unreadable=false
+    --- FAIL: TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence/op_namespace_is_NULL_(the_story's_first_read) (1.26s)
+        claim_single_consumption_v0151_test.go:345: err = action/sqlite: approval "apr_a8380d1793e08deea8b785c31d9ea0cf": read the story of "act_null_cell": action/sqlite: the approval could not be read: sql: Scan error on column index 1, name "op_namespace": converting NULL to string is unsupported: corrupt=false unreadable=true, want corrupt=true unreadable=false
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	3.424s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_everyNullCellInsideTheClaimIsCorruptEvidence ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.950s
+# exit: 0

@@ -1,0 +1,33 @@
+# mutation EFFECT-enum-only: restrict the stored domain to the sealed enum (drop the E1 placeholder)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:31:21Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -896,5 +896,5 @@
+ // the E1 placeholder. The empty string and anything else are corrupt evidence
+ // (v0.15.1 block A, director's decision).
+ func storedEffectClassInDomain(class string) bool {
+-	return action.EffectClass(class).Known() || class == unclassifiedEffect
+-}
++	return action.EffectClass(class).Known()
++}
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_anUnclassifiedStoryStillClaims|TestApproval_moreBranches|TestApproval_deepErrorBranches ./internal/action/sqlite/
+--- FAIL: TestClaim_anUnclassifiedStoryStillClaims (0.28s)
+    claim_single_consumption_v0151_test.go:488: an unclassified request was refused: action/sqlite: approval "apr_00a0f8da8dc989cfef62aa05341ed221": the actions row for "act_unclassified" carries effect class "unclassified", outside the domain: action/sqlite: the approval's stored evidence no longer verifies
+--- FAIL: TestApproval_moreBranches (0.45s)
+    approvals_test.go:620: zero expiry must round-trip as zero: action/sqlite: approval "apr_bbe16c8d653aab2b97e6ea9b1ed8da09": the actions row for "act_noexp" carries effect class "unclassified", outside the domain: action/sqlite: the approval's stored evidence no longer verifies 0001-01-01 00:00:00 +0000 UTC
+--- FAIL: TestApproval_deepErrorBranches (0.66s)
+    approvals_test.go:521: reject: action/sqlite: approval "apr_64424b69875119ee4874f3941311f0b2": the actions row for "act_deep3" carries effect class "unclassified", outside the domain: action/sqlite: the approval's stored evidence no longer verifies; refusing the decision
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.322s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_anUnclassifiedStoryStillClaims|TestApproval_moreBranches|TestApproval_deepErrorBranches ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.371s
+# exit: 0

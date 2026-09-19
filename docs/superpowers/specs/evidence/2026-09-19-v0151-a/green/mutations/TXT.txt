@@ -1,0 +1,30 @@
+# mutation TXT: give ErrDeliveryUnknown a text that claims delivery
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:23:58Z
+## diff of the mutation
+--- internal/tool/caged.go
++++ internal/tool/caged.go (mutated)
+@@ -75,7 +75,7 @@
+ // written, a receiver can read the whole POST and hang up — and the client
+ // cannot tell those apart, so its text claims neither. It closes
+ // OUTCOME_UNKNOWN.
+-var ErrDeliveryUnknown = errors.New("tool: a connection was obtained and no answer was read; whether the request left is not known")
++var ErrDeliveryUnknown = errors.New("tool: the request reached the receiver and its answer was lost")
+ 
+ // ErrNotSent marks a tool error raised before any connection was handed to the
+ // request (httptrace GotConn never fired): the dial failed, the TLS handshake
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered ./internal/tool/
+--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.00s)
+    webhookcall_v0151_a_test.go:697: ErrDeliveryUnknown's text = "tool: the request reached the receiver and its answer was lost", want exactly "tool: a connection was obtained and no answer was read; whether the request left is not known"
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	1.112s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered ./internal/tool/
+ok  	github.com/Sebastian197/korvun/internal/tool	2.067s
+# exit: 0

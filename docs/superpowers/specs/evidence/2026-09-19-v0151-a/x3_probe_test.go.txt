@@ -1,0 +1,98 @@
+// X3 probe (v0.15.1 block A evidence; NOT part of the tree). Dropped into
+// internal/app of a scratch worktree at 61ae5827f4798f9cf469870483bee4958993bcef,
+// run once at base and once with the planned reorder (snapshot compared
+// before the law in ClaimApprovalParamsUnderDigest).
+package app
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/Sebastian197/korvun/internal/action"
+	"github.com/Sebastian197/korvun/internal/action/executor"
+	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
+	"github.com/Sebastian197/korvun/internal/tool"
+)
+
+func TestX3Probe(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "korvun.db")
+	app, err := Build(approvalsConfig(t, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	t.Cleanup(func() { shutdownApp(t, app) })
+	ctx := context.Background()
+	raw := `{"url":"https://a.example"}`
+	env := action.NewEnvelope("act_x3", "env-x3",
+		action.Source{Kind: "agent_brain", Protocol: "text", Channel: "telegram"},
+		action.Operation{Namespace: "tool", Name: "webhook_call", Version: 1},
+		raw, time.Now().UTC())
+	env.IntentID = action.RootIntentID
+	env.Principal = action.PrincipalRef{PrincipalID: "principal_brain_a"}
+	env.Effect = action.Effect{Class: string(action.EffectWriteIrreversible)}
+	approvalID, err := app.recorderForTest().(requester).RequestApproval(ctx, env, "require_approval", raw)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	store := app.actions.(*actionsqlite.Store)
+	fake := &countingTool{}
+	exec := executor.New(tool.Registry{"webhook_call": fake}, 0, time.Now)
+
+	hand, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hand.Close()
+	var cp string
+	if err := hand.QueryRow(`SELECT canonical_preview FROM approvals WHERE approval_id = ?`, approvalID).Scan(&cp); err != nil {
+		t.Fatal(err)
+	}
+	p, err := action.ParseCanonicalPreview([]byte(cp))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.PolicyDigest = "sha256:attacker"
+	newRaw, newDigest := string(action.CanonicalPreview(p)), p.Digest()
+	q := "CREATE TRIGGER x3 AFTER UPDATE OF status ON approvals WHEN NEW.status = 'APPROVED' BEGIN " +
+		"UPDATE approvals SET policy_digest = 'sha256:attacker', preview_digest = '" + newDigest + "', canonical_preview = '" + quote(newRaw) + "' WHERE approval_id = NEW.approval_id; " +
+		"UPDATE action_decisions SET policy_digest = 'sha256:attacker' WHERE action_id = NEW.action_id; END"
+	if _, err := hand.Exec(q); err != nil {
+		t.Fatalf("install: %v", err)
+	}
+	envD, identD := operatorApprovalEnv("approve", approvalID)
+	rule, err := store.DecideApprovalUnderLaw(ctx, approvalID, "approved", time.Now().UTC(), envD, identD, "", testLaw)
+	t.Logf("decide: rule=%q err=%v", rule, err)
+	_, _, gerr := store.GetApproval(ctx, approvalID)
+	t.Logf("GetApproval after decide: err=%v", gerr)
+	_, cerr := ExecuteApprovedAction(ctx, store, exec, approvalID, testLaw, digestOf(t, store, approvalID))
+	t.Logf("CLAIM RESULT: %v", cerr)
+	for _, s := range []struct {
+		n string
+		e error
+	}{
+		{"ErrApprovalInvalidated", actionsqlite.ErrApprovalInvalidated},
+		{"ErrApprovalMovedUnderTheClaim", actionsqlite.ErrApprovalMovedUnderTheClaim},
+		{"ErrApprovalEvidenceCorrupt", actionsqlite.ErrApprovalEvidenceCorrupt},
+		{"ErrApprovalUnreadable", actionsqlite.ErrApprovalUnreadable},
+		{"ErrApprovalNoLongerApproved", actionsqlite.ErrApprovalNoLongerApproved},
+	} {
+		t.Logf("  errors.Is(%s) = %v", s.n, errors.Is(cerr, s.e))
+	}
+	t.Logf("exec runs = %d", fake.runs.Load())
+}
+
+func quote(s string) string {
+	out := []rune{}
+	for _, r := range s {
+		if r == '\'' {
+			out = append(out, '\'', '\'')
+		} else {
+			out = append(out, r)
+		}
+	}
+	return string(out)
+}

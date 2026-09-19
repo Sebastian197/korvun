@@ -1,0 +1,49 @@
+# mutation SIS: put the law check back ahead of the snapshot comparison
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:19:03Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -623,6 +623,13 @@
+ 	if err != nil {
+ 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+ 	}
++	if law != nil {
++		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
++			return nil, action.Operation{}, fmt.Errorf(
++				"action/sqlite: approval %q was parked under law v%d %s but the current law is v%d %s (%s): %w",
++				approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, dim, ErrApprovalInvalidated)
++		}
++	}
+ 	// The snapshot the caller read, against the row THIS transaction read. The
+ 	// caller's prechecks happen outside this transaction, so every column they
+ 	// judged is a stale read until it is compared here. It is compared BEFORE
+@@ -634,13 +641,6 @@
+ 			return nil, action.Operation{}, fmt.Errorf(
+ 				"action/sqlite: approval %q moved under the claim (%s): %w",
+ 				approvalID, column, ErrApprovalMovedUnderTheClaim)
+-		}
+-	}
+-	if law != nil {
+-		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
+-			return nil, action.Operation{}, fmt.Errorf(
+-				"action/sqlite: approval %q was parked under law v%d %s but the current law is v%d %s (%s): %w",
+-				approvalID, a.PolicyVersion, a.PolicyDigest, law.Version, law.Digest, dim, ErrApprovalInvalidated)
+ 		}
+ 	}
+ 	// Scanned without conversion (v0.15.1): a NULL in either cell is a value
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aMovedRowIsNamedBeforeAMovedLaw ./internal/action/sqlite/
+--- FAIL: TestClaim_aMovedRowIsNamedBeforeAMovedLaw (0.21s)
+    claim_single_consumption_v0151_test.go:186: err = action/sqlite: approval "apr_1118c98e7ca52b81078ab6f03440d32f" was parked under law v7 sha256:law but the current law is v8 sha256:another-law (policy): action/sqlite: the law moved under this approval, want ErrApprovalMovedUnderTheClaim — the row moved before the law was judged
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.249s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aMovedRowIsNamedBeforeAMovedLaw ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.608s
+# exit: 0

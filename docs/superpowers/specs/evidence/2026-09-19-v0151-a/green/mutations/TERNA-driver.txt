@@ -1,0 +1,31 @@
+# mutation TERNA-driver: class every ternaOf error corrupt (driver branch)
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:20:04Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -435,7 +435,7 @@
+ 		return action.Operation{}, "", fmt.Errorf("the actions row for %q is gone: %w", actionID, ErrApprovalEvidenceCorrupt)
+ 	}
+ 	if err != nil {
+-		return action.Operation{}, "", fmt.Errorf("read the actions row for %q: %w: %w", actionID, ErrApprovalUnreadable, err)
++		return action.Operation{}, "", fmt.Errorf("read the actions row for %q: %w: %w", actionID, ErrApprovalEvidenceCorrupt, err)
+ 	}
+ 	if !ns.Valid || !name.Valid || !versionRaw.Valid || !state.Valid {
+ 		return action.Operation{}, "", fmt.Errorf("the actions row for %q is incomplete: %w", actionID, ErrApprovalEvidenceCorrupt)
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_ternaOfNamesConversionAndDriverApart ./internal/action/sqlite/
+--- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart (0.00s)
+    --- FAIL: TestClaim_ternaOfNamesConversionAndDriverApart/op_version_dropped_(driver) (1.92s)
+        claim_classification_v0151_test.go:167: err = action/sqlite: approval "apr_d9fc8ea2867037845aaeaa30501ceb90": read the actions row for "act_terna": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such column: a.op_version (1): corrupt=true unreadable=false, want corrupt=false unreadable=true
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.736s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_ternaOfNamesConversionAndDriverApart ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.167s
+# exit: 0

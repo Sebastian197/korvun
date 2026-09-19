@@ -1,0 +1,55 @@
+// Copyright 2026 Sebastián Moreno Saavedra
+// SPDX-License-Identifier: Apache-2.0
+
+// X1 — handed from v0.15.1 block A to block B (director, 2026-09-19).
+//
+// Drop this file into internal/action/sqlite AFTER block A is merged. It
+// declares only its test. It needs, from the package's test files, and does
+// NOT redeclare: approvedForClaim (claim_classification_v0151_test.go, block
+// A), sealedStore (ledger_test.go), claimAttackConn
+// (approvals_claim_authority_test.go), boundPark (approvals_r4f2_test.go) and
+// operatorDecisionEnv (approvals_test.go, both reached through
+// approvedForClaim).
+//
+// Evidence level, honest: multiple real database connections. In-process.
+package sqlite
+
+import (
+	"context"
+	"errors"
+	"testing"
+)
+
+// TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence is X1 (block B's pass,
+// P2): the claim wraps EVERY non-NotFound error of its first read in
+// ErrApprovalEvidenceCorrupt. A driver failure — the approvals table dropped
+// by a second connection — is published as corrupt evidence; once block B's
+// approvalTx types its errors, the same failure would carry BOTH sentinels.
+// The claim must pass the classification through: unreadable stays
+// unreadable, never both.
+//
+// Delivered by block B (director, 2026-09-19): the claim can only pass
+// through a class that approvalTx assigns, and typing approvalTx's errors is
+// B's P2-6 cure, so this mould and the passthrough in
+// ClaimApprovalParamsUnderDigest ship in B's PR, after B rebases on A.
+//
+// Planned probing mutation (after green): restore the blanket
+// ErrApprovalEvidenceCorrupt wrap ⇒ this reddens with both sentinels.
+func TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence(t *testing.T) {
+	t.Parallel()
+	store, _ := sealedStore(t)
+	approvalID, digest := approvedForClaim(t, store, "act_x1_dropped")
+	hand := claimAttackConn(t, store)
+	if _, err := hand.Exec(`DROP TABLE approvals`); err != nil {
+		t.Fatalf("drop the table from the second connection: %v", err)
+	}
+
+	params, _, err := store.ClaimApprovalParamsUnderDigest(context.Background(), approvalID, nil, digest, nil)
+	if params != nil {
+		t.Fatalf("a refused claim handed back parameters: %q", params)
+	}
+	corrupt, unreadable := errors.Is(err, ErrApprovalEvidenceCorrupt), errors.Is(err, ErrApprovalUnreadable)
+	if !unreadable || corrupt {
+		t.Fatalf("err = %v: corrupt=%v unreadable=%v, want corrupt=false unreadable=true — the store did not answer", err, corrupt, unreadable)
+	}
+}

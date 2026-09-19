@@ -1,0 +1,39 @@
+# mutation G-nohook: drop the GotConn hook
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:22:55Z
+## diff of the mutation
+--- internal/tool/webhookcall.go
++++ internal/tool/webhookcall.go (mutated)
+@@ -165,7 +165,6 @@
+ 	// zero bytes.
+ 	var connObtained atomic.Bool
+ 	callCtx = httptrace.WithClientTrace(callCtx, &httptrace.ClientTrace{
+-		GotConn: func(httptrace.GotConnInfo) { connObtained.Store(true) },
+ 	})
+ 	req, err := http.NewRequestWithContext(callCtx, http.MethodPost, u.String(), strings.NewReader(body))
+ 	if err != nil {
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_ ./internal/tool/
+--- FAIL: TestWebhookCall_aDeadPooledConnIsUnknownButNotDelivered (0.00s)
+    webhookcall_v0151_a_test.go:685: the error carries ErrNotSent as well as its own class: webhook_call: request failed: tool: no connection was obtained; nothing was sent: Post "http://127.0.0.1:50567": dial tcp: connection refused
+--- FAIL: TestWebhookCall_aLongURLWhoseStartWasReadStaysUnknown (1.46s)
+    webhookcall_v0151_a_test.go:468: the error carries ErrNotSent as well as its own class: webhook_call: request failed: tool: no connection was obtained; nothing was sent: Post "http://127.0.0.1:50569/trigger?x=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+--- FAIL: TestWebhookCall_everyBranchAfterDo (0.07s)
+    delivered_effect_test.go:252: Execute installs no GotConn trace hook that stores an observation — delivery is being inferred from the error's shape again
+--- FAIL: TestWebhookCall_aHostThatReadsAndHangsUpIsADeliveredPost (0.00s)
+    delivered_effect_test.go:699: a connection was obtained and no answer came, and the error is not ErrDeliveryUnknown: webhook_call: request failed: tool: no connection was obtained; nothing was sent: Post "http://127.0.0.1:50601": EOF
+--- FAIL: TestWebhookCall_aResetDuringTheBodyIsUnknown (3.53s)
+    webhookcall_v0151_a_test.go:546: the error carries ErrNotSent as well as its own class: webhook_call: request failed: tool: no connection was obtained; nothing was sent: Post "http://127.0.0.1:50566/trigger": readfrom tcp 127.0.0.1:50655->127.0.0.1:50566: write tcp 127.0.0.1:50655->127.0.0.1:50566: write: broken pipe
+--- FAIL: TestWebhookCall_anEndAfterTheHeadersLeftStaysUnknown (3.27s)
+    webhookcall_v0151_a_test.go:391: the error carries ErrNotSent as well as its own class: webhook_call: request failed: tool: no connection was obtained; nothing was sent: Post "http://127.0.0.1:50573/trigger": context canceled
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	5.281s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestWebhookCall_ ./internal/tool/
+ok  	github.com/Sebastian197/korvun/internal/tool	5.784s
+# exit: 0

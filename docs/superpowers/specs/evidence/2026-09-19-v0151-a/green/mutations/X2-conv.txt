@@ -1,0 +1,30 @@
+# mutation X2-conv: route the history conversion back through the Unreadable wrap
+# base HEAD: 61ae5827f4798f9cf469870483bee4958993bcef; code tree of the final bytes: 8e70c8554c1071e4d2d967d24fa8b4ee94935d4d
+# code tree command: green/codetree.sh <worktree> (HEAD tree + working-tree .go, go.mod, go.sum through a throwaway GIT_INDEX_FILE, then git write-tree)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T15:19:27Z
+## diff of the mutation
+--- internal/action/sqlite/approvals_v15.go
++++ internal/action/sqlite/approvals_v15.go (mutated)
+@@ -516,7 +516,7 @@
+ 	}
+ 	polVersion, perr := strconv.ParseInt(polVersionRaw.String, 10, 64)
+ 	if perr != nil {
+-		return fmt.Errorf("the decision row for %q carries policy_version %q: %w", a.ActionID, polVersionRaw.String, ErrApprovalEvidenceCorrupt)
++		return fmt.Errorf("the decision row for %q carries policy_version %q: %w", a.ActionID, polVersionRaw.String, ErrApprovalUnreadable)
+ 	}
+ 	outcome, rule, polDigest := outcomeRaw.String, ruleRaw.String, polDigestRaw.String
+ 	if outcome != a.Reason || rule != a.Reason {
+
+## mutated run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aCorruptHistoryRowIsCorruptEvidence ./internal/action/sqlite/
+--- FAIL: TestClaim_aCorruptHistoryRowIsCorruptEvidence (0.20s)
+    claim_classification_v0151_test.go:66: err = action/sqlite: approval "apr_bda0d482d91cdd1c0e55b7694f4cd109": the decision row for "act_x2_history" carries policy_version "x": action/sqlite: the approval could not be read: corrupt=false unreadable=true, want corrupt=true unreadable=false — the bytes are there and do not verify
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.098s
+FAIL
+# exit: 1
+## restored run
+# command: go test -race -count=1 -timeout 300s -run TestClaim_aCorruptHistoryRowIsCorruptEvidence ./internal/action/sqlite/
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.022s
+# exit: 0

@@ -1,0 +1,17 @@
+# command: go test -race -count=5 -run TestWebhookCall_anEarlyAnswerIsNotADeliveryClaim ./internal/tool/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef + green tree BEFORE the P2-2 text change
+# captured: 2026-09-19T13:34:41Z
+--- FAIL: TestWebhookCall_anEarlyAnswerIsNotADeliveryClaim (1.66s)
+    webhookcall_v0151_a_test.go:742: err = webhook_call: HTTP 413 from 127.0.0.1:55994: tool: the request was delivered and no successful answer came back, want exactly "webhook_call: HTTP 413 from 127.0.0.1:55994: tool: the receiver answered and the answer was not a usable success"
+--- FAIL: TestWebhookCall_anEarlyAnswerIsNotADeliveryClaim (1.60s)
+    webhookcall_v0151_a_test.go:742: err = webhook_call: HTTP 413 from 127.0.0.1:55996: tool: the request was delivered and no successful answer came back, want exactly "webhook_call: HTTP 413 from 127.0.0.1:55996: tool: the receiver answered and the answer was not a usable success"
+--- FAIL: TestWebhookCall_anEarlyAnswerIsNotADeliveryClaim (1.59s)
+    webhookcall_v0151_a_test.go:742: err = webhook_call: HTTP 413 from 127.0.0.1:55998: tool: the request was delivered and no successful answer came back, want exactly "webhook_call: HTTP 413 from 127.0.0.1:55998: tool: the receiver answered and the answer was not a usable success"
+--- FAIL: TestWebhookCall_anEarlyAnswerIsNotADeliveryClaim (1.59s)
+    webhookcall_v0151_a_test.go:742: err = webhook_call: HTTP 413 from 127.0.0.1:56000: tool: the request was delivered and no successful answer came back, want exactly "webhook_call: HTTP 413 from 127.0.0.1:56000: tool: the receiver answered and the answer was not a usable success"
+--- FAIL: TestWebhookCall_anEarlyAnswerIsNotADeliveryClaim (1.71s)
+    webhookcall_v0151_a_test.go:742: err = webhook_call: HTTP 413 from 127.0.0.1:56003: tool: the request was delivered and no successful answer came back, want exactly "webhook_call: HTTP 413 from 127.0.0.1:56003: tool: the receiver answered and the answer was not a usable success"
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	8.666s
+FAIL
+# exit: 1

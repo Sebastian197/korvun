@@ -1,0 +1,6 @@
+# command: go test -race -count=20 -timeout 600s -run TestWebhookCall_anEndAfterTheHeadersLeftStaysUnknown|TestWebhookCall_aLongURLWhoseStartWasReadStaysUnknown ./internal/tool/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (red-phase moulds in the worktree, no production change; delivered_effect_test.go modified by the director's decision)
+# go: go version go1.26.6 darwin/amd64
+# captured: 2026-09-19T11:35:57Z
+ok  	github.com/Sebastian197/korvun/internal/tool	25.371s
+# exit: 0
