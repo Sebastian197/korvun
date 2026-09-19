@@ -1,0 +1,14 @@
+# m70 — widen approvalRawIntAsInt's bound from int32 to uint32 (captured 2026-09-19T19:19:42Z on the working tree over c5def94)
+## mutated line:
+174:	if n < -math.MaxUint32 || n > math.MaxUint32 {
+## mutated run:
+--- FAIL: TestV0151B_P2_6_anOutOfRangeSchemaVersionIsEvidenceCorrupt (0.00s)
+    --- FAIL: TestV0151B_P2_6_anOutOfRangeSchemaVersionIsEvidenceCorrupt/2147483648 (0.03s)
+        v0151b_intrange_test.go:37: GetApproval err = <nil>, want ErrApprovalEvidenceCorrupt
+    --- FAIL: TestV0151B_P2_6_anOutOfRangeSchemaVersionIsEvidenceCorrupt/-2147483649 (0.03s)
+        v0151b_intrange_test.go:37: GetApproval err = <nil>, want ErrApprovalEvidenceCorrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.481s
+FAIL
+## restored run:
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.789s

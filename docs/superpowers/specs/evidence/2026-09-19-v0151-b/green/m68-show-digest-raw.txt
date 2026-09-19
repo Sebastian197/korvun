@@ -1,0 +1,29 @@
+# id: m68-show-digest-raw
+# guard: P2-1 sister: show prints the stored action digest raw
+# date: 2026-09-19T18:29:37.813634+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 0a1f550c2e3a41c6b29345a9f6bf95d0df794a87
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_1_sister_showEscapes' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/approvals.go
++++ b/internal/cli/approvals.go
+@@ -142,7 +142,7 @@
+ 	}
+ 	// THE DIGEST the human approves, first and prominent. A stored field like
+ 	// every other: escaped.
+-	_, _ = fmt.Fprintf(c.stdout, "APPROVING EXACTLY THIS — digest: %s\n\n", escapeUntrusted(a.ActionDigest))
++	_, _ = fmt.Fprintf(c.stdout, "APPROVING EXACTLY THIS — digest: %s\n\n", a.ActionDigest) /* MUTATION */
+ 	// Every stored field `show` prints on stdout goes through the screen's
+ 	// escape alphabet (v0.15.1 block B, P2-1 sister). Error lines on stderr
+ 	// are NOT escaped: a store error can carry stored bytes raw (captured,
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_1_sister_showEscapesACoherentlyRewrittenDigest (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.632s
+FAIL
+# first failing assertion: v0151b_test.go:854: show printed a raw U+202E: "APPROVING EXACTLY THIS — digest: sha256:EVIL\u202edcba\n\nrequest:       apr_05eacd4202ac1daa44424d87896c3829 (PENDING)\npurpose:       semana de pruebas\nactor:         principal_brain_a (grant -, depth 0)\noperation:     tool/calc\nresources:     [console]\ndata egress:   no declared data egress\ncost:          unbudgeted\neffect class:  pure\nreversibility: pure — reversible\ntool cage:     calc\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\nrequired by:   require_approval\nexpires:       2026-09-19T19:29:34Z\n\nraw parameters:\n7*6\n"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 0a1f550c2e3a41c6b29345a9f6bf95d0df794a87 (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	0.620s
+# exit (restored): 0

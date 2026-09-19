@@ -1,0 +1,50 @@
+# id: m36-seal-principal-by-status
+# guard: P2-6 sealer: judge the principal by the STATUS instead of the verb
+# date: 2026-09-19T16:56:01.257866+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -288,16 +288,11 @@
+ 	}
+ 	// The origin rule (judgeTombstoneOrigin): a human verb requires a
+ 	// principal, the clock verb requires none.
+-	switch {
+-	case action.IsHumanDecision(verb):
+-		if principal == "" {
+-			return MarkCorruptDecisionPrincipal
+-		}
+-	case verb == action.DecisionClock:
+-		if principal != "" {
+-			return MarkCorruptDecisionPrincipal
+-		}
+-	default:
++	// MUTATION: principal judged by status
++	if (action.ApprovalStatus(status) == action.ApprovalExpired) != (principal == "") {
++		return MarkCorruptDecisionPrincipal
++	}
++	if !action.IsHumanDecision(verb) && verb != action.DecisionClock {
+ 		return MarkCorruptDecisionVerb
+ 	}
+ 	a.DecisionPrincipalID, a.Decision = principal, verb
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/clock-verb-on-approved (0.07s)
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/clock-verb-with-principal (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/human-verb-on-clock-row (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/clock-verb-with-principal (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/human-verb-on-clock-row (0.23s)
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/clock-verb-on-approved (0.06s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.232s
+FAIL
+# first failing assertion: v0151b_test.go:341: recovered receipt approval_digest = ["sha256:5eb5a9c162484980c59ba9d99c3f9b8044ab6be1bf3cd20821e71a0e1749933e"], want exactly "corrupt:decision_principal"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.053s
+# exit (restored): 0

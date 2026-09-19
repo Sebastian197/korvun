@@ -1,0 +1,31 @@
+# id: m43-ver-any-sha256-prefix
+# guard: P2-6 verifiers: accept any sha256: prefix
+# date: 2026-09-19T16:56:43.517121+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_(theVerifiersFailNamingEachMark|aValueOutsideTheListFailsClosed|aPlainOrphanVerifiesClean)' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/receipt.go
++++ b/internal/cli/receipt.go
+@@ -73,7 +73,7 @@
+ 
+ // receiptCmd dispatches the `receipt` noun's verbs.
+ // sealedDigestShape is the shape action.Approval.Digest produces.
+-var sealedDigestShape = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
++var sealedDigestShape = regexp.MustCompile(`^sha256:`) // MUTATION
+ 
+ func (c *cli) receiptCmd(args []string) int {
+ 	if len(args) == 0 {
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/pruned (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/sha256:not-a-digest/intact-row (0.18s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	1.244s
+FAIL
+# first failing assertion: v0151b_test.go:617: failures = [], want exactly [approval_evidence_unknown_mark: …]
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	1.335s
+# exit (restored): 0

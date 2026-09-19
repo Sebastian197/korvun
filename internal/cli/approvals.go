@@ -15,12 +15,14 @@
 // Executor path — and reports the REAL outcome. show renders the full
 // §15.2 preview, the RAW parameters — they live in the parked store row,
 // and this command is not their only surface: the approvals API serves
-// them too, on whatever address `observability.addr` binds (loopback by
-// default) — and THE DIGEST the human approves, prominently.
+// them too, to a loopback peer only whatever address `observability.addr`
+// binds (v0.15.1 block B, P2-7) — and THE DIGEST the human approves,
+// prominently.
 package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"strings"
@@ -39,6 +41,11 @@ func (c *cli) approvalsCmd(args []string) int {
 		return 2
 	}
 	switch args[0] {
+	case "-h", "--help":
+		// A query, not a usage error (ADR-0032 «Exit codes»): the noun's usage
+		// to stdout, exit 0 (v0.15.1 block B, P2-2).
+		_, _ = fmt.Fprint(c.stdout, "Usage: korvun approvals <list|show|approve|reject|execute> [flags]\n\nRun 'korvun approvals <verb> -h' for the flags of one verb.\n")
+		return 0
 	case "list":
 		return c.approvalsList(args[1:])
 	case "show":
@@ -60,8 +67,8 @@ func (c *cli) approvalsList(args []string) int {
 	fs := flag.NewFlagSet("approvals list", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" {
 		_, _ = fmt.Fprint(c.stderr, "korvun approvals list: --config is required\n")
@@ -94,8 +101,9 @@ func (c *cli) approvalsList(args []string) int {
 			// at the next mutating touch; this door writes no ROW —
 			// see OpenReadOnly's godoc for what the open itself
 			// writes to disk, R14).
+			// Stored bytes: printed in the screen's escape alphabet (P2-1).
 			_, _ = fmt.Fprintf(c.stdout, "%-38s %-9s %-22s %s\n",
-				a.ApprovalID, a.EffectiveStatusAt(time.Now().UTC()), a.RiskSummary, expiry)
+				escapeUntrusted(a.ApprovalID), a.EffectiveStatusAt(time.Now().UTC()), escapeUntrusted(a.RiskSummary), expiry)
 			total++
 		}
 	}
@@ -110,12 +118,15 @@ func (c *cli) approvalsShow(args []string) int {
 	fs := flag.NewFlagSet("approvals show", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" || fs.NArg() != 1 {
 		_, _ = fmt.Fprint(c.stderr, "korvun approvals show: usage: korvun approvals show --config <path> <apr_…>\n")
 		return 2
+	}
+	if code, bad := c.refuseMalformedApprovalID("show", fs.Arg(0)); bad {
+		return code
 	}
 	store, err := openOperatorStore(*configPath)
 	if err != nil {
@@ -129,26 +140,32 @@ func (c *cli) approvalsShow(args []string) int {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals show: %v\n", err)
 		return 1
 	}
-	// THE DIGEST the human approves, first and prominent.
-	_, _ = fmt.Fprintf(c.stdout, "APPROVING EXACTLY THIS — digest: %s\n\n", a.ActionDigest)
+	// THE DIGEST the human approves, first and prominent. A stored field like
+	// every other: escaped.
+	_, _ = fmt.Fprintf(c.stdout, "APPROVING EXACTLY THIS — digest: %s\n\n", escapeUntrusted(a.ActionDigest))
+	// Every stored field `show` prints on stdout goes through the screen's
+	// escape alphabet (v0.15.1 block B, P2-1 sister). Error lines on stderr
+	// are NOT escaped: a store error can carry stored bytes raw (captured,
+	// filed for v0.15.2).
+	e := escapeUntrusted
 	_, _ = fmt.Fprintf(c.stdout,
-		"request:       %s (%s)\npurpose:       %s\nactor:         %s (grant %s, depth %d)\noperation:     %s\nresources:     %v\ndata egress:   %s\ncost:          %s\neffect class:  %s\nreversibility: %s\ntool cage:     %s\npinned law:    v%d %s\nrequired by:   %s\nexpires:       %s\n",
-		a.ApprovalID, a.EffectiveStatusAt(time.Now().UTC()), p.IntentPurpose, p.PrincipalID, p.GrantID, p.GrantDepth,
-		p.Operation, p.Resources, p.DataEgress, p.CostLine, p.EffectClass,
-		p.Reversibility, p.ToolCage, p.PolicyVersion, p.PolicyDigest, p.RequiredRule,
+		"request:       %s (%s)\npurpose:       %s\nactor:         %s (grant %s, depth %d)\noperation:     %s\nresources:     %s\ndata egress:   %s\ncost:          %s\neffect class:  %s\nreversibility: %s\ntool cage:     %s\npinned law:    v%d %s\nrequired by:   %s\nexpires:       %s\n",
+		e(a.ApprovalID), e(string(a.EffectiveStatusAt(time.Now().UTC()))), e(p.IntentPurpose), e(p.PrincipalID), e(p.GrantID), p.GrantDepth,
+		e(p.Operation), e(fmt.Sprint(p.Resources)), e(fmt.Sprint(p.DataEgress)), e(p.CostLine), e(string(p.EffectClass)),
+		e(p.Reversibility), e(p.ToolCage), p.PolicyVersion, e(p.PolicyDigest), e(p.RequiredRule),
 		a.ExpiresAt.UTC().Format(time.RFC3339))
 	// The RAW parameters. They live only in the parked row; this command is not
-	// the only surface that prints them — the approvals API serves them too, on
-	// the admin server's address (observability.addr, loopback by default).
+	// the only surface that prints them — the approvals API serves them too, to
+	// a loopback peer only (P2-7), whatever observability.addr binds.
 	if params, err := store.ApprovalParams(ctx, a.ApprovalID); err == nil {
-		_, _ = fmt.Fprintf(c.stdout, "\nraw parameters:\n%s\n", string(params))
+		_, _ = fmt.Fprintf(c.stdout, "\nraw parameters:\n%s\n", escapeUntrusted(string(params)))
 	} else {
 		_, _ = fmt.Fprintln(c.stdout, "\nraw parameters: no longer held (decided or executed)")
 	}
 	if a.Decision != "" {
 		_, _ = fmt.Fprintf(c.stdout, "\ndecision: %s by %s at %s (%s)\nproof receipt: %s\n",
-			a.Decision, a.DecisionPrincipalID, a.DecisionAt.UTC().Format(time.RFC3339),
-			a.Comment, a.DecisionReceiptID)
+			escapeUntrusted(a.Decision), escapeUntrusted(a.DecisionPrincipalID), a.DecisionAt.UTC().Format(time.RFC3339),
+			escapeUntrusted(a.Comment), escapeUntrusted(a.DecisionReceiptID))
 	}
 	return 0
 }
@@ -160,14 +177,17 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
 	comment := fs.String("comment", "", "optional decision comment")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" || fs.NArg() != 1 {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: usage: korvun approvals %s --config <path> <apr_…>\n", verb, verb)
 		return 2
 	}
 	approvalID := fs.Arg(0)
+	if code, bad := c.refuseMalformedApprovalID(verb, approvalID); bad {
+		return code
+	}
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
@@ -184,7 +204,7 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 	if verb == "approve" {
 		decision = action.DecisionApproved
 	}
-	env, ident, err := operatorEnvelope("approval", verb, `{"approval_id":"`+approvalID+`"}`)
+	env, ident, err := operatorEnvelope("approval", verb, approvalIDParams(approvalID))
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
@@ -243,14 +263,17 @@ func (c *cli) approvalsExecute(args []string) int {
 	fs := flag.NewFlagSet("approvals execute", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" || fs.NArg() != 1 {
 		_, _ = fmt.Fprint(c.stderr, "korvun approvals execute: usage: korvun approvals execute --config <path> <apr_…>\n")
 		return 2
 	}
 	approvalID := fs.Arg(0)
+	if code, bad := c.refuseMalformedApprovalID("execute", approvalID); bad {
+		return code
+	}
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
@@ -306,8 +329,11 @@ func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Stor
 	// no now returns without one, because that is a decided outcome with its
 	// receipt and not a failure to learn anything.
 	if run.Unknown {
-		// The deadline, and every request the wire reports as written: the call
-		// may have been delivered and its answer lost.
+		// Every outcome ExecuteApprovedAction closes OUTCOME_UNKNOWN (the table
+		// in tool.CloseStateAfterRun): a response that is not a usable success,
+		// a connection obtained with no answer read, or a context that ended
+		// in a tool that does not observe the wire. A deadline that ended
+		// BEFORE any connection existed is not here: it closes FAILED.
 		// Printing SUCCEEDED here — which is what the previous shape did, by
 		// never reading this field — puts a definite claim on an irreversible
 		// effect nobody can account for. The headline cannot claim it either:
@@ -328,4 +354,30 @@ func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Stor
 	_, _ = fmt.Fprintf(c.stdout, "approval %s %s — executed the exact approved object (digest %s)\noutcome: SUCCEEDED\nreceipt: %s\nresult: %s\n",
 		approvalID, decided, a.ActionDigest, run.ReceiptID, run.Result)
 	return 0
+}
+
+// refuseMalformedApprovalID judges an approval id by the shape
+// action.NewApprovalID mints, BEFORE any config or store is opened (v0.15.1
+// block B, P2-1): a malformed id is a usage error, exit 2, and the refusal
+// echoes the id only through the escape alphabet.
+func (c *cli) refuseMalformedApprovalID(verb, id string) (int, bool) {
+	if action.ValidApprovalID(id) {
+		return 0, false
+	}
+	_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: invalid approval id %q is not of the form apr_ followed by 32 lowercase hex characters\n", verb, escapeUntrusted(id))
+	return 2, true
+}
+
+// approvalIDParams renders {"approval_id": id} through encoding/json instead
+// of concatenating bytes into a sealed document (defence in depth, declared
+// without a mould: approve and reject, its only callers, refuse a malformed id
+// through refuseMalformedApprovalID before it runs).
+func approvalIDParams(approvalID string) string {
+	b, err := json.Marshal(struct {
+		ApprovalID string `json:"approval_id"`
+	}{approvalID})
+	if err != nil {
+		return `{}`
+	}
+	return string(b)
 }

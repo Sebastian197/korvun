@@ -1,0 +1,34 @@
+# id: m06-p29-approve-typed-notpending
+# guard: P2-9: type the approve verb's exec failure as ErrApprovalActionNotPending
+# date: 2026-09-19T18:06:21.192564+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_9' ./internal/action/sqlite/ ./internal/app/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -317,7 +317,7 @@
+ 			// (ErrApprovalActionNotPending) or the write failed
+ 			// (ErrApprovalWriteFailed). Either way the whole transaction rolls
+ 			// back and nothing was decided.
+-			return "", fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
++			return "", fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalActionNotPending, err) // MUTATION
+ 		}
+ 	} else {
+ 		if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_9_aDriverFailureInTheTransitionIsWriteFailedOnBothVerbs (0.00s)
+    --- FAIL: TestV0151B_P2_9_aDriverFailureInTheTransitionIsWriteFailedOnBothVerbs/approved (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.601s
+--- FAIL: TestV0151B_P2_9_storeLevelTheDriverErrorIsNotTypedNotPending (0.02s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.794s
+FAIL
+# first failing assertion: v0151b_writefailed_test.go:49: err = action/sqlite: approval "apr_717620b261e82af889a6858a27a6461e": action/sqlite: the parked action was no longer pending: action/sqlite: transition "act_wf_approved" PENDING_APPROVAL->APPROVED: action/sqlite: writing the approval's action transition failed: constraint failed: forced driver failure (1811): a driver failure typed as a moved action
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.566s
+ok  	github.com/Sebastian197/korvun/internal/app	0.817s
+# exit (restored): 0

@@ -1,0 +1,49 @@
+# id: m11-p26-every-scan-corrupt
+# guard: P2-6 transient: type every Scan error as corrupt
+# date: 2026-09-19T18:07:17.277670+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6|TestClaim_|TestApprovalDetail_|TestReReadParams_' ./internal/action/sqlite/ ./internal/app/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approval_rows.go
++++ b/internal/action/sqlite/approval_rows.go
+@@ -171,7 +171,7 @@
+ 	switch {
+ 	case errors.Is(err, sql.ErrNoRows):
+ 		return fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalNotFound)
+-	case errors.Is(err, errApprovalRowInvalid):
++	case err != nil: // MUTATION
+ 		return fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalEvidenceCorrupt, err)
+ 	default:
+ 		return fmt.Errorf("action/sqlite: approval %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestReReadParams_aStoreThatCannotBeReadIsNotCorrupt (0.08s)
+--- FAIL: TestClaim_aStoreThatCannotBeReadIsNotCorruptEvidence (0.04s)
+--- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption (0.00s)
+    --- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption/get (0.11s)
+--- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt (0.00s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/ctx-cancelled-after-4 (0.06s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/rename-column (0.07s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/drop-column (0.06s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/ctx-cancelled-after-5 (0.06s)
+    --- FAIL: TestClaim_aTransientOrMissingSchemaIsNeverCorrupt/ctx-cancelled-after-6 (0.07s)
+--- FAIL: TestApprovalDetail_oneClassPerFailure (0.00s)
+    --- FAIL: TestApprovalDetail_oneClassPerFailure/driver (0.09s)
+--- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption (0.00s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-approve (0.07s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/get (0.07s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/get (0.08s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-reject (0.08s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	5.044s
+--- FAIL: TestV0151B_P2_6_aCancelledRejectIsUnavailableNotCorrupt (0.07s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	1.689s
+FAIL
+# first failing assertion: v0151b_x1_claim_test.go:159: err = action/sqlite: approval "apr_ad1f8c86f1305b36ebb30913464058a1": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such column: decision_at (1): corrupt=true unreadable=false, want corrupt=false unreadable=true
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	4.873s
+ok  	github.com/Sebastian197/korvun/internal/app	1.331s
+# exit (restored): 0

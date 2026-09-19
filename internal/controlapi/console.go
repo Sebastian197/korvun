@@ -104,7 +104,11 @@ func RegisterConsole(m Mounter, token string, store conversation.SessionStore, o
 	m.Handle("DELETE /api/conversations/{key}", auth(deleteConversationHandler(store, op)))
 	m.Handle("DELETE /api/conversations/{key}/sessions/{id}", auth(deleteSessionHandler(store)))
 	m.Handle("GET /api/search", auth(searchHandler(store)))
-	m.Handle("POST /api/conversations/{key}/message", auth(userMessageHandler(op)))
+	// The console sister of P2-7 (v0.15.1 block B, director 2026-09-19): the
+	// message it dispatches enters the core as the console channel, whose
+	// provenance is «loopback, in-process». A peer that is not loopback is
+	// refused before the bearer and before any dispatch.
+	m.Handle("POST /api/conversations/{key}/message", loopbackOnlyConsole(auth(userMessageHandler(op))))
 }
 
 // userMessageHandler is the direct-chat send (FR-CONS-3): a USER envelope —
@@ -425,4 +429,19 @@ func toTurnRows(turns []conversation.Turn) []turnRow {
 		})
 	}
 	return out
+}
+
+// loopbackOnlyConsole refuses a non-loopback peer with 403 and the registered
+// name loopback_only, in the console's error shape.
+func loopbackOnlyConsole(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !peerIsLoopback(r) {
+			writeJSONStatus(w, http.StatusForbidden, map[string]string{
+				"error":   string(OutcomeLoopbackOnly),
+				"message": "this message can only be sent from the machine that runs Korvun — the request came from another origin and was refused without touching anything",
+			})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

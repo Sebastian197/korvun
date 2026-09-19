@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 )
 
@@ -124,6 +125,18 @@ type Approval struct {
 	// DecisionReceiptID references the decision act's own signed
 	// receipt in the E4 ledger — §10.8's proof of decision.
 	DecisionReceiptID string
+}
+
+// approvalIDShape is the only shape NewApprovalID mints: "apr_" and 32
+// lowercase hex characters.
+var approvalIDShape = regexp.MustCompile(`^apr_[0-9a-f]{32}$`)
+
+// ValidApprovalID reports whether id has the shape NewApprovalID mints. Every
+// door that takes an approval id from outside — the CLI verbs, the control
+// API routes — judges it here first, before any store is read (v0.15.1
+// block B, P2-1): one expression, so the doors cannot drift.
+func ValidApprovalID(id string) bool {
+	return approvalIDShape.MatchString(id)
 }
 
 // NewApprovalID generates a fresh approval identity ("apr_" + 16

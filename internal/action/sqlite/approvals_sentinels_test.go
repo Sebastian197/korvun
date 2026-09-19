@@ -24,7 +24,8 @@ import (
 	"github.com/Sebastian197/korvun/internal/action"
 )
 
-// approvalSentinels is the set the walks below cover, and
+// approvalSentinels is the set TestApprovalSentinels_noneIsReachableFromAnother
+// and the other sentinel walks of this file cover, and
 // TestApprovalSentinels_theSetIsClosed keeps it from going stale: it counts the
 // ErrApproval* declarations in the package source and fails when one is missing
 // here. Without that count the list would rot silently behind the next
@@ -41,6 +42,10 @@ var approvalSentinels = map[string]error{
 	"ErrApprovalActionNotPending":     ErrApprovalActionNotPending,
 	"ErrApprovalNoLongerApproved":     ErrApprovalNoLongerApproved,
 	"ErrApprovalMovedUnderTheClaim":   ErrApprovalMovedUnderTheClaim,
+	// CHANGED 2026-09-19 (v0.15.1 block B, P2-9, director's authorisation):
+	// 11 → 12. Declared in approvals.go, so the closed-set scan reads BOTH
+	// files.
+	"ErrApprovalWriteFailed": ErrApprovalWriteFailed,
 }
 
 // TestApprovalSentinels_noneIsReachableFromAnother is the direction, both ways,
@@ -148,24 +153,32 @@ func TestApprovalDoors_everyMissingRowNamesItself(t *testing.T) {
 // package declares and refuses to pass while approvalSentinels does not name
 // them all.
 //
-// It exists because its absence was a published falsehood: the comment above
-// invoked it by name for a whole commit while the test did not exist, so the
+// It exists because its absence was a published falsehood: the approvalSentinels
+// godoc invoked it by name for a whole commit while the test did not exist, so the
 // list it promised to keep honest was covered by nothing.
 //
 // Probing mutation: remove any entry from approvalSentinels ⇒ this reddens.
 func TestApprovalSentinels_theSetIsClosed(t *testing.T) {
 	t.Parallel()
-	src, err := os.ReadFile("approvals_v15.go")
-	if err != nil {
-		t.Fatalf("read the sentinel declarations: %v", err)
+	// CHANGED 2026-09-19 (v0.15.1 block B, P2-3 of pass #5, declared): the scan
+	// read ONLY approvals_v15.go, so a sentinel declared in approvals.go escaped
+	// the closed-set and distinctness walks (class g). It reads both files and
+	// matches a top-level `var ErrApproval… =` as well as a block entry.
+	var src []byte
+	for _, f := range []string{"approvals_v15.go", "approvals.go"} {
+		b, err := os.ReadFile(f) // #nosec G304 -- the two package files named in the loop, not input
+		if err != nil {
+			t.Fatalf("read the sentinel declarations in %s: %v", f, err)
+		}
+		src = append(append(src, b...), '\n')
 	}
-	declared := regexp.MustCompile(`(?m)^\t(ErrApproval\w+)\s+=`).FindAllStringSubmatch(string(src), -1)
+	declared := regexp.MustCompile(`(?m)^(?:\t|var\s+)(ErrApproval\w+)\s+=`).FindAllStringSubmatch(string(src), -1)
 	if len(declared) == 0 {
 		t.Fatal("found no ErrApproval* declarations — the scan is broken, not the set")
 	}
 	for _, m := range declared {
 		if _, listed := approvalSentinels[m[1]]; !listed {
-			t.Errorf("%s is declared and NOT in approvalSentinels — the walks below skip it in silence", m[1])
+			t.Errorf("%s is declared and NOT in approvalSentinels — the sentinel walks skip it in silence", m[1])
 		}
 	}
 	if len(declared) != len(approvalSentinels) {

@@ -1,0 +1,33 @@
+# id: m64-sweep-first-read-untyped
+# guard: P2-a: the sweep's first read wraps without a sentinel
+# date: 2026-09-19T18:05:51.931102+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_(aCancelledContextIsNeverCorruption|aDriverFailureIsNeverCorruption)' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -704,7 +704,7 @@
+ 		// The first read is a SELECT over the store: its only failures are
+ 		// the store not answering (a cancelled context, a closed store, a
+ 		// table that cannot be read), never a row that was read (P2-6).
+-		return 0, 0, fmt.Errorf("action/sqlite: expiry sweep: %w: %w", ErrApprovalUnreadable, err)
++		return 0, 0, fmt.Errorf("action/sqlite: expiry sweep: %w", err) // MUTATION
+ 	}
+ 	for _, id := range ids {
+ 		// R4-F3: real errors (a dead context included) abort; a row an
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption (0.00s)
+    --- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption/sweep (0.03s)
+--- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption (0.00s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/sweep (0.04s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/sweep (0.18s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.847s
+FAIL
+# first failing assertion: v0151b_test.go:202: err = action/sqlite: expiry sweep: context canceled, want ErrApprovalUnreadable — transient, by name
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.664s
+# exit (restored): 0

@@ -39,6 +39,13 @@
 //	tombstone_read_failed      — that evidence cannot be read, said by
 //	                             name and never disguised as old history
 //
+// and, when the receipt seals a mark instead of a digest (the sealer could
+// not use the approval row), exactly one of, and nothing else for that arm:
+//
+//	approval_evidence_corrupt      — a corrupt: mark of the closed list
+//	approval_evidence_unreadable   — an unreadable: mark of the closed list
+//	approval_evidence_unknown_mark — neither a sha256 digest nor a listed mark
+//
 // Verification is READ-ONLY in the sense `OpenReadOnly` defines and no
 // wider: no sealer, no key generation, no schema migration, and a
 // sealed connection that refuses every WRITE at the SQLite level. It
@@ -55,6 +62,7 @@ import (
 	"flag"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/Sebastian197/korvun/internal/action"
@@ -64,12 +72,20 @@ import (
 )
 
 // receiptCmd dispatches the `receipt` noun's verbs.
+// sealedDigestShape is the shape action.Approval.Digest produces.
+var sealedDigestShape = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
 func (c *cli) receiptCmd(args []string) int {
 	if len(args) == 0 {
 		_, _ = fmt.Fprint(c.stderr, "korvun receipt: expected a subcommand: verify | rotate-key\nRun 'korvun help' for usage.\n")
 		return 2
 	}
 	switch args[0] {
+	case "-h", "--help":
+		// A query, not a usage error (ADR-0032 «Exit codes»): the noun's usage
+		// to stdout, exit 0 (v0.15.1 block B, P2-2).
+		_, _ = fmt.Fprint(c.stdout, "Usage: korvun receipt <verify|rotate-key> [flags]\n\nRun 'korvun receipt <verb> -h' for the flags of one verb.\n")
+		return 0
 	case "verify":
 		return c.receiptVerify(args[1:])
 	case "rotate-key":
@@ -86,8 +102,8 @@ func (c *cli) receiptVerify(args []string) int {
 	fs := flag.NewFlagSet("receipt verify", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" || fs.NArg() != 1 {
 		_, _ = fmt.Fprint(c.stderr, "korvun receipt verify: usage: korvun receipt verify --config <path> <receipt-id | action-id>\n")
@@ -204,7 +220,26 @@ func verifyReceiptChecks(ctx context.Context, store *actionsqlite.Store, r actio
 	// action (ADR-0046) — so an absent approval row forks below: both
 	// rows gone is retention (the tombstone carries the story); the
 	// action alone remaining makes the absence a failure.
-	if r.SchemaVersion >= 2 && r.ApprovalDigest != "" {
+	approvalArm := r.SchemaVersion >= 2 && r.ApprovalDigest != ""
+	if approvalArm && !sealedDigestShape.MatchString(r.ApprovalDigest) {
+		// v0.15.1 block B, P2-6: a sealer that could not use the approval
+		// row seals ONE mark from a closed list instead of a digest. The
+		// mark is the whole story of this arm — nothing re-derives from it
+		// and no tombstone carries it — so it fails by its class and the
+		// rest of the arm is skipped: one receipt, one approval failure.
+		// Anything that is neither a well-formed digest nor a listed mark
+		// (a sha256: prefix of the wrong shape included) fails closed.
+		approvalArm = false
+		switch class, ok := actionsqlite.ApprovalMarkClass(r.ApprovalDigest); {
+		case ok && class == "corrupt":
+			fail("approval_evidence_corrupt", "the receipt seals %s: the approval row could not be used when it was sealed", r.ApprovalDigest)
+		case ok:
+			fail("approval_evidence_unreadable", "the receipt seals %s: the approval row could not be read when it was sealed", r.ApprovalDigest)
+		default:
+			fail("approval_evidence_unknown_mark", "the receipt seals %q, which is neither a sha256 digest nor a listed mark", r.ApprovalDigest)
+		}
+	}
+	if approvalArm {
 		// R15-P1A (Codex's fourteenth pass): the tombstone is judged
 		// WHENEVER a row carries the sealed digest — never only after
 		// retention took the approval AND the action row. The arms
@@ -378,8 +413,8 @@ func (c *cli) receiptRotateKey(args []string) int {
 	fs := flag.NewFlagSet("receipt rotate-key", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
 	configPath := fs.String("config", "", "path to the korvun config (required)")
-	if err := fs.Parse(args); err != nil {
-		return 2
+	if _, _, code, done := c.parseStyled(fs, args); done {
+		return code
 	}
 	if *configPath == "" {
 		_, _ = fmt.Fprint(c.stderr, "korvun receipt rotate-key: --config is required\n")

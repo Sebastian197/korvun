@@ -1,0 +1,39 @@
+# id: m28-seal-clock-needs-principal
+# guard: P2-6 sealer: mark every clock row without a principal
+# date: 2026-09-19T16:54:47.376829+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -294,7 +294,7 @@
+ 			return MarkCorruptDecisionPrincipal
+ 		}
+ 	case verb == action.DecisionClock:
+-		if principal != "" {
++		if principal == "" { // MUTATION
+ 			return MarkCorruptDecisionPrincipal
+ 		}
+ 	default:
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/clock-verb-on-approved (0.07s)
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/clock-verb-on-approved (0.11s)
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/control (0.13s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/control (0.05s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/clock-verb-with-principal (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/clock-with-principal (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/clock-verb-with-principal (0.17s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/clock-with-principal (0.11s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.319s
+FAIL
+# first failing assertion: v0151b_test.go:313: receipt approval_digest = ["sha256:bc7b9066dfc20c5396ff21da7d2b5e04d9c2b9766920d5a0b040ec25cac1ae6d"], want exactly "corrupt:decision_principal"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.028s
+# exit (restored): 0

@@ -1,0 +1,42 @@
+# id: m52-p21-cli-drop-show-check
+# guard: P2-1: drop the shape check from one CLI door (show)
+# date: 2026-09-19T18:08:53.932519+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_1_(aMalformedApprovalIDIsRefusedByShapeBeforeTheStore|theShapeIsJudgedBeforeAnyStoreOpen)' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/approvals.go
++++ b/internal/cli/approvals.go
+@@ -125,9 +125,7 @@
+ 		_, _ = fmt.Fprint(c.stderr, "korvun approvals show: usage: korvun approvals show --config <path> <apr_…>\n")
+ 		return 2
+ 	}
+-	if code, bad := c.refuseMalformedApprovalID("show", fs.Arg(0)); bad {
+-		return code
+-	}
++	// MUTATION: shape check dropped from show
+ 	store, err := openOperatorStore(*configPath)
+ 	if err != nil {
+ 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals show: %v\n", err)
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen (0.01s)
+    --- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/show (0.00s)
+--- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore (0.05s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/upper-case_stem (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/upper-case_hex (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/short (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/path_traversal (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/quote_injected (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/word_joiner (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/bidi_override (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/action_namespace (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedApprovalIDIsRefusedByShapeBeforeTheStore/show/C1_control (0.00s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.702s
+FAIL
+# first failing assertion: v0151b_test.go:286: malformed id: exit 1 stderr "korvun approvals show: action/sqlite: seal read-only connection \"/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen3489090397/002\": unable to open database file (14)\n", want 2 naming the approval id
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	0.688s
+# exit (restored): 0

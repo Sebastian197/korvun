@@ -1,0 +1,6 @@
+# command: go test -race -count=5 -run TestRecoveryVsFinish_acrossRealConnections ./internal/action/sqlite/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# set aside for this run: internal/action/sqlite/v0151b_writefailed_test.go moved out; internal/action/sqlite/approvals_sentinels_test.go restored to HEAD (both reference the undeclared ErrApprovalWriteFailed)
+# date: 2026-09-19T14:39:39Z
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	3.853s
+# exit: 0

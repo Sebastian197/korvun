@@ -1,0 +1,39 @@
+# id: m54-p21-api-drop-detail-check
+# guard: P2-1: drop the shape check from one route (detail)
+# date: 2026-09-19T16:58:07.177630+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_1' ./internal/controlapi/
+# --- mutation diff ---
+--- a/internal/controlapi/approvals.go
++++ b/internal/controlapi/approvals.go
+@@ -389,9 +389,7 @@
+ 
+ func approvalDetailHandler(a Approvals) http.Handler {
+ 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+-		if !validApprovalIDOrNotFound(w, r.PathValue("id")) {
+-			return
+-		}
++		// MUTATION: shape check dropped
+ 		detail, err := a.Detail(r.Context(), r.PathValue("id"))
+ 		if err != nil {
+ 			writeApprovalError(w, err)
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam (0.01s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/quote_injected (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/word_joiner (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/bidi_override (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/C1_control (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/upper-case_stem (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/upper-case_hex (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/short (0.00s)
+    --- FAIL: TestV0151B_P2_1_aMalformedIDNeverReachesTheSeam/GET/action_id (0.00s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/controlapi	0.492s
+FAIL
+# first failing assertion: v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/controlapi	0.468s
+# exit (restored): 0

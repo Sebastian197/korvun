@@ -1,0 +1,39 @@
+# id: m25-seal-accept-empty-principal
+# guard: P2-6 sealer: accept an empty principal on a human verb
+# date: 2026-09-19T16:54:26.667721+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -290,9 +290,7 @@
+ 	// principal, the clock verb requires none.
+ 	switch {
+ 	case action.IsHumanDecision(verb):
+-		if principal == "" {
+-			return MarkCorruptDecisionPrincipal
+-		}
++		// MUTATION: empty principal accepted
+ 	case verb == action.DecisionClock:
+ 		if principal != "" {
+ 			return MarkCorruptDecisionPrincipal
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-principal-empty (0.08s)
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-principal-empty (0.09s)
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/human-verb-on-clock-row (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/human-without-principal (0.06s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/human-verb-on-clock-row (0.09s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/human-without-principal (0.07s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.959s
+FAIL
+# first failing assertion: v0151b_test.go:313: receipt approval_digest = ["sha256:d9628157c2bb86b2c3287159b18df391b9c64fdaa3c8ffe48e614febe7b93558"], want exactly "corrupt:decision_principal"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.107s
+# exit (restored): 0

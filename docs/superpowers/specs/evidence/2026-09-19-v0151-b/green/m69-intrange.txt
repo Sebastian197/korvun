@@ -1,0 +1,18 @@
+# m69 — drop approvalRawIntAsInt's range check (re-captured 2026-09-19T19:19:57Z over the four-row mould, working tree over c5def94)
+## mutated line:
+174:	if false && (n < math.MinInt32 || n > math.MaxInt32) {
+## mutated run:
+--- FAIL: TestV0151B_P2_6_anOutOfRangeSchemaVersionIsEvidenceCorrupt (0.00s)
+    --- FAIL: TestV0151B_P2_6_anOutOfRangeSchemaVersionIsEvidenceCorrupt/-4294967296 (0.04s)
+        v0151b_intrange_test.go:37: GetApproval err = <nil>, want ErrApprovalEvidenceCorrupt
+    --- FAIL: TestV0151B_P2_6_anOutOfRangeSchemaVersionIsEvidenceCorrupt/2147483648 (0.04s)
+        v0151b_intrange_test.go:37: GetApproval err = <nil>, want ErrApprovalEvidenceCorrupt
+    --- FAIL: TestV0151B_P2_6_anOutOfRangeSchemaVersionIsEvidenceCorrupt/-2147483649 (0.04s)
+        v0151b_intrange_test.go:37: GetApproval err = <nil>, want ErrApprovalEvidenceCorrupt
+    --- FAIL: TestV0151B_P2_6_anOutOfRangeSchemaVersionIsEvidenceCorrupt/4294967296 (0.04s)
+        v0151b_intrange_test.go:37: GetApproval err = <nil>, want ErrApprovalEvidenceCorrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.533s
+FAIL
+## restored run:
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.786s

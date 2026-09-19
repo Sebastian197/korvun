@@ -1,0 +1,33 @@
+# id: m35-seal-m6-expired-skips-verb
+# guard: P2-6 sealer (M6-verb): skip verb validation when status is EXPIRED
+# date: 2026-09-19T16:55:54.004619+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -298,7 +298,9 @@
+ 			return MarkCorruptDecisionPrincipal
+ 		}
+ 	default:
+-		return MarkCorruptDecisionVerb
++		if action.ApprovalStatus(status) != action.ApprovalExpired { // MUTATION
++			return MarkCorruptDecisionVerb
++		}
+ 	}
+ 	a.DecisionPrincipalID, a.Decision = principal, verb
+ 	return a.Digest()
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision-verb-unknown (0.07s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision-verb-unknown (0.05s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.067s
+FAIL
+# first failing assertion: v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:aa32d5f6a7cb2d55f26da199b8f75675b4e452696eea3ff4bee9f2ab4412b5c2", want exactly "corrupt:decision_verb"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	1.841s
+# exit (restored): 0

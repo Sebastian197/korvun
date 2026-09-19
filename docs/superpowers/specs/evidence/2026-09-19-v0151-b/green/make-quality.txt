@@ -1,0 +1,229 @@
+# base e030202 + uncommitted green tree; code tree 50b53bec6d1d1a1ad85d7c55b53e1720245e2c07 (codetree: HEAD tree + working tree via a throwaway index; node_modules, dist, test output, the evidence folder and the canto excluded); go version go1.26.6 darwin/amd64; 2026-09-19T18:33:22Z
+# command: make quality; exit 0
+GO_PKGS guard: 41 packages, node_modules-free.
+ok  	github.com/Sebastian197/korvun/internal/action	(cached)
+ok  	github.com/Sebastian197/korvun/internal/action/executor	1.529s
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	(cached)
+ok  	github.com/Sebastian197/korvun/internal/app	39.446s
+ok  	github.com/Sebastian197/korvun/internal/brain	(cached)
+ok  	github.com/Sebastian197/korvun/internal/buildinfo	(cached)
+ok  	github.com/Sebastian197/korvun/internal/bus	(cached)
+ok  	github.com/Sebastian197/korvun/internal/channel	(cached)
+ok  	github.com/Sebastian197/korvun/internal/channel/console	(cached)
+ok  	github.com/Sebastian197/korvun/internal/channel/discord	(cached)
+ok  	github.com/Sebastian197/korvun/internal/channel/telegram	(cached)
+ok  	github.com/Sebastian197/korvun/internal/channel/webhook	(cached)
+ok  	github.com/Sebastian197/korvun/internal/cli	14.510s
+ok  	github.com/Sebastian197/korvun/internal/config	(cached)
+ok  	github.com/Sebastian197/korvun/internal/controlapi	3.155s
+ok  	github.com/Sebastian197/korvun/internal/conversation	(cached)
+ok  	github.com/Sebastian197/korvun/internal/conversation/sqlite	(cached)
+ok  	github.com/Sebastian197/korvun/internal/envelope	(cached)
+ok  	github.com/Sebastian197/korvun/internal/httpserver	(cached)
+ok  	github.com/Sebastian197/korvun/internal/liveview	(cached)
+ok  	github.com/Sebastian197/korvun/internal/metrics	(cached)
+ok  	github.com/Sebastian197/korvun/internal/metrics/prom	(cached)
+ok  	github.com/Sebastian197/korvun/internal/model	(cached)
+ok  	github.com/Sebastian197/korvun/internal/model/fanout	(cached)
+ok  	github.com/Sebastian197/korvun/internal/model/groq	(cached)
+ok  	github.com/Sebastian197/korvun/internal/model/ollama	(cached)
+ok  	github.com/Sebastian197/korvun/internal/model/openaicompat	(cached)
+ok  	github.com/Sebastian197/korvun/internal/model/retry	(cached)
+ok  	github.com/Sebastian197/korvun/internal/model/sequential	(cached)
+ok  	github.com/Sebastian197/korvun/internal/policy	(cached)
+ok  	github.com/Sebastian197/korvun/internal/router	(cached)
+ok  	github.com/Sebastian197/korvun/internal/shell	(cached)
+ok  	github.com/Sebastian197/korvun/internal/shell/keyring	(cached)
+ok  	github.com/Sebastian197/korvun/internal/shell/logsink	(cached)
+ok  	github.com/Sebastian197/korvun/internal/skill	(cached)
+ok  	github.com/Sebastian197/korvun/internal/supervisor	(cached)
+ok  	github.com/Sebastian197/korvun/internal/tool	(cached)
+ok  	github.com/Sebastian197/korvun/web/builder	(cached)
+ok  	github.com/Sebastian197/korvun/internal/action	(cached)	coverage: 86.5% of statements
+ok  	github.com/Sebastian197/korvun/internal/action/executor	1.537s	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	(cached)	coverage: 88.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/app	32.389s	coverage: 85.8% of statements
+ok  	github.com/Sebastian197/korvun/internal/brain	(cached)	coverage: 95.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/buildinfo	(cached)	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/bus	(cached)	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/channel	(cached)	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/channel/console	(cached)	coverage: 60.6% of statements
+ok  	github.com/Sebastian197/korvun/internal/channel/discord	(cached)	coverage: 89.6% of statements
+ok  	github.com/Sebastian197/korvun/internal/channel/telegram	(cached)	coverage: 90.7% of statements
+ok  	github.com/Sebastian197/korvun/internal/channel/webhook	(cached)	coverage: 91.6% of statements
+ok  	github.com/Sebastian197/korvun/internal/cli	14.654s	coverage: 87.1% of statements
+ok  	github.com/Sebastian197/korvun/internal/config	(cached)	coverage: 98.1% of statements
+ok  	github.com/Sebastian197/korvun/internal/controlapi	3.569s	coverage: 91.9% of statements
+ok  	github.com/Sebastian197/korvun/internal/conversation	(cached)	coverage: 96.7% of statements
+ok  	github.com/Sebastian197/korvun/internal/conversation/sqlite	(cached)	coverage: 90.2% of statements
+ok  	github.com/Sebastian197/korvun/internal/envelope	(cached)	coverage: 97.2% of statements
+ok  	github.com/Sebastian197/korvun/internal/httpserver	(cached)	coverage: 95.5% of statements
+ok  	github.com/Sebastian197/korvun/internal/liveview	(cached)	coverage: 92.1% of statements
+ok  	github.com/Sebastian197/korvun/internal/metrics	(cached)	coverage: [no statements]
+ok  	github.com/Sebastian197/korvun/internal/metrics/prom	(cached)	coverage: 89.7% of statements
+ok  	github.com/Sebastian197/korvun/internal/model	(cached)	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/model/fanout	(cached)	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/model/groq	(cached)	coverage: 94.1% of statements
+ok  	github.com/Sebastian197/korvun/internal/model/ollama	(cached)	coverage: 86.4% of statements
+ok  	github.com/Sebastian197/korvun/internal/model/openaicompat	(cached)	coverage: 94.7% of statements
+ok  	github.com/Sebastian197/korvun/internal/model/retry	(cached)	coverage: 97.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/model/sequential	(cached)	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/policy	(cached)	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/router	(cached)	coverage: 92.4% of statements
+ok  	github.com/Sebastian197/korvun/internal/shell	(cached)	coverage: 87.9% of statements
+ok  	github.com/Sebastian197/korvun/internal/shell/keyring	(cached)	coverage: 100.0% of statements
+ok  	github.com/Sebastian197/korvun/internal/shell/logsink	(cached)	coverage: 87.5% of statements
+ok  	github.com/Sebastian197/korvun/internal/skill	(cached)	coverage: 95.2% of statements
+ok  	github.com/Sebastian197/korvun/internal/supervisor	(cached)	coverage: 93.1% of statements
+ok  	github.com/Sebastian197/korvun/internal/tool	(cached)	coverage: 92.3% of statements
+fuzz: elapsed: 0s, gathering baseline coverage: 0/386 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 386/386 completed, now fuzzing with 4 workers
+ok  	github.com/Sebastian197/korvun/internal/action	1.231s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/358 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 358/358 completed, now fuzzing with 4 workers
+ok  	github.com/Sebastian197/korvun/internal/action	1.159s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/57 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 57/57 completed, now fuzzing with 4 workers
+ok  	github.com/Sebastian197/korvun/internal/action	0.754s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/9 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 9/9 completed, now fuzzing with 4 workers
+ok  	github.com/Sebastian197/korvun/internal/action	0.642s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/389 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 389/389 completed, now fuzzing with 4 workers
+ok  	github.com/Sebastian197/korvun/internal/action	1.252s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/62 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 62/62 completed, now fuzzing with 4 workers
+ok  	github.com/Sebastian197/korvun/internal/action	0.729s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/300 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 300/300 completed, now fuzzing with 4 workers
+ok  	github.com/Sebastian197/korvun/internal/action	1.248s
+fuzz: elapsed: 0s, gathering baseline coverage: 0/283 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 283/283 completed, now fuzzing with 4 workers
+ok  	github.com/Sebastian197/korvun/internal/action	1.290s
+--- fixtures
+--- check-direct: the argument walls, the tool loop, the ROOT wall
+ok    check-direct NOROOT-none (exit 2)
+ok    check-direct NOROOT-empty (exit 2)
+ok    check-direct NOROOT-from-top (exit 2)
+ok    check-direct NOARG (exit 2)
+ok    check-direct NOARG-empty (exit 2)
+ok    check-direct BADARG (exit 2)
+ok    check-direct BADARG-40 (exit 2)
+ok    check-direct NODIR (exit 2)
+ok    check-direct NOTAREPO (exit 2)
+ok    check-direct UNSEARCHABLE (exit 2, Permission denied observed)
+ok    check-direct GITTRACE (exit 0 under GIT_TRACE=1)
+ok    check-direct GRAFTENV (exit 2, the caller's GIT_GRAFT_FILE dropped)
+ok    check-direct ENVDIR (exit 0, the caller's GIT_DIR dropped)
+ok    check-direct WORKTREE (exit 0, the worktree's .git file rediscovered under a foreign GIT_DIR)
+ok    door 2 WORKTREE-oldsha blocked (git exit 1)
+ok    door 2 WORKTREE allowed
+ok    check-direct WRONGROOT (exit 2)
+ok    check-direct SYMLINKROOT (exit 0)
+ok    check-direct TRAILSLASH (exit 0)
+ok    check-direct NOTOOL-git (exit 2)
+--- check-direct: fake gits (the subcommand located after the global options)
+ok    check-direct GITFAIL-REVLIST (exit 2)
+ok    check-direct GITFAIL-LSTREE (exit 2)
+ok    check-direct GITFAIL-CATFILE (exit 2)
+ok    check-direct GARBAGE-SIZE (exit 2)
+ok    check-direct EMPTY-SIZE (exit 2)
+ok    check-direct GITFAIL-CATFILE-P (exit 2)
+ok    check-direct EMPTY-CONTENT (exit 2)
+ok    check-direct GITFAIL-DIFFTREE (exit 2)
+--- check-direct and door 2: the commit shapes
+ok    door 2 PARENTOK allowed
+ok    check-direct PARENTOK (exit 0)
+ok    door 2 TAG allowed
+ok    check-direct TAG-peeled (exit 0)
+ok    door 2 SMUGGLE blocked (git exit 1)
+ok    door 2 DIRTY blocked (git exit 1)
+ok    door 2 NOBLOB blocked (git exit 1)
+ok    door 2 OLDSHA blocked (git exit 1)
+ok    door 1 OLDSHA (exit 2)  [git push origin probe]
+ok    door 2 GRANDPARENT blocked (git exit 1)
+ok    door 2 MERGE blocked (git exit 1)
+ok    door 2 ROOT blocked (git exit 1)
+ok    door 2 NOSHA blocked (git exit 1)
+ok    door 2 SHORTSHA blocked (git exit 1)
+ok    door 2 PREFIX40 blocked (git exit 1)
+ok    door 2 TRAILWS blocked (git exit 1)
+ok    door 2 LEADWS blocked (git exit 1)
+ok    door 2 BOM blocked (git exit 1)
+ok    door 2 UPPERHEX blocked (git exit 1)
+ok    door 2 EMPTYFIRSTLINE blocked (git exit 1)
+ok    door 2 NEWLINESONLY blocked (git exit 1)
+ok    door 2 REVOKED-WITH-SHA blocked (git exit 1)
+ok    door 2 EMPTYBLOB blocked (git exit 1)
+ok    door 2 BIGBLOB blocked (git exit 1)
+ok    door 2 NONEWLINE allowed
+ok    door 2 CRLF blocked (git exit 1)
+ok    door 2 NOTBLOB-SYMLINK blocked (git exit 1)
+ok    door 2 NOTBLOB-DIR blocked (git exit 1)
+ok    door 2 NOTBLOB-GITLINK blocked (git exit 1)
+ok    door 2 NONHEAD-REF blocked (git exit 1)
+ok    door 1 NONHEAD-REF-head-is-marker (exit 0)  [git push origin probe]
+ok    door 2 MULTIREF blocked, the failing ref named (the authorized ref judged first)
+ok    door 2 DELETE blocked (git exit 1)
+ok    door 2 UPTODATE blocked (the hook ran with empty stdin)
+ok    door 2 NOCHECK blocked (git exit 1)
+ok    door 1 NOCHECK (exit 2)  [git push origin probe]
+ok    REPLACE positive control: the replace ref is active (K's tree reads as M′'s without the wall)
+ok    check-direct REPLACE (exit 2)
+ok    door 2 REPLACE blocked (git exit 1)
+ok    check-direct DUPENTRY (exit 2)
+ok    check-direct UNKNOWNMODE-as-160000 (exit 2)
+ok    check-direct MODE664-canonicalized (exit 0)
+ok    door 2 NOTOPLEVEL blocked (a push from a bare repository)
+--- door 1: the shapes, the hatches, the tooling (the R12 table, the reason now the marker's)
+ok    door 1 shape (exit 2)  [git push origin master]
+ok    door 1 shape (exit 2)  [if ! git push origin ensayo; then echo no; fi]
+ok    door 1 shape (exit 2)  [if true; then git push origin ensayo; fi]
+ok    door 1 shape (exit 2)  [for b in ensayo; do git push origin $b; done]
+ok    door 1 shape (exit 2)  [time git push origin ensayo]
+ok    door 1 shape (exit 2)  [nohup git push origin ensayo &]
+ok    door 1 shape (exit 2)  [\git push origin ensayo]
+ok    door 1 shape (exit 2)  [git -C . push]
+ok    door 1 shape (exit 2)  [echo x > f; git push]
+ok    door 1 shape (exit 2)  [git push]
+ok    door 1 shape (exit 2)  [	git push origin master]
+ok    door 1 shape (exit 2)  [git -c a=b --no-pager push]
+ok    door 1 shape (exit 2)  [Git push origin master]
+ok    door 1 shape (exit 2)  [git pu''sh origin master]
+ok    door 1 shape (exit 2)  [git pus\h origin master]
+ok    door 1 shape (exit 2)  [git pu$'s'h origin master]
+ok    door 1 shape (exit 2)  [git pu$"s"h origin master]
+ok    door 1 shape (exit 2)  [git send-pack origin master]
+ok    door 1 shape (exit 2)  [C:\tools\git\bin\git.exe push origin master]
+ok    door 1 hatch (exit 2)  [git push --no-verify origin master]
+ok    door 1 hatch (exit 2)  [git -c core.hooksPath=/dev/null push origin master]
+ok    door 1 pass (exit 0)  [git push origin master]
+ok    door 1 pass (exit 0)  [if ! git push origin ensayo; then echo no; fi]
+ok    door 1 hatch (exit 2)  [git push --no-verif origin master]
+ok    door 1 hatch (exit 2)  [git push --no-ver origin master]
+ok    door 1 hatch (exit 2)  [git -c core.hookspath=/dev/null pus\h origin master]
+ok    door 1 hatch (exit 2)  [git -c CORE.HOOKSPATH=/dev/null commit -m x]
+ok    door 1 hatch (exit 2)  [git commit --no-verify -m x]
+ok    door 1 hatch (exit 2)  [Git push --no-verify origin ensayo]
+ok    door 1 hatch (exit 2)  [git pu''sh --no-"verify" origin ensayo]
+ok    door 1 hatch (exit 2)  [git push --no-$'v'erify origin master]
+ok    door 1 hatch (exit 2)  [git push --no-$"v"erify origin master]
+ok    door 1 negative (exit 0)  [git commit -m "wip"]
+ok    door 1 negative (exit 0)  [git log --oneline -3]
+ok    door 1 negative (exit 0)  [echo hello]
+ok    door 1 negative (exit 0)  [go test ./...]
+ok    door 1 NOPROJECTDIR unset blocked (exit 2)
+ok    door 1 NOPROJECTDIR empty blocked (exit 2)
+ok    door 1 NOPROJECTDIR unset, no push shape, allowed
+--- door 1 tooling (kept from R12)
+ok    hook without jq fails closed
+ok    hook without cat fails closed by its reason
+ok    hook without grep fails closed by its reason
+ok    hook without tr fails closed by its reason
+ok    a push at the head of a 300 KB command is still gated
+ok    hook with a broken grep fails closed by its reason
+ok    hook on empty input fails closed by its reason
+ok    hook on unparseable input fails closed
+----------------------------------------------------------------------
+----------------------------------------------------------------------
+Quality gate passed.

@@ -1,0 +1,32 @@
+# id: m23-seal-leak-driver-error
+# guard: P2-6 sealer: leak err.Error() into the driver branch
+# date: 2026-09-19T16:54:13.153449+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_the(Finish|Recovery|RejectPath)SealsTheExactMark|TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark|TestApprovalDigestTx' ./internal/action/sqlite/
+# --- mutation diff ---
+--- a/internal/action/sqlite/ledger.go
++++ b/internal/action/sqlite/ledger.go
+@@ -244,7 +244,7 @@
+ 			}
+ 			return ""
+ 		}
+-		return MarkUnreadableDriver
++		return MarkUnreadableDriver + ":" + err.Error() // MUTATION
+ 	}
+ 	var a action.Approval
+ 	var err error
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/unreadable (0.03s)
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/unreadable (0.20s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	2.155s
+FAIL
+# first failing assertion: v0151b_test.go:313: receipt approval_digest = ["unreadable:driver:SQL logic error: no such column: decision_at (1)"], want exactly "unreadable:driver"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	2.006s
+# exit (restored): 0

@@ -32,7 +32,7 @@ const NOW = new Date('2026-09-08T14:00:00Z')
 const EXPIRES = '2026-09-08T14:31:00Z'
 
 const ROW = {
-  id: 'apr_1',
+  id: 'apr_11111111111111111111111111111111',
   action_id: 'act_1',
   operation: 'tool/webhook_call',
   effect_class: 'write_irreversible',
@@ -89,10 +89,10 @@ function happy(overrides: Partial<Record<string, Route>> = {}): Route {
     const key = `${c.method} ${c.url.replace(/^https?:\/\/[^/]+/, '')}`
     for (const [k, r] of Object.entries(overrides)) if (k === key && r) return r(c)
     if (key === 'GET /api/approvals') return json(200, LIST)
-    if (key === 'GET /api/approvals/apr_1') return json(200, DETAIL)
-    if (key === 'POST /api/approvals/apr_1/approve')
+    if (key === 'GET /api/approvals/apr_11111111111111111111111111111111') return json(200, DETAIL)
+    if (key === 'POST /api/approvals/apr_11111111111111111111111111111111/approve')
       return json(200, { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: 'rcp_t1' })
-    if (key === 'POST /api/approvals/apr_1/reject')
+    if (key === 'POST /api/approvals/apr_11111111111111111111111111111111/reject')
       return json(200, { outcome: 'rejected', receipt_id: 'rcp_d1' })
     return raw(404, '<html>not here</html>')
   }
@@ -127,7 +127,9 @@ async function openDetail(route: Route = happy()): Promise<void> {
   await renderList(route)
   const row = await screen.findByRole('button', { name: /tool\/webhook_call/ })
   fireEvent.click(row)
-  await waitFor(() => expect(gets('/api/approvals/apr_1').length).toBe(1))
+  await waitFor(() =>
+    expect(gets('/api/approvals/apr_11111111111111111111111111111111').length).toBe(1),
+  )
 }
 function armingInput(): HTMLInputElement {
   return screen.getByLabelText(
@@ -348,7 +350,15 @@ describe('P1 · lista', () => {
         'GET /api/approvals': () =>
           json(200, {
             gate: GATE,
-            rows: [ROW, { ...ROW, id: 'apr_2', action_id: 'act_2', digest: OTHER_DIGEST }],
+            rows: [
+              ROW,
+              {
+                ...ROW,
+                id: 'apr_22222222222222222222222222222222',
+                action_id: 'act_2',
+                digest: OTHER_DIGEST,
+              },
+            ],
           }),
       }),
     )
@@ -366,9 +376,9 @@ describe('P1 · lista', () => {
           json(200, {
             gate: GATE,
             rows: [
-              { ...ROW, id: 'apr_e', digest: '' },
-              { ...ROW, id: 'apr_m', digest: 'nosoyundigest' },
-              { ...ROW, id: 'apr_m2', digest: 'nosoyundigest' },
+              { ...ROW, id: 'apr_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', digest: '' },
+              { ...ROW, id: 'apr_dddddddddddddddddddddddddddddddd', digest: 'nosoyundigest' },
+              { ...ROW, id: 'apr_cccccccccccccccccccccccccccccccc', digest: 'nosoyundigest' },
             ],
           }),
       }),
@@ -400,7 +410,7 @@ describe('P1 · lista', () => {
       }),
     )
     expect(await screen.findByText('SIN CLASE LEGIBLE')).toBeInTheDocument()
-    expect(screen.getByText(/apr_1/)).toBeInTheDocument()
+    expect(screen.getByText(/apr_11111111111111111111111111111111/)).toBeInTheDocument()
     expect(screen.queryByText('IRREVERSIBLE')).toBeNull()
   })
 
@@ -466,7 +476,7 @@ describe('P2 · detalle', () => {
   it('AS-7 · clase write_compensatable: banda ANOMALÍA con su frase exacta y armado presente', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(200, { ...DETAIL, effect_class: 'write_compensatable' }),
       }),
     )
@@ -482,7 +492,8 @@ describe('P2 · detalle', () => {
   it('AS-8 · clase "garabato": «CLASE DESCONOCIDA» y armado presente', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, effect_class: 'garabato' }),
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, effect_class: 'garabato' }),
       }),
     )
     expect(await screen.findByText('CLASE DESCONOCIDA')).toBeInTheDocument()
@@ -494,7 +505,10 @@ describe('P2 · detalle', () => {
 
   it('AS-46 · reversibility vacío: «el registro no declara reversibilidad» y el armado sigue en una irreversible', async () => {
     await openDetail(
-      happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, reversibility: '' }) }),
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, reversibility: '' }),
+      }),
     )
     expect(await screen.findByText('el registro no declara reversibilidad')).toBeInTheDocument()
     expect(armingInput()).toBeInTheDocument()
@@ -507,7 +521,8 @@ describe('P2 · detalle', () => {
     cleanup()
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, effect_class: 'critical' }),
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, effect_class: 'critical' }),
       }),
     )
     await screen.findByText('CRÍTICO')
@@ -533,7 +548,10 @@ describe('P2 · detalle', () => {
     for (const cls of ['write_irreversible', 'critical', 'write_compensatable']) {
       cleanup()
       await openDetail(
-        happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, effect_class: cls }) }),
+        happy({
+          'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+            json(200, { ...DETAIL, effect_class: cls }),
+        }),
       )
       expect(await screen.findByText(ESC_LINE)).toBeInTheDocument()
     }
@@ -541,7 +559,10 @@ describe('P2 · detalle', () => {
 
   it('AS-76 · el detalle no imprime law_version en ningún estado', async () => {
     await openDetail(
-      happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, law_version: 'v3' }) }),
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, law_version: 'v3' }),
+      }),
     )
     await screen.findByText('LA LEY QUE LO EXIGIÓ')
     expect(document.body.textContent).not.toMatch(/law_version|\bv3\b/)
@@ -550,7 +571,7 @@ describe('P2 · detalle', () => {
   it('AS-38 · parámetros con U+202E: el DOM contiene <U+202E> y no el carácter crudo', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(200, { ...DETAIL, parameters: 'https://hooks.acme.io‮oi.emca' }),
       }),
     )
@@ -561,7 +582,10 @@ describe('P2 · detalle', () => {
 
   it('AS-72 · parámetros con U+200B y U+FEFF: escapes visibles, no los crudos', async () => {
     await openDetail(
-      happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, parameters: 'a​b﻿c' }) }),
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, parameters: 'a​b﻿c' }),
+      }),
     )
     const params = await screen.findByTestId('approval-parameters')
     expect(params.textContent).toContain('<U+200B>')
@@ -585,7 +609,8 @@ describe('P2 · detalle', () => {
   ])('el alfabeto del escape se reserva \u00b7 %s', async (_label, raw, rendered) => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, parameters: `pagar ${raw} 100` }),
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, parameters: `pagar ${raw} 100` }),
       }),
     )
     const params = await screen.findByTestId('approval-parameters')
@@ -617,7 +642,10 @@ describe('P2 · detalle', () => {
     ],
   ])('los campos hermanos tambien se escapan · %s', async (_label, patch, testid, rendered) => {
     await openDetail(
-      happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, ...patch }) }),
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, ...patch }),
+      }),
     )
     const block = await screen.findByTestId(testid)
     expect(block.textContent).toContain(rendered)
@@ -656,7 +684,7 @@ describe('P2 · detalle', () => {
     async (_label, invisible, escaped) => {
       await openDetail(
         happy({
-          'GET /api/approvals/apr_1': () =>
+          'GET /api/approvals/apr_11111111111111111111111111111111': () =>
             json(200, { ...DETAIL, parameters: `pagar${invisible}100 EUR` }),
         }),
       )
@@ -668,7 +696,10 @@ describe('P2 · detalle', () => {
 
   it('AS-39 · purpose con U+202E: idéntico en el bloque ORIGEN', async () => {
     await openDetail(
-      happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, purpose: 'ver‮reb' }) }),
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, purpose: 'ver‮reb' }),
+      }),
     )
     const origin = await screen.findByTestId('approval-origin')
     expect(origin.textContent).toContain('<U+202E>')
@@ -686,13 +717,13 @@ describe('P2 · detalle', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
-    expect(gets('/api/approvals/apr_1').length).toBe(1)
+    expect(gets('/api/approvals/apr_11111111111111111111111111111111').length).toBe(1)
   })
 
   it('AS-36 · parameters_state too_large: su literal, Aprobar ausente, la CLI nombrada', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(200, { ...DETAIL, parameters: '', parameters_state: 'too_large' }),
       }),
     )
@@ -708,7 +739,7 @@ describe('P2 · detalle', () => {
   it('AS-64 · parameters_state empty: su literal y Aprobar ausente', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(200, { ...DETAIL, parameters: '', parameters_state: 'empty' }),
       }),
     )
@@ -723,7 +754,7 @@ describe('P2 · detalle', () => {
   it('AS-37 · present con parámetros vacíos: respuesta ilegible del núcleo, sin Aprobar', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(200, { ...DETAIL, parameters: '', parameters_state: 'present' }),
       }),
     )
@@ -734,7 +765,7 @@ describe('P2 · detalle', () => {
   it('AS-34 · parameters_state purged: respuesta ilegible del núcleo, nunca un estado normal', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(200, { ...DETAIL, parameters: '', parameters_state: 'purged' }),
       }),
     )
@@ -745,7 +776,10 @@ describe('P2 · detalle', () => {
 
   it('AS-78 · 200 con brain_gone:true: documento entero, Rechazar habilitado, Aprobar ausente, sin estado terminal', async () => {
     await openDetail(
-      happy({ 'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, brain_gone: true }) }),
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, brain_gone: true }),
+      }),
     )
     expect(await screen.findByText('PARÁMETROS — LITERALES')).toBeInTheDocument()
     expect(rejectBtn()).toBeEnabled()
@@ -756,7 +790,8 @@ describe('P2 · detalle', () => {
   it('AS-80 · fila EXPIRED ⇒ expired; fila REJECTED ⇒ already_decided: dos literales', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () => json(409, { error: 'expired', message: EXPIRES }),
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(409, { error: 'expired', message: EXPIRES }),
       }),
     )
     expect(
@@ -765,7 +800,7 @@ describe('P2 · detalle', () => {
     cleanup()
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(409, { error: 'already_decided', message: 'decided' }),
       }),
     )
@@ -779,7 +814,7 @@ describe('P2 · detalle', () => {
   it('AS-92 · params_digest_mismatch en el GET: literal de E6-ter, sin decisión, sin «Es transitorio» ni «no reconoce»', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(409, { error: 'params_digest_mismatch', message: 'x' }),
       }),
     )
@@ -798,7 +833,7 @@ describe('P2 · detalle', () => {
   it('AS-23 · 409 invalidated en el GET: literal de E7, Rechazar presente, Aprobar ausente, «Es transitorio» ausente', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(409, {
             error: 'invalidated',
             message: 'law moved',
@@ -821,7 +856,7 @@ describe('P2 · detalle', () => {
   it('AS-24 · 409 evidence_corrupt con message preview_effect_mismatch: literal de E8, cinturón impreso, sin botones', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(409, { error: 'evidence_corrupt', message: 'preview_effect_mismatch' }),
       }),
     )
@@ -837,7 +872,7 @@ describe('P2 · detalle', () => {
   it('AS-47 · unavailable: su literal; «no existe» ausente', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(503, { error: 'unavailable', message: 'store busy' }),
       }),
     )
@@ -852,7 +887,10 @@ describe('P2 · detalle', () => {
 
   it('AS-90 · nombre desconocido en un GET: [Reintentar] presente', async () => {
     await openDetail(
-      happy({ 'GET /api/approvals/apr_1': () => json(500, { error: 'zumo', message: 'raro' }) }),
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(500, { error: 'zumo', message: 'raro' }),
+      }),
     )
     expect(await screen.findByText('Respuesta que esta pantalla no reconoce.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
@@ -875,7 +913,9 @@ describe('P3 · decisión', () => {
   })
 
   it('AS-11 · Esc durante «Ejecutando»: cero llamadas', async () => {
-    await openDetail(happy({ 'POST /api/approvals/apr_1/approve': NEVER }))
+    await openDetail(
+      happy({ 'POST /api/approvals/apr_11111111111111111111111111111111/approve': NEVER }),
+    )
     typeKeys(armingInput(), TAIL)
     fireEvent.click(approveBtn()!)
     expect(
@@ -900,7 +940,8 @@ describe('P3 · decisión', () => {
     let release: (r: Response) => void = () => undefined
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () => new Promise<Response>((res) => (release = res)),
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
+          new Promise<Response>((res) => (release = res)),
       }),
     )
     typeKeys(armingInput(), TAIL)
@@ -917,7 +958,7 @@ describe('P3 · decisión', () => {
   it('AS-12 · 409 digest_mismatch: literal de E6 y ningún control que apruebe', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () =>
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
           json(409, { error: 'digest_mismatch', message: 'x' }),
       }),
     )
@@ -935,7 +976,7 @@ describe('P3 · decisión', () => {
     const NEW = 'sha256:' + 'e'.repeat(64)
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () =>
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
           json(409, { error: 'digest_mismatch', message: `stored is ${NEW}` }),
       }),
     )
@@ -949,14 +990,16 @@ describe('P3 · decisión', () => {
   it('AS-14 · [Volver a leer] tras E6: se repite el GET y el armado queda vacío', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () =>
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
           json(409, { error: 'digest_mismatch', message: 'x' }),
       }),
     )
     typeKeys(armingInput(), TAIL)
     fireEvent.click(approveBtn()!)
     fireEvent.click(await screen.findByRole('button', { name: 'Volver a leer la petición' }))
-    await waitFor(() => expect(gets('/api/approvals/apr_1').length).toBe(2))
+    await waitFor(() =>
+      expect(gets('/api/approvals/apr_11111111111111111111111111111111').length).toBe(2),
+    )
     expect(armingInput().value).toBe('')
     expect(approveBtn()).toBeDisabled()
   })
@@ -1004,7 +1047,8 @@ describe('P3 · decisión', () => {
   it('AS-22 · 409 expired: literal de E5 con el instante UTC; ambos botones ausentes', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () => json(409, { error: 'expired', message: 'x' }),
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
+          json(409, { error: 'expired', message: 'x' }),
       }),
     )
     typeKeys(armingInput(), TAIL)
@@ -1021,7 +1065,8 @@ describe('P3 · decisión', () => {
   it('AS-17 · 503 core unreachable en POST: desenlace desconocido; «Ninguna decisión ha salido de esta ventana» ausente', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () => json(503, { error: 'core unreachable' }),
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
+          json(503, { error: 'core unreachable' }),
       }),
     )
     typeKeys(armingInput(), TAIL)
@@ -1033,7 +1078,7 @@ describe('P3 · decisión', () => {
   it('AS-26 · respuesta de /reject perdida: desenlace desconocido simétrico; «Rechazada» ausente', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/reject': () =>
+        'POST /api/approvals/apr_11111111111111111111111111111111/reject': () =>
           Promise.reject(new TypeError('Failed to fetch')) as never,
       }),
     )
@@ -1047,7 +1092,8 @@ describe('P3 · decisión', () => {
   it('AS-94 · brain_gone en un POST: literal de E9-bis, Rechazar habilitado, Aprobar ausente', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () => json(409, { error: 'brain_gone', message: 'x' }),
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
+          json(409, { error: 'brain_gone', message: 'x' }),
       }),
     )
     typeKeys(armingInput(), TAIL)
@@ -1062,7 +1108,7 @@ describe('P3 · decisión', () => {
   it('AS-89 · invalidated en un POST antes del commit: E7 con Rechazar; «La decisión quedó registrada» ausente', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () =>
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
           json(409, {
             error: 'invalidated',
             message: 'x',
@@ -1082,7 +1128,8 @@ describe('P3 · decisión', () => {
   it('AS-90 · nombre desconocido en un POST: desenlace desconocido y [Reintentar] ausente', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () => json(500, { error: 'zumo', message: 'raro' }),
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
+          json(500, { error: 'zumo', message: 'raro' }),
       }),
     )
     typeKeys(armingInput(), TAIL)
@@ -1105,7 +1152,8 @@ describe('P3 · decisión', () => {
       cleanup()
       await openDetail(
         happy({
-          'POST /api/approvals/apr_1/approve': () => json(status, { error: name, message: 'x' }),
+          'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
+            json(status, { error: name, message: 'x' }),
         }),
       )
       typeKeys(armingInput(), TAIL)
@@ -1125,7 +1173,10 @@ describe('P3 · decisión', () => {
 describe('P4 · desenlaces', () => {
   async function approveWith(name: string, message = 'x'): Promise<void> {
     await openDetail(
-      happy({ 'POST /api/approvals/apr_1/approve': () => json(409, { error: name, message }) }),
+      happy({
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
+          json(409, { error: name, message }),
+      }),
     )
     typeKeys(armingInput(), TAIL)
     fireEvent.click(approveBtn()!)
@@ -1403,7 +1454,7 @@ describe('MUT · lo curado llega al operador', () => {
   it('MUT-7 · outcome failed: se dice que falló, con su recibo, y no «ejecutada»', async () => {
     await openDetail(
       happy({
-        'POST /api/approvals/apr_1/approve': () =>
+        'POST /api/approvals/apr_11111111111111111111111111111111/approve': () =>
           json(200, {
             outcome: 'failed',
             digest: DIGEST,
@@ -1437,7 +1488,8 @@ describe('B · maqueta aprobada — caducidad, armado y Esc', () => {
   function withExpiry(expires_at: string): Route {
     return happy({
       'GET /api/approvals': () => json(200, { gate: GATE, rows: [{ ...ROW, expires_at }] }),
-      'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, expires_at }),
+      'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+        json(200, { ...DETAIL, expires_at }),
     })
   }
   function bar(): HTMLElement {
@@ -1491,7 +1543,9 @@ describe('B · maqueta aprobada — caducidad, armado y Esc', () => {
     expect(approveBtn()).toBeNull()
     expect(rejectBtn()).toBeEnabled()
     fireEvent.keyDown(document.body, { key: 'Escape' })
-    await waitFor(() => expect(posts('/api/approvals/apr_1/reject')).toHaveLength(1))
+    await waitFor(() =>
+      expect(posts('/api/approvals/apr_11111111111111111111111111111111/reject')).toHaveLength(1),
+    )
     cleanup()
     await openDetail(withExpiry('2026-09-07T23:00:00Z'))
     await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
@@ -1564,12 +1618,19 @@ describe('B · maqueta aprobada — caducidad, armado y Esc', () => {
     ]
     for (const [name, detail] of variants) {
       cleanup()
-      await openDetail(happy({ 'GET /api/approvals/apr_1': () => json(200, detail) }))
+      await openDetail(
+        happy({
+          'GET /api/approvals/apr_11111111111111111111111111111111': () => json(200, detail),
+        }),
+      )
       await waitFor(() => expect(screen.queryByText('Consultando el almacén…')).toBeNull())
       expect(rejectBtn(), name).toBeNull()
       fireEvent.keyDown(document.body, { key: 'Escape' })
       await act(async () => {})
-      expect(posts('/api/approvals/apr_1/reject'), name).toHaveLength(0)
+      expect(
+        posts('/api/approvals/apr_11111111111111111111111111111111/reject'),
+        name,
+      ).toHaveLength(0)
     }
   })
 
@@ -1579,7 +1640,7 @@ describe('B · maqueta aprobada — caducidad, armado y Esc', () => {
   it('G7 · E5 por la puerta de lectura: sin «Caducó a las», porque no hay instante que citar', async () => {
     await openDetail(
       happy({
-        'GET /api/approvals/apr_1': () =>
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
           json(409, {
             error: 'expired',
             message: 'this request expired before the decision touched it — it never executes',
@@ -1603,8 +1664,10 @@ describe('B · maqueta aprobada — caducidad, armado y Esc', () => {
     await openDetail(
       happy({
         'GET /api/approvals': () => json(200, { gate: GATE, rows: [{ ...ROW, expires_at: raw }] }),
-        'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, expires_at: raw }),
-        'POST /api/approvals/apr_1/reject': () => json(409, { error: 'expired', message: 'x' }),
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, expires_at: raw }),
+        'POST /api/approvals/apr_11111111111111111111111111111111/reject': () =>
+          json(409, { error: 'expired', message: 'x' }),
       }),
     )
     await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')
@@ -1622,7 +1685,7 @@ describe('B · maqueta aprobada — caducidad, armado y Esc', () => {
     fireEvent.keyDown(reason, { key: 'Escape', isComposing: true })
     fireEvent.keyDown(reason, { key: 'Escape', keyCode: 229 })
     await act(async () => {})
-    expect(posts('/api/approvals/apr_1/reject')).toHaveLength(0)
+    expect(posts('/api/approvals/apr_11111111111111111111111111111111/reject')).toHaveLength(0)
   })
 
   it('G3/G4 · textos exactos: etiqueta, «faltan N», casillas «–» y prefijo de diez caracteres', async () => {
@@ -1670,7 +1733,8 @@ describe('B · maqueta aprobada — caducidad, armado y Esc', () => {
       await openDetail(
         happy({
           'GET /api/approvals': () => json(200, { gate: GATE, rows: [{ ...ROW, digest }] }),
-          'GET /api/approvals/apr_1': () => json(200, { ...DETAIL, digest }),
+          'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+            json(200, { ...DETAIL, digest }),
         }),
       )
       await screen.findByText('✓ el almacén devolvió parámetros que re-derivan este digest')

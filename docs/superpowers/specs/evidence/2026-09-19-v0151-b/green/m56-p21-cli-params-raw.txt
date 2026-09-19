@@ -1,0 +1,29 @@
+# id: m56-p21-cli-params-raw
+# guard: HANDOFF sister: print show's raw parameters raw
+# date: 2026-09-19T18:09:11.471151+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_sister_showEscapesTheRawParameters' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/approvals.go
++++ b/internal/cli/approvals.go
+@@ -157,7 +157,7 @@
+ 	// the only surface that prints them — the approvals API serves them too, to
+ 	// a loopback peer only (P2-7), whatever observability.addr binds.
+ 	if params, err := store.ApprovalParams(ctx, a.ApprovalID); err == nil {
+-		_, _ = fmt.Fprintf(c.stdout, "\nraw parameters:\n%s\n", escapeUntrusted(string(params)))
++		_, _ = fmt.Fprintf(c.stdout, "\nraw parameters:\n%s\n", string(params) /* MUTATION */)
+ 	} else {
+ 		_, _ = fmt.Fprintln(c.stdout, "\nraw parameters: no longer held (decided or executed)")
+ 	}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_sister_showEscapesTheRawParameters (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.678s
+FAIL
+# first failing assertion: v0151b_test.go:236: the raw U+2060 reached the terminal: "APPROVING EXACTLY THIS — digest: sha256:c79fae72655962a6d18263d22897c81fcc5282d532d157c8ad0b107c89e20188\n\nrequest:       apr_b583dd9a1c266e94d715a95c14b22354 (PENDING)\npurpose:       escape\nactor:         principal_brain_a (grant -, depth 0)\noperation:     tool/calc\nresources:     [console]\ndata egress:   no declared data egress\ncost:          unbudgeted\neffect class:  pure\nreversibility: pure — reversible\ntool cage:     calc\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\nrequired by:   require_approval\nexpires:       2026-09-19T19:09:08Z\n\nraw parameters:\npagar\u2060100 EUR <U+2060>\n"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	0.689s
+# exit (restored): 0

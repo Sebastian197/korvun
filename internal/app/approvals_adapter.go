@@ -21,6 +21,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -78,7 +79,7 @@ func (a *ApprovalsAdapter) ListPending(ctx context.Context) (controlapi.Approval
 	}
 	listing, err := a.store.ListPendingApprovals(ctx, controlapi.ApprovalsPageLimit)
 	if err != nil {
-		return controlapi.ApprovalList{}, a.nameRead(err)
+		return controlapi.ApprovalList{}, a.nameRead(ctx, "", err)
 	}
 	out := controlapi.ApprovalList{
 		Gate: controlapi.ApprovalGate{
@@ -132,7 +133,7 @@ func (a *ApprovalsAdapter) Detail(ctx context.Context, id string) (controlapi.Ap
 		d, err = a.store.ApprovalDetail(ctx, id)
 	}
 	if err != nil {
-		return controlapi.ApprovalDetail{}, a.nameRead(err)
+		return controlapi.ApprovalDetail{}, a.nameRead(ctx, id, err)
 	}
 	// Precedence by STATE beats any belt's name (FR-API-18). An unknown
 	// status is not a document either: the column has no CHECK, so anything
@@ -195,10 +196,10 @@ func channelOfPreview(p action.ActionPreview) string {
 // nameRead maps a store refusal on a READ door. Nothing has been decided here,
 // so a driver failure is `unavailable` — the honest "retry", not a sentence
 // about an execution that never began.
-func (a *ApprovalsAdapter) nameRead(err error) error {
+func (a *ApprovalsAdapter) nameRead(ctx context.Context, id string, err error) error {
 	switch {
 	case errors.Is(err, actionsqlite.ErrApprovalInvalidated):
-		return controlapi.LawMoved(a.currentLawDigest())
+		return controlapi.LawMoved(a.currentLawDigest(ctx, id))
 	case errors.Is(err, actionsqlite.ErrApprovalEvidenceCorrupt):
 		return controlapi.ErrApprovalEvidenceCorrupt
 	case errors.Is(err, actionsqlite.ErrApprovalParamsDigestMismatch):
@@ -212,11 +213,15 @@ func (a *ApprovalsAdapter) nameRead(err error) error {
 	}
 }
 
-func (a *ApprovalsAdapter) currentLawDigest() string {
-	if len(a.cfg.Brains) == 0 {
+// currentLawDigest is the CURRENT law of the brain that parked THIS request
+// (v0.15.1 block B, P2-8) — never cfg.Brains[0], which published another
+// brain's law for a request parked by any brain but the first. "" when the
+// request or its brain cannot be resolved: an empty field, never a guess.
+func (a *ApprovalsAdapter) currentLawDigest(ctx context.Context, id string) string {
+	if id == "" {
 		return ""
 	}
-	_, pin, err := ResolveApprovalLaw(a.cfg, a.cfg.Brains[0].Name)
+	_, pin, err := a.resolveLawFor(ctx, id)
 	if err != nil {
 		return ""
 	}
@@ -354,12 +359,12 @@ func (a *ApprovalsAdapter) Approve(ctx context.Context, id, digest string) (cont
 	// exactly what needs naming.
 	status, err := a.store.ApprovalStatusOf(ctx, id)
 	if err != nil {
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, false)
+		return controlapi.ApprovalOutcome{}, a.nameTouch(ctx, id, err, false)
 	}
 	sealed := decideWasCommitted(status)
 	approval, _, err := a.store.GetApproval(ctx, id)
 	if err != nil {
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, sealed)
+		return controlapi.ApprovalOutcome{}, a.nameTouch(ctx, id, err, sealed)
 	}
 	if !sealed && approval.ActionDigest != digest {
 		return controlapi.ApprovalOutcome{}, controlapi.ErrApprovalDigestMismatch
@@ -369,7 +374,7 @@ func (a *ApprovalsAdapter) Approve(ctx context.Context, id, digest string) (cont
 		if errors.Is(err, ErrBrainNotInProfile) {
 			return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %w", controlapi.ErrApprovalBrainGone, err)
 		}
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, sealed)
+		return controlapi.ApprovalOutcome{}, a.nameTouch(ctx, id, err, sealed)
 	}
 	opEnv, opIdent, err := approvalsOperator(id)
 	if err != nil {
@@ -378,7 +383,7 @@ func (a *ApprovalsAdapter) Approve(ctx context.Context, id, digest string) (cont
 	rule, err := a.store.DecideApprovalUnderLaw(ctx, id, action.DecisionApproved,
 		nowUTC(), opEnv, opIdent, "", pin)
 	if err != nil {
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, sealed)
+		return controlapi.ApprovalOutcome{}, a.nameTouch(ctx, id, err, sealed)
 	}
 	// The store signals IN BAND: it hands back a RULE with a nil error. An
 	// adapter that read only the error would publish a receipt for a decision
@@ -405,7 +410,7 @@ func (a *ApprovalsAdapter) Reject(ctx context.Context, id, comment string) (cont
 		return controlapi.ApprovalOutcome{}, controlapi.ErrApprovalsDisabled
 	}
 	if _, _, err := a.store.GetApproval(ctx, id); err != nil {
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, false)
+		return controlapi.ApprovalOutcome{}, a.nameTouch(ctx, id, err, false)
 	}
 	opEnv, opIdent, err := approvalsOperator(id)
 	if err != nil {
@@ -414,7 +419,7 @@ func (a *ApprovalsAdapter) Reject(ctx context.Context, id, comment string) (cont
 	rule, err := a.store.DecideApprovalUnderLaw(ctx, id, action.DecisionRejected,
 		nowUTC(), opEnv, opIdent, comment, actionsqlite.PolicyPin{})
 	if err != nil {
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, false)
+		return controlapi.ApprovalOutcome{}, a.nameTouch(ctx, id, err, false)
 	}
 	if rule != "" {
 		return controlapi.ApprovalOutcome{}, nameInBandRule(rule)
@@ -485,15 +490,20 @@ func decideWasCommitted(status action.ApprovalStatus) bool {
 // was already committed for this request — decideWasCommitted is the judge —
 // and it is the frontier: before the commit a driver failure means nothing was
 // decided, after it the decision exists and only the effect is unknown.
-func (a *ApprovalsAdapter) nameTouch(err error, sealed bool) error {
+func (a *ApprovalsAdapter) nameTouch(ctx context.Context, id string, err error, sealed bool) error {
 	switch {
+	case errors.Is(err, actionsqlite.ErrApprovalWriteFailed):
+		// A driver failure while the decide wrote the transition: the
+		// transaction rolled back and nothing was decided (v0.15.1 block B,
+		// P2-9). Transient, retry — never already_closed.
+		return controlapi.ErrApprovalsUnavailable
 	case errors.Is(err, actionsqlite.ErrApprovalActionNotPending):
 		// The whole transaction rolled back: nothing decided, nothing run.
 		// Saying «we do not know whether the effect happened» here would be
 		// lying out of caution, which is still lying.
 		return controlapi.ErrApprovalAlreadyClosed
 	case errors.Is(err, actionsqlite.ErrApprovalInvalidated):
-		return controlapi.LawMoved(a.currentLawDigest())
+		return controlapi.LawMoved(a.currentLawDigest(ctx, id))
 	case errors.Is(err, actionsqlite.ErrApprovalEvidenceCorrupt):
 		if sealed {
 			return controlapi.ErrApprovalDecidedEvidenceBad
@@ -518,6 +528,23 @@ func (a *ApprovalsAdapter) nameTouch(err error, sealed bool) error {
 
 func nowUTC() time.Time { return time.Now().UTC() }
 
+// approvalIDParams renders {"approval_id": id} through encoding/json. The
+// string concatenation it replaced built a sealed document from bytes nobody
+// validated. The control API's detail, approve and reject routes refuse a
+// malformed id by shape before they call this adapter (P2-1); the adapter
+// itself accepts any string, so this is defence in depth, declared without a
+// mould (v0.15.1 block B).
+func approvalIDParams(approvalID string) string {
+	b, err := json.Marshal(struct {
+		ApprovalID string `json:"approval_id"`
+	}{approvalID})
+	if err != nil {
+		// Unreachable: a struct of one string always marshals.
+		return `{}`
+	}
+	return string(b)
+}
+
 // approvalsOperator builds the desktop operator's envelope and attempt
 // identity. The window is a LOOPBACK, in-process caller behind the admin
 // bearer, so its provenance class says exactly that — the decision act is
@@ -534,7 +561,7 @@ func approvalsOperator(approvalID string) (action.Envelope, actionsqlite.Attempt
 	env := action.NewEnvelope(action.NewID(), "desktop",
 		action.Source{Kind: "operator", Protocol: "desktop", Channel: "desktop"},
 		action.Operation{Namespace: "approval", Name: "decide", Version: 1},
-		`{"approval_id":"`+approvalID+`"}`, nowUTC())
+		approvalIDParams(approvalID), nowUTC())
 	env.Principal = action.PrincipalRef{
 		PrincipalID:        principal.PrincipalID,
 		EvidenceID:         evidence.EvidenceID,
@@ -555,7 +582,7 @@ func approvalsOperator(approvalID string) (action.Envelope, actionsqlite.Attempt
 func (a *ApprovalsAdapter) runApproved(ctx context.Context, id string, cage *EffectiveCage, pin actionsqlite.PolicyPin, digest string) (controlapi.ApprovalOutcome, error) {
 	_, preview, err := a.store.GetApproval(ctx, id)
 	if err != nil {
-		return controlapi.ApprovalOutcome{}, a.nameTouch(err, true)
+		return controlapi.ApprovalOutcome{}, a.nameTouch(ctx, id, err, true)
 	}
 	// FROM CAGE, never the resolving variant: the executor is rebuilt from the
 	// cage this decision already resolved, so editing the profile halfway
@@ -569,8 +596,12 @@ func (a *ApprovalsAdapter) runApproved(ctx context.Context, id string, cage *Eff
 		return controlapi.ApprovalOutcome{}, a.nameExecution(ctx, id, err)
 	}
 	if run.Unknown {
-		// The deadline, and every delivered request whose answer was lost: the
-		// effect may have left and nobody can account for it.
+		// Every outcome ExecuteApprovedAction closes OUTCOME_UNKNOWN (the table
+		// in tool.CloseStateAfterRun): a response that is not a usable success,
+		// a connection obtained with no answer read, or a context that ended
+		// in a tool that does not observe the wire. The effect may have left
+		// and nobody can account for it. A deadline that ended BEFORE any
+		// connection existed is not here: it closes FAILED.
 		// It is the ONE outcome that says «we do not know», and saying it is
 		// the whole reason the name exists.
 		return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %s", controlapi.ErrApprovalUnknownOutcome, run.FailureDetail)
@@ -625,7 +656,7 @@ func (a *ApprovalsAdapter) nameClaim(ctx context.Context, id string, err error) 
 	case errors.Is(err, actionsqlite.ErrApprovalEvidenceCorrupt),
 		errors.Is(err, actionsqlite.ErrApprovalParamsDigestMismatch),
 		errors.Is(err, actionsqlite.ErrApprovalInvalidated):
-		return a.nameTouch(err, true)
+		return a.nameTouch(ctx, id, err, true)
 	}
 	params, state, rerr := a.store.ReReadParams(ctx, id)
 	switch {

@@ -1,0 +1,772 @@
+[
+ {
+  "id": "m01-p27-seam-then-refuse",
+  "guard": "P2-7 seam: call the seam, then refuse",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 10,
+  "first_assertion": "v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer"
+ },
+ {
+  "id": "m02-p27-drop-approve-route",
+  "guard": "P2-7 route: drop the peer check from the approve route",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "v0151b_test.go:164: the seam was called 1 time(s) for a non-loopback peer"
+ },
+ {
+  "id": "m03-p27-drop-console-route",
+  "guard": "P2-7 route: drop the peer check from the console /message route",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 3,
+  "first_assertion": "v0151b_test.go:212: a non-loopback peer's message was dispatched (1)"
+ },
+ {
+  "id": "m04-p27-refuse-loopback",
+  "guard": "P2-7 over-refusal: refuse loopback too",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 13,
+  "first_assertion": "v0151b_test.go:178: control: the seam was called 0 time(s) for a loopback peer, want 1"
+ },
+ {
+  "id": "m05-p28-brains-first",
+  "guard": "P2-8: resolve from cfg.Brains[0]",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "v0151b_test.go:149: current_law_digest = \"sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a\", want b's \"sha256:7ac5e2cadcd8b2e7c2f184040adafacd7649a23df6d4e69183c3e3e1fde6d2da\" (a \"sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a\", c \"sha256:71a0c634fa2fc5fca24c2cb23b2ce89a9fee4b84a86582023aeade319c4a0493\")"
+ },
+ {
+  "id": "m05-p28-brains-last",
+  "guard": "P2-8: resolve from cfg.Brains[len(a.cfg.Brains)-1]",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "v0151b_test.go:149: current_law_digest = \"sha256:71a0c634fa2fc5fca24c2cb23b2ce89a9fee4b84a86582023aeade319c4a0493\", want b's \"sha256:7ac5e2cadcd8b2e7c2f184040adafacd7649a23df6d4e69183c3e3e1fde6d2da\" (a \"sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a\", c \"sha256:71a0c634fa2fc5fca24c2cb23b2ce89a9fee4b84a86582023aeade319c4a0493\")"
+ },
+ {
+  "id": "m06-p29-approve-typed-notpending",
+  "guard": "P2-9: type the approve verb's exec failure as ErrApprovalActionNotPending",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 3,
+  "first_assertion": "v0151b_writefailed_test.go:49: err = action/sqlite: approval \"apr_717620b261e82af889a6858a27a6461e\": action/sqlite: the parked action was no longer pending: action/sqlite: transition \"act_wf_approved\" PENDING_APPROVAL->APPROVED: action/sqlite: writing the approval's action transition failed: constraint failed: forced driver failure (1811): a driver failure typed as a moved action"
+ },
+ {
+  "id": "m07-p29-expiry-touch-untyped",
+  "guard": "P2-9: leave the expiry touch untyped",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_writefailed_test.go:79: err = action/sqlite: transition \"act_wf_expiry\" PENDING_APPROVAL->REJECTED: action/sqlite: writing the approval's action transition failed: constraint failed: forced driver failure (1811), want ErrApprovalWriteFailed"
+ },
+ {
+  "id": "m08-p29-reject-zero-rows-untyped",
+  "guard": "P2-9 zero rows: leave the reject path's zero rows untyped",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_test.go:280: err = approvals: store unavailable, want ErrApprovalAlreadyClosed"
+ },
+ {
+  "id": "m09-p26-only-parse-typed",
+  "guard": "P2-6 Scan vs parse: type only parse errors (a wrong-kind cell is not corrupt)",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 5,
+  "first_assertion": "v0151b_wrongkind_test.go:87: GetApproval err = action/sqlite: approval \"apr_52172f9402657d3891aca7086ed67371\": action/sqlite: the approval could not be read: policy_version holds a float64, not an integer, want ErrApprovalEvidenceCorrupt"
+ },
+ {
+  "id": "m09b-p26-scan-conversion-untyped",
+  "guard": "P2-6 Scan vs parse (faithful): the conversion database/sql's Scan used to do (text into an INTEGER column) untyped; only time parse errors stay typed",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 13,
+  "first_assertion": "v0151b_test.go:92: decide err = action/sqlite: approval \"apr_832af09844a148e07c914a973f829c8a\": action/sqlite: the approval could not be read: policy_version holds text that is not an integer, want ErrApprovalEvidenceCorrupt"
+ },
+ {
+  "id": "m10-p26-classify-by-context",
+  "guard": "P2-6 transient: classify by context only",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 12,
+  "first_assertion": "v0151b_x1_claim_test.go:159: err = action/sqlite: approval \"apr_a85742e3bdb42bd8b81b0ea4ce9b1af4\": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such column: decision_at (1): corrupt=true unreadable=false, want corrupt=false unreadable=true"
+ },
+ {
+  "id": "m11-p26-every-scan-corrupt",
+  "guard": "P2-6 transient: type every Scan error as corrupt",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 18,
+  "first_assertion": "v0151b_x1_claim_test.go:159: err = action/sqlite: approval \"apr_ad1f8c86f1305b36ebb30913464058a1\": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such column: decision_at (1): corrupt=true unreadable=false, want corrupt=false unreadable=true"
+ },
+ {
+  "id": "m12-p26-excl-driver-also-corrupt",
+  "guard": "P2-6 exclusivity: wrap a driver failure as corrupt too",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 18,
+  "first_assertion": "v0151b_x1_claim_test.go:72: err = action/sqlite: approval \"apr_de0e882e82df601f43f2d188a67f6a45\": action/sqlite: the approval could not be read: action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such table: approvals (1): corrupt=true unreadable=true, want corrupt=false unreadable=true — the store did not answer"
+ },
+ {
+  "id": "m13-p26-excl-scan-also-unreadable",
+  "guard": "P2-6 exclusivity: a Scan-level corruption also unreadable",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 17,
+  "first_assertion": "v0151b_x1_claim_test.go:98: err = action/sqlite: approval \"apr_d370f6637589dfd6038373abe7727be7\": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: the approval could not be read: action/sqlite: the approval row does not convert: policy_version holds text that is not an integer: corrupt=true unreadable=true, want corrupt=true unreadable=false"
+ },
+ {
+  "id": "m14-x1-detail-blanket-corrupt",
+  "guard": "X1 / ApprovalDetail: keep the blanket corrupt wrap",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 2,
+  "first_assertion": "v0151b_x1_claim_test.go:131: err = action/sqlite: approval \"apr_b380e4192fbde06515b027341975ee75\": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: the approval row does not convert: SQL logic error: no such table: approvals (1): corrupt=true unreadable=false, want corrupt=false unreadable=true"
+ },
+ {
+  "id": "m15-x1-tx0-blanket-corrupt",
+  "guard": "X1 / approvalTx0: keep the blanket corrupt wrap",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_x1_claim_test.go:159: err = action/sqlite: approval \"apr_47581f98a621fcad8fae8ea8892063fc\": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: the approval row does not convert: SQL logic error: no such column: decision_at (1): corrupt=true unreadable=false, want corrupt=false unreadable=true"
+ },
+ {
+  "id": "m16-x1-claim-blanket-corrupt",
+  "guard": "X1 queued rows: keep the claim's blanket corrupt wrap",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": -1,
+  "restored_exit": -1,
+  "restored_equal": true,
+  "failing_leaves": 0,
+  "first_assertion": "(none captured)"
+ },
+ {
+  "id": "m16b-x1-claim-blanket-corrupt",
+  "guard": "X1 queued rows: keep the claim's blanket corrupt wrap",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 7,
+  "first_assertion": "v0151b_x1_claim_test.go:72: err = action/sqlite: approval \"apr_46dcd155a55198eec783319e4a90b215\": action/sqlite: the approval's stored evidence no longer verifies: action/sqlite: approval \"apr_46dcd155a55198eec783319e4a90b215\": action/sqlite: the approval could not be read: SQL logic error: no such table: approvals (1): corrupt=true unreadable=true, want corrupt=false unreadable=true — the store did not answer"
+ },
+ {
+  "id": "m17-x1-collapse-to-unreadable",
+  "guard": "X1 / every door: collapse every class to unreadable",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 23,
+  "first_assertion": "v0151b_x1_claim_test.go:98: err = action/sqlite: approval \"apr_f3d7b6d30637de02d66fcbeae73d9c1d\": action/sqlite: the approval could not be read: action/sqlite: the approval row does not convert: policy_version holds text that is not an integer: corrupt=false unreadable=true, want corrupt=true unreadable=false"
+ },
+ {
+  "id": "m18-seal-scan-empty",
+  "guard": "P2-6 sealer: return \"\" on the scan (conversion) error",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 11,
+  "first_assertion": "v0151b_test.go:341: recovered receipt approval_digest = [\"\"], want exactly \"corrupt:row_scan\""
+ },
+ {
+  "id": "m19-seal-drop-parse-error",
+  "guard": "P2-6 sealer: drop the decision_at parse error again",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 10,
+  "first_assertion": "approvals_test.go:1061: approval_digest = \"sha256:be2d457c661b3f46d9297a693b3d4fb77329904b4270b483608bc4d0c330ae83\", want exactly \"corrupt:decision_at\""
+ },
+ {
+  "id": "m20-seal-cure-only-finish",
+  "guard": "P2-6 sealer: cure only the finish door (recovery and reject seal \"\" over a mark)",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 73,
+  "first_assertion": "v0151b_test.go:573: REJECTED receipt approval_digest = \"\", want exactly \"corrupt:decision_principal\""
+ },
+ {
+  "id": "m21-seal-driver-empty",
+  "guard": "P2-6 sealer: return \"\" on a driver failure",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "v0151b_test.go:341: recovered receipt approval_digest = [\"\"], want exactly \"unreadable:driver\""
+ },
+ {
+  "id": "m22-seal-leak-status",
+  "guard": "P2-6 sealer: leak a cell's bytes into the status branch",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 9,
+  "first_assertion": "v0151b_test.go:341: recovered receipt approval_digest = [\"corrupt:status:bogus\"], want exactly \"corrupt:status\""
+ },
+ {
+  "id": "m23-seal-leak-driver-error",
+  "guard": "P2-6 sealer: leak err.Error() into the driver branch",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "v0151b_test.go:313: receipt approval_digest = [\"unreadable:driver:SQL logic error: no such column: decision_at (1)\"], want exactly \"unreadable:driver\""
+ },
+ {
+  "id": "m24-seal-accept-empty-decision-at",
+  "guard": "P2-6 sealer: accept an empty/NULL decision_at on a decided row",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 15,
+  "first_assertion": "v0151b_test.go:341: recovered receipt approval_digest = [\"sha256:3b3d5e0110f52629054ecde7205ead6019e81b112629b20641955bcf740c8320\"], want exactly \"corrupt:decision_at\""
+ },
+ {
+  "id": "m25-seal-accept-empty-principal",
+  "guard": "P2-6 sealer: accept an empty principal on a human verb",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 9,
+  "first_assertion": "v0151b_test.go:313: receipt approval_digest = [\"sha256:d9628157c2bb86b2c3287159b18df391b9c64fdaa3c8ffe48e614febe7b93558\"], want exactly \"corrupt:decision_principal\""
+ },
+ {
+  "id": "m26-seal-accept-unknown-verb",
+  "guard": "P2-6 sealer: accept an unknown verb",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 9,
+  "first_assertion": "v0151b_test.go:341: recovered receipt approval_digest = [\"sha256:fe10eeb3d51e3d45304c2479b8659d3b66c8970eefd39362896bdcb41bb71e1a\"], want exactly \"corrupt:decision_verb\""
+ },
+ {
+  "id": "m27-seal-missing-as-empty",
+  "guard": "P2-6 sealer: keep mapping ErrNoRows / a non-decided status to \"\"",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 15,
+  "first_assertion": "v0151b_test.go:341: recovered receipt approval_digest = [\"\"], want exactly \"corrupt:approval_missing\""
+ },
+ {
+  "id": "m28-seal-clock-needs-principal",
+  "guard": "P2-6 sealer: mark every clock row without a principal",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 11,
+  "first_assertion": "v0151b_test.go:313: receipt approval_digest = [\"sha256:bc7b9066dfc20c5396ff21da7d2b5e04d9c2b9766920d5a0b040ec25cac1ae6d\"], want exactly \"corrupt:decision_principal\""
+ },
+ {
+  "id": "m29-seal-decided-every-recovery",
+  "guard": "P2-6 sealer (M2b): decided on every recovery close",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 8,
+  "first_assertion": "v0151b_test.go:639: plain action receipt approval_digest = \"corrupt:approval_missing\", want \"\" (no approval in this life)"
+ },
+ {
+  "id": "m30-seal-decided-all-but-claimed",
+  "guard": "P2-6 sealer (M2c): decided on every pass but the claimed-orphan one",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 14,
+  "first_assertion": "v0151b_test.go:639: plain action receipt approval_digest = \"corrupt:approval_missing\", want \"\" (no approval in this life)"
+ },
+ {
+  "id": "m31-seal-finish-failed-decided",
+  "guard": "P2-6 sealer: current == APPROVED || to == FAILED",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 2,
+  "first_assertion": "v0151b_test.go:639: plain action receipt approval_digest = \"corrupt:approval_missing\", want \"\" (no approval in this life)"
+ },
+ {
+  "id": "m32-seal-tombstone-at-finish",
+  "guard": "P2-6 sealer: derive decided from a tombstone by action_id at the finish",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 2,
+  "first_assertion": "v0151b_test.go:639: plain action receipt approval_digest = \"corrupt:approval_missing\", want \"\" (no approval in this life)"
+ },
+ {
+  "id": "m33-seal-tombstone-at-recovery",
+  "guard": "P2-6 sealer: derive decided from a tombstone by action_id at the recovery",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "v0151b_test.go:639: plain action receipt approval_digest = \"corrupt:approval_missing\", want \"\" (no approval in this life)"
+ },
+ {
+  "id": "m34-seal-m6-expired-skips-decision-at",
+  "guard": "P2-6 sealer (M6): skip decision_at validation when status is EXPIRED",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 9,
+  "first_assertion": "v0151b_test.go:542: REJECTED receipt approval_digest = \"sha256:1272aeb9cbbc81e211f7dff70fa40bc9d961dbea52a1afd0049757d70afdb389\", want exactly \"corrupt:decision_at\""
+ },
+ {
+  "id": "m35-seal-m6-expired-skips-verb",
+  "guard": "P2-6 sealer (M6-verb): skip verb validation when status is EXPIRED",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 3,
+  "first_assertion": "v0151b_test.go:542: REJECTED receipt approval_digest = \"sha256:aa32d5f6a7cb2d55f26da199b8f75675b4e452696eea3ff4bee9f2ab4412b5c2\", want exactly \"corrupt:decision_verb\""
+ },
+ {
+  "id": "m36-seal-principal-by-status",
+  "guard": "P2-6 sealer: judge the principal by the STATUS instead of the verb",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 9,
+  "first_assertion": "v0151b_test.go:341: recovered receipt approval_digest = [\"sha256:5eb5a9c162484980c59ba9d99c3f9b8044ab6be1bf3cd20821e71a0e1749933e\"], want exactly \"corrupt:decision_principal\""
+ },
+ {
+  "id": "m37-seal-validate-only-approved",
+  "guard": "P2-6 sealer: validate only APPROVED rows",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 29,
+  "first_assertion": "v0151b_test.go:537: control: approval_digest = \"sha256:cfca16a43ea282f708c1986501810144f5ad1c341e0ad88a2b599e0bd4d02648\", want the approval's own digest \"sha256:3127e7e72ede1be9142406fe7b5c78f46cd5e93a1637290d96eb1fafa7c5c288\""
+ },
+ {
+  "id": "m38-seal-m7-reject-not-decided",
+  "guard": "P2-6 sealer (M7): decided=false on the reject path",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 9,
+  "first_assertion": "v0151b_test.go:573: REJECTED receipt approval_digest = \"\", want exactly \"corrupt:approval_missing\""
+ },
+ {
+  "id": "m39-seal-cancelled-unknown-status",
+  "guard": "P2-6 sealer: mark a CANCELLED row as an unknown status",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 8,
+  "first_assertion": "v0151b_test.go:542: REJECTED receipt approval_digest = \"corrupt:status\", want exactly \"corrupt:decision_principal\""
+ },
+ {
+  "id": "m40-wire-prior-select-claimed",
+  "guard": "P2-6 wire: a prior SELECT before closeCrashOrphan's UPDATE on the claimed pass",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_test.go:801: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer"
+ },
+ {
+  "id": "m40b-tied-observer-x30-race",
+  "guard": "P2-6 wire: a prior SELECT before closeCrashOrphan's UPDATE on the claimed pass",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 30,
+  "first_assertion": "v0151b_test.go:801: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer"
+ },
+ {
+  "id": "m40b-tied-observer-x30",
+  "guard": "P2-6 wire: a prior SELECT before closeCrashOrphan's UPDATE on the claimed pass",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 30,
+  "first_assertion": "v0151b_test.go:801: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer"
+ },
+ {
+  "id": "m40x30",
+  "guard": "P2-6 wire: a prior SELECT before closeCrashOrphan's UPDATE on the claimed pass",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 30,
+  "first_assertion": "v0151b_test.go:801: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer"
+ },
+ {
+  "id": "m41-wire-prior-select-claimed-loose-observer",
+  "guard": "Pass-13 P3 (a): the same production mutation with the observation loosened to ANY goroutine (instrument mutation) — must ESCAPE (green): the sibling is what the recovery-tied observation exists to reject",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 0,
+  "first_assertion": "internal/action/sqlite/v0151b_test.go:772:2: declared and not used: recoveryID"
+ },
+ {
+  "id": "m41b-loose-observer-x30-race",
+  "guard": "Pass-13 P3 (a): the same production mutation with the observation loosened to ANY goroutine (instrument mutation) — must ESCAPE (green): the sibling is what the recovery-tied observation exists to reject",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 23,
+  "first_assertion": "v0151b_test.go:801: recovery skipped 1 row(s), want 0 — the claimed pass must close under a concurrent writer"
+ },
+ {
+  "id": "m41b-loose-observer-x30",
+  "guard": "Pass-13 P3 (a): the same production mutation with the observation loosened to ANY goroutine (instrument mutation) — must ESCAPE (green): the sibling is what the recovery-tied observation exists to reject",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 30,
+  "first_assertion": "v0151b_test.go:801: recovery skipped 6 row(s), want 0 — the claimed pass must close under a concurrent writer"
+ },
+ {
+  "id": "m41x30",
+  "guard": "Pass-13 P3 (a): the same production mutation with the observation loosened to ANY goroutine (instrument mutation) — must ESCAPE (green): the sibling is what the recovery-tied observation exists to reject",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 0,
+  "first_assertion": "internal/action/sqlite/v0151b_test.go:772:2: declared and not used: recoveryID"
+ },
+ {
+  "id": "m42-recovery-control-blank",
+  "guard": "P2-6 recovery control: blank the digest at closeCrashOrphan",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_test.go:683: recovered receipt approval_digest = \"\", want the approval's real digest \"sha256:0a6f0650cc95991ac0710c248e157330f226123bdee83e61f04c1e11215bf557\""
+ },
+ {
+  "id": "m43-ver-any-sha256-prefix",
+  "guard": "P2-6 verifiers: accept any sha256: prefix",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 3,
+  "first_assertion": "v0151b_test.go:617: failures = [], want exactly [approval_evidence_unknown_mark: …]"
+ },
+ {
+  "id": "m44-ver-second-failure",
+  "guard": "P2-6 verifiers: name a second failure beside the mark",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 15,
+  "first_assertion": "v0151b_test.go:529: receipt verify names 2 failures for one receipt, want exactly 1: \"receipt rcpt_4ad10cb8e0d8b67ca4d29370a721255f (seq 1): FAIL approval_evidence_corrupt: the receipt seals corrupt:row_scan: the approval row could not be used when it was sealed\\nreceipt rcpt_4ad10cb8e0d8b67ca4d29370a721255f (seq 1): FAIL approval_mismatch: receipt seals corrupt:row_scan but the approval row re-derives sha256:27ec5e7c1f7f76565c7d0ae89bcac8ebdd3d765fb89e89fc763c4cebc527a33d\\n\""
+ },
+ {
+  "id": "m45-ver-forget-status",
+  "guard": "P2-6 verifiers: know only some codes (corrupt:status forgotten)",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 3,
+  "first_assertion": "v0151b_test.go:521: receipt verify: exit 1 stdout \"receipt rcpt_65cac724dcb9ca658780245eabd72474 (seq 1): FAIL approval_evidence_unknown_mark: the receipt seals \\\"corrupt:status\\\", which is neither a sha256 digest nor a listed mark\\n\" stderr \"\", want 1 with FAIL approval_evidence_corrupt"
+ },
+ {
+  "id": "m46-ver-any-prefix",
+  "guard": "P2-6 verifiers: accept any corrupt:/unreadable: prefix",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 5,
+  "first_assertion": "v0151b_test.go:617: failures = [approval_evidence_unreadable: unreadable:not_in_the_list], want exactly [approval_evidence_unknown_mark: …]"
+ },
+ {
+  "id": "m47-ver-skip-non-digest",
+  "guard": "P2-6 verifiers: skip a non-sha256 value (a pruned row's mark read as absence)",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 28,
+  "first_assertion": "v0151b_test.go:617: failures = [approval_mismatch: receipt seals zzz:anything but the approval row re-derives sha256:4669088006d5f82ecf84b7568f25f9ca5198deff06a246e3820785bacdbc55cc], want exactly [approval_evidence_unknown_mark: …]"
+ },
+ {
+  "id": "m48-p210-executed-fallback",
+  "guard": "P2-10: fall back to executed for any non-failed 2xx",
+  "tree": "5176805b7ecc714a493fe72ac57a136e7060dc85",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 5,
+  "first_assertion": "TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible."
+ },
+ {
+  "id": "m49-p210-drop-loopback-name",
+  "guard": "P2-10: drop one name (loopback_only)",
+  "tree": "5176805b7ecc714a493fe72ac57a136e7060dc85",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 2,
+  "first_assertion": "TestingLibraryElementError: Unable to find an element with the text: Esta decisión solo puede tomarse desde la misma máquina que ejecuta Korvun. La petición llegó desde otro origen y se rechazó sin tocar nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible."
+ },
+ {
+  "id": "m50-p210-skip-receipt-check",
+  "guard": "P2-10: skip the receipt_id check",
+  "tree": "5176805b7ecc714a493fe72ac57a136e7060dc85",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "TestingLibraryElementError: Unable to find role=\"button\" and name \"Volver a pendientes\""
+ },
+ {
+  "id": "m51-p210-refuse-exact-success",
+  "guard": "P2-10 over-refusal: refuse the exact success",
+  "tree": "5176805b7ecc714a493fe72ac57a136e7060dc85",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 3,
+  "first_assertion": "TestingLibraryElementError: Unable to find an element with the text: Ejecutada. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible."
+ },
+ {
+  "id": "m52-p21-cli-drop-show-check",
+  "guard": "P2-1: drop the shape check from one CLI door (show)",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 12,
+  "first_assertion": "v0151b_test.go:286: malformed id: exit 1 stderr \"korvun approvals show: action/sqlite: seal read-only connection \\\"/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen3489090397/002\\\": unable to open database file (14)\\n\", want 2 naming the approval id"
+ },
+ {
+  "id": "m53-p21-cli-check-after-open",
+  "guard": "P2-1: move the shape check after the store open (show)",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 2,
+  "first_assertion": "v0151b_test.go:286: malformed id: exit 1 stderr \"korvun approvals show: action/sqlite: seal read-only connection \\\"/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen817265748/002\\\": unable to open database file (14)\\n\", want 2 naming the approval id"
+ },
+ {
+  "id": "m54-p21-api-drop-detail-check",
+  "guard": "P2-1: drop the shape check from one route (detail)",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 9,
+  "first_assertion": "v0151b_test.go:108: the seam was called 1 time(s) with an id no mint produces"
+ },
+ {
+  "id": "m55-p21-cli-purpose-raw",
+  "guard": "P2-1 sister: print show's purpose raw",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_test.go:370: the purpose must print escaped; stdout = \"APPROVING EXACTLY THIS — digest: sha256:e29471c63f9ccaa32adb4c0166c41f79678168c570a9818316367358edb14a47\\n\\nrequest:       apr_ac06b631dae2e2d7b7c6b281f3782287 (PENDING)\\npurpose:       pagar a\\u202eproveedor\\nactor:         principal_brain_a (grant -, depth 0)\\noperation:     tool/calc\\nresources:     [console]\\ndata egress:   no declared data egress\\ncost:          unbudgeted\\neffect class:  pure\\nreversibility: pure — reversible\\ntool cage:     calc\\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\\nrequired by:   require_approval\\nexpires:       2026-09-19T19:09:03Z\\n\\nraw parameters:\\n7*6\\n\""
+ },
+ {
+  "id": "m56-p21-cli-params-raw",
+  "guard": "HANDOFF sister: print show's raw parameters raw",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_test.go:236: the raw U+2060 reached the terminal: \"APPROVING EXACTLY THIS — digest: sha256:c79fae72655962a6d18263d22897c81fcc5282d532d157c8ad0b107c89e20188\\n\\nrequest:       apr_b583dd9a1c266e94d715a95c14b22354 (PENDING)\\npurpose:       escape\\nactor:         principal_brain_a (grant -, depth 0)\\noperation:     tool/calc\\nresources:     [console]\\ndata egress:   no declared data egress\\ncost:          unbudgeted\\neffect class:  pure\\nreversibility: pure — reversible\\ntool cage:     calc\\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\\nrequired by:   require_approval\\nexpires:       2026-09-19T19:09:08Z\\n\\nraw parameters:\\npagar\\u2060100 EUR <U+2060>\\n\""
+ },
+ {
+  "id": "m57-p21-cli-list-risk-raw",
+  "guard": "P2-1 sister: print list's risk summary raw",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_test.go:318: list printed a raw U+202E: \"apr_0d3d1f48e2c6f6e4ca7025e8a6e34032<U+202E> PENDING   pure — reversible\\u202e     expires 2026-09-19T19:09:14Z\\n\""
+ },
+ {
+  "id": "m58-p21-screen-open-malformed-row",
+  "guard": "P2-1: open the malformed row (screen)",
+  "tree": "5176805b7ecc714a493fe72ac57a136e7060dc85",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "TestingLibraryElementError: Unable to find an element with the text: Esta fila lleva un identificador que Korvun no puede leer. No se abre ni se decide desde aquí. Las demás filas no se ven afectadas.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible."
+ },
+ {
+  "id": "m59-p21-screen-receipt-raw",
+  "guard": "P2-1 sister: print the receipt raw (screen)",
+  "tree": "5176805b7ecc714a493fe72ac57a136e7060dc85",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "AssertionError: expected 'Recibo rcp_\\u202ex' to contain '<U+202E>'"
+ },
+ {
+  "id": "m60-p21-screen-show-line-raw",
+  "guard": "P2-1: print the show line's id raw (screen)",
+  "tree": "5176805b7ecc714a493fe72ac57a136e7060dc85",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "AssertionError: expected 'korvun approvals show apr_abababababa…' to contain '<U+202E>'"
+ },
+ {
+  "id": "m61-p21-screen-row-id-raw",
+  "guard": "P2-1: print the malformed row's id raw (screen)",
+  "tree": "5176805b7ecc714a493fe72ac57a136e7060dc85",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "AssertionError: expected 'Actualizartool/webhook_callIRREVERSIB…' to contain '<U+2060>'"
+ },
+ {
+  "id": "m62-p22-ledger-check-bare-parse",
+  "guard": "P2-2: route one verb (ledger check) back to bare fs.Parse",
+  "tree": "357f2d8d9efd6258ba701588ecfd72589a531b7b",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 4,
+  "first_assertion": "v0151b_test.go:80: exit = 2, want 0 — help is a query (ADR-0032), never the usage-error path"
+ },
+ {
+  "id": "m63-already-decided-ran-twice",
+  "guard": "Tone: the already_decided refusal claims nothing about executions",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 2,
+  "first_assertion": "approvals_test.go:358: already decided: the TEXT is the contract too — an operator reads it before an irreversible yes."
+ },
+ {
+  "id": "m64-sweep-first-read-untyped",
+  "guard": "P2-a: the sweep's first read wraps without a sentinel",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 5,
+  "first_assertion": "v0151b_test.go:202: err = action/sqlite: expiry sweep: context canceled, want ErrApprovalUnreadable — transient, by name"
+ },
+ {
+  "id": "m65-sweep-loop-untyped",
+  "guard": "P2-a: the sweep loop's ctx.Err() wraps without a sentinel",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 2,
+  "first_assertion": "v0151b_test.go:202: err = action/sqlite: expiry sweep interrupted: context canceled, want ErrApprovalUnreadable — transient, by name"
+ },
+ {
+  "id": "m66-show-status-raw",
+  "guard": "P3-b: show prints the stored status raw",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 2,
+  "first_assertion": "v0151b_test.go:805: show printed a raw U+202E: \"APPROVING EXACTLY THIS — digest: sha256:e29471c63f9ccaa32adb4c0166c41f79678168c570a9818316367358edb14a47\\n\\nrequest:       apr_688a34aec6fc73dd2b4d52a3b5db9428 (REJ\\u202eECTED)\\npurpose:       semana de pruebas\\nactor:         principal_brain_a (grant -, depth 0)\\noperation:     tool/calc\\nresources:     [console]\\ndata egress:   no declared data egress\\ncost:          unbudgeted\\neffect class:  pure\\nreversibility: pure — reversible\\ntool cage:     calc\\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\\nrequired by:   require_approval\\nexpires:       2026-09-19T19:06:00Z\\n\\nraw parameters:\\n7*6\\n\""
+ },
+ {
+  "id": "m67-reject-commits-on-failure",
+  "guard": "P3-e: a failed reject commits its approval close (the request would not stay decidable)",
+  "tree": "d663a137a5646d192b6d4a2ad7eb85ec1d74a06d",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_test.go:390: after the trigger is gone the request must still be rejectable: approvals: already decided"
+ },
+ {
+  "id": "m68-show-digest-raw",
+  "guard": "P2-1 sister: show prints the stored action digest raw",
+  "tree": "0a1f550c2e3a41c6b29345a9f6bf95d0df794a87",
+  "mutated_exit": 1,
+  "restored_exit": 0,
+  "restored_equal": true,
+  "failing_leaves": 1,
+  "first_assertion": "v0151b_test.go:854: show printed a raw U+202E: \"APPROVING EXACTLY THIS — digest: sha256:EVIL\\u202edcba\\n\\nrequest:       apr_05eacd4202ac1daa44424d87896c3829 (PENDING)\\npurpose:       semana de pruebas\\nactor:         principal_brain_a (grant -, depth 0)\\noperation:     tool/calc\\nresources:     [console]\\ndata egress:   no declared data egress\\ncost:          unbudgeted\\neffect class:  pure\\nreversibility: pure — reversible\\ntool cage:     calc\\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\\nrequired by:   require_approval\\nexpires:       2026-09-19T19:29:34Z\\n\\nraw parameters:\\n7*6\\n\""
+ }
+]

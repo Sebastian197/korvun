@@ -1,0 +1,38 @@
+# id: m53-p21-cli-check-after-open
+# guard: P2-1: move the shape check after the store open (show)
+# date: 2026-09-19T18:08:59.844559+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/approvals.go
++++ b/internal/cli/approvals.go
+@@ -125,13 +125,13 @@
+ 		_, _ = fmt.Fprint(c.stderr, "korvun approvals show: usage: korvun approvals show --config <path> <apr_…>\n")
+ 		return 2
+ 	}
+-	if code, bad := c.refuseMalformedApprovalID("show", fs.Arg(0)); bad {
+-		return code
+-	}
+ 	store, err := openOperatorStore(*configPath)
+ 	if err != nil {
+ 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals show: %v\n", err)
+ 		return 1
++	}
++	if code, bad := c.refuseMalformedApprovalID("show", fs.Arg(0)); bad { // MUTATION: after the open
++		return code
+ 	}
+ 	defer func() { _ = store.Close() }()
+ 	ctx := context.Background()
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen (0.01s)
+    --- FAIL: TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen/show (0.00s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.674s
+FAIL
+# first failing assertion: v0151b_test.go:286: malformed id: exit 1 stderr "korvun approvals show: action/sqlite: seal read-only connection \"/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestV0151B_P2_1_theShapeIsJudgedBeforeAnyStoreOpen817265748/002\": unable to open database file (14)\n", want 2 naming the approval id
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	0.656s
+# exit (restored): 0

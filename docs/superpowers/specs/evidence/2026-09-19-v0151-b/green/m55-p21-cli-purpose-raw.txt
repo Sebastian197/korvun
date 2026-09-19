@@ -1,0 +1,29 @@
+# id: m55-p21-cli-purpose-raw
+# guard: P2-1 sister: print show's purpose raw
+# date: 2026-09-19T18:09:05.649816+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_1_sister_showEscapesThePurpose' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/approvals.go
++++ b/internal/cli/approvals.go
+@@ -149,7 +149,7 @@
+ 	e := escapeUntrusted
+ 	_, _ = fmt.Fprintf(c.stdout,
+ 		"request:       %s (%s)\npurpose:       %s\nactor:         %s (grant %s, depth %d)\noperation:     %s\nresources:     %s\ndata egress:   %s\ncost:          %s\neffect class:  %s\nreversibility: %s\ntool cage:     %s\npinned law:    v%d %s\nrequired by:   %s\nexpires:       %s\n",
+-		e(a.ApprovalID), e(string(a.EffectiveStatusAt(time.Now().UTC()))), e(p.IntentPurpose), e(p.PrincipalID), e(p.GrantID), p.GrantDepth,
++		e(a.ApprovalID), e(string(a.EffectiveStatusAt(time.Now().UTC()))), p.IntentPurpose /* MUTATION */, e(p.PrincipalID), e(p.GrantID), p.GrantDepth,
+ 		e(p.Operation), e(fmt.Sprint(p.Resources)), e(fmt.Sprint(p.DataEgress)), e(p.CostLine), e(string(p.EffectClass)),
+ 		e(p.Reversibility), e(p.ToolCage), p.PolicyVersion, e(p.PolicyDigest), e(p.RequiredRule),
+ 		a.ExpiresAt.UTC().Format(time.RFC3339))
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_1_sister_showEscapesThePurpose (0.02s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.677s
+FAIL
+# first failing assertion: v0151b_test.go:370: the purpose must print escaped; stdout = "APPROVING EXACTLY THIS — digest: sha256:e29471c63f9ccaa32adb4c0166c41f79678168c570a9818316367358edb14a47\n\nrequest:       apr_ac06b631dae2e2d7b7c6b281f3782287 (PENDING)\npurpose:       pagar a\u202eproveedor\nactor:         principal_brain_a (grant -, depth 0)\noperation:     tool/calc\nresources:     [console]\ndata egress:   no declared data egress\ncost:          unbudgeted\neffect class:  pure\nreversibility: pure — reversible\ntool cage:     calc\npinned law:    v3 sha256:761f93b8c40d2dd73af1866df51bf705b6254787186117950464243e1b27b7f1\nrequired by:   require_approval\nexpires:       2026-09-19T19:09:03Z\n\nraw parameters:\n7*6\n"
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	0.676s
+# exit (restored): 0

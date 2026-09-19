@@ -1,0 +1,570 @@
+# command: go test -race -count=1 -v -run TestV0151B\|TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark ./internal/action/sqlite/
+# HEAD: 61ae5827f4798f9cf469870483bee4958993bcef (+ uncommitted red-phase moulds)
+# set aside for this run: internal/action/sqlite/v0151b_writefailed_test.go moved out; internal/action/sqlite/approvals_sentinels_test.go restored to HEAD (both reference the undeclared ErrApprovalWriteFailed)
+# date: 2026-09-19T15:51:15Z
+=== RUN   TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark
+=== PAUSE TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark
+=== RUN   TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide
+=== PAUSE TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide
+=== RUN   TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheList
+=== PAUSE TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheList
+=== RUN   TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheSweep
+=== PAUSE TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheSweep
+=== RUN   TestV0151B_P2_6_aCancelledContextIsNeverCorruption
+=== PAUSE TestV0151B_P2_6_aCancelledContextIsNeverCorruption
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark
+=== RUN   TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark
+=== PAUSE TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+=== RUN   TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== PAUSE TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark
+=== CONT  TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter
+=== CONT  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheSweep
+=== RUN   TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/approved
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/scan
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/scan
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/parse
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/parse
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-empty
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-empty
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-null
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-null
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-principal-empty
+=== PAUSE TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/approved
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-principal-empty
+=== RUN   TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/rejected
+=== PAUSE TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/rejected
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-verb-unknown
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-verb-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/control
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/control
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/clock-verb-on-approved
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row_scan
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row_scan
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/clock-verb-on-approved
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-unknown
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-reset-pending
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-reset-pending
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-unknown
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/row-deleted
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/row-deleted
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-unknown
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row-deleted
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/hostile-bytes
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/hostile-bytes
+=== RUN   TestV0151B_P2_6_sister_theFinishSealsTheExactMark/unreadable
+=== PAUSE TestV0151B_P2_6_sister_theFinishSealsTheExactMark/unreadable
+=== CONT  TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark
+=== RUN   TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id
+=== PAUSE TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row-deleted
+=== RUN   TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-succeeded
+=== PAUSE TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-succeeded
+=== RUN   TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-failed
+=== PAUSE TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-failed
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-reset-pending
+=== RUN   TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-authorized-orphan
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-reset-pending
+=== PAUSE TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-authorized-orphan
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-garbage
+=== RUN   TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-crash-orphan
+=== PAUSE TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-crash-orphan
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-garbage
+=== RUN   TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id-recovery
+=== PAUSE TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id-recovery
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-empty
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/scan
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-empty
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/scan
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/parse
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/parse
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-null
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-empty
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-empty
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-null
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-null
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-null
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-principal-empty
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-principal-empty
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-verb-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-verb-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision-verb-unknown
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/clock-verb-on-approved
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision-verb-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/clock-verb-on-approved
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/human-without-principal
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-reset-pending
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-reset-pending
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/row-deleted
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/row-deleted
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/human-without-principal
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-unknown
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/hostile-bytes
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/hostile-bytes
+=== RUN   TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/unreadable
+=== PAUSE TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/unreadable
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/clock-verb-with-principal
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/clock-verb-with-principal
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/control
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/control
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row_scan
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row_scan
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/clock-with-principal
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/clock-with-principal
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row-deleted
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row-deleted
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-reset-pending
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-reset-pending
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-garbage
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-garbage
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-empty
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-empty
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-null
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-null
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision-verb-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision-verb-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/human-verb-on-clock-row
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/human-verb-on-clock-row
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/control
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/control
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row_scan
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row_scan
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row-deleted
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row-deleted
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-reset-pending
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-reset-pending
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-garbage
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-garbage
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-empty
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-empty
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-null
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-null
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision-verb-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision-verb-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/human-without-principal
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/human-without-principal
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/clock-verb-with-principal
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/clock-verb-with-principal
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/control
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/control
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row_scan
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row_scan
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/clock-with-principal
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/clock-with-principal
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row-deleted
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row-deleted
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-reset-pending
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-reset-pending
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-garbage
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-garbage
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-empty
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-empty
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-null
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-null
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision-verb-unknown
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision-verb-unknown
+=== RUN   TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/human-verb-on-clock-row
+=== PAUSE TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/human-verb-on-clock-row
+=== CONT  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheList
+=== NAME  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheSweep
+    v0151b_test.go:123: sweep err = sql: Scan error on column index 8, name "policy_version": converting driver.Value type string ("x") to a int64: invalid syntax, want ErrApprovalEvidenceCorrupt
+--- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheSweep (0.20s)
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/get
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/get
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/list
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/list
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-approve
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-approve
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-reject
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-reject
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/get
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/get
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/list
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/list
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-approve
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-approve
+=== RUN   TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-reject
+=== PAUSE TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-reject
+=== CONT  TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark
+=== NAME  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheList
+    v0151b_test.go:104: list err = sql: Scan error on column index 8, name "policy_version": converting driver.Value type string ("x") to a int64: invalid syntax, want ErrApprovalEvidenceCorrupt
+--- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheList (0.21s)
+=== CONT  TestV0151B_P2_6_aCancelledContextIsNeverCorruption
+=== RUN   TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-reject
+=== PAUSE TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-reject
+=== RUN   TestV0151B_P2_6_aCancelledContextIsNeverCorruption/get
+=== PAUSE TestV0151B_P2_6_aCancelledContextIsNeverCorruption/get
+=== RUN   TestV0151B_P2_6_aCancelledContextIsNeverCorruption/list
+=== PAUSE TestV0151B_P2_6_aCancelledContextIsNeverCorruption/list
+=== RUN   TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-approve
+=== PAUSE TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-approve
+=== CONT  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/approved
+--- PASS: TestV0151B_P2_6_sister_theRecoverySealsTheRealDigestWhenIntact (0.24s)
+=== CONT  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/rejected
+=== NAME  TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark
+    approvals_test.go:1061: approval_digest = "sha256:acfe88ebab1e33fcd853bc1352b7474fb54c4b1b89424e4bdb5d194b52451f5d", want exactly "corrupt:decision_at"
+--- FAIL: TestApprovalDigestTx_corruptDecisionSealsAnExplicitMark (0.23s)
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/scan
+=== NAME  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/approved
+    v0151b_test.go:84: decide err = sql: Scan error on column index 8, name "policy_version": converting driver.Value type string ("x") to a int64: invalid syntax, want ErrApprovalEvidenceCorrupt
+--- PASS: TestV0151B_P2_6_sister_theClaimedPassClosesUnderAConcurrentWriter (0.46s)
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/clock-verb-on-approved
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/unreadable
+=== NAME  TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/rejected
+    v0151b_test.go:84: decide err = sql: Scan error on column index 8, name "policy_version": converting driver.Value type string ("x") to a int64: invalid syntax, want ErrApprovalEvidenceCorrupt
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/hostile-bytes
+--- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide (0.00s)
+    --- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/approved (0.25s)
+    --- FAIL: TestV0151B_P2_6_scanLevelCorruptionIsEvidenceCorruptOnTheDecide/rejected (0.27s)
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/clock-verb-on-approved
+    v0151b_test.go:313: receipt approval_digest = ["sha256:e19da047498ac3d6d9e36e0014f39545d2be5be19bb937d589c1536d00f9d4e5"], want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/row-deleted
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/hostile-bytes
+    v0151b_test.go:313: receipt approval_digest = [""], want exactly "corrupt:row_scan"
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-reset-pending
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/scan
+    v0151b_test.go:313: receipt approval_digest = [""], want exactly "corrupt:row_scan"
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-unknown
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/unreadable
+    v0151b_test.go:313: receipt approval_digest = [""], want exactly "unreadable:driver"
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-verb-unknown
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/row-deleted
+    v0151b_test.go:313: receipt approval_digest = [""], want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-null
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-unknown
+    v0151b_test.go:313: receipt approval_digest = ["sha256:5bac0850eae5cf55e739512f97368583d1ac4caa46081b72be1ed9abfc465a4e"], want exactly "corrupt:status"
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-empty
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-reset-pending
+    v0151b_test.go:313: receipt approval_digest = [""], want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/parse
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-verb-unknown
+    v0151b_test.go:313: receipt approval_digest = ["sha256:4ad496abc3e2134c128be25a5973c02d7bd4e22f3cdea6d639eed566fcda7f18"], want exactly "corrupt:decision_verb"
+=== CONT  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-principal-empty
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-null
+    v0151b_test.go:313: receipt approval_digest = ["sha256:10dabbfb4d67ccc8b65ebff6f15963fdacf813459920d20691a04847322b6459"], want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-empty
+    v0151b_test.go:313: receipt approval_digest = ["sha256:c187babb37581c62364dbba9d1a3b56b498fa7f62200e17e6d9ad206967ec040"], want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-authorized-orphan
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-principal-empty
+    v0151b_test.go:313: receipt approval_digest = ["sha256:cd588a78bfdbb917ea982e02a6301d86619d33422bf50a73c86d1180414abcd1"], want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id-recovery
+=== NAME  TestV0151B_P2_6_sister_theFinishSealsTheExactMark/parse
+    v0151b_test.go:313: receipt approval_digest = ["sha256:5af69088b71bf139d3e923fe8bb1fceb0def1dea7fe3add655fcf2b1ffb6c251"], want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-crash-orphan
+--- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/clock-verb-on-approved (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/hostile-bytes (0.22s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/scan (0.33s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/unreadable (0.36s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/row-deleted (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-unknown (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/status-reset-pending (0.33s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-verb-unknown (0.25s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-null (0.34s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-at-empty (0.36s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/decision-principal-empty (0.34s)
+    --- FAIL: TestV0151B_P2_6_sister_theFinishSealsTheExactMark/parse (0.41s)
+=== CONT  TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-failed
+=== CONT  TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-succeeded
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/scan
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/clock-verb-on-approved
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/unreadable
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/hostile-bytes
+--- PASS: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark (0.00s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id (0.31s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-authorized-orphan (0.26s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/reused-action-id-recovery (0.26s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/recovery-crash-orphan (0.23s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-succeeded (0.18s)
+    --- PASS: TestV0151B_P2_6_sister_aPlainActionSealsNoApprovalMark/finish-failed (0.21s)
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/scan
+    v0151b_test.go:341: recovered receipt approval_digest = [""], want exactly "corrupt:row_scan"
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/row-deleted
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/clock-verb-on-approved
+    v0151b_test.go:341: recovered receipt approval_digest = ["sha256:ff00490655870c39123f5662fc01be3288030717418947406cb5d0138027cf58"], want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-reset-pending
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/hostile-bytes
+    v0151b_test.go:341: recovered receipt approval_digest = [""], want exactly "corrupt:row_scan"
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-unknown
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/unreadable
+    v0151b_test.go:341: recovered receipt approval_digest = [""], want exactly "unreadable:driver"
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-empty
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/row-deleted
+    v0151b_test.go:341: recovered receipt approval_digest = [""], want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-verb-unknown
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-reset-pending
+    v0151b_test.go:341: recovered receipt approval_digest = [""], want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-null
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-verb-unknown
+    v0151b_test.go:341: recovered receipt approval_digest = ["sha256:4e7153518dd77cfd33e9f615fe78c97b13094c884e283599c0758eb421013279"], want exactly "corrupt:decision_verb"
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/parse
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-empty
+    v0151b_test.go:341: recovered receipt approval_digest = ["sha256:48af533dda3788f9cecb6df3bf2e0c271a2da540c45083c41c8ddfd32157d4d5"], want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-principal-empty
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-unknown
+    v0151b_test.go:341: recovered receipt approval_digest = ["sha256:b1562cdc60a8d0f98b25d2069377f7edfa7181522c9a1aa2e6a775b914fbfa9d"], want exactly "corrupt:status"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/control
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-null
+    v0151b_test.go:341: recovered receipt approval_digest = ["sha256:e5b6055f3b894227b2c6e61ba3bacbd3b81d8cdbce5006ca5b30d7dd1594e91a"], want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/human-verb-on-clock-row
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/parse
+    v0151b_test.go:341: recovered receipt approval_digest = ["sha256:047cb1b93a848488a339a29a9fc5cbd6a42e90b4231a504134fd360f8eaa812e"], want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision-verb-unknown
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-null
+=== NAME  TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-principal-empty
+    v0151b_test.go:341: recovered receipt approval_digest = ["sha256:9db37b5b5d291d932eedc618891e805f807e67cc8bafb3c992778eeecaf7c7aa"], want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-empty
+--- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/scan (0.25s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/clock-verb-on-approved (0.25s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/hostile-bytes (0.30s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/unreadable (0.33s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/row-deleted (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-reset-pending (0.55s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-verb-unknown (0.59s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-empty (0.61s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/status-unknown (0.75s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-at-null (0.48s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/parse (0.34s)
+    --- FAIL: TestV0151B_P2_6_sister_theRecoverySealsTheExactMark/decision-principal-empty (0.37s)
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/human-verb-on-clock-row
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:c8797d848c67dff7dce36f2c631e07d1c19a1c63bdcdbf6d26dddd59f37ed689", want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-garbage
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision-verb-unknown
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:ec073688dc118e8933e5eac7e882c2d249da99be848bf24ae1a702b3ef45ff67", want exactly "corrupt:decision_verb"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row-deleted
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-empty
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:af0bf9739414cb7ee5aaf14d30f6c379fa4fe4a53e098a28a324d8db419015e0", want exactly "corrupt:decision_at"
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-null
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:8317a74d464a8bf7afddd87d0558ca50564736884751acc39f47e84d297e644a", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/clock-with-principal
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-reset-pending
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-garbage
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:e169c0d179b42cce4c371e3dd3e5d9b4fe914c753d0050dd9d04196b2a79e898", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row_scan
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/clock-with-principal
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:171457c15928b8c07b9c895871cb2bb4b45b9a71b347ae52cae22852a1f4ca72", want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-unknown
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row-deleted
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/clock-verb-with-principal
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row_scan
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:row_scan"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/control
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-reset-pending
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision-verb-unknown
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-unknown
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:93c698789b4c8c1e8c78128b17c85468548b8959485ef41a168b40576acdcebe", want exactly "corrupt:status"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-null
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/clock-verb-with-principal
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:9c164c82501a63623002ce57e09e177b3d5f50d53548c0b9ec51ff1ab228e5f3", want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-empty
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/human-without-principal
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision-verb-unknown
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:6c115291c7f00eb6442629eca1764b1a63cf2fbfe2d2f6ed76f020f02f62b1a2", want exactly "corrupt:decision_verb"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-reset-pending
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-null
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:a8383686e91149dd40f7de60042152023d95bac75efd4b6b253c28b79ca464e3", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row-deleted
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-empty
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:864f8c15a20b1e81ff862e67337268eabd7badeeb5a600a73122674a0c41c26c", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-garbage
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/human-without-principal
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:3fc20c019fdf7f0bf49a9ead7a589434a509a25ebcd6ac225a445d975abac771", want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-unknown
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-reset-pending
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/control
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row-deleted
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/human-verb-on-clock-row
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-garbage
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:db2c5270fcecb5ab5462f54236a27a168dbde411f8eb0e41a9da1ad4ba39ca20", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row_scan
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-unknown
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:a9ae932f6f1f884a2a56e55b49e3ae3eb9c0ff9cb155305abbda01e612fe7db2", want exactly "corrupt:status"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision-verb-unknown
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-null
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/human-verb-on-clock-row
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:70b2b290b47f96298fd26eb2e30189fae035a48c1a907eb98e70c445aa7c53d6", want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-empty
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row_scan
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:row_scan"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-reset-pending
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision-verb-unknown
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:31d2b2d9a7b5beba293bf21e71b2517bf060dd39aac945920e0c7c9f6ca99a19", want exactly "corrupt:decision_verb"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-garbage
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-null
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:bd50ac04502a0234ab5fea707426e7fe59b7d6057b59cddb971b9157dadcb86f", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row-deleted
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-empty
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:08e67a33595c11d57e0205fc5b51cb55216a321c4ddc69e46c6bf7d54bb1d7a1", want exactly "corrupt:decision_at"
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-reset-pending
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/clock-with-principal
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row_scan
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-garbage
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:f773b4f2aeb2e1a203d7eebdc76e463fa76766f5135fda585beb5f21e19a4971", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-unknown
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row-deleted
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/control
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row_scan
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:row_scan"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/human-without-principal
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/clock-with-principal
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:718a6ee65d881de6a7d65d692d79afb480430a4f5c1f3c41799c1f952fd286ff", want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/clock-verb-with-principal
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-unknown
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:ad086513063050e0965bda3c83af46bcb5b047c3b9e6f780ce94515c18b4705f", want exactly "corrupt:status"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision-verb-unknown
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-empty
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/human-without-principal
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:8d134a55bef46fe77cafbb067d5797d5cf4ad429446e1f86eaaf60a86f86447d", want exactly "corrupt:decision_principal"
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/clock-verb-with-principal
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:bc51ad60c9c03d3617c3ba16477c5e162c37332e027e6e641ee85ccca3045689", want exactly "corrupt:decision_principal"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-garbage
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-reset-pending
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision-verb-unknown
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:2e8dc836281a1b38a995ce024e2011ed62182dec62ad9cdec360a1b189060adc", want exactly "corrupt:decision_verb"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row-deleted
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-empty
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:f6206f909092b3be4b660a1765526584b52c8b90767c79a08b105522e8118dfe", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-null
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-reset-pending
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-unknown
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-garbage
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:393593f851950b2316d1d6ff038043c6df95982718a92246e30b07f5a79113dc", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row_scan
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row-deleted
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:approval_missing"
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-approve
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-null
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:ee1ca2fb09a4dcc3749a1999e4bf5e78927077ea3573682068898cc46c500d90", want exactly "corrupt:decision_at"
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-reject
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-unknown
+    v0151b_test.go:542: REJECTED receipt approval_digest = "sha256:0331fe9f9fb06b9a8e00dec2e6c4378dcc18cad0ddde1e3230269c7e15f35ff3", want exactly "corrupt:status"
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-reject
+=== NAME  TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row_scan
+    v0151b_test.go:542: REJECTED receipt approval_digest = "", want exactly "corrupt:row_scan"
+--- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark (0.01s)
+    --- PASS: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/control (0.24s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/human-verb-on-clock-row (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision-verb-unknown (0.31s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-empty (0.30s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-null (0.32s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/decision_at-garbage (0.28s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/clock-with-principal (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row-deleted (0.32s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/row_scan (0.30s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-reset-pending (0.39s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/status-unknown (0.24s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/clock-verb-with-principal (0.31s)
+    --- PASS: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/sweep/control (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision-verb-unknown (0.28s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-null (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-empty (0.24s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/human-without-principal (0.28s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-reset-pending (0.28s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row-deleted (0.31s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/decision_at-garbage (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/status-unknown (0.27s)
+    --- PASS: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/control (0.28s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/human-verb-on-clock-row (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-cancel/row_scan (0.25s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision-verb-unknown (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-null (0.28s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-empty (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-reset-pending (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/decision_at-garbage (0.29s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row-deleted (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/row_scan (0.30s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/clock-with-principal (0.33s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/status-unknown (0.28s)
+    --- PASS: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/expiry-touch/control (0.32s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/clock-verb-with-principal (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/human-without-principal (0.29s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision-verb-unknown (0.27s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-empty (0.28s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-reset-pending (0.31s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-garbage (0.32s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row-deleted (0.32s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/decision_at-null (0.30s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/status-unknown (0.26s)
+    --- FAIL: TestV0151B_P2_6_sister_theRejectPathSealsTheExactMark/decide-reject/row_scan (0.27s)
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-approve
+=== NAME  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-approve
+    v0151b_test.go:412: err = action/sqlite: begin decision: sql: database is closed, want ErrApprovalUnreadable
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/list
+=== NAME  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-reject
+    v0151b_test.go:412: err = action/sqlite: begin decision: sql: database is closed, want ErrApprovalUnreadable
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/get
+=== NAME  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-reject
+    v0151b_test.go:412: err = SQL logic error: no such table: approvals (1), want ErrApprovalUnreadable
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/list
+=== NAME  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/list
+    v0151b_test.go:412: err = action/sqlite: list approvals: sql: database is closed, want ErrApprovalUnreadable
+=== CONT  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/get
+=== NAME  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-approve
+    v0151b_test.go:412: err = SQL logic error: no such table: approvals (1), want ErrApprovalUnreadable
+=== CONT  TestV0151B_P2_6_aCancelledContextIsNeverCorruption/list
+=== NAME  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/get
+    v0151b_test.go:409: err = action/sqlite: approval "apr_060982464ae8cec350ee961cb70b302a": action/sqlite: the approval's stored evidence no longer verifies: SQL logic error: no such table: approvals (1): a driver failure published as corrupt evidence
+=== CONT  TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-approve
+=== NAME  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/list
+    v0151b_test.go:412: err = action/sqlite: list approvals: SQL logic error: no such table: approvals (1), want ErrApprovalUnreadable
+=== CONT  TestV0151B_P2_6_aCancelledContextIsNeverCorruption/get
+=== NAME  TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/get
+    v0151b_test.go:409: err = action/sqlite: approval "apr_3ad55873574a2055d9f59c92f7a00a95": action/sqlite: the approval's stored evidence no longer verifies: sql: database is closed: a driver failure published as corrupt evidence
+--- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption (0.00s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-approve (0.26s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/decide-reject (0.22s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-reject (0.26s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/list (0.20s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/decide-approve (0.27s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/get (0.25s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/dropped/list (0.24s)
+    --- FAIL: TestV0151B_P2_6_aDriverFailureIsNeverCorruption/closed/get (0.23s)
+=== CONT  TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-reject
+=== NAME  TestV0151B_P2_6_aCancelledContextIsNeverCorruption/list
+    v0151b_test.go:176: err = action/sqlite: list approvals: context canceled, want ErrApprovalUnreadable — transient, by name
+=== NAME  TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-approve
+    v0151b_test.go:176: err = action/sqlite: begin decision: context canceled, want ErrApprovalUnreadable — transient, by name
+=== NAME  TestV0151B_P2_6_aCancelledContextIsNeverCorruption/get
+    v0151b_test.go:170: err = action/sqlite: approval "apr_b73a0eb71adc86579e92f1962d084274": action/sqlite: the approval's stored evidence no longer verifies: context canceled: a cancelled request published as corrupt evidence
+=== NAME  TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-reject
+    v0151b_test.go:176: err = action/sqlite: begin decision: context canceled, want ErrApprovalUnreadable — transient, by name
+--- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption (0.00s)
+    --- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption/list (0.23s)
+    --- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-approve (0.27s)
+    --- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption/get (0.23s)
+    --- FAIL: TestV0151B_P2_6_aCancelledContextIsNeverCorruption/decide-reject (0.22s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	8.214s
+FAIL
+# exit: 1

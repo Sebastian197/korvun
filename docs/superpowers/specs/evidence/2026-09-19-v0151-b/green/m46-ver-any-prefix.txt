@@ -1,0 +1,35 @@
+# id: m46-ver-any-prefix
+# guard: P2-6 verifiers: accept any corrupt:/unreadable: prefix
+# date: 2026-09-19T16:57:03.755410+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_6_sister_(theVerifiersFailNamingEachMark|aValueOutsideTheListFailsClosed|aPlainOrphanVerifiesClean)' ./internal/cli/
+# --- mutation diff ---
+--- a/internal/cli/receipt.go
++++ b/internal/cli/receipt.go
+@@ -231,6 +231,10 @@
+ 		// (a sha256: prefix of the wrong shape included) fails closed.
+ 		approvalArm = false
+ 		switch class, ok := actionsqlite.ApprovalMarkClass(r.ApprovalDigest); {
++		case strings.HasPrefix(r.ApprovalDigest, "corrupt:"): // MUTATION
++			fail("approval_evidence_corrupt", "%s", r.ApprovalDigest)
++		case strings.HasPrefix(r.ApprovalDigest, "unreadable:"): // MUTATION
++			fail("approval_evidence_unreadable", "%s", r.ApprovalDigest)
+ 		case ok && class == "corrupt":
+ 			fail("approval_evidence_corrupt", "the receipt seals %s: the approval row could not be used when it was sealed", r.ApprovalDigest)
+ 		case ok:
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed (0.00s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/intact-row (0.04s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/unreadable:not_in_the_list/pruned (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/intact-row (0.08s)
+    --- FAIL: TestV0151B_P2_6_sister_aValueOutsideTheListFailsClosed/corrupt:not_in_the_list/pruned (0.09s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	1.266s
+FAIL
+# first failing assertion: v0151b_test.go:617: failures = [approval_evidence_unreadable: unreadable:not_in_the_list], want exactly [approval_evidence_unknown_mark: …]
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/cli	1.374s
+# exit (restored): 0

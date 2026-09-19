@@ -1,0 +1,32 @@
+# id: m05-p28-brains-last
+# guard: P2-8: resolve from cfg.Brains[len(a.cfg.Brains)-1]
+# date: 2026-09-19T16:51:44.870219+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_8' ./internal/app/
+# --- mutation diff ---
+--- a/internal/app/approvals_adapter.go
++++ b/internal/app/approvals_adapter.go
+@@ -221,7 +221,7 @@
+ 	if id == "" {
+ 		return ""
+ 	}
+-	_, pin, err := a.resolveLawFor(ctx, id)
++	_, pin, err := ResolveApprovalLaw(a.cfg, a.cfg.Brains[len(a.cfg.Brains)-1].Name) // MUTATION
+ 	if err != nil {
+ 		return ""
+ 	}
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains (0.06s)
+    --- FAIL: TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains/detail (0.04s)
+    --- FAIL: TestV0151B_P2_8_theCurrentLawIsTheApprovalsOwnBrains/approve (0.02s)
+--- FAIL: TestV0151B_P2_8_theClaimDoorNeverPublishesAnotherBrainsLaw (0.02s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.674s
+FAIL
+# first failing assertion: v0151b_test.go:149: current_law_digest = "sha256:71a0c634fa2fc5fca24c2cb23b2ce89a9fee4b84a86582023aeade319c4a0493", want b's "sha256:7ac5e2cadcd8b2e7c2f184040adafacd7649a23df6d4e69183c3e3e1fde6d2da" (a "sha256:ebdcc4c327c5a0be36474d0b0c1f4715994b03372634fd1ab233c97278c8064a", c "sha256:71a0c634fa2fc5fca24c2cb23b2ce89a9fee4b84a86582023aeade319c4a0493")
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/app	0.740s
+# exit (restored): 0

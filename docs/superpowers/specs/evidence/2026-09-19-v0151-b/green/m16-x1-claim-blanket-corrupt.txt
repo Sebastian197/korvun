@@ -1,0 +1,14 @@
+# id: m16-x1-claim-blanket-corrupt
+# guard: X1 queued rows: keep the claim's blanket corrupt wrap
+# date: 2026-09-19T16:53:18.303877+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestClaim_' ./internal/action/sqlite/
+# --- mutation diff ---
+# ANCHOR NOT UNIQUE (0) in internal/action/sqlite/approvals_v15.go: '\t\treturn nil, action.Operation{}, err\n\t}\n\tif law != nil {'
+# --- mutated run (FAIL/ok lines) ---
+# first failing assertion: (none captured)
+# exit (mutated): -1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+# exit (restored): -1

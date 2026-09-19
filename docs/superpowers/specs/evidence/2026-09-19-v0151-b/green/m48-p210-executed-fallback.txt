@@ -1,0 +1,47 @@
+# id: m48-p210-executed-fallback
+# guard: P2-10: fall back to executed for any non-failed 2xx
+# date: 2026-09-19T17:03:09.874589+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 5176805b7ecc714a493fe72ac57a136e7060dc85
+# command (cwd cmd/korvun-desktop/frontend): npx vitest run src/views/Approvals.v0151b.test.tsx
+# --- mutation diff ---
+--- a/cmd/korvun-desktop/frontend/src/views/Approvals.tsx
++++ b/cmd/korvun-desktop/frontend/src/views/Approvals.tsx
+@@ -144,7 +144,7 @@
+   status: number,
+   body: unknown,
+ ): Exclude<Decision, null | { kind: 'sending' } | { kind: 'named' } | { kind: 'lost' }> | null {
+-  if (status !== 200 || typeof body !== 'object' || body === null) return null
++  if (typeof body !== 'object' || body === null) return null // MUTATION
+   const b = body as Record<string, unknown>
+   const optional = (v: unknown): v is string | undefined => v === undefined || typeof v === 'string'
+   if (typeof b.outcome !== 'string' || typeof b.receipt_id !== 'string') return null
+@@ -153,7 +153,7 @@
+   if (verb === 'reject') return b.outcome === 'rejected' ? { kind: 'rejected', receipt } : null
+   const digest = b.digest ?? ''
+   const result = b.result ?? ''
+-  if (b.outcome === 'executed') return { kind: 'executed', digest, result, receipt }
++  if (b.outcome !== 'failed') return { kind: 'executed', digest, result, receipt } // MUTATION
+   // The tool ran and said no. It is a KNOWN outcome with its receipt: calling
+   // it executed would be a lie, and calling it unknown would be a second one.
+   if (b.outcome === 'failed') return { kind: 'failed', digest, detail: result, receipt }
+# --- mutated run (FAIL/ok lines) ---
+     × P2-10 · approve con outcome «rejected»: el literal de respuesta no reconocida, nada afirmado 73ms
+     × P2-10 · approve con outcome «EXECUTED»: el literal de respuesta no reconocida, nada afirmado 73ms
+     × P2-10 · approve con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 71ms
+     × P2-10 · approve con un 202 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 70ms
+     × P2-10 · reject con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 64ms
+ Test Files  1 failed (1)
+      Tests  5 failed | 25 passed (30)
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con outcome «rejected»: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con outcome «EXECUTED»: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · approve con un 202 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado
+ FAIL  src/views/Approvals.v0151b.test.tsx > P2-10 · el protocolo de la respuesta a un POST > P2-10 · reject con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado
+# first failing assertion: TestingLibraryElementError: Unable to find an element with the text: El servidor respondió, pero esta pantalla no sabe leer su respuesta. No afirma que se ejecutó ni que falló. Mira el libro antes de repetir nada.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 5176805b7ecc714a493fe72ac57a136e7060dc85 (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ Test Files  1 passed (1)
+      Tests  30 passed (30)
+# exit (restored): 0

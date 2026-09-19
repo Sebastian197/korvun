@@ -1,0 +1,28 @@
+# id: m67-reject-commits-on-failure
+# guard: P3-e: a failed reject commits its approval close (the request would not stay decidable)
+# date: 2026-09-19T18:06:13.365500+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: d663a137a5646d192b6d4a2ad7eb85ec1d74a06d
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable' ./internal/app/
+# --- mutation diff ---
+--- a/internal/action/sqlite/approvals.go
++++ b/internal/action/sqlite/approvals.go
+@@ -321,6 +321,7 @@
+ 		}
+ 	} else {
+ 		if err := s.rejectParkedActionTx(ctx, tx, a.ActionID, at); err != nil {
++			_ = tx.Commit() // MUTATION
+ 			return "", err
+ 		}
+ 		// A close without execution purges the raw canonical params.
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_9_rejectUnderADriverFailureStaysUnavailable (0.04s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.714s
+FAIL
+# first failing assertion: v0151b_test.go:390: after the trigger is gone the request must still be rejectable: approvals: already decided
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = d663a137a5646d192b6d4a2ad7eb85ec1d74a06d (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/app	0.722s
+# exit (restored): 0

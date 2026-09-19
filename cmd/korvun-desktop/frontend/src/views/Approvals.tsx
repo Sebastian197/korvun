@@ -21,12 +21,16 @@ import type { JSX } from 'react'
 import { desktop } from '../lib/go'
 import {
   ESC_LINE,
+  LOOPBACK_ONLY,
+  MALFORMED_ROW_ID,
   OUTCOME_TEXT,
   PARAMS_STATE_TEXT,
   PERMANENT_LINE,
+  POST_PARAMS_MISMATCH,
   SURFACE_NOT_MOUNTED,
   UNKNOWN_NAME_TITLE,
   UNREADABLE_TITLE,
+  UNRECOGNISED_SUCCESS,
   classBanner,
 } from './approvalsText'
 
@@ -69,7 +73,7 @@ interface Gate {
  * screen could not read. The three are disjoint on purpose — collapsing the
  * third into "empty" is the fail-open FR-UI-37 forbids. */
 type Answer<T> =
-  | { kind: 'ok'; value: T }
+  | { kind: 'ok'; value: T; status: number }
   | { kind: 'named'; name: string; message: string; currentLaw: string; status: number }
   | { kind: 'unreadable'; detail: string }
 
@@ -120,6 +124,41 @@ function isDigest(d: string): boolean {
   return DIGEST_RE.test(d)
 }
 const tailOf = (d: string): string => d.slice(-6)
+
+/** apr_ + 32 lowercase hex, the shape action.NewApprovalID mints (v0.15.1
+ * block B, P2-1). An id is untrusted bytes from the core: a row whose id does
+ * not have this shape is listed and never opened, and no URL is ever built
+ * from one. */
+const APPROVAL_ID_RE = /^apr_[0-9a-f]{32}$/
+function isApprovalID(id: string): boolean {
+  return APPROVAL_ID_RE.test(id)
+}
+
+/** The committed outcome of a POST, judged by protocol (P2-10): only a 200
+ * whose body is exactly one of the success shapes the core sends
+ * (controlapi.ApprovalOutcome) paints an outcome. Anything else — another 2xx,
+ * an outcome that is not the verb's, a field of the wrong type — is null, and
+ * the screen affirms nothing. */
+function judgeDecision(
+  verb: 'approve' | 'reject',
+  status: number,
+  body: unknown,
+): Exclude<Decision, null | { kind: 'sending' } | { kind: 'named' } | { kind: 'lost' }> | null {
+  if (status !== 200 || typeof body !== 'object' || body === null) return null
+  const b = body as Record<string, unknown>
+  const optional = (v: unknown): v is string | undefined => v === undefined || typeof v === 'string'
+  if (typeof b.outcome !== 'string' || typeof b.receipt_id !== 'string') return null
+  if (!optional(b.digest) || !optional(b.result)) return null
+  const receipt = b.receipt_id
+  if (verb === 'reject') return b.outcome === 'rejected' ? { kind: 'rejected', receipt } : null
+  const digest = b.digest ?? ''
+  const result = b.result ?? ''
+  if (b.outcome === 'executed') return { kind: 'executed', digest, result, receipt }
+  // The tool ran and said no. It is a KNOWN outcome with its receipt: calling
+  // it executed would be a lie, and calling it unknown would be a second one.
+  if (b.outcome === 'failed') return { kind: 'failed', digest, detail: result, receipt }
+  return null
+}
 
 /** The 64 hex in eight groups of eight, the ONE grouping of the document. */
 function digestGroups(d: string): string[] {
@@ -246,7 +285,7 @@ async function ask<T>(url: string, init?: RequestInit): Promise<Answer<T>> {
     }
   }
   if (!res.ok) return { kind: 'unreadable', detail: text }
-  return { kind: 'ok', value: body as T }
+  return { kind: 'ok', value: body as T, status: res.status }
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +371,15 @@ interface NamedProps {
   onBack?: () => void
 }
 
+/** E3's lines, one text wherever `disabled` arrives: the list, the detail, or
+ * a POST. */
+const DISABLED_LINES = [
+  'Con las aprobaciones apagadas ya no se retiene nada nuevo',
+  'Una acción irreversible se ejecuta ahora en el momento en que el agente la llama. Esto no es una bandeja vacía: es un hueco en la garantía.',
+  'Y lo que se aparcó ANTES de apagar el interruptor sigue vivo en el almacén: esta pantalla no puede enseñártelo con las aprobaciones apagadas, y solo se decide desde la CLI hasta que el barrendero lo cierre.',
+  'Se enciende en el perfil: approvals.enabled',
+]
+
 /** The names both surfaces share. Returns null when the caller must handle the
  * name itself (the detail's decision states). */
 function SharedNamed({ answer, onRetry, onGoHome }: NamedProps): JSX.Element | null {
@@ -353,15 +401,7 @@ function SharedNamed({ answer, onRetry, onGoHome }: NamedProps): JSX.Element | n
       )
     case 'disabled':
       return (
-        <State
-          title="APROBACIONES APAGADAS EN ESTE PERFIL"
-          lines={[
-            'Con las aprobaciones apagadas ya no se retiene nada nuevo',
-            'Una acción irreversible se ejecuta ahora en el momento en que el agente la llama. Esto no es una bandeja vacía: es un hueco en la garantía.',
-            'Y lo que se aparcó ANTES de apagar el interruptor sigue vivo en el almacén: esta pantalla no puede enseñártelo con las aprobaciones apagadas, y solo se decide desde la CLI hasta que el barrendero lo cierre.',
-            'Se enciende en el perfil: approvals.enabled',
-          ]}
-        >
+        <State title="APROBACIONES APAGADAS EN ESTE PERFIL" lines={DISABLED_LINES}>
           <Actions>
             <ConfigFolderButton />
           </Actions>
@@ -652,13 +692,28 @@ function PendingList({
         {rows.map((r) => {
           const banner = classBanner(r.effect_class)
           const whole = !isDigest(r.digest) || collided.has(tailOf(r.digest))
+          if (!isApprovalID(r.id)) {
+            // P2-1: listed, so the operator sees it exists; not a button, so it
+            // is neither opened nor decided, and no URL is built from its id.
+            return (
+              <li key={r.id}>
+                <div className="approvals-row">
+                  <span className="approvals-row-op">{escapeUntrusted(r.operation)}</span>
+                  <span className="approvals-row-class">{banner.label}</span>
+                  <span className="approvals-row-origin">{escapeUntrusted(r.origin)}</span>
+                  <span className="approvals-row-id">{escapeUntrusted(r.id)}</span>
+                  <p role="status">{MALFORMED_ROW_ID}</p>
+                </div>
+              </li>
+            )
+          }
           return (
             <li key={r.id}>
               <button type="button" className="approvals-row" onClick={() => onOpen(r.id)}>
                 <span className="approvals-row-op">{escapeUntrusted(r.operation)}</span>
                 <span className="approvals-row-class">{banner.label}</span>
                 <span className="approvals-row-origin">{escapeUntrusted(r.origin)}</span>
-                <span className="approvals-row-id">{r.id}</span>
+                <span className="approvals-row-id">{escapeUntrusted(r.id)}</span>
                 <span className="approvals-row-digest">
                   {!isDigest(r.digest) ? (
                     <>
@@ -692,6 +747,7 @@ type Decision =
   | { kind: 'rejected'; receipt: string }
   | { kind: 'named'; name: string; message: string; currentLaw: string; status: number }
   | { kind: 'lost'; verb: 'approve' | 'reject' }
+  | { kind: 'unrecognised' }
 
 function RequestDetail({
   id,
@@ -719,6 +775,12 @@ function RequestDetail({
     setPasteRefused(false)
     setDecision(null)
     autofocused.current = false
+    // P2-1: the list never opens a malformed id; this refuses to build the URL
+    // even if something else ever does.
+    if (!isApprovalID(id)) {
+      setAnswer({ kind: 'named', name: 'malformed id', message: '', currentLaw: '', status: 0 })
+      return
+    }
     void ask<Detail>(`/api/approvals/${id}`).then(setAnswer)
   }, [id])
   // Asked ONCE on opening; refreshing is [Volver a leer], which clears the
@@ -786,32 +848,15 @@ function RequestDetail({
 
   const send = useCallback(
     (verb: 'approve' | 'reject', body: string) => {
+      if (!isApprovalID(id)) return
       setDecision({ kind: 'sending' })
-      void ask<{ outcome: string; digest?: string; result?: string; receipt_id: string }>(
-        `/api/approvals/${id}/${verb}`,
-        { method: 'POST', headers: { 'content-type': 'application/json' }, body },
-      ).then((a) => {
+      void ask<unknown>(`/api/approvals/${id}/${verb}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+      }).then((a) => {
         if (a.kind === 'ok') {
-          setDecision(
-            verb === 'approve'
-              ? a.value.outcome === 'failed'
-                ? {
-                    // The tool ran and said no. It is a KNOWN outcome with its
-                    // receipt: calling it executed would be a lie, and calling
-                    // it unknown would be a second one.
-                    kind: 'failed',
-                    digest: a.value.digest ?? '',
-                    detail: a.value.result ?? '',
-                    receipt: a.value.receipt_id,
-                  }
-                : {
-                    kind: 'executed',
-                    digest: a.value.digest ?? '',
-                    result: a.value.result ?? '',
-                    receipt: a.value.receipt_id,
-                  }
-              : { kind: 'rejected', receipt: a.value.receipt_id },
-          )
+          setDecision(judgeDecision(verb, a.status, a.value) ?? { kind: 'unrecognised' })
           return
         }
         if (a.kind === 'unreadable') {
@@ -982,7 +1027,9 @@ function RequestDetail({
             <p data-testid="approval-parameters">
               {paramsPresent ? escapeUntrusted(d.parameters) : paramsText}
             </p>
-            {d.parameters_state === 'too_large' && <p>korvun approvals show {d.id}</p>}
+            {d.parameters_state === 'too_large' && (
+              <p>korvun approvals show {escapeUntrusted(d.id)}</p>
+            )}
           </section>
 
           <section>
@@ -1244,6 +1291,14 @@ function ReadRefusal({
     </button>
   )
   switch (answer.name) {
+    // A synthetic name, spelled with a space like 'core stopped', so no name
+    // the server registers can collide with it.
+    case 'malformed id':
+      return (
+        <State title={MALFORMED_ROW_ID} lines={[]}>
+          <Actions>{back}</Actions>
+        </State>
+      )
     case 'expired':
       return (
         <State
@@ -1345,7 +1400,11 @@ function DecisionState({
     return (
       <State
         title="Ejecutada"
-        lines={[detail.digest, escapeUntrusted(decision.result), `Recibo ${decision.receipt}`]}
+        lines={[
+          detail.digest,
+          escapeUntrusted(decision.result),
+          `Recibo ${escapeUntrusted(decision.receipt)}`,
+        ]}
         alert
       >
         <Actions>{back}</Actions>
@@ -1361,7 +1420,7 @@ function DecisionState({
           'La ejecución se intentó y no salió bien. El registro se cerró con su recibo, así que esto no es una duda sobre la DECISIÓN.',
           'La herramienta se negó antes de que nada saliera, o falló sin llegar a entregar nada. Cuando el binario NO puede afirmar eso, esta pantalla no dice «falló»: dice que no se sabe. Mira el libro antes de repetir nada.',
           escapeUntrusted(decision.detail),
-          `Recibo ${decision.receipt}`,
+          `Recibo ${escapeUntrusted(decision.receipt)}`,
         ]}
         alert
       >
@@ -1373,9 +1432,16 @@ function DecisionState({
     return (
       <State
         title="Rechazada. La acción aparcada se cierra con su recibo sellado."
-        lines={[`Recibo ${decision.receipt}`]}
+        lines={[`Recibo ${escapeUntrusted(decision.receipt)}`]}
         alert
       >
+        <Actions>{back}</Actions>
+      </State>
+    )
+  }
+  if (decision.kind === 'unrecognised') {
+    return (
+      <State title={UNRECOGNISED_SUCCESS} lines={[]} alert>
         <Actions>{back}</Actions>
       </State>
     )
@@ -1406,6 +1472,52 @@ function DecisionState({
     )
   }
   switch (decision.name) {
+    // P2-10: the registered names a POST can carry, each under its own literal
+    // (UX v36 for not_found, unavailable and disabled; the 2026-09-19 approved
+    // literals for params_digest_mismatch and loopback_only). None affirms an
+    // outcome.
+    case 'not_found':
+      return (
+        <State title="No hay ninguna petición con ese identificador." lines={[]} alert>
+          <Actions>{back}</Actions>
+        </State>
+      )
+    case 'unavailable':
+      return (
+        <State
+          title="El almacén no se pudo leer en este instante. Es transitorio y no dice nada sobre la evidencia."
+          lines={[]}
+          alert
+        >
+          <Actions>{back}</Actions>
+        </State>
+      )
+    case 'disabled':
+      return (
+        <State title="APROBACIONES APAGADAS EN ESTE PERFIL" lines={DISABLED_LINES} alert>
+          <Actions>
+            <ConfigFolderButton />
+            {back}
+          </Actions>
+        </State>
+      )
+    case 'params_digest_mismatch':
+      return (
+        <State title={POST_PARAMS_MISMATCH} lines={[]} alert>
+          <Actions>
+            <button type="button" className="btn-secondary" onClick={onReload}>
+              Volver a leer la petición
+            </button>
+            {back}
+          </Actions>
+        </State>
+      )
+    case 'loopback_only':
+      return (
+        <State title={LOOPBACK_ONLY} lines={[]} alert>
+          <Actions>{back}</Actions>
+        </State>
+      )
     case 'digest_mismatch':
       return (
         <State

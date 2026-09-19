@@ -1,0 +1,44 @@
+# id: m04-p27-refuse-loopback
+# guard: P2-7 over-refusal: refuse loopback too
+# date: 2026-09-19T16:51:33.010831+00:00
+# base: e030202651667ad0dfa90a456ba60bb188b18abd + the uncommitted green tree
+# code-tree hash before: 357f2d8d9efd6258ba701588ecfd72589a531b7b
+# command (cwd .): go test -count=1 -run 'TestV0151B_P2_7' ./internal/controlapi/ ./internal/app/
+# --- mutation diff ---
+--- a/internal/controlapi/peer.go
++++ b/internal/controlapi/peer.go
+@@ -21,7 +21,7 @@
+ 		host = r.RemoteAddr
+ 	}
+ 	ip := net.ParseIP(host)
+-	return ip != nil && ip.IsLoopback()
++	return false && ip != nil && ip.IsLoopback() // MUTATION
+ }
+ 
+ // loopbackOnlyApprovals refuses a non-loopback peer with 403 `loopback_only`
+# --- mutated run (FAIL/ok lines) ---
+--- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_GET_/api/approvals (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_GET_/api/approvals (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_GET_/api/approvals/apr_abababababababababababababababab (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_GET_/api/approvals/apr_abababababababababababababababab (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_POST_/api/approvals/apr_abababababababababababababababab/approve (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_POST_/api/approvals/apr_abababababababababababababababab/approve (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_127.0.0.1:40000_POST_/api/approvals/apr_abababababababababababababababab/reject (0.00s)
+    --- FAIL: TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer/loopback_[::1]:40000_POST_/api/approvals/apr_abababababababababababababababab/reject (0.00s)
+--- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer (0.00s)
+    --- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/127.0.0.1:40000 (0.00s)
+    --- FAIL: TestV0151B_P2_7_sister_theConsoleMessageRefusesARemotePeer/[::1]:40000 (0.00s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/controlapi	0.482s
+--- FAIL: TestV0151B_P2_7_loopbackPeersStillReachTheSurface (0.03s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.689s
+FAIL
+# first failing assertion: v0151b_test.go:178: control: the seam was called 0 time(s) for a loopback peer, want 1
+# exit (mutated): 1
+# restored: file sha256 equal = True; code-tree hash after = 357f2d8d9efd6258ba701588ecfd72589a531b7b (equal = True)
+# --- restored run (FAIL/ok lines) ---
+ok  	github.com/Sebastian197/korvun/internal/controlapi	0.467s
+ok  	github.com/Sebastian197/korvun/internal/app	0.690s
+# exit (restored): 0
