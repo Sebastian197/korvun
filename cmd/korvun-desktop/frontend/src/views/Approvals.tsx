@@ -141,21 +141,32 @@ function isReceiptID(id: string): boolean {
 }
 
 /** The committed outcome of a POST, judged by protocol (P2-10): only a 200
- * with the required fields for its outcome paints that outcome. Executed and
- * failed require the digest, non-empty result and minted receipt shape.
- * Anything else is null, and the screen affirms nothing. */
+ * with the required fields for its outcome paints that outcome. `executed` and
+ * `failed` require a minted receipt shape, a `result` that is a non-empty
+ * string, and a `digest` that is not merely well shaped but IDENTICAL to the
+ * one this screen sent with the request, so an answer about another action is
+ * never painted as this one's. `rejected` keeps the contract it had: its
+ * receipt is taken as the string it is — the screen escapes it where it prints
+ * it — and a `digest` or `result` of the wrong TYPE still refuses the whole
+ * answer. Nothing else paints anything, for either verb. */
 function judgeDecision(
   verb: 'approve' | 'reject',
   status: number,
   body: unknown,
+  sentDigest: string,
 ): Exclude<Decision, null | { kind: 'sending' } | { kind: 'named' } | { kind: 'lost' }> | null {
   if (status !== 200 || typeof body !== 'object' || body === null) return null
   const b = body as Record<string, unknown>
   if (typeof b.outcome !== 'string' || typeof b.receipt_id !== 'string') return null
   const receipt = b.receipt_id
-  if (verb === 'reject') return b.outcome === 'rejected' ? { kind: 'rejected', receipt } : null
+  const optional = (v: unknown): v is string | undefined => v === undefined || typeof v === 'string'
+  if (verb === 'reject') {
+    if (!optional(b.digest) || !optional(b.result)) return null
+    return b.outcome === 'rejected' ? { kind: 'rejected', receipt } : null
+  }
   if (!isReceiptID(receipt)) return null
   if (typeof b.digest !== 'string' || !isDigest(b.digest)) return null
+  if (b.digest !== sentDigest) return null
   if (typeof b.result !== 'string' || b.result === '') return null
   const digest = b.digest
   const result = b.result
@@ -853,7 +864,7 @@ function RequestDetail({
   }, [])
 
   const send = useCallback(
-    (verb: 'approve' | 'reject', body: string) => {
+    (verb: 'approve' | 'reject', body: string, sentDigest: string) => {
       if (!isApprovalID(id)) return
       setDecision({ kind: 'sending' })
       void ask<unknown>(`/api/approvals/${id}/${verb}`, {
@@ -862,7 +873,9 @@ function RequestDetail({
         body,
       }).then((a) => {
         if (a.kind === 'ok') {
-          setDecision(judgeDecision(verb, a.status, a.value) ?? { kind: 'unrecognised' })
+          setDecision(
+            judgeDecision(verb, a.status, a.value, sentDigest) ?? { kind: 'unrecognised' },
+          )
           return
         }
         if (a.kind === 'unreadable') {
@@ -882,7 +895,7 @@ function RequestDetail({
     [id],
   )
 
-  const reject = useCallback(() => send('reject', JSON.stringify({ comment })), [send, comment])
+  const reject = useCallback(() => send('reject', JSON.stringify({ comment }), ''), [send, comment])
 
   // Esc rejects while the request is open and undecided, typing included — and
   // is inert everywhere else (FR-UI-53), which is what gives it one meaning.
@@ -1128,7 +1141,7 @@ function RequestDetail({
                   type="button"
                   className="approvals-approve"
                   disabled={!armed || sending}
-                  onClick={() => send('approve', JSON.stringify({ digest: d.digest }))}
+                  onClick={() => send('approve', JSON.stringify({ digest: d.digest }), d.digest)}
                 >
                   Aprobar y ejecutar
                 </button>
@@ -1407,7 +1420,7 @@ function DecisionState({
       <State
         title="Ejecutada"
         lines={[
-          detail.digest,
+          decision.digest,
           escapeUntrusted(decision.result),
           `Recibo ${escapeUntrusted(decision.receipt)}`,
         ]}
@@ -1422,7 +1435,7 @@ function DecisionState({
       <State
         title="El intento falló"
         lines={[
-          detail.digest,
+          decision.digest,
           'La ejecución se intentó y no salió bien. El registro se cerró con su recibo, así que esto no es una duda sobre la DECISIÓN.',
           'La herramienta se negó antes de que nada saliera, o falló sin llegar a entregar nada. Cuando el binario NO puede afirmar eso, esta pantalla no dice «falló»: dice que no se sabe. Mira el libro antes de repetir nada.',
           escapeUntrusted(decision.detail),
