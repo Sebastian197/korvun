@@ -148,6 +148,36 @@ entrada saltada lleva `ApprovalID = ""` con el texto del error del `Scan` como
 razón. La otra puerta, `ListApprovals`, sí clasifica la misma fila: falla como
 evidencia corrupta y no como ilegible.
 
+### La forma del recibo vive solo en TypeScript
+
+Hallado y ejecutado por el adversario del bloque D (2026-09-20, sobre copias
+del árbol; sin captura en el árbol); fichado para la v0.15.2. La pantalla exige
+`rcpt_` + 32 hex minúsculas (`RECEIPT_ID_RE`, `Approvals.tsx`) para pintar una
+ejecución. En Go no hay `ValidReceiptID`, `action.NewReceiptID`
+(`internal/action/wire.go`) no tiene ningún test, y lo único que ata algo es un
+prefijo en `internal/cli/receipt.go`.
+
+**Reproducción:** acortar el recibo acuñado a 40 hex manteniendo el prefijo deja
+en verde `internal/action`, `internal/action/executor`, `internal/action/sqlite`,
+`internal/app`, `internal/controlapi` e `internal/cli`; la pantalla, en cambio,
+responde «esta pantalla no sabe leer su respuesta» a una ejecución real y
+sellada. Hoy no hay defecto vivo (16 bytes en hex dan 32 minúsculas), pero la
+costura no la sostiene ninguna prueba. La cura natural es un test en Go que fije
+la forma que la pantalla espera.
+
+### Un rechazo con `receipt_id` vacío imprime «Recibo » a secas
+
+Heredado de master, confirmado por el adversario del bloque D con captura del
+DOM renderizado; fichado para la v0.15.2. Un 200 de reject con `receipt_id: ""`
+pinta el título «Rechazada. La acción aparcada se cierra con su recibo sellado.»
+y, debajo, la línea «Recibo » vacía: un vacío tratado como presente en la
+superficie que anuncia lo contrario. En producción `decision_receipt_id` es
+`TEXT NOT NULL DEFAULT ''` y se escribe dentro de la transacción del decide, así
+que el camino solo se abre con una fila corrupta o reescrita desde fuera. El
+bloque D no lo cura porque exigir la forma del recibo en el rechazo deja sin
+sujeto un molde aprobado: el que prueba que la pantalla ESCAPA un recibo hostil
+al imprimirlo.
+
 ### Una clase de efecto futura se leería corrupta
 
 Declarado, predicho, no ejecutado (canto §5). Una clase de efecto escrita por un

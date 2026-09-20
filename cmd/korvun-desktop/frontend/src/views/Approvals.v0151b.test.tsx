@@ -257,22 +257,68 @@ describe('P2-10 · el protocolo de la respuesta a un POST', () => {
     ['approve', 'result numérico', 200, { outcome: 'executed', result: 5, receipt_id: 'rcp_x' }],
     ['approve', 'receipt_id ausente', 200, { outcome: 'executed', result: 'ok' }],
     ['approve', 'receipt_id numérico', 200, { outcome: 'executed', result: 'ok', receipt_id: 7 }],
+    // The two 2xx rows carry a body that is EXACT but for its status: minted
+    // receipt, well-shaped digest matching the one the screen sent, non-empty
+    // result. Only the status guard can refuse them, so widening it to any 2xx
+    // reddens these rows (mutation m-d4 in the canto). A body refused for some
+    // other reason would let that mutation live.
     [
       'approve',
       'un 201 con cuerpo de éxito',
       201,
-      { outcome: 'executed', result: 'ok', receipt_id: 'rcp_x' },
+      { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: RECEIPT },
     ],
     [
       'approve',
       'un 202 con cuerpo de éxito',
       202,
-      { outcome: 'executed', result: 'ok', receipt_id: 'rcp_x' },
+      { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: RECEIPT },
+    ],
+    [
+      'approve',
+      'outcome «executed_partially», que empieza por el verbo exacto',
+      200,
+      { outcome: 'executed_partially', digest: DIGEST, result: 'ok', receipt_id: RECEIPT },
+    ],
+    [
+      'approve',
+      'un digest bien formado pero distinto del que se envió',
+      200,
+      {
+        outcome: 'executed',
+        digest: `sha256:${'b'.repeat(64)}`,
+        result: 'ok',
+        receipt_id: RECEIPT,
+      },
+    ],
+    [
+      'approve',
+      'un failed con un digest bien formado pero distinto del que se envió',
+      200,
+      {
+        outcome: 'failed',
+        digest: `sha256:${'c'.repeat(64)}`,
+        result: 'boom',
+        receipt_id: RECEIPT,
+      },
     ],
     ['reject', 'outcome «executed»', 200, { outcome: 'executed', receipt_id: 'rcp_x' }],
     ['reject', 'receipt_id ausente', 200, { outcome: 'rejected' }],
     ['reject', 'receipt_id numérico', 200, { outcome: 'rejected', receipt_id: 7 }],
-    ['reject', 'un 201 con cuerpo de éxito', 201, { outcome: 'rejected', receipt_id: 'rcp_x' }],
+    ['reject', 'un 201 con cuerpo de éxito', 201, { outcome: 'rejected', receipt_id: RECEIPT }],
+    // The rejected contract is NOT widened by this train — its receipt is
+    // still taken as the string it is, because an approved mould proves the
+    // screen ESCAPES a hostile one where it prints it. What the train restores
+    // is the type guard the cure had moved below reject's early return: a
+    // `digest` or `result` of the wrong TYPE refuses the whole answer, as it
+    // did before (the audit's P2-1, a regression these two rows now watch).
+    ['reject', 'digest numérico', 200, { outcome: 'rejected', receipt_id: RECEIPT, digest: 7 }],
+    [
+      'reject',
+      'result objeto',
+      200,
+      { outcome: 'rejected', receipt_id: RECEIPT, result: { a: 1 } },
+    ],
   ]
   for (const [verb, label, status, body] of unrecognised) {
     it(`P2-10 · ${verb} con ${label}: el literal de respuesta no reconocida, nada afirmado`, async () => {

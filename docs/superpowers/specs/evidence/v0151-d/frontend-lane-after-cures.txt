@@ -1,0 +1,35 @@
+# The desktop frontend lane after the audit's cures (2026-09-20)
+$ npx tsc --noEmit
+npm warn config init.license Use `--init-license` instead.
+npm warn Unknown user config "init.licence". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown user config "init.name". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm notice run korvun-desktop-chrome@0.0.0 npx
+npm notice run 'tsc' --noEmit
+TYPECHECK_EXIT=0
+
+$ npx prettier --check src/views/Approvals.tsx src/views/Approvals.v0151b.test.tsx
+Checking formatting...
+[warn] src/views/Approvals.tsx
+[warn] src/views/Approvals.v0151b.test.tsx
+[warn] Code style issues found in 2 files. Run Prettier with --write to fix.
+
+$ npx eslint .
+/Users/sebastianmorenosaavedra/Desktop/korvun-d.nosync/cmd/korvun-desktop/frontend/src/views/Console.tsx
+  370:5  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/exhaustive-deps')
+
+✖ 1 problem (0 errors, 1 warning)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+
+LINT_EXIT=0
+
+$ npx vitest run
+ Test Files  44 passed (44)
+      Tests  487 passed (487)
+
+$ npx prettier --write (the two touched files) then --check
+Checking formatting...
+All matched files use Prettier code style!
+
+$ npx vitest run  (after the format pass)
+ Test Files  44 passed (44)
+      Tests  487 passed (487)

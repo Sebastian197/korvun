@@ -1,0 +1,34 @@
+# Probing mutations for the cures of the v0.15.1 block D audit (2026-09-20)
+# tree: /Users/sebastianmorenosaavedra/Desktop/korvun-d.nosync, HEAD d05b28cfcf9fb472894f5b3b64fc01681863b75e + the cure, uncommitted
+# command per run: npx vitest run src/views/Approvals.v0151b.test.tsx
+
+## m-d4 — widen the status guard from 200 to any 2xx
+158:  if (status < 200 || status > 299 || typeof body !== 'object' || body === null) return null
+     × P2-10 · approve con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 74ms
+     × P2-10 · approve con un 202 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 72ms
+     × P2-10 · reject con un 201 con cuerpo de éxito: el literal de respuesta no reconocida, nada afirmado 64ms
+ Test Files  1 failed (1)
+      Tests  3 failed | 49 passed (52)
+
+## m-d5 — outcome matched by prefix instead of exact equality
+173:  if (b.outcome.startsWith('exec')) return { kind: 'executed', digest, result, receipt }
+     × P2-10 · approve con outcome «executed_partially», que empieza por el verbo exacto: el literal de respuesta no reconocida, nada afirmado 76ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 51 passed (52)
+
+## m-d6 — drop the digest identity check, keep the shape check
+0
+     × P2-10 · approve con un digest bien formado pero distinto del que se envió: el literal de respuesta no reconocida, nada afirmado 76ms
+     × P2-10 · approve con un failed con un digest bien formado pero distinto del que se envió: el literal de respuesta no reconocida, nada afirmado 76ms
+ Test Files  1 failed (1)
+      Tests  2 failed | 50 passed (52)
+
+## m-d7 — move the reject early return above the type guard again (the audited regression)
+     × P2-10 · reject con digest numérico: el literal de respuesta no reconocida, nada afirmado 66ms
+     × P2-10 · reject con result objeto: el literal de respuesta no reconocida, nada afirmado 62ms
+ Test Files  1 failed (1)
+      Tests  2 failed | 50 passed (52)
+
+## restored
+ Test Files  1 passed (1)
+      Tests  52 passed (52)
