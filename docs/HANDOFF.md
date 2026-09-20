@@ -1,5 +1,43 @@
 # HANDOFF — Korvun
 
+## Dos moldes escuchaban en todas las interfaces y ningún gate lo vio (2026-09-20)
+
+El cortafuegos de un Mac fue el primer verificador que lo dijo: durante la
+suite de la fase 2 saltó el diálogo para `app.test`. La sonda lo capturó:
+
+```text
+app.test  21917  ...  IPv6  TCP *:50520 (LISTEN)
+```
+
+Dos moldes del bloque B de la v0.15.1 (`9559447`) arrancaban el servidor admin
+con `bootAdmin(t, "0.0.0.0:0")` —para colocar un par remoto— y con `[::]:0`
+—para probar las dos familias de loopback desde un solo socket—. La guarda del
+PRODUCTO aguantó siempre: el par no loopback se rechazaba con `loopback_only`,
+que es justo lo que esos moldes afirman. Lo que estaba abierto era el socket del
+TEST, en la máquina de quien corría la suite.
+
+Lo que aprendimos: `make quality`, los tres sistemas de CI y cada pasada del
+adversario pasaron con ese socket abierto, porque **ninguna vigilaba lo que la
+suite abre**, solo lo que el producto permite. Medido, no estimado: el bind
+ancho vivió **22 h 58 min** y **14 commits** entre `9559447` y su cura
+`2adbd68`; `git log -S '0.0.0.0:0' -- '*_test.go'` no encuentra vida anterior
+de la clase salvo el webhook que solo se construye y nunca arranca. La
+invariante NO AUTH ⇔ LOOPBACK ONLY gobierna también nuestras propias pruebas.
+
+Qué cierra el guardián nuevo, dicho con su perímetro: `loopbackBindAllowed`
+juzga cada dirección y nombra el rechazo (comodín, host vacío, dirección
+enrutable, deletreo que no reconoce, o algo que no es host:puerto);
+`bootAdmin` no arranca sin pasar por ahí; el opt-in se lee como BOOLEANO, así
+que `=0` ya no abre la LAN; el control dual usa un listener por familia; y el
+molde que necesita un par realmente remoto queda tras `KORVUN_TEST_LAN_BIND`,
+diciendo que abre un socket de LAN. Dos moldes lo vigilan:
+`TestV0151B_P2_7_testBindsStayOnLoopback` juzga la función y la puerta del
+entorno, y `TestV0151B_P2_7_everyAdminBindInThisPackageIsGuarded` lee las
+fuentes del paquete y enrojece si alguien borra la llamada a la guarda o
+escribe un `Addr:` que no es loopback. Lo que NO cubre está dicho en su propio
+godoc: una dirección construida en tiempo de ejecución, leída de un fixture o
+pasada por el parámetro de otro ayudante.
+
 ## Una sola pasada para el texto corto — orden del director (2026-09-20)
 
 Cualquier cambio SOLO de texto de menos de diez líneas lleva como MÁXIMO UNA
