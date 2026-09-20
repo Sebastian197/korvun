@@ -1,65 +1,9 @@
-VETO LEVANTADO 3765f71ddd2cab27fee12273a2cb493d3c346218
-
-Round: v0.15.1 public truth (2026-09-20). No production code: the tag was
-cut on `261ab3f`, the two release lanes published 23 assets, and this train
-moves the public claims to the release that now exists, plus the director's
-new rule for short prose. Two commits: `c3c335b` (the public surfaces) and
-`3765f71` (the rule, in `docs/HANDOFF.md`).
-
-WHO HELD THE VETO, and how it was lifted. The internal adversary ran TWO
-passes, both VETO MANTENIDO, and both are declared here rather than hidden:
-
-- First pass, over the whole diff: P2-1 — the new releases-table row, EN and
-  ES, enumerated two Known issues behind a colon and dropped the «including»
-  hedge the row it demotes carries, on a surface whose own contract is
-  "unsoftened". Cured in both locales, with the pointer to the notes restored.
-  Five P3 came with it and all five were cured in the same tree: the row said
-  «a digest mismatch» where only `params_digest_mismatch` is meant (the sister
-  outcome leaves the request PENDING, so the sentence was false of it); the
-  Known issue said «with a capture» of an artifact that is not in the tree;
-  «Copy only» was silent about the state the scenario leaves; three published
-  surfaces still spoke from before the publication (`SECURITY.md`, the
-  operator-CLI reference page in both locales); and the ceremony record still
-  opened claiming every command was executed while P2-11 says nothing in the
-  tree binds it to a real run.
-
-- Second pass, scoped to those cures: P2-1 cured in both locales, every P3
-  cured, and a NEW P2-2 created by the cures themselves — the commit message
-  claimed `docs/releases/v0.15.1.md` was synced with the body published for
-  the tag, which the cures had made false by 453 bytes. Its lift condition was
-  mechanical and it was EXECUTED: the cured file was published with
-  `gh release edit --notes-file`, the byte comparison was re-run through the
-  API (published 14288, file 14288, `IDENTICAL: True`), the message was
-  reworded to say what happened, and its arithmetic was corrected (five issues
-  filed to v0.15.2, a sixth bullet declaring itself unscheduled).
-
-WHAT WAS NOT RE-PASSED, and under whose order. By the director's order of
-2026-09-20 there is NO third pass over that last correction, and none over the
-`docs/HANDOFF.md` paragraph: for this class the sole verification is the sixth
-question — every corrected line was re-read ON DISK after being written — and
-the marker says so instead of implying a pass that did not happen. The same
-order becomes the standing rule this train registers: any change that is only
-text and under ten lines gets at most ONE adversary pass, and what it returns
-is cured in the same tree and declared.
-
-WHAT RAN on this tree: `make quality` green (exit 0, «Quality gate passed»,
-3m21s over the final tree); the three website guards green before and after
-the cures — `check-current-release` («the five current-release claims name
-v0.15.1»), `check-release-facts` («every release version flows from
-releaseFacts.ts» and the online comparison «latest-release comparison OK
-(v0.15.1)») and `check-parity` (13 page pairs); the adversary's own five
-probing mutations of `check-current-release` on a copy, each red with its
-named reason and restored. The pre-commit gate ran on every commit of the
-train and announced its one skip by name («staged tree is identical to
-f52b72b — its green stands»).
-
-EVIDENCE LEVEL, honest: this is prose over published surfaces. Nothing here
-is proved by a new test, because nothing here changes behaviour — the only
-executable bytes that moved are the two literals of `website/src/releaseFacts.ts`.
-The release itself was verified after publication, captured: cosign
-`Verified OK` over `checksums.txt` and `checksums-desktop.txt`, both build
-provenance attestations bound to the exact local digests and to the workflows
-at `refs/tags/v0.15.1`, `shasum -a 256 -c` clean over both manifests, six
-SPDX-2.3 SBOMs, and the published `.dmg` printing `korvun-desktop v0.15.1`.
-
-STATE: IMPLEMENTED. Not ACCEPTED: the merge is the director's.
+VETO LEVANTADO 28c42f418a34e9ecefce3338110145ab857cdcde
+KORVUN-REBASE-EVIDENCE v1
+{
+  "schema": 1,
+  "repository": "Sebastian197/korvun",
+  "pr": 50,
+  "base": "adb44231a6635f8d1abd48196ef892e74809b935",
+  "review": "Round: Piece 3, Phase 0 — canonical execution (2026-09-20). The implementation\nwas written by the external executor in this worktree and is delivered here:\ncommitted, audited and cured by this session. The phase adds no feature; its\nwhole criterion is ZERO observable change while every attempted tool call is\nforced through one canonical action, one finite decision and one private\ndispatch site.\n\nWHO HELD THE VETO. The internal adversary ran ONE pass over the COMPLETE diff —\none pass by the director's order of today for this train — and returned VETO\nMANTENIDO with no P1, two P2 and three P3. Both P2 are cured in this same tree,\neach against the auditor's own reproduction, and declared in the canto's\nsection \"The pass over the complete diff\".\n\n[PRODUCT] P2-1. The structural wall of AS-EXEC-01 was blind to an entire\nsyntactic category: the AST walk started at each function body after a\nFuncDecl filter, so every package-level declaration was skipped unvisited. The\nauditor wrote a reachable EXPORTED bypass — a package-level closure calling\nTool.Execute, a map of closures calling ExecuteScoped, and an (*AgentBrain)\nmethod invoking any registered tool with no canonical action, no decision, no\nrecord, no close and no audit — and it passed go build, go vet, the guard and\nall four packages' suites. The shape is idiomatic Go and the repository already\nwrites it in production. Cure: both walks now judge EVERY declaration of every\nfile; outside a function body a dispatch selector is a violation by\nconstruction. Verified with the auditor's backdoor file byte for byte: the\nmould reddens on both shapes in all six scanned configurations, and returns\ngreen when the file is removed. Declared and not cured: the scan still pins\nGOARCH=amd64, scans only the empty and desktop tags and three package roots,\nand a reflect-built call is invisible to any AST guard.\n\n[PRODUCT] P2-2. \"Zero observable change\" was FALSE on the audit bus. Prepare\nhanded the audit hooks a half-deep clone of the inbound envelope, so\nbus.Event.Envelope stopped being the live message on every immediate branch\nexcept the parked one, which still carried the live pointer. The auditor\ncaptured it with a 23-scenario behavioural differential run against the base\nand this commit; that same differential found every other observable fact\nbyte-identical — recorder order and selection, outcome and rule strings, the\ndurable envelope, close state, result digest, log lines, audit fields, model\nobservations, the exact original argument bytes, both lanes, the per-tool\ntimeout. Cure: the request keeps the caller's pointer and the clone is gone.\nNew mould TestRunTool_AuditCarriesTheLiveInboundEnvelope pins pointer identity\non the executed and denied rows; its probing mutation restores the snapshot and\nreddens both rows, captured and reverted.\n\nP3 adjudicated one by one: the six wrong line citations in the canto were\nre-derived against this commit (the seventh was already right);\ngovernanceFromDecisions — production code that production never reaches, over\nwhich three of this commit's moulds assert — is FILED with the auditor's\ncapture, because curing it means moving those moulds onto the production door\nand that is its own piece; the unreachable default arm of presentToolResult is\nrecorded as defensive dead code. The auditor's own largest declared gap is also\nrecorded: app.ExecuteApprovedAction was audited by reading both revisions and\nby the executor-level moulds, not by a two-tree execution against a real SQLite\nfile.\n\nWHAT RAN HERE, not taken on trust: make quality green in this worktree over the\ndelivered tree (exit 0, \"Quality gate passed\") and again through the pre-commit\ngate over the cured tree; coverage 88.6, 92.9, 85.6 and 92.3 percent for\nexecutor, brain, app and tool, all above the 85 percent floor and identical to\nthe numbers the canto claims; the four packages green under -race after the\ncures; the real local-model compatibility suite with both opt-in variables and\nno skips — four PASS, ok 46.241s; the action schema still 12 and no dependency\nfile touched.\n\nEVIDENCE LEVEL, honest: in-process tests under -race, an AST guard with Go type\nresolution over six GOOS/tag configurations, real SQLite files with two\nconnections for the claim and recovery rows, and one real local model for the\nprotocol lanes. No crash-restart of a packaged binary and no CLI, desktop or\ncontrol-API exercise of this diff.\n\nSTATE: IMPLEMENTED. Not ACCEPTED: the merge is the director's."
+}
