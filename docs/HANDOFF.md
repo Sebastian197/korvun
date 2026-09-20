@@ -1,5 +1,14 @@
 # HANDOFF — Korvun
 
+## Una sola pasada para el texto corto — orden del director (2026-09-20)
+
+Cualquier cambio SOLO de texto de menos de diez líneas lleva como MÁXIMO UNA
+pasada del adversario. Lo [PRODUCT] que esa pasada traiga se cura en el MISMO
+árbol y se declara en el canto o en el marcador; no hay repasada. La doctrina
+destructiva no se toca: esto gobierna cuántas veces se relee prosa, nunca qué
+evidencia exige un test. Nació de la v0.15.1: dos pasadas sobre siete líneas de
+prosa, la segunda sostenida por una frase del mensaje de commit.
+
 ## Fichado para la v0.15.2 — lo que el bloque A de la v0.15.1 dejó escrito (2026-09-19)
 
 Cada ficha nombra su propia fuente en su cuerpo; ninguna se localiza aquí por
