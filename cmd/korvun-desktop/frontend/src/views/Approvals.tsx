@@ -134,11 +134,16 @@ function isApprovalID(id: string): boolean {
   return APPROVAL_ID_RE.test(id)
 }
 
+/** rcpt_ + 32 lowercase hex, the shape action.NewReceiptID mints. */
+const RECEIPT_ID_RE = /^rcpt_[0-9a-f]{32}$/
+function isReceiptID(id: string): boolean {
+  return RECEIPT_ID_RE.test(id)
+}
+
 /** The committed outcome of a POST, judged by protocol (P2-10): only a 200
- * whose body is exactly one of the success shapes the core sends
- * (controlapi.ApprovalOutcome) paints an outcome. Anything else — another 2xx,
- * an outcome that is not the verb's, a field of the wrong type — is null, and
- * the screen affirms nothing. */
+ * with the required fields for its outcome paints that outcome. Executed and
+ * failed require the digest, non-empty result and minted receipt shape.
+ * Anything else is null, and the screen affirms nothing. */
 function judgeDecision(
   verb: 'approve' | 'reject',
   status: number,
@@ -146,13 +151,14 @@ function judgeDecision(
 ): Exclude<Decision, null | { kind: 'sending' } | { kind: 'named' } | { kind: 'lost' }> | null {
   if (status !== 200 || typeof body !== 'object' || body === null) return null
   const b = body as Record<string, unknown>
-  const optional = (v: unknown): v is string | undefined => v === undefined || typeof v === 'string'
   if (typeof b.outcome !== 'string' || typeof b.receipt_id !== 'string') return null
-  if (!optional(b.digest) || !optional(b.result)) return null
   const receipt = b.receipt_id
   if (verb === 'reject') return b.outcome === 'rejected' ? { kind: 'rejected', receipt } : null
-  const digest = b.digest ?? ''
-  const result = b.result ?? ''
+  if (!isReceiptID(receipt)) return null
+  if (typeof b.digest !== 'string' || !isDigest(b.digest)) return null
+  if (typeof b.result !== 'string' || b.result === '') return null
+  const digest = b.digest
+  const result = b.result
   if (b.outcome === 'executed') return { kind: 'executed', digest, result, receipt }
   // The tool ran and said no. It is a KNOWN outcome with its receipt: calling
   // it executed would be a lie, and calling it unknown would be a second one.
