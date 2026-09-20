@@ -19,10 +19,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -454,11 +457,71 @@ func nonLoopbackIPv4(t *testing.T) string {
 	return ""
 }
 
+// lanBindOptIn names the variable a test must set to bind the admin surface to
+// every interface. Without it such a bind is REFUSED. The invariant
+// NO AUTH <=> LOOPBACK ONLY governs what this suite opens on the machine that
+// runs it, not only what the product allows: on 2026-09-20 a `go test` of this
+// package was captured listening on every interface —
+// `app.test 21917 ... TCP *:50520 (LISTEN)` — which is also what raised the
+// operating system's firewall dialog. The product's guard held; the suite's
+// socket was the hole.
+const lanBindOptIn = "KORVUN_TEST_LAN_BIND"
+
+// lanBindOptedIn parses the variable as a BOOLEAN. `os.Getenv(...) != ""` made
+// `KORVUN_TEST_LAN_BIND=0` — the plain spelling of "keep it shut" — open the
+// wildcard bind (the twenty-third pass, P2-2). An unparseable value is NOT an
+// opt-in: this door only opens on a value that says true.
+func lanBindOptedIn() bool {
+	on, err := strconv.ParseBool(os.Getenv(lanBindOptIn))
+	return err == nil && on
+}
+
+// loopbackBindAllowed judges ONE bind address for a test. An empty host, a
+// wildcard and any non-loopback IP are refused unless the opt-in is set; the
+// error names which of those it was, so a refusal is never mistaken for
+// another.
+func loopbackBindAllowed(addr string, optIn bool) error {
+	if optIn {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("bind %q is not host:port: %w", addr, err)
+	}
+	if host == "" {
+		return fmt.Errorf("bind %q listens on every interface", addr)
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsUnspecified() {
+			return fmt.Errorf("bind %q is the wildcard: it listens on every interface", addr)
+		}
+		if !ip.IsLoopback() {
+			return fmt.Errorf("bind %q is a routable address, not loopback", addr)
+		}
+		return nil
+	}
+	// "localhost" is trusted by TEXT, with no lookup, exactly as the production
+	// twin does (app.go, isLoopbackBind) — and the caveat is stated here rather
+	// than implied: on a host where that name resolves off-loopback this guard
+	// would allow it. Everything else that is not a numeric address is refused
+	// WITHOUT diagnosing it: `127.1` and `2130706433` really are loopback to the
+	// resolver, so the refusal says the guard does not recognise the spelling
+	// instead of claiming the address is not loopback (the twenty-third pass,
+	// P3-2).
+	if !strings.EqualFold(strings.TrimSuffix(host, "."), "localhost") {
+		return fmt.Errorf("bind %q: this guard only recognises 127.0.0.1, ::1 and localhost; spell it one of those", addr)
+	}
+	return nil
+}
+
 // bootAdmin builds a profile whose admin server binds bindAddr, with the bearer
 // set, approvals on and one request parked before boot. It returns the bound
 // port, the parked approval and the db path.
 func bootAdmin(t *testing.T, bindAddr string) (port string, a action.Approval, dbPath string) {
 	t.Helper()
+	if err := loopbackBindAllowed(bindAddr, lanBindOptedIn()); err != nil {
+		t.Fatalf("test admin bind refused: %v (set %s=1 to open one deliberately)", err, lanBindOptIn)
+	}
 	dbPath = filepath.Join(t.TempDir(), "korvun.db")
 	cfg := kernelWiringConfig(dbPath)
 	cfg.Approvals = &config.ApprovalsConfig{Enabled: true}
@@ -555,6 +618,21 @@ func countDecisionActs(t *testing.T, dbPath string) int {
 // Probing mutation (planned): refuse after calling the seam ⇒ the PENDING and
 // zero-act assertions red.
 func TestV0151B_P2_7_noRouteServesOrDecidesForARemotePeer(t *testing.T) {
+	if !lanBindOptedIn() {
+		// Honest about WHY: a peer the server did not choose needs a socket
+		// reachable from a non-loopback source address — a wildcard bind here,
+		// or this host's own routable address. Either one is a LAN socket, and
+		// that is what the opt-in is for; it is not that no other shape exists.
+		t.Skipf("placing a REMOTE peer opens a LAN socket; set %s=true to run it", lanBindOptIn)
+	}
+	// What still runs by default, and what it does NOT replace: the controlapi
+	// moulds (TestV0151B_P2_7_theSeamIsNeverCalledForARemotePeer and its console
+	// sister) drive the real mux with a FORGED RemoteAddr and count the seam, so
+	// they see something this mould cannot — whether the seam was called at all.
+	// They are weaker in three named ways: the peer is a string on a struct and
+	// not a socket, they register their own mux instead of the app's boot path,
+	// and they carry no persistence oracle, so the "no decision act, still
+	// PENDING" assertions below are not replaced anywhere.
 	ip := nonLoopbackIPv4(t)
 	if ip == "" {
 		t.Skip("this host has no non-loopback IPv4 interface; the P2-7 remote mould cannot place a peer")
@@ -595,22 +673,107 @@ func TestV0151B_P2_7_noRouteServesOrDecidesForARemotePeer(t *testing.T) {
 }
 
 // TestV0151B_P2_7_loopbackPeersStillReachTheSurface are the positive controls
-// the refusal needs: on a dual-stack bind, 127.0.0.1 and ::1 are served. A cure
-// that refused everybody would pass the remote mould and redden these.
+// the refusal needs: 127.0.0.1 and ::1 are served. A cure that refused
+// everybody would pass the remote mould and redden these.
+//
+// One listener PER FAMILY, each bound to its own loopback address. The earlier
+// shape bound `[::]:0` — every interface — to get both families from one
+// socket, which is exactly the hole the guard above now refuses. A case is LOST
+// and said out loud: nothing here exercises ONE dual-stack socket serving both
+// families, which is what the product does when an operator binds `[::]`, nor
+// the v4-mapped RemoteAddr such a socket produces. You cannot have that socket
+// without a wildcard bind.
 //
 // Evidence: real TCP sockets over both loopback families, in-process core.
 func TestV0151B_P2_7_loopbackPeersStillReachTheSurface(t *testing.T) {
-	port, _, _ := bootAdmin(t, "[::]:0")
-	for _, host := range []string{"127.0.0.1", "::1"} {
-		c, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), time.Second)
-		if err != nil {
-			t.Skipf("loopback %s unreachable on this host (%v); the control cannot run", host, err)
-		}
-		_ = c.Close()
-		status, body := bearerDo(t, http.MethodGet, "http://"+net.JoinHostPort(host, port)+"/api/approvals", "")
-		if status != http.StatusOK {
-			t.Errorf("GET /api/approvals from %s: %d %s, want 200", host, status, body)
-		}
+	for _, row := range []struct{ bind, host string }{
+		{bind: "127.0.0.1:0", host: "127.0.0.1"},
+		{bind: "[::1]:0", host: "::1"},
+	} {
+		t.Run(row.host, func(t *testing.T) {
+			port, _, _ := bootAdmin(t, row.bind)
+			c, err := net.DialTimeout("tcp", net.JoinHostPort(row.host, port), time.Second)
+			if err != nil {
+				t.Skipf("loopback %s unreachable on this host (%v); the control cannot run", row.host, err)
+			}
+			_ = c.Close()
+			status, body := bearerDo(t, http.MethodGet, "http://"+net.JoinHostPort(row.host, port)+"/api/approvals", "")
+			if status != http.StatusOK {
+				t.Errorf("GET /api/approvals from %s: %d %s, want 200", row.host, status, body)
+			}
+		})
+	}
+}
+
+// TestV0151B_P2_7_testBindsStayOnLoopback watches the guard's JUDGEMENT over
+// every shape that reaches it, including the environment door that decides
+// whether the wildcard is allowed at all. The call site is watched separately,
+// by TestV0151B_P2_7_everyAdminBindInThisPackageIsGuarded — a pure-function
+// mould cannot see a deleted caller, and this one used to claim it did (the
+// twenty-third pass, P2-1).
+//
+// Evidence: in-process, pure function plus process environment; no socket is
+// opened by this mould.
+// Probing mutations executed: `loopbackBindAllowed` returning nil for
+// everything reddens every refusal row; `lanBindOptedIn` returning
+// `os.Getenv(...) != ""` reddens the "0" and "false" rows.
+func TestV0151B_P2_7_testBindsStayOnLoopback(t *testing.T) {
+	for _, row := range []struct {
+		name, addr, want string
+		optIn            bool
+	}{
+		{name: "ipv4 loopback", addr: "127.0.0.1:0"},
+		{name: "ipv6 loopback", addr: "[::1]:0"},
+		{name: "named loopback", addr: "localhost:0"},
+		{name: "named loopback, other case", addr: "LOCALHOST:0"},
+		{name: "named loopback, rooted", addr: "localhost.:0"},
+		{name: "v4-mapped loopback", addr: "[::ffff:127.0.0.1]:0"},
+		{name: "wildcard v4", addr: "0.0.0.0:0", want: "is the wildcard"},
+		{name: "wildcard v6", addr: "[::]:0", want: "is the wildcard"},
+		{name: "empty host", addr: ":0", want: "listens on every interface"},
+		{name: "a routable address", addr: "192.0.2.10:0", want: "is a routable address"},
+		{name: "a spelling this guard does not recognise", addr: "127.1:0", want: "only recognises"},
+		{name: "a name that is not loopback", addr: "example.invalid:0", want: "only recognises"},
+		{name: "not host:port", addr: "0.0.0.0", want: "is not host:port"},
+		{name: "wildcard, opted in", addr: "0.0.0.0:0", optIn: true},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			err := loopbackBindAllowed(row.addr, row.optIn)
+			if row.want == "" {
+				if err != nil {
+					t.Fatalf("bind %q refused: %v", row.addr, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("bind %q was allowed; want refused with %q", row.addr, row.want)
+			}
+			if !strings.Contains(err.Error(), row.want) {
+				t.Fatalf("bind %q refused with %v, want the reason %q", row.addr, err, row.want)
+			}
+		})
+	}
+	// The environment door: the single decision that lets a LAN socket open.
+	for _, row := range []struct {
+		value string
+		want  bool
+	}{
+		{value: "", want: false},
+		{value: "0", want: false},
+		{value: "false", want: false},
+		{value: "no", want: false},
+		{value: "off", want: false},
+		{value: "maybe", want: false},
+		{value: "1", want: true},
+		{value: "true", want: true},
+		{value: "TRUE", want: true},
+	} {
+		t.Run("opt-in="+row.value, func(t *testing.T) {
+			t.Setenv(lanBindOptIn, row.value)
+			if got := lanBindOptedIn(); got != row.want {
+				t.Fatalf("%s=%q opts in = %v, want %v", lanBindOptIn, row.value, got, row.want)
+			}
+		})
 	}
 }
 
