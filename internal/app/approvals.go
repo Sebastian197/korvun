@@ -124,6 +124,36 @@ func (a *App) recorderForTest() brain.ActionRecorder {
 	return newBrainRecorder(a.actions.(*actionsqlite.Store), pin, a.approvalsCfg, a.approvalTTL)
 }
 
+type approvedExecutionStore struct {
+	store          *actionsqlite.Store
+	law            actionsqlite.PolicyPin
+	approvedDigest string
+}
+
+func (s approvedExecutionStore) ReadApproval(ctx context.Context, approvalID string) (action.Approval, error) {
+	approval, _, err := s.store.GetApproval(ctx, approvalID)
+	return approval, err
+}
+
+func (s approvedExecutionStore) ReadActionState(ctx context.Context, actionID string) (action.State, error) {
+	record, err := s.store.Get(ctx, actionID)
+	return record.State, err
+}
+
+func (s approvedExecutionStore) Claim(ctx context.Context, approvalID string, seen *action.Approval) ([]byte, action.Operation, error) {
+	approval := *seen
+	return s.store.ClaimApprovalParamsUnderDigest(ctx, approvalID, &s.law, s.approvedDigest, &approval)
+}
+
+func (s approvedExecutionStore) Close(ctx context.Context, actionID string, state action.State, at time.Time, digest string) error {
+	return s.store.FinishWithResult(ctx, actionID, state, at, digest)
+}
+
+func (s approvedExecutionStore) ReadReceipt(ctx context.Context, approvalID string) (string, error) {
+	approval, _, err := s.store.GetApproval(ctx, approvalID)
+	return approval.DecisionReceiptID, err
+}
+
 // ExecuteApprovedAction runs the EXACT stored envelope of an APPROVED
 // request through the one Executor Registry path (spec FR-EXEC, sealed
 // NC-2: identity, never equivalence): claim the canonical params
@@ -156,120 +186,49 @@ func (a *App) recorderForTest() brain.ActionRecorder {
 // class (a) of the known-classes checklist, on the one path that fires an
 // irreversible effect.
 func ExecuteApprovedAction(ctx context.Context, store *actionsqlite.Store, exec *executor.Executor, approvalID string, law actionsqlite.PolicyPin, approvedDigest string) (ApprovedExecution, error) {
-	approval, _, err := store.GetApproval(ctx, approvalID)
+	run, err := exec.ResumeApproved(ctx, approvedExecutionStore{
+		store: store, law: law, approvedDigest: approvedDigest,
+	}, approvalID)
 	if err != nil {
-		return ApprovedExecution{}, err
-	}
-	if approval.Status != action.ApprovalApproved {
-		if approval.Status == action.ApprovalPending {
-			return ApprovedExecution{}, fmt.Errorf("app: approval %s is %s — only APPROVED requests execute: %w", approvalID, approval.Status, ErrApprovalNotDecided)
+		var resume *executor.ResumeError
+		if !errors.As(err, &resume) {
+			return ApprovedExecution{}, err
 		}
-		return ApprovedExecution{}, fmt.Errorf("app: approval %s is %s: %w", approvalID, approval.Status, ErrApprovalAlreadyClosed)
-	}
-	rec, err := store.Get(ctx, approval.ActionID)
-	if err != nil {
-		// The decide has COMMITTED by the time this runs, and the actions row
-		// is what the recovery pass would close. A failure here is evidence
-		// that no longer reads, not «the execution simply did not start»: left
-		// unnamed it was published as «the row still holds its parameters»,
-		// which is a benign sentence over a permanently broken ledger.
-		return ApprovedExecution{}, fmt.Errorf("app: approved action %s: %w: %w", approval.ActionID, ErrApprovalRecordUnreadable, err)
-	}
-	if rec.State != action.StateApproved {
-		return ApprovedExecution{}, fmt.Errorf("app: action %s is %s: %w", approval.ActionID, rec.State, ErrApprovalAlreadyClosed)
-	}
-	// The atomic claim, and with it the WHOLE judgement: the law, the belts and
-	// the digest all run inside the claiming transaction, over the row that
-	// transaction read.
-	//
-	// The old shape read the operation triple here, claimed (committing the
-	// purge), and only THEN compared the digest against that earlier read. An
-	// external UPDATE of op_version in that window passed every belt and fired
-	// an irreversible effect under an operation the row no longer declared. So
-	// the claim hands back the triple it judged, and that is the one that runs.
-	// The snapshot travels too: everything the prechecks above judged was read
-	// OUTSIDE the claiming transaction, so the claim compares that whole row
-	// against the row it reads itself and refuses if any column moved.
-	params, op, err := store.ClaimApprovalParamsUnderDigest(ctx, approvalID, &law, approvedDigest, &approval)
-	if err != nil {
-		return ApprovedExecution{}, fmt.Errorf("app: claim execution of %s: %w", approvalID, err)
-	}
-	toolName := op.Name
-	conv := ""
-	result, _, execErr := exec.Run(ctx, toolName,
-		tool.Scope{Brain: "", Conversation: conv}, string(params))
-	// ONE function decides what this closes on, and the brain path calls the
-	// same one (tool.CloseStateAfterRun). An answer that is not a usable
-	// success, and a connection obtained with no answer, are uncertainty —
-	// closing them FAILED would put in the ledger a definite claim nobody can
-	// support, what the store's own C5 comment calls «a FAILED lie». A run that
-	// never obtained a connection closes FAILED even when its context ended:
-	// nothing left. For a tool that does not observe the wire, a context that
-	// ended is uncertainty and any other error is a refusal before it acted.
-	outcome := tool.CloseStateAfterRun(execErr)
-	resultDigest := action.HashCanonical(result)
-	if outcome != action.StateSucceeded {
-		resultDigest = ""
-	}
-	// The close does NOT ride the caller's context. Between the record and this
-	// line an irreversible effect happened; a context that ended meanwhile —
-	// a cancelled request, a shutdown — would take the close down with it,
-	// because database/sql refuses a query on a dead context before the driver
-	// ever sees it. The effect would have happened and the ledger kept none of
-	// What WithoutCancel drops is the cancellation AND the deadline: the close
-	// and the read-back below run with no context bound at all, and the only
-	// thing that bounds a wait for a lock is the store's own
-	// `busy_timeout(5000)` in its DSN. That is the trade this line makes on
-	// purpose — a bounded wait for the lock against an effect with no record —
-	// and it is written here so nobody reads a surviving deadline into it.
-	closeCtx := context.WithoutCancel(ctx)
-	if err := store.FinishWithResult(closeCtx, approval.ActionID, outcome, time.Now().UTC(), resultDigest); err != nil {
-		// The effect already happened or already failed; what could not be
-		// written is the close. That is a KNOWN effect with an unwritten
-		// record, never an unknown one.
-		return ApprovedExecution{}, fmt.Errorf("app: close executed action %s: %w: %w", approval.ActionID, ErrApprovalCloseFailed, err)
-	}
-	// The receipt identifiers are re-read: neither the decide nor the close
-	// returns them, and P4 and P5 print them. On the SAME uncancellable context
-	// as the close: a read that dies with the caller would turn a landed close
-	// into «the executed action could not be closed», which is a false sentence
-	// about a ledger row that is right there.
-	after, _, rerr := store.GetApproval(closeCtx, approvalID)
-	if rerr != nil {
-		return ApprovedExecution{}, fmt.Errorf("app: read back the receipt of %s: %w: %w", approvalID, ErrApprovalCloseFailed, rerr)
+		switch resume.Stage {
+		case executor.ResumeReadApproval:
+			return ApprovedExecution{}, resume.Err
+		case executor.ResumeApprovalPending:
+			return ApprovedExecution{}, fmt.Errorf("app: approval %s is %s — only APPROVED requests execute: %w", approvalID, resume.Status, ErrApprovalNotDecided)
+		case executor.ResumeApprovalClosed:
+			return ApprovedExecution{}, fmt.Errorf("app: approval %s is %s: %w", approvalID, resume.Status, ErrApprovalAlreadyClosed)
+		case executor.ResumeReadAction:
+			return ApprovedExecution{}, fmt.Errorf("app: approved action %s: %w: %w", resume.ActionID, ErrApprovalRecordUnreadable, resume.Err)
+		case executor.ResumeActionClosed:
+			return ApprovedExecution{}, fmt.Errorf("app: action %s is %s: %w", resume.ActionID, resume.State, ErrApprovalAlreadyClosed)
+		case executor.ResumeClaim:
+			return ApprovedExecution{}, fmt.Errorf("app: claim execution of %s: %w", approvalID, resume.Err)
+		case executor.ResumeClose:
+			return ApprovedExecution{}, fmt.Errorf("app: close executed action %s: %w: %w", resume.ActionID, ErrApprovalCloseFailed, resume.Err)
+		case executor.ResumeReadReceipt:
+			return ApprovedExecution{}, fmt.Errorf("app: read back the receipt of %s: %w: %w", approvalID, ErrApprovalCloseFailed, resume.Err)
+		default:
+			return ApprovedExecution{}, err
+		}
 	}
 	out := ApprovedExecution{
-		Result:       result,
-		ResultDigest: resultDigest,
-		ReceiptID:    after.DecisionReceiptID,
-		Operation:    op,
+		Result:       run.Result,
+		ResultDigest: run.ResultDigest,
+		ReceiptID:    run.ReceiptID,
+		Operation:    run.Operation,
 	}
-	if execErr != nil {
-		// The classifier said OUTCOME_UNKNOWN: a response that is not a success,
-		// a connection obtained with no answer read, or — for a tool that does
-		// not observe the wire — a context that ended. The effect's fate is
-		// genuinely unknown, which is what `unknown_outcome` is for.
-		if outcome == action.StateOutcomeUnknown {
-			out.Unknown = true
-			out.FailureDetail = execErr.Error()
-			return out, nil
-		}
-		// The classifier said FAILED: for webhook_call, no connection was ever
-		// obtained (tool.ErrNotSent — a refused dial, a handshake that never
-		// completed, a shield refusal, a context that ended first); for any
-		// tool, a refusal before it acted — a host off the allow-list, a
-		// malformed payload. That is a DECIDED outcome with its receipt, and it
-		// travels as one; knowing the attempt failed is a different fact from
-		// not knowing what happened.
-		//
-		// A reset, a broken pipe or a hang-up AFTER a connection was obtained
-		// is not here: it classes tool.ErrDeliveryUnknown and routes to the
-		// unknown branch. Which error class each wire fact carries is held by
-		// the behavioural moulds named in TestWebhookCall_everyBranchAfterDo's
-		// godoc (internal/tool).
-		out.Failed = true
-		out.FailureDetail = execErr.Error()
+	if run.ToolError == nil {
 		return out, nil
+	}
+	out.FailureDetail = run.ToolError.Error()
+	if run.Outcome == action.StateOutcomeUnknown {
+		out.Unknown = true
+	} else {
+		out.Failed = true
 	}
 	return out, nil
 }

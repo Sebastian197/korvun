@@ -25,9 +25,9 @@ type Scope struct {
 }
 
 // ScopedTool is the OPTIONAL conversation-identity capability of a Tool
-// (FR-TOOL-2, the ParamTool/ToolCallingModel precedent): the AgentBrain
-// type-asserts it in runTool and fills Scope from its own name and the
-// envelope; non-scoped tools are untouched.
+// (FR-TOOL-2, the ParamTool/ToolCallingModel precedent): the canonical
+// executor's private dispatcher type-asserts it and supplies Scope derived
+// from the brain name and inbound envelope; non-scoped tools are untouched.
 type ScopedTool interface {
 	Tool
 	// ExecuteScoped runs the tool with the caller's scope facts. Same
@@ -66,11 +66,11 @@ func (m *MemoryNote) Description() string {
 	return "stores one short note the brain will remember in this scope. args = the note text."
 }
 
-// Execute implements Tool: the scope-less path delegates to ExecuteScoped
-// with the zero scope (a conversation-scoped writer will refuse it
-// honestly; the AgentBrain always prefers ExecuteScoped).
+// Execute implements Tool through the same private implementation as
+// ExecuteScoped, with the zero scope. A conversation-scoped writer refuses
+// that scope honestly; the canonical executor prefers ExecuteScoped.
 func (m *MemoryNote) Execute(ctx context.Context, args string) (string, error) {
-	return m.ExecuteScoped(ctx, Scope{}, args)
+	return m.execute(ctx, Scope{}, args)
 }
 
 // ExecuteScoped implements ScopedTool (FR-TOOL-1): single-line
@@ -78,6 +78,10 @@ func (m *MemoryNote) Execute(ctx context.Context, args string) (string, error) {
 // translation of the writer's failure modes — every error becomes the
 // model's observation.
 func (m *MemoryNote) ExecuteScoped(ctx context.Context, scope Scope, args string) (string, error) {
+	return m.execute(ctx, scope, args)
+}
+
+func (m *MemoryNote) execute(ctx context.Context, scope Scope, args string) (string, error) {
 	note := strings.Join(strings.Fields(args), " ")
 	if note == "" {
 		return "", errors.New("the note is empty — nothing stored")
