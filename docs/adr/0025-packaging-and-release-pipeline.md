@@ -61,7 +61,9 @@ external consumer by flipping visibility and adding the trust layer.
 - **`cmd/korvun/main.go` already uses `flag`** (`-config`), so a `--version` flag
   is a one-line addition on an existing parser.
 - **An `sbom` CI job already exists** (the SBOM is produced for CI today); Stage 15
-  attaches an SBOM **per release** so the published artifact is self-describing.
+  attaches an SBOM **per release** so the published artifact is self-describing
+  (scoped by the 2026-09-20 amendment in §6: the headless archives, not the
+  desktop packages).
 - `configs/` holds `korvun.example.json` + `korvun.local.json`; there are no
   `edge`/`cloud` examples yet.
 
@@ -178,6 +180,15 @@ Syft). Rationale: an `sbom` job already exists in CI, so an SBOM is already
 produced; attaching one **per release** is free, makes the published artifact
 self-describing (an operator can see exactly what is inside the binary), and is a
 supply-chain *artifact*, not a supply-chain *attestation*.
+
+> **Amendment, 2026-09-20 (v0.15.1 block C).** «The published artifact» here
+> means the archives this ADR decided on: the six headless ones GoReleaser
+> builds, which do each carry an SPDX SBOM. Since v0.4.0 a release also ships
+> three DESKTOP packages, built by `.github/workflows/release-desktop.yml`,
+> and those ship WITHOUT an SBOM. Read against a release today, the sentence
+> above is wider than the wire; the decision is not reopened here, the scope
+> is stated. Evidence: the published v0.15.0 assets — six `*.sbom.json`, none
+> for the `.dmg`, the desktop `.tar.gz` or the installer.
 
 - **The line vs Stage 16:** an SBOM **describes** the build (a bill of materials);
   **signing / provenance / SLSA attestation** *prove* it. The descriptive artifact

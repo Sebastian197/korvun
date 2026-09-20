@@ -1,10 +1,5 @@
 # Korvun v0.15.0 — Beta: the human yes, in the window
 
-> **BORRADOR.** Nada de este fichero se publica antes de que la PR del tren
-> quede fusionada y el tag exista. Cada cifra de aquí sale de una ejecución
-> capturada, no de la memoria, y las que no se hayan podido capturar están
-> marcadas como pendientes en `docs/releases/v0.15.0-superficies.md`.
-
 The fifth release of the Execution Trust Layer era, and the one that brings
 approvals. They are opt-in: with `approvals.enabled` set, an irreversible action
 under a bounded ceiling PARKS as a request until a human decides it, in the

@@ -1,0 +1,8 @@
+## RED — README.md exactly as committed at 61ae582 (git show 61ae582:README.md > README.md)
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: README.md sha256 41b691a2e1c13380778b1a3e7a24be03c12b7aae682db6126cca267e2a7b4832
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — README.md the Download line names v0.14.0 but releaseFacts.tag is v0.15.0
+exit=1
+

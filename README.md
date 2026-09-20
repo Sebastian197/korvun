@@ -98,7 +98,8 @@ Everything below is **on `master` today** — no roadmap item is counted as pres
 - **Cross-platform** — one static, pure-Go binary (no cgo) for Linux, macOS, and
   Windows on x86-64 and ARM64.
 - **Signed releases** — each release ships cosign keyless signatures over the
-  checksums and a per-artifact SBOM (SPDX via Syft).
+  checksums, and an SBOM (SPDX via Syft) for each of the six headless archives;
+  the desktop packages ship without one today.
 - **First-class CLI** — `serve`, `config check`, `status`, `intent`, `grant`,
   `approvals`, `ledger`, `receipt`, `version`, `help`:
 
@@ -126,15 +127,16 @@ headless binary is unchanged and is still the way to run Korvun on a server.
 |:--:|:--:|:--:|
 | **Activity** — every routing decision, explained where it happens. | **Keychain assistant** — tokens go to the OS keychain, never to the config. | **Channels** — each channel with its mode, health and brain. |
 
-**Approvals (v0.15.0).** When a brain reaches for something irreversible under a
-bounded ceiling, the action PARKS instead of firing, and the window's
-Aprobaciones screen is where a human reads it whole and decides. The yes sits
+**Approvals (v0.15.0, opt-in).** With `approvals.enabled` set, when a brain
+reaches for something irreversible under a bounded ceiling, the action PARKS
+instead of being denied (a park that fails falls closed to the denial), and the
+window's Aprobaciones screen is where a human reads it whole and decides. The yes sits
 behind a typed gate — you re-type the last six characters of the digest, and
 pasting does not arm it — while the no is always one click away. The operator
 CLI takes the same decision against the same store, which is still the only way
 in on a headless server.
 
-**Download v0.14.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.15.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
@@ -340,7 +342,7 @@ still works via a retrocompat shim; `korvun serve --config …` is canonical.
 ## Verifying a release
 
 Releases are signed keyless with [cosign](https://github.com/sigstore/cosign)
-(Sigstore) and ship an SBOM. Verify the checksums signature, then check your archive
+(Sigstore), and each headless archive ships an SBOM. Verify the checksums signature, then check your archive
 against the verified `checksums.txt`:
 
 ```sh
@@ -353,7 +355,7 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.14.0` — Beta — is the current release.** Every beta criterion is met and the
+**`v0.15.0` — Beta — is the current release.** Every beta criterion is met and the
 platform keeps growing: channels, multi-brain routing, the policy engine,
 resilience, the no-code builder, the operator console, governed tools & skills,
 governed memory, the universal model gateway, the honest desktop, the Action
@@ -364,8 +366,13 @@ and per-action policy: the consequence ladder, effect ceilings as the
 tenth attenuation dimension, and every decision pinning its exact law —
 and now the ledger: every terminal outcome leaving its signed receipt
 on a hash chain the operator re-judges offline, tamper-evident and
-honestly so — each validated on real hardware. See
-[the release notes](docs/releases/v0.14.0.md),
+honestly so — each validated on real hardware. v0.15.0 adds opt-in approvals:
+with `approvals.enabled` set, an irreversible action under a bounded ceiling
+parks until a human decides it, from the window or the operator CLI, or until it
+expires; a failed park or an unresolved provenance falls closed to
+`approval_unavailable`, which is also the denial without the setting, as since
+v0.13.0. The release ships with the known issues its notes list. See
+[the release notes](docs/releases/v0.15.0.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 

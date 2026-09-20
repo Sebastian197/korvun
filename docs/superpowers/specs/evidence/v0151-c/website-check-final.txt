@@ -1,0 +1,160 @@
+command: make website-check
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+Makefile sha256: 5aa56820a11f3633602a32b8c54182d05459deb9d5a2f8249a1de4e812eb8928
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+node v22.23.2 (CI uses 24)
+---- make output, unfiltered ----
+[website-check] (1/9) npm ci x2 — lockfile determinism (AS-9)
+npm warn config init.author.email Use `--init-author-email` instead.
+npm warn config init.author.name Use `--init-author-name` instead.
+npm warn config init.license Use `--init-license` instead.
+npm warn Unknown user config "init.licence". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown user config "init.name". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm notice run postinstall
+npm notice run node scripts/apply-webpackbar-compat.mjs
+webpackbar 6.0.1 compatibility patch applied
+
+added 1259 packages, and audited 1260 packages in 16s
+
+428 packages are looking for funding
+  run `npm fund` for details
+
+1 high severity vulnerability
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+npm warn install-scripts 4 packages had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   core-js@3.50.0 (postinstall: node -e "try{require('./postinstall')}catch(e){}")
+npm warn install-scripts   core-js-pure@3.50.0 (postinstall: node -e "try{require('./postinstall')}catch(e){}")
+npm warn install-scripts   fsevents@2.3.3 (install: (install scripts present))
+npm warn install-scripts   fsevents@2.3.2 (install: (install scripts present))
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm warn config init.author.email Use `--init-author-email` instead.
+npm warn config init.author.name Use `--init-author-name` instead.
+npm warn config init.license Use `--init-license` instead.
+npm warn Unknown user config "init.licence". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown user config "init.name". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm notice run postinstall
+npm notice run node scripts/apply-webpackbar-compat.mjs
+webpackbar 6.0.1 compatibility patch applied
+
+added 1259 packages, and audited 1260 packages in 10s
+
+428 packages are looking for funding
+  run `npm fund` for details
+
+1 high severity vulnerability
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+npm warn install-scripts 4 packages had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   core-js@3.50.0 (postinstall: node -e "try{require('./postinstall')}catch(e){}")
+npm warn install-scripts   core-js-pure@3.50.0 (postinstall: node -e "try{require('./postinstall')}catch(e){}")
+npm warn install-scripts   fsevents@2.3.3 (install: (install scripts present))
+npm warn install-scripts   fsevents@2.3.2 (install: (install scripts present))
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+[website-check] (2/9) current-release claims (README, releases table EN/ES; text and href) match releaseFacts.ts
+check-current-release: OK — the five current-release claims name v0.15.0
+[website-check] (3/9) docusaurus build into .vitepress/dist under base '/korvun/' (AS-1)
+npm warn config init.author.email Use `--init-author-email` instead.
+npm warn config init.author.name Use `--init-author-name` instead.
+npm warn config init.license Use `--init-license` instead.
+npm warn Unknown user config "init.licence". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown user config "init.name". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm notice run build
+npm notice run docusaurus build --out-dir .vitepress/dist
+
+ ------------------------------------------------------------------------------                                                                                                         Update available 3.9.2 → 3.10.2                                                                                                                 To upgrade Docusaurus packages with the latest version, run the                                       following command:                                        `npm i @docusaurus/core@latest @docusaurus/preset-classic@latest               @docusaurus/module-type-aliases@latest @docusaurus/tsconfig@latest                                  @docusaurus/types@latest`                                                                                                             ------------------------------------------------------------------------------ 
+
+[WARNING] The `siteConfig.onBrokenMarkdownLinks` config option is deprecated and will be removed in Docusaurus v4.
+Please migrate and move this option to `siteConfig.markdown.hooks.onBrokenMarkdownLinks` instead.
+[INFO] Website will be built for all these locales: 
+- en
+- es
+[INFO] [en] Creating an optimized production build...
+[WARNING] The `siteConfig.onBrokenMarkdownLinks` config option is deprecated and will be removed in Docusaurus v4.
+Please migrate and move this option to `siteConfig.markdown.hooks.onBrokenMarkdownLinks` instead.
+[webpackbar] ℹ Compiling Client
+[webpackbar] ℹ Compiling Server
+[webpackbar] ✔ Server: Compiled successfully in 7.89s
+[webpackbar] ✔ Client: Compiled successfully in 14.37s
+[SUCCESS] Generated static files in ".vitepress/dist".
+[INFO] [es] Creating an optimized production build...
+[WARNING] The `siteConfig.onBrokenMarkdownLinks` config option is deprecated and will be removed in Docusaurus v4.
+Please migrate and move this option to `siteConfig.markdown.hooks.onBrokenMarkdownLinks` instead.
+[webpackbar] ℹ Compiling Client
+[webpackbar] ℹ Compiling Server
+[webpackbar] ✔ Server: Compiled successfully in 5.68s
+[webpackbar] ✔ Client: Compiled successfully in 11.51s
+[SUCCESS] Generated static files in ".vitepress/dist/es".
+[INFO] Use `npm run serve` command to test your build locally.
+[website-check] (4/9) link + asset integrity over dist (AS-1)
+check-brand: OK
+check-brand: gif OK
+check-dist: 30 pages, 1210 internal refs checked, all resolve under / — OK
+[website-check] (5/9) WCAG AA contrast over the site token pairs (AS-8)
+primary text: 5.78:1
+teal text: 9.46:1
+white button text: 4.56:1
+check-contrast: audited UI token pairs meet WCAG AA — OK
+[website-check] (6/9) motion-property gate — transform/opacity only (AS-perf)
+check-motion: every authored animation uses transform/opacity/filter — OK
+[website-check] (7/9) docs-map gate — no stubs, no secret-looking values (FR-DOCS)
+check-docs: 30 pages — every locale populated, no secret-looking values — OK
+[website-check] (8/9) locale-parity gate — ES mirrors EN, code blocks identical (SP4b)
+check-parity: 13 source page pairs — full ES mirror and byte-identical technical blocks — OK
+[website-check] (9/9) e2e — same-origin, motion law, axe, search, docs map, i18n (AS-2/3/4/5/8/perf)
+npm warn config init.author.email Use `--init-author-email` instead.
+npm warn config init.author.name Use `--init-author-name` instead.
+npm warn config init.license Use `--init-license` instead.
+npm warn Unknown user config "init.licence". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown user config "init.name". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm notice run npx
+npm notice run 'playwright' test
+[WebServer] npm warn config init.author.email Use `--init-author-email` instead.
+[WebServer] npm warn config init.author.name Use `--init-author-name` instead.
+[WebServer] npm warn config init.license Use `--init-license` instead.
+[WebServer] npm warn Unknown env config "init.licence". This will error in a future major version of npm. See `npm help npmrc` for supported config options.
+[WebServer] npm warn Unknown user config "init.licence". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+[WebServer] npm warn Unknown user config "init.name". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+[WebServer] npm notice run preview
+[WebServer] npm notice run docusaurus serve --dir .vitepress/dist --port 4174
+[WebServer] [WARNING] The `siteConfig.onBrokenMarkdownLinks` config option is deprecated and will be removed in Docusaurus v4.
+[WebServer] Please migrate and move this option to `siteConfig.markdown.hooks.onBrokenMarkdownLinks` instead.
+
+Running 24 tests using 2 workers
+
+  ✓   2 e2e/docs.spec.ts:23:5 › documentation navigation reaches the complete public map (578ms)
+  ✓   3 e2e/docs.spec.ts:37:5 › documentation does not make third-party runtime requests (1.0s)
+  ✓   1 e2e/docs.spec.ts:15:5 › every English documentation route renders real content (2.1s)
+  ✓   5 e2e/i18n.spec.ts:29:5 › every public English route has a Spanish mirror (170ms)
+  ✓   6 e2e/i18n.spec.ts:38:5 › English and Spanish documentation expose the same route tree (722ms)
+  ✓   4 e2e/i18n.spec.ts:15:5 › the locale switcher connects both real homepages (1.8s)
+  ✓   7 e2e/mobile-menu.spec.ts:26:9 › 390 px navbar drawer › EN drawer opens full-height, navigates, and closes (1.4s)
+  ✓   8 e2e/mobile-menu.spec.ts:26:9 › 390 px navbar drawer › ES drawer opens full-height, navigates, and closes (1.3s)
+  ✓   9 e2e/redesign.spec.ts:40:9 › EN redesigned landing › presents the selected story in the intended order (441ms)
+  ✓  10 e2e/redesign.spec.ts:60:9 › EN redesigned landing › publishes current, verifiable release facts (549ms)
+  ✓  11 e2e/redesign.spec.ts:80:9 › EN redesigned landing › has real destinations for every landing action (674ms)
+  ✓  13 e2e/redesign.spec.ts:40:9 › ES redesigned landing › presents the selected story in the intended order (505ms)
+  ✓  14 e2e/redesign.spec.ts:60:9 › ES redesigned landing › publishes current, verifiable release facts (398ms)
+  ✓  12 e2e/redesign.spec.ts:94:9 › EN redesigned landing › uses same-origin media and passes the WCAG A/AA scan (1.4s)
+  ✓  15 e2e/redesign.spec.ts:80:9 › ES redesigned landing › has real destinations for every landing action (468ms)
+  ✓  17 e2e/redesign.spec.ts:118:9 › 390 px landing › EN remains within the viewport (979ms)
+  ✓  16 e2e/redesign.spec.ts:94:9 › ES redesigned landing › uses same-origin media and passes the WCAG A/AA scan (1.3s)
+  ✓  19 e2e/redesign.spec.ts:138:5 › reduced motion removes meaningful animation (433ms)
+  ✓  18 e2e/redesign.spec.ts:118:9 › 390 px landing › ES remains within the viewport (988ms)
+  ✓  20 e2e/redesign.spec.ts:155:5 › below-fold storytelling reveals once on viewport entry (643ms)
+  ✓  22 e2e/redesign.spec.ts:202:5 › the journey switches to the mobile rail at 390px without overflow (417ms)
+  ✓  23 e2e/redesign.spec.ts:213:5 › reduced motion shows the complete static circuit with no signal head (495ms)
+  ✓  21 e2e/redesign.spec.ts:189:5 › routes through every landing block in order (1.4s)
+  ✓  24 e2e/redesign.spec.ts:220:5 › client-side navigation back home re-arms the routing journey (858ms)
+
+  24 passed (16.9s)
+website-check passed.
+make exit=0

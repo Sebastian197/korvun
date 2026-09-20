@@ -11,6 +11,13 @@ Pre-test paper: `docs/superpowers/specs/2026-09-13-approvals-screen-to-mockup-pr
 
 Captured from the ceremony's own store, on a copy with its md5 unchanged:
 
+> **Scoped 2026-09-19 (P2-11 of the fifteenth external pass).** Nothing in the
+> tree binds the outputs and the table of this section to real executions: the
+> commit carries no copy of the store, no ledger export, no raw terminal
+> capture and no hash of either. They are the author's transcription of runs
+> made on the director's machine. They may correspond to real executions; this
+> commit cannot prove it.
+
 ```
 $ korvun ledger check --config <copy>
 ledger main: 4 receipts, chain intact

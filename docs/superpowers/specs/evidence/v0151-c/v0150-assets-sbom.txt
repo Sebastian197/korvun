@@ -1,0 +1,28 @@
+# The published v0.15.0 assets, read 2026-09-20 (source of the SBOM sentence)
+$ gh release view v0.15.0 --json assets --jq '.assets[].name'
+checksums-desktop.txt
+checksums-desktop.txt.pem
+checksums-desktop.txt.sig
+checksums.txt
+checksums.txt.pem
+checksums.txt.sig
+korvun-desktop_0.15.0_darwin_universal.dmg
+korvun-desktop_0.15.0_linux_amd64.tar.gz
+korvun-desktop_0.15.0_windows_amd64-installer.exe
+korvun_0.15.0_darwin_amd64.tar.gz
+korvun_0.15.0_darwin_amd64.tar.gz.sbom.json
+korvun_0.15.0_darwin_arm64.tar.gz
+korvun_0.15.0_darwin_arm64.tar.gz.sbom.json
+korvun_0.15.0_linux_amd64.tar.gz
+korvun_0.15.0_linux_amd64.tar.gz.sbom.json
+korvun_0.15.0_linux_arm64.tar.gz
+korvun_0.15.0_linux_arm64.tar.gz.sbom.json
+korvun_0.15.0_windows_amd64.zip
+korvun_0.15.0_windows_amd64.zip.sbom.json
+korvun_0.15.0_windows_arm64.zip
+korvun_0.15.0_windows_arm64.zip.sbom.json
+korvun_checksums_provenance.intoto.jsonl
+korvun_desktop_checksums_provenance.intoto.jsonl
+
+sbom.json assets: 6
+desktop packages without an sbom: dmg, linux tar.gz, windows installer

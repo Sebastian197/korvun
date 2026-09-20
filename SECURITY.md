@@ -54,9 +54,10 @@ minor release** — older tags are not patched; upgrade to the newest release.
 
 ## Release signing and verification
 
-Every release is **draft-until-complete**: binaries for six platforms across
-two families (headless + desktop), each with an SPDX **SBOM**, a sha256
-manifest, and a **cosign keyless signature** (Sigstore, GitHub OIDC).
+Every release is **draft-until-complete**: two families, each with a sha256
+manifest and a **cosign keyless signature** (Sigstore, GitHub OIDC). The six
+headless archives each ship an SPDX **SBOM**; the three desktop packages ship
+without one today.
 Verify the manifest, then your download against it:
 
 ```sh
@@ -127,9 +128,18 @@ executor may already have fired) closes the action as
 would misstate what happened. Idempotency, reconciliation of uncertain
 outcomes and status re-queries against the external system are stage
 6's scope, declared, not implied.
-Since R5, the receipt of EVERY approval-decided outcome — approved,
+Since R5, the receipt of an approval-decided outcome — approved,
 rejected, expired or cancelled — seals the decided approval's digest,
-so the evidence of the NO survives retention exactly like the YES;
+so the evidence of the NO survives retention exactly like the YES.
+On master, shipping in v0.15.1: when the approval row cannot be used at
+the moment of sealing, the receipt seals instead ONE mark from a closed list —
+`corrupt:row_scan`, `corrupt:decision_at`, `corrupt:decision_principal`,
+`corrupt:decision_verb`, `corrupt:approval_missing`, `corrupt:status` or
+`unreadable:driver` — never an empty reference and never a digest the row
+does not re-derive; `receipt verify` and `ledger check` fail such a
+receipt by name (`approval_evidence_corrupt`,
+`approval_evidence_unreadable`; anything that is neither a digest nor a
+listed mark fails as `approval_evidence_unknown_mark`);
 receipts sealed by pre-R5 binaries carry an empty approval reference
 on refused outcomes — a declared historical fact, never rewritten.
 Since the R3 consolidation the boot's recovery closes land in the
@@ -152,8 +162,8 @@ carries ITS OWN name — `hash_mismatch`, `signature_invalid`,
 being READ does not parse, the command refuses on stderr with the read
 error and no ladder name; when ANOTHER receipt of the same chain does
 not parse, the failure reported may carry a name that describes a
-disagreement rather than the unreadable byte, which is a defect filed
-to v0.15.1, not a guarantee. The agreement with those rows is a COHERENCE
+disagreement rather than the unreadable byte, which is a filed defect,
+unscheduled (v0.15.1 does not deliver it), not a guarantee. The agreement with those rows is a COHERENCE
 check over UNSIGNED evidence: it catches a mismatch, it does not seal
 them, and the auxiliary v2-era evidence (tombstones, live rows) is
 governed by the "Known limits of the receipt v2 era" section below.
@@ -179,7 +189,8 @@ follows from the same index-derived expectation and was NOT executed:
 
 All four need what Korvun does not ship yet — an EXTERNAL anchor (the
 store's identity, the last sealed hash, the authoritative key) or a
-verifier that scans instead of looking up. Filed to v0.15.1. The
+verifier that scans instead of looking up. Filed, unscheduled (v0.15.1
+does not deliver it). The
 signing key living on the same machine as the store remains true and
 is the older half of the same fact: an attacker with full control of
 the profile can rewrite history, with the resident key or with one of
@@ -251,6 +262,6 @@ is produced by the workflow's own OIDC identity and is verifiable by anyone
 following "Release signing and verification" above.
 
 What does NOT bound it: anything in this repository verifying the GoReleaser
-binary itself. **Filed with declared priority for v0.15.1** — ahead of cosmetic
-work — to verify the downloaded tool ourselves against a checksum we pin, so the
-chain fails CLOSED.
+binary itself. **Filed with declared priority**, first announced for v0.15.1,
+which does not deliver it; now unscheduled — to verify the downloaded tool
+ourselves against a checksum we pin, so the chain fails CLOSED.

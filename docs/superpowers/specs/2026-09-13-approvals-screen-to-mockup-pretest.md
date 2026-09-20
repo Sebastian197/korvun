@@ -86,7 +86,9 @@ PROBE listRow="tool/webhook_callIRREVERSIBLEtelegramapr_…35cda6f9…324d602026
 The doors, the reason field and the missing cards are seen in
 `/Users/sebastianmorenosaavedra/Desktop/korvun.nosync/design-drafts/ceremonia-v0150/decision-block-1100x760.png`
 (gitignored, main repository only). Their computed styles were not printed by
-that probe; M1 prints them.
+that probe; M1 prints them. That image is a visual capture of the screen, not
+evidence of any receipt, and it is not in the tree (P2-11 of the fifteenth
+external pass, scoped 2026-09-19).
 
 ## 1. The director's decisions, literal (2026-09-13)
 

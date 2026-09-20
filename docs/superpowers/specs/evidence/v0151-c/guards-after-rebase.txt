@@ -1,0 +1,11 @@
+# The two website guards, run after C was rebased onto master's tip 70850da (2026-09-20)
+HEAD: 70850da7ab18b438635f24c08ed006fea6f6762f (working tree carries the uncommitted train)
+
+$ node website/scripts/check-current-release.mjs
+check-current-release: OK — the five current-release claims name v0.15.0
+exit=0
+
+$ (cd website && npm run check:release-facts)
+check-release-facts: OK — every release version flows from releaseFacts.ts
+check-release-facts: latest-release comparison OK (v0.15.0)
+exit=0

@@ -184,9 +184,18 @@ decisión.** La pantalla de Aprobaciones de Korvun Desktop lista lo
 aparcado, enseña el documento entero y toma el sí detrás de una puerta
 que hay que teclear; esta página documenta la CLI, que hace lo mismo
 desde un terminal y es la única entrada en un servidor sin pantalla.
-Las dos tocan el mismo almacén, los mismos cinturones y el mismo
-consumo de una sola vez: decida quien decida primero, a la otra se lo
-dicen por su nombre.
+Las dos tocan el mismo almacén, los mismos cinturones y el mismo claim
+que consume una vez los parámetros guardados: decida quien decida
+primero, a la otra se lo dicen por su nombre. Ese consumo único tiene
+dos límites conocidos. En la v0.15.0, un trigger que restaura los
+parámetros dentro de la propia transacción del claim lo rompe; está
+corregido en master y sale en la v0.15.1. Y si otra conexión vuelve a
+escribir los parámetros después de que el claim confirme, mientras la
+acción siga APPROVED —una primera ejecución aún en curso, una cuyo
+cierre falló, o un claim seguido de una caída antes del cierre—, una
+segunda ejecución vuelve a disparar el efecto; una restauración después
+de que la acción cerrara no obtiene una segunda. Ese segundo límite es
+un problema conocido fichado para la v0.15.2.
 
 El aparcamiento necesita un cerebro ACOTADO: pon `agent.effect_ceiling`
 en el brain (por ejemplo `"write_reversible"`) — el cable que faltaba
@@ -223,7 +232,9 @@ korvun approvals reject --config korvun.json --comment "why" apr_…
 Ambos son actos de operador registrados con su recibo firmado.
 Aprobar ejecuta EL objeto guardado — recuperado íntegro, re-verificado
 contra el digest aprobado, reclamado atómicamente para que dos
-aprobaciones en carrera no disparen el efecto dos veces — y reporta el
+aprobaciones en carrera no obtengan las dos los parámetros (no frente a
+una restauración confirmada mientras la acción siga APPROVED, el
+problema conocido fichado para la v0.15.2) — y reporta el
 desenlace real; el recibo de una acción aprobada sella su referencia
 de aprobación (canónico v2), y `receipt verify` gana el check
 `approval_mismatch`. El rechazo, la cancelación o la caducidad

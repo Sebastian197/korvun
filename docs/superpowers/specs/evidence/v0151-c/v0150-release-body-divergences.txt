@@ -1,0 +1,123 @@
+command: gh release view v0.15.0 --json body --jq .body | diff - docs/superpowers/specs/evidence/v0151-c/v0150-release-body-replacement.md
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+replacement sha256: caf0571c5284b47185e9ea7330eb9faac8207e3f7cd7d9f136e486e9f79de38c
+---- diff, unfiltered ----
+3,7c3,21
+< The fifth release of the Execution Trust Layer era. Until now an irreversible
+< action under a bounded ceiling PARKED and waited for a terminal: the decision
+< lived in the operator CLI and nowhere else. From v0.15.0 the same decision is
+< taken in the desktop window, against the same store, the same belts and the
+< same one-shot consume.
+---
+> The fifth release of the Execution Trust Layer era, and the one that brings
+> approvals. They are opt-in: with `approvals.enabled` set, an irreversible action
+> under a bounded ceiling PARKS as a request until a human decides it, in the
+> desktop window or with the operator CLI, or until it expires (default TTL one
+> hour), against the same store, the same belts and the same claim that
+> consumes the stored parameters once. That single consumption has two known
+> limits in this release, both reproduced at `61ae582`, the base of the v0.15.1
+> trains, whose Go code is byte-identical to this tag's. A trigger that restores
+> the parameters inside the claim's own transaction defeats it (two executions,
+> `runs=2`); fixed on master for v0.15.1. And another connection that writes the
+> parameters back after the claim commits, while the action is still APPROVED (a
+> first execution still running, one whose close failed, or a claim followed by
+> a crash before the close), followed by a second execute, runs the effect again
+> (`runs=2`); a restore after the action closed gets no second run. That second
+> limit is filed for v0.15.2.
+> If the park itself fails, or the request's provenance cannot be resolved, it
+> falls closed to the same denial. Without the setting that action is denied with
+> `approval_unavailable`, as it has been since v0.13.0; no earlier release could
+> park it or decide it.
+23c37,39
+< conversation.
+---
+> conversation. The ceremony is narrated, not evidenced: the commit carries no
+> store, ledger or raw capture that binds this account to a real run (P2-11 under
+> Known issues).
+70,73c86,90
+<   there is the one the operator typed into the arming gate. From `korvun
+<   approvals approve|execute` it is the column the command just read: that
+<   command takes no digest flag, so there is no re-typed string to carry — filed
+<   below, with its reproduction.
+---
+>   there is the full digest the detail served to the screen; the six characters
+>   the operator types only arm the button and do not travel (P2-5 under Known
+>   issues). From `korvun approvals approve|execute` it is the column the command
+>   just read: that command takes no digest flag, so there is no re-typed string
+>   to carry.
+114c131,132
+< **From the fifteenth external pass (8 P2 + 2 P3), reproduced in `docs/HANDOFF.md`:**
+---
+> **From the fifteenth external pass (8 P2 + 2 P3), reproduced in `docs/HANDOFF.md`
+> under the same IDs:**
+116,119c134,137
+< - A deadline that fired BEFORE the request was written closes `OUTCOME_UNKNOWN`
+<   on both paths — a TLS handshake that never completes proves the POST never
+<   left, and the ledger still says it does not know.
+< - The digest the window sends is the one the detail served, not the six
+---
+> - **P2-4.** A deadline that fired BEFORE the request was written closes
+>   `OUTCOME_UNKNOWN` on both paths — a TLS handshake that never completes proves
+>   the POST never left, and the ledger still says it does not know.
+> - **P2-5.** The digest the window sends is the one the detail served, not the six
+122,132c140,152
+< - The same corrupt bytes are classified `evidence_corrupt` by `GetApproval` and
+<   left untyped by the decide path, so one corruption can be published as
+<   `unavailable`.
+< - The approvals API rides `observability.addr`, which accepts `0.0.0.0`, while
+<   every decision receipt is signed `CredentialLoopbackInProcess`. The prose is
+<   cured in this release; the receipt is not.
+< - `current_law_digest` is resolved from `cfg.Brains[0]`, so a second brain's
+<   request is shown the first brain's law.
+< - Any SQL failure inside `transitionTx` is published as `already_closed`, over a
+<   transaction that rolled back and an action that is still approvable.
+< - Four named outcomes (`not_found`, `unavailable`, `disabled`,
+---
+> - **P2-6.** The same corrupt bytes are classified `evidence_corrupt` by
+>   `GetApproval` and left untyped by the decide path, so one corruption can be
+>   published as `unavailable`.
+> - **P2-7.** The approvals API rides `observability.addr`, which accepts
+>   `0.0.0.0`, while every decision receipt is signed
+>   `CredentialLoopbackInProcess`. The prose is cured in this release; the
+>   receipt is not.
+> - **P2-8.** `current_law_digest` is resolved from `cfg.Brains[0]`, so a second
+>   brain's request is shown the first brain's law.
+> - **P2-9.** Any SQL failure inside `transitionTx` is published as
+>   `already_closed`, over a transaction that rolled back and an action that is
+>   still approvable.
+> - **P2-10.** Four named outcomes (`not_found`, `unavailable`, `disabled`,
+136,140c156,167
+< - Approve and reject accept trailing JSON and unknown fields.
+< - A comment in `approvals_test.go` claims `unknown_outcome` has no reachable
+<   emitter; the adapter emits it.
+< - The four post-delivery branches of `webhook_call` are covered in
+<   `internal/tool`, but no mould composes them across both execution paths.
+---
+> - **P2-11.** The ceremony behind this release's screenshots is not verifiable
+>   from the commit: the canto narrates four receipts, `chain intact` and two
+>   verifications, but the tree carries no capture, ledger, raw output, database
+>   or hash that binds those sentences to real executions.
+> - **P3-12.** Approve and reject accept trailing JSON and unknown fields.
+> - **P3-13.** Two minor mismatches: a comment in
+>   `internal/controlapi/approvals_test.go` claims that the only emitter of
+>   `unknown_outcome` is the default of `nameInBandRule`, which the store never
+>   reaches, while `internal/app/approvals_adapter.go` also emits it from
+>   `runApproved` when a run's outcome is unknown; and the
+>   four post-delivery branches of `webhook_call` are covered in `internal/tool`,
+>   but no mould composes them across both execution paths.
+154,157d180
+< - The local model that drove the ceremony answered two of six requests in prose
+<   with no tool call, and nested its JSON body inside `message`. The screen
+<   prints that literally, which is its job, and the model's unreliability is
+<   not a Korvun defect — it is what a small local model does.
+175a199,205
+> **Observed, and not a Korvun defect:**
+> 
+> - The local model that drove the ceremony answered two of six requests in prose
+>   with no tool call, and nested its JSON body inside `message`. The screen
+>   prints that literally, which is its job; the model's unreliability is what a
+>   small local model does, not a defect of Korvun.
+> 
+203d232
+< 
+exit=1 (1 = the bodies differ)

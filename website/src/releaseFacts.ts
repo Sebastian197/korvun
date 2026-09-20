@@ -3,11 +3,11 @@
 
 // releaseFacts: the ONLY place under src/ where a release version is
 // spelled. Every component interpolates from here, and
-// scripts/check-release-facts.mjs fails the build on any literal
-// elsewhere — the root fix for the 2026-08-30 public-truth find, where
-// the hero, the install block and the release-notes href served
-// v0.11.0 while the copy said v0.13.0 (four hand-updated spots, one
-// updated).
+// scripts/check-release-facts.mjs, run by hand (no gate calls it),
+// reports any literal elsewhere — the root fix for the 2026-08-30
+// public-truth find, where the hero, the install block and the
+// release-notes href served v0.11.0 while the copy said v0.13.0 (four
+// hand-updated spots, one updated).
 export const releaseFacts = {
   /** The current public release, bare (install VERSION= lines). */
   version: "0.15.0",

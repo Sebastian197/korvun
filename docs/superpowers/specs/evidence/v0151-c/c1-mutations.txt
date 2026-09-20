@@ -1,0 +1,88 @@
+## CLEAN — the train's tree, no mutation
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: README.md sha256 9b23e7f501881879e43c5ae03f042b390e21f23c28760bfecafb615e156f0974
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: OK — the five current-release claims name v0.15.0
+exit=0
+
+## M1 — README status line back to v0.14.0
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: README.md sha256 241384fe2fd32a9d2b4a803695a0a62ab1fa6c34b77905e9b0a21ee2f331e7b8
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — README.md the current-release line names v0.14.0 but releaseFacts.tag is v0.15.0
+exit=1
+
+## M2 — README Download line duplicated
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: README.md sha256 5f19217ca36bd646e92348d581a616e022dcc8b7b98e132fa49a4474366b0aa9
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — README.md carries 2 occurrences of the Download line; exactly one is required
+exit=1
+
+## M3 — README Download line removed
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: README.md sha256 d73afea00f2913eb6f5513a1bb06909fc42ab4de54e2dbaca9a3d16652342df1
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — README.md carries 0 occurrences of the Download line; exactly one is required
+exit=1
+
+## M4 — releaseFacts.tag moved to v0.15.1, README untouched
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: website/src/releaseFacts.ts sha256 7e58d1ae83308bd0fb1250e84e0a0bb556234479d2819278a4ef983a17a3df8d
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — README.md the Download line names v0.15.0 but releaseFacts.tag is v0.15.1
+exit=1
+
+## M5 — README Status release-notes link to v0.14.0
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: README.md sha256 21d183e9ca93e493e987b1b6797a025aed65255cc036b11a90b46ade43785ac6
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — README.md the Status release-notes link names v0.14.0 but releaseFacts.tag is v0.15.0
+exit=1
+
+## M6 — EN Current-release row link text to v0.14.0
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: website/docs/releases/index.md sha256 7cb5311ea936f845a8d652aaff78a08a030283d077f8a92fdecacfdc0954848a
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — docs/releases/index.md the "Current release" row names v0.14.0 but releaseFacts.tag is v0.15.0
+exit=1
+
+## M7 — EN Current-release row href to v0.14.0, link text untouched
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: website/docs/releases/index.md sha256 a42c86e347594764c7854ec0bd270c4564ee6fc2776e3154c862391b367d53c2
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — docs/releases/index.md the "Current release" row links to v0.14.0 but releaseFacts.tag is v0.15.0
+exit=1
+
+## M8 — ES Release-actual row href to v0.14.0, link text untouched
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: website/i18n/es/docusaurus-plugin-content-docs/current/releases/index.md sha256 dc535a0aa6bbdc6a4ff2ad51f69612b9213d5f2103de9879f9c3a1b70ce20b2a
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — i18n es releases/index.md the "Release actual" row links to v0.14.0 but releaseFacts.tag is v0.15.0
+exit=1
+
+## M9 — ES Release-actual marker removed
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: website/i18n/es/docusaurus-plugin-content-docs/current/releases/index.md sha256 2c44dba274a92c11a114d9c570c00af09ce399a89978b86d966f52129b8d6446
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — i18n es releases/index.md carries 0 occurrences of the "Release actual" row; exactly one is required
+exit=1
+
+## M10 — EN Current-release marker also on the v0.14.0 row
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (working tree carries the uncommitted train)
+guard sha256: b4f3a47965ba8125111ff27a4a1638cf8690bedd17eb5d8c9b9ec53a9672f3cc
+file under test: website/docs/releases/index.md sha256 66eb4bb64bb0bde82425dce6a5f2474449617542e26d4c30ee16c36b71516265
+command: (cd website && node scripts/check-current-release.mjs)
+check-current-release: FAIL — docs/releases/index.md carries 2 occurrences of the "Current release" row; exactly one is required
+exit=1
+

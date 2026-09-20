@@ -81,8 +81,10 @@ signs:
     artifacts: checksum
     output: true
 
-# One SBOM per archive (SPDX JSON via Syft), so every published artifact is
-# self-describing (ADR-0025 §6). Requires `syft` on PATH (the release workflow
+# One SBOM per archive (SPDX JSON via Syft), so every archive this file
+# builds — the six headless ones — is self-describing (ADR-0025 §6). The
+# desktop packages are built by release-desktop.yml, not here, and ship
+# without an SBOM today. Requires `syft` on PATH (the release workflow
 # installs it). Describes the build; signing/provenance/SLSA are Stage 16.
 sboms:
   - id: korvun

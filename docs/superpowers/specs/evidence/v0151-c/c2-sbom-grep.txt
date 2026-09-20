@@ -1,0 +1,46 @@
+command: git grep -n -i sbom -- ':!website/node_modules' ':!docs/cantos' ':!docs/stages' ':!docs/HANDOFF.md' ':!docs/superpowers' ':!docs/adr' ':!docs/releases/v0.[0-9].*' ':!docs/releases/v0.1[0-4]*' ':!.github' ':!**/package-lock.json' ':!**/*.go'
+HEAD: e030202651667ad0dfa90a456ba60bb188b18abd (git grep reads the working tree, which carries the uncommitted train)
+---- output, unfiltered ----
+.goreleaser.yaml:7:# per-release SBOM (Syft). Signing / provenance / public release are Stage 16.
+.goreleaser.yaml:84:# One SBOM per archive (SPDX JSON via Syft), so every published artifact is
+.goreleaser.yaml:87:sboms:
+.goreleaser.yaml:126:  # compiled bytes, checksums, SBOM, and cosign signing are all unchanged.
+CLAUDE.md:412:`github/codeql-action`, `anchore/sbom-action`, etc.) and other CI tooling,
+CONTRIBUTING.md:118:cosign keyless signatures over each family's checksums, and an SPDX SBOM for
+MASTER.md:245:  de SBOM.
+MASTER.md:309:  lint/test/cobertura; SAST y `govulncheck`; SBOM. **Context7** (acciones y versiones).
+README.md:101:  checksums, and an SBOM (SPDX via Syft) for each of the six headless archives;
+README.md:345:(Sigstore), and each headless archive ships an SBOM. Verify the checksums signature, then check your archive
+SECURITY.md:59:headless archives each ship an SPDX **SBOM**; the three desktop packages ship
+SECURITY.md:255:packages, signs the checksum manifest and emits the SBOMs for the six published
+docs/RELEASE-CHECKLIST.md:41:   21 assets, cosign manifests, SBOMs, the app with the current icon), the
+docs/ROAD-TO-BETA.md:397:ya está** (Stage 15 cerrado: GoReleaser, ×6 binarios, checksums, SBOM, systemd).
+docs/ROADMAP-V1.md:75:  corre en los 3 SO (`quality` ×3), genera SBOM y cross-compila las 6
+docs/ROADMAP-V1.md:187:  Conventional-Commits + SBOM por-release (Syft); `--version` por ldflags vía el
+docs/ROADMAP-V1.md:191:  --clean` (6 archivos + 6 SBOMs + checksums). Alcance honesto: 15 = autor
+docs/blueprints/2026-08-15-execution-trust-layer.md:1365:- SBOM, artefactos firmados y verificación de releases.
+docs/notes/stage-16-preflight-checklist.md:76:- **Run artifacts:** the `sbom` job uploads SPDX JSON (dependency manifests) — no
+docs/notes/stage-16-preflight-checklist.md:134:- **Prior master CI run on `adde69d` (docs-only) failed in `sbom` + `cross-compile`
+docs/operations/branch-protection-proposal.md:8:> `quality (macos-latest)`, `quality (windows-latest)`, `sbom`,
+docs/operations/branch-protection-proposal.md:21:> of codeql.yml's `analyze` job, and `cross-compile`/`sbom` are jobs of
+docs/operations/branch-protection-proposal.md:71:- `sbom`
+docs/packaging/INSTALL.md:5:supported OS/arch, a `checksums.txt`, an SBOM, and a cosign signature.
+docs/releases/v0.15.0.md:219:with cosign, and the headless family also ships an SBOM per archive:
+docs/security/bestpractices-cuestionario.md:59:| Entrega protegida contra MITM | Sí | HTTPS + manifiestos sha256 firmados con cosign + SBOM (`docs/packaging/INSTALL.md`) |
+scripts/integration_gate.py:25:        for system in ("linux", "darwin", "windows") for arch in ("amd64", "arm64")] + ["sbom"]),
+website/docs/guide/install.md:7:`checksums.txt`, an SBOM, and a keyless cosign signature.
+website/docs/guide/what-is-korvun.md:50:  manifest, and an SBOM for each of the six headless archives.
+website/docs/releases/index.md:6:the six headless archives also ships an SBOM; the desktop apps ship without
+website/e2e/redesign.spec.ts:71:      expect(main).toContain('SBOM')
+website/i18n/es/docusaurus-plugin-content-docs/current/guide/install.md:8:`checksums.txt`, un SBOM y una firma cosign sin clave.
+website/i18n/es/docusaurus-plugin-content-docs/current/guide/what-is-korvun.md:58:  checksums firmado con cosign, y un SBOM por cada uno de los seis archivos
+website/i18n/es/docusaurus-plugin-content-docs/current/releases/index.md:6:cada uno de los seis archivos headless trae además un SBOM; las apps de
+website/scripts/check-dist.mjs:166:  for (const fact of ['v0.9.0', 'Apache-2.0', 'cosign', 'SBOM']) {
+website/src/components/landing/InstallProof.tsx:77:                <span>✓ SBOM</span>
+website/src/components/landing/landingCopy.ts:129:        `${releaseFacts.tag} — Beta publishes six headless OS/architecture archives. The release also includes a cosign-signed checksum manifest and an SBOM for every archive.`,
+website/src/components/landing/landingCopy.ts:130:      proof: ['6 headless archives', 'cosign-signed checksums', 'SBOM per archive'],
+website/src/components/landing/landingCopy.ts:194:          body: 'Verify the checksum manifest and inspect the supplied SBOM before running a binary.',
+website/src/components/landing/landingCopy.ts:270:        `${releaseFacts.tag} — Beta publica seis archivos headless para distintas combinaciones de sistema y arquitectura. La release incluye un manifiesto de checksums firmado con cosign y un SBOM por archivo.`,
+website/src/components/landing/landingCopy.ts:271:      proof: ['6 archivos headless', 'checksums firmados con cosign', 'SBOM por archivo'],
+website/src/components/landing/landingCopy.ts:335:          body: 'Verifica el manifiesto de checksums y revisa el SBOM suministrado antes de ejecutar un binario.',
+exit=0

@@ -1,0 +1,34 @@
+# make website-check over C rebased onto master's tip 70850da (2026-09-20)
+HEAD: 70850da7ab18b438635f24c08ed006fea6f6762f (working tree carries the uncommitted train)
+make exit=0
+--- tail ---
+
+Running 24 tests using 2 workers
+
+  ✓   1 e2e/docs.spec.ts:23:5 › documentation navigation reaches the complete public map (596ms)
+  ✓   3 e2e/docs.spec.ts:37:5 › documentation does not make third-party runtime requests (1.1s)
+  ✓   2 e2e/docs.spec.ts:15:5 › every English documentation route renders real content (2.2s)
+  ✓   5 e2e/i18n.spec.ts:29:5 › every public English route has a Spanish mirror (194ms)
+  ✓   6 e2e/i18n.spec.ts:38:5 › English and Spanish documentation expose the same route tree (939ms)
+  ✓   4 e2e/i18n.spec.ts:15:5 › the locale switcher connects both real homepages (1.9s)
+  ✓   7 e2e/mobile-menu.spec.ts:26:9 › 390 px navbar drawer › EN drawer opens full-height, navigates, and closes (1.5s)
+  ✓   8 e2e/mobile-menu.spec.ts:26:9 › 390 px navbar drawer › ES drawer opens full-height, navigates, and closes (1.5s)
+  ✓   9 e2e/redesign.spec.ts:40:9 › EN redesigned landing › presents the selected story in the intended order (579ms)
+  ✓  10 e2e/redesign.spec.ts:60:9 › EN redesigned landing › publishes current, verifiable release facts (714ms)
+  ✓  11 e2e/redesign.spec.ts:80:9 › EN redesigned landing › has real destinations for every landing action (644ms)
+  ✓  13 e2e/redesign.spec.ts:40:9 › ES redesigned landing › presents the selected story in the intended order (614ms)
+  ✓  14 e2e/redesign.spec.ts:60:9 › ES redesigned landing › publishes current, verifiable release facts (376ms)
+  ✓  12 e2e/redesign.spec.ts:94:9 › EN redesigned landing › uses same-origin media and passes the WCAG A/AA scan (1.8s)
+  ✓  15 e2e/redesign.spec.ts:80:9 › ES redesigned landing › has real destinations for every landing action (658ms)
+  ✓  17 e2e/redesign.spec.ts:118:9 › 390 px landing › EN remains within the viewport (1.1s)
+  ✓  16 e2e/redesign.spec.ts:94:9 › ES redesigned landing › uses same-origin media and passes the WCAG A/AA scan (1.5s)
+  ✓  19 e2e/redesign.spec.ts:138:5 › reduced motion removes meaningful animation (509ms)
+  ✓  18 e2e/redesign.spec.ts:118:9 › 390 px landing › ES remains within the viewport (1.2s)
+  ✓  20 e2e/redesign.spec.ts:155:5 › below-fold storytelling reveals once on viewport entry (951ms)
+  ✓  22 e2e/redesign.spec.ts:202:5 › the journey switches to the mobile rail at 390px without overflow (577ms)
+  ✓  21 e2e/redesign.spec.ts:189:5 › routes through every landing block in order (1.5s)
+  ✓  23 e2e/redesign.spec.ts:213:5 › reduced motion shows the complete static circuit with no signal head (628ms)
+  ✓  24 e2e/redesign.spec.ts:220:5 › client-side navigation back home re-arms the routing journey (992ms)
+
+  24 passed (18.7s)
+website-check passed.

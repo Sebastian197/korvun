@@ -1,0 +1,38 @@
+# finding (filed for v0.15.2): receipt verify and ledger check print stored bytes RAW on STDOUT, outside approvals
+# HEAD: 70850da7ab18b438635f24c08ed006fea6f6762f (working tree carries the uncommitted block C train; no production code changed by it)
+# command: go test -count=1 -run TestCapture_verifiersPrintStoredBytesRawOnStdout -v ./internal/cli/
+# harness: internal/cli/zz_capture_stdout_test.go, written for this capture and deleted afterwards
+# evidence level: in-process CLI over buffers, real store file, second real connection for the write
+# go version go1.26.6 darwin/amd64 captured 2026-09-20T05:24:17Z
+--- output ---
+    zz_capture_stdout_test.go:35: CAPTURE receipt verify exit=1
+    zz_capture_stdout_test.go:36: CAPTURE receipt verify stdout="receipt rcpt_49bd1e4f2eed6adb0a7eb3af18aebb10 (seq 1): FAIL tombstone_action_mismatch: the tombstone for the sealed digest points at act_\u202erepointed but the receipt belongs to act_inbox1 — the evidence was re-pointed\n"
+    zz_capture_stdout_test.go:37: CAPTURE receipt verify stderr=""
+    zz_capture_stdout_test.go:38: CAPTURE receipt verify stdout carries RAW U+202E = true
+    zz_capture_stdout_test.go:41: CAPTURE ledger check exit=1
+    zz_capture_stdout_test.go:42: CAPTURE ledger check stdout="ledger main: FAIL at receipt rcpt_49bd1e4f2eed6adb0a7eb3af18aebb10 (seq 1): tombstone_action_mismatch: the tombstone for the sealed digest points at act_\u202erepointed but the receipt belongs to act_inbox1 — the evidence was re-pointed\n"
+    zz_capture_stdout_test.go:43: CAPTURE ledger check stderr=""
+    zz_capture_stdout_test.go:44: CAPTURE ledger check stdout carries RAW U+202E = true
+--- PASS: TestCapture_verifiersPrintStoredBytesRawOnStdout (0.04s)
+PASS
+ok  	github.com/Sebastian197/korvun/internal/cli	0.668s
+
+--- how it was produced (so it can be re-run without the harness) ---
+The harness was internal/cli/zz_capture_stdout_test.go, a copy of the fixture of
+TestReceiptVerify_tombstoneActionBindingFailsNamed (internal/cli/receipt_r4f4_test.go)
+with the sabotage byte added:
+  cfgPath, dbPath, approvalID := parkedRequest(t)
+  receiptID := approvedReceiptID(t, cfgPath, dbPath, approvalID)
+  second connection: sql.Open("sqlite", "file:"+dbPath+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)")
+    DELETE FROM actions WHERE action_id = 'act_inbox1'            -- prune-shaped
+    UPDATE approval_tombstones SET action_id = 'act_' || char(8238) || 'repointed'
+      WHERE action_id = 'act_inbox1'                              -- char(8238) = U+202E
+  then runIntentCLI(t, "receipt", "verify", "--config", cfgPath, receiptID)
+  and  runIntentCLI(t, "ledger", "check", "--config", cfgPath)
+The stdout strings above are rendered with Go's %q, so the byte appears as the
+escape \u202e written as six ASCII characters; the "carries RAW U+202E" lines are the direct test of the
+unrendered string. action_id is not in the digest's preimage
+(internal/action/approval.go), which is why the row still re-derives the sealed
+digest and reaches the mismatch branch instead of being refused earlier.
+Harness removed after the capture: `find . -name 'zz_*'` returns nothing and
+`git status --porcelain --untracked-files=all internal/` is empty.

@@ -174,8 +174,16 @@ decision.** The Aprobaciones screen in Korvun Desktop lists what is
 parked, shows the whole document and takes the yes behind a typed gate;
 this page documents the CLI, which does the same thing from a terminal
 and is the only way in on a headless server. Both touch the same store,
-the same belts and the same one-shot consume: whichever decides first,
-the other is told so by name.
+the same belts and the same claim that consumes the stored parameters
+once: whichever decides first, the other is told so by name. That single
+consumption has two known limits. In v0.15.0, a trigger that restores the
+parameters inside the claim's own transaction defeats it; that is fixed on
+master and ships in v0.15.1. And if another connection writes the
+parameters back after the claim commits, while the action is still
+APPROVED — a first execution still running, one whose close failed, or a
+claim followed by a crash before the close — a second execute runs the
+effect again; a restore after the action closed gets no second run. That
+second limit is a known issue filed for v0.15.2.
 
 The parking needs a BOUNDED brain: set `agent.effect_ceiling` on the
 brain (for example `"write_reversible"`) — the missing cable landed
@@ -211,8 +219,10 @@ korvun approvals reject --config korvun.json --comment "why" apr_…
 
 Both are recorded operator acts with their own signed receipts.
 Approving executes THE stored object — recovered whole, re-verified
-against the approved digest, claimed atomically so racing approvals
-cannot fire the effect twice — and reports the real outcome; the
+against the approved digest, claimed atomically so two racing approvals
+do not both obtain the parameters (not against a restore committed while
+the action is still APPROVED, the known issue filed for v0.15.2) — and
+reports the real outcome; the
 receipt of an approved action seals its approval reference (canonical
 v2), and `receipt verify` gains the `approval_mismatch` check.
 Rejection, cancellation or expiry close the parked action with a
