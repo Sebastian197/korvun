@@ -189,7 +189,7 @@ que consume una vez los parámetros guardados: decida quien decida
 primero, a la otra se lo dicen por su nombre. Ese consumo único tiene
 dos límites conocidos. En la v0.15.0, un trigger que restaura los
 parámetros dentro de la propia transacción del claim lo rompe; está
-corregido en master y sale en la v0.15.1. Y si otra conexión vuelve a
+curado en la v0.15.1, la release actual. Y si otra conexión vuelve a
 escribir los parámetros después de que el claim confirme, mientras la
 acción siga APPROVED —una primera ejecución aún en curso, una cuyo
 cierre falló, o un claim seguido de una caída antes del cierre—, una

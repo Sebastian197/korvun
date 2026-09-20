@@ -136,7 +136,7 @@ pasting does not arm it — while the no is always one click away. The operator
 CLI takes the same decision against the same store, which is still the only way
 in on a headless server.
 
-**Download v0.15.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.15.1** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
@@ -355,7 +355,7 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.15.0` — Beta — is the current release.** Every beta criterion is met and the
+**`v0.15.1` — Beta — is the current release.** Every beta criterion is met and the
 platform keeps growing: channels, multi-brain routing, the policy engine,
 resilience, the no-code builder, the operator console, governed tools & skills,
 governed memory, the universal model gateway, the honest desktop, the Action
@@ -371,8 +371,12 @@ with `approvals.enabled` set, an irreversible action under a bounded ceiling
 parks until a human decides it, from the window or the operator CLI, or until it
 expires; a failed park or an unresolved provenance falls closed to
 `approval_unavailable`, which is also the denial without the setting, as since
-v0.13.0. The release ships with the known issues its notes list. See
-[the release notes](docs/releases/v0.15.0.md),
+v0.13.0. v0.15.1 is a patch over it: it cures the three P1 findings of the
+seventeenth external pass, narrows what the approvals screen may affirm about
+an answer, and corrects what the project claimed about the digest that
+travels, the ceremony record and the SBOM the release ships. Both ship with
+the known issues their notes list. See
+[the release notes](docs/releases/v0.15.1.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 
