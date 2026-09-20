@@ -1,9 +1,65 @@
-VETO LEVANTADO 14bd0782753a65c2baa05af780f8c900d29a45ec
-KORVUN-REBASE-EVIDENCE v1
-{
-  "schema": 1,
-  "repository": "Sebastian197/korvun",
-  "pr": 48,
-  "base": "09db2b769aa1a252407531330b38880307a6cd5e",
-  "review": "Round: v0.15.1 block D (director's order, 2026-09-20): the approvals screen\npaints an execution only for an answer it can prove is this action's. WRITTEN\nBY THE EXTERNAL EXECUTOR (Codex) and committed by the director; AUDITED HERE.\nThe new division of work: Codex writes, this session verifies and delivers.\n\nWHO HELD THE VETO. The internal adversary, in ONE scoped pass over the diff:\nVETO MANTENIDO, two P2 [PRODUCT], one P2 [INSTRUMENT], five P3. Everything it\nfound is cured in this same tree, in the commit on top of the executor's, and\ndeclared in the canto.\n\n[PRODUCT] The rejected path had LOST a guard it had on master: the type check\nfor digest and result moved below reject's early return, so a rejected answer\ncarrying digest: 7 painted «Rechazada» where master refused it, and the canto\nclaimed the rejected contract was untouched. Guard restored above the return;\ntwo mould rows watch it; mutation m-d7 reddens them; the canto's false sentence\nis replaced by what the code does.\n\n[PRODUCT] The response's digest was validated by SHAPE and thrown away while\nthe screen painted the digest it already held — an answer about another action\npainted as this one's, captured by the adversary. judgeDecision now takes the\ndigest the screen SENT, refuses any answer whose digest is not identical, and\nthe screen paints the answer's. Two mould rows, executed and failed; mutation\nm-d6 reddens both.\n\n[INSTRUMENT] The 201 and 202 rows had stopped watching the status guard: their\nbody was refused by the new receipt guard first, so widening the status guard\nto any 2xx left the approve verb uncovered. The rows carry an exact body again;\nmutation m-d4 reddens all three. A new row pins that outcome is judged by\nequality, not by prefix; mutation m-d5 reddens it.\n\nWHAT IS NOT CURED, and why, filed for v0.15.2 in docs/HANDOFF.md: the receipt's\nshape lives only in TypeScript (the adversary shortened the minted receipt in\nGo and the whole Go suite stayed green while the screen answered «no sabemos»\nto a real sealed execution); a rejected answer with an empty receipt_id prints\n«Recibo » bare, inherited from master and NOT cured because requiring the\nreceipt's shape on reject leaves an approved mould without a subject — the one\nproving the screen escapes a hostile receipt; and a result of only spaces\ncounts as non-empty.\n\nAPPROVED MOULD TOUCHED, declared in the canto: Approvals.test.tsx changes four\nreceipt fixtures to minted ids, because the new guard refuses the placeholders.\nNo assertion weakened; the adversary read the four hunks one by one.\n\nWHAT RAN on this tree: make quality green as the pre-commit gate; the desktop\nfrontend lane after the cures — typecheck 0, eslint 0 errors (one pre-existing\nwarning in Console.tsx), prettier clean on the two touched files, vitest 487\npassed over 44 files; four probing mutations red and restored, captured in\ndocs/superpowers/specs/evidence/v0151-d/.\n\nEvidence level, honest: deterministic component tests in jsdom with a stubbed\nPOST. Nothing here is proved against the packaged app or a real core; that is\nthe manual pass's job before the tag.\n\nNOT DONE HERE: no Codex pass over this branch (Codex wrote it; by the\ndirector's rule it judges versions, not pull requests); no rehearsal push to\n`ensayo` (force-push denied by the session's permission control and not\ncircumvented). master's tip marker is REFUSED by adversary-gate-check after the\nrebase merges rewrote block B's and block C's SHAs; by the director's order of\n2026-09-20 the repair marker is written after this train merges, as a\nsingle-commit pull request, and that commit carries the tag.\n\nSTATE: IMPLEMENTED. Not ACCEPTED: the merge is the director's."
-}
+VETO LEVANTADO 3765f71ddd2cab27fee12273a2cb493d3c346218
+
+Round: v0.15.1 public truth (2026-09-20). No production code: the tag was
+cut on `261ab3f`, the two release lanes published 23 assets, and this train
+moves the public claims to the release that now exists, plus the director's
+new rule for short prose. Two commits: `c3c335b` (the public surfaces) and
+`3765f71` (the rule, in `docs/HANDOFF.md`).
+
+WHO HELD THE VETO, and how it was lifted. The internal adversary ran TWO
+passes, both VETO MANTENIDO, and both are declared here rather than hidden:
+
+- First pass, over the whole diff: P2-1 — the new releases-table row, EN and
+  ES, enumerated two Known issues behind a colon and dropped the «including»
+  hedge the row it demotes carries, on a surface whose own contract is
+  "unsoftened". Cured in both locales, with the pointer to the notes restored.
+  Five P3 came with it and all five were cured in the same tree: the row said
+  «a digest mismatch» where only `params_digest_mismatch` is meant (the sister
+  outcome leaves the request PENDING, so the sentence was false of it); the
+  Known issue said «with a capture» of an artifact that is not in the tree;
+  «Copy only» was silent about the state the scenario leaves; three published
+  surfaces still spoke from before the publication (`SECURITY.md`, the
+  operator-CLI reference page in both locales); and the ceremony record still
+  opened claiming every command was executed while P2-11 says nothing in the
+  tree binds it to a real run.
+
+- Second pass, scoped to those cures: P2-1 cured in both locales, every P3
+  cured, and a NEW P2-2 created by the cures themselves — the commit message
+  claimed `docs/releases/v0.15.1.md` was synced with the body published for
+  the tag, which the cures had made false by 453 bytes. Its lift condition was
+  mechanical and it was EXECUTED: the cured file was published with
+  `gh release edit --notes-file`, the byte comparison was re-run through the
+  API (published 14288, file 14288, `IDENTICAL: True`), the message was
+  reworded to say what happened, and its arithmetic was corrected (five issues
+  filed to v0.15.2, a sixth bullet declaring itself unscheduled).
+
+WHAT WAS NOT RE-PASSED, and under whose order. By the director's order of
+2026-09-20 there is NO third pass over that last correction, and none over the
+`docs/HANDOFF.md` paragraph: for this class the sole verification is the sixth
+question — every corrected line was re-read ON DISK after being written — and
+the marker says so instead of implying a pass that did not happen. The same
+order becomes the standing rule this train registers: any change that is only
+text and under ten lines gets at most ONE adversary pass, and what it returns
+is cured in the same tree and declared.
+
+WHAT RAN on this tree: `make quality` green (exit 0, «Quality gate passed»,
+3m21s over the final tree); the three website guards green before and after
+the cures — `check-current-release` («the five current-release claims name
+v0.15.1»), `check-release-facts` («every release version flows from
+releaseFacts.ts» and the online comparison «latest-release comparison OK
+(v0.15.1)») and `check-parity` (13 page pairs); the adversary's own five
+probing mutations of `check-current-release` on a copy, each red with its
+named reason and restored. The pre-commit gate ran on every commit of the
+train and announced its one skip by name («staged tree is identical to
+f52b72b — its green stands»).
+
+EVIDENCE LEVEL, honest: this is prose over published surfaces. Nothing here
+is proved by a new test, because nothing here changes behaviour — the only
+executable bytes that moved are the two literals of `website/src/releaseFacts.ts`.
+The release itself was verified after publication, captured: cosign
+`Verified OK` over `checksums.txt` and `checksums-desktop.txt`, both build
+provenance attestations bound to the exact local digests and to the workflows
+at `refs/tags/v0.15.1`, `shasum -a 256 -c` clean over both manifests, six
+SPDX-2.3 SBOMs, and the published `.dmg` printing `korvun-desktop v0.15.1`.
+
+STATE: IMPLEMENTED. Not ACCEPTED: the merge is the director's.
