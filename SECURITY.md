@@ -131,7 +131,7 @@ outcomes and status re-queries against the external system are stage
 Since R5, the receipt of an approval-decided outcome — approved,
 rejected, expired or cancelled — seals the decided approval's digest,
 so the evidence of the NO survives retention exactly like the YES.
-On master, shipping in v0.15.1: when the approval row cannot be used at
+Since v0.15.1: when the approval row cannot be used at
 the moment of sealing, the receipt seals instead ONE mark from a closed list —
 `corrupt:row_scan`, `corrupt:decision_at`, `corrupt:decision_principal`,
 `corrupt:decision_verb`, `corrupt:approval_missing`, `corrupt:status` or

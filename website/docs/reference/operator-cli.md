@@ -177,8 +177,8 @@ and is the only way in on a headless server. Both touch the same store,
 the same belts and the same claim that consumes the stored parameters
 once: whichever decides first, the other is told so by name. That single
 consumption has two known limits. In v0.15.0, a trigger that restores the
-parameters inside the claim's own transaction defeats it; that is fixed on
-master and ships in v0.15.1. And if another connection writes the
+parameters inside the claim's own transaction defeats it; that is cured in
+v0.15.1, the current release. And if another connection writes the
 parameters back after the claim commits, while the action is still
 APPROVED — a first execution still running, one whose close failed, or a
 claim followed by a crash before the close — a second execute runs the
