@@ -61,29 +61,35 @@ func TestRun_plainAndScopedRouting(t *testing.T) {
 	t.Parallel()
 	plain := &plainTool{}
 	scoped := &scopedTool{}
-	e := New(tool.Registry{"plain": plain, "scoped": scoped}, 0, fixedNow())
+	e := NewCoordinator(tool.Registry{"plain": plain, "scoped": scoped}, 0, fixedNow(), CoordinatorConfig{BrainName: "b"})
+	ctx := context.Background()
+	plan := testPlan(t, e, ctx, "console")
+	env := testEnvelope("console", "operator", "c")
 
-	out, latency, err := e.Run(context.Background(), "plain", tool.Scope{Brain: "b"}, "x")
-	if err != nil || out != "plain:x" {
-		t.Fatalf("plain path: out=%q err=%v", out, err)
+	result, err := e.Submit(ctx, testRequest(t, e, plan, env, "text", "plain", "x"))
+	if err != nil || result.Output != "plain:x" {
+		t.Fatalf("plain path: out=%q err=%v", result.Output, err)
 	}
-	if latency <= 0 {
-		t.Fatalf("latency must be measured, got %v", latency)
+	if result.Latency <= 0 {
+		t.Fatalf("latency must be measured, got %v", result.Latency)
 	}
-	scope := tool.Scope{Brain: "b", Conversation: "c"}
-	out, _, err = e.Run(context.Background(), "scoped", scope, "y")
-	if err != nil || out != "scoped:y" {
-		t.Fatalf("scoped path: out=%q err=%v", out, err)
+	result, err = e.Submit(ctx, testRequest(t, e, plan, env, "text", "scoped", "y"))
+	if err != nil || result.Output != "scoped:y" {
+		t.Fatalf("scoped path: out=%q err=%v", result.Output, err)
 	}
-	if scoped.gotScope != scope {
-		t.Fatalf("the scope must reach the scoped tool verbatim, got %+v", scoped.gotScope)
+	wantScope := tool.Scope{Brain: "b", Conversation: "console::c"}
+	if scoped.gotScope != wantScope {
+		t.Fatalf("the derived scope must reach the scoped tool, got %+v", scoped.gotScope)
 	}
 }
 
 func TestRun_unknownToolSentinel(t *testing.T) {
 	t.Parallel()
 	e := New(tool.Registry{}, 0, time.Now)
-	if _, _, err := e.Run(context.Background(), "ghost", tool.Scope{}, ""); !errors.Is(err, ErrUnknownTool) {
+	ctx := context.Background()
+	plan := testPlan(t, e, ctx, "console")
+	req := testRequest(t, e, plan, testEnvelope("console", "operator", ""), "text", "ghost", "")
+	if _, err := e.Submit(ctx, req); !errors.Is(err, ErrUnknownTool) {
 		t.Fatalf("unknown names carry the sentinel, got %v", err)
 	}
 	if e.Has("ghost") {
@@ -94,8 +100,11 @@ func TestRun_unknownToolSentinel(t *testing.T) {
 func TestRun_perToolTimeoutBoundsExecution(t *testing.T) {
 	t.Parallel()
 	e := New(tool.Registry{"sleepy": sleepyTool{}}, 25*time.Millisecond, time.Now)
+	ctx := context.Background()
+	plan := testPlan(t, e, ctx, "console")
+	req := testRequest(t, e, plan, testEnvelope("console", "operator", ""), "text", "sleepy", "")
 	start := time.Now()
-	_, _, err := e.Run(context.Background(), "sleepy", tool.Scope{}, "")
+	_, err := e.Submit(ctx, req)
 	if err == nil {
 		t.Fatal("a hung tool must be cut by the per-tool timeout")
 	}
@@ -108,11 +117,14 @@ func TestRun_toolErrorPassesThroughUnclassified(t *testing.T) {
 	t.Parallel()
 	boom := errors.New("boom")
 	e := New(tool.Registry{"plain": &plainTool{err: boom}}, 0, time.Now)
-	out, _, err := e.Run(context.Background(), "plain", tool.Scope{}, "z")
+	ctx := context.Background()
+	plan := testPlan(t, e, ctx, "console")
+	req := testRequest(t, e, plan, testEnvelope("console", "operator", ""), "text", "plain", "z")
+	result, err := e.Submit(ctx, req)
 	if !errors.Is(err, boom) {
 		t.Fatalf("the tool's own error must pass through for the caller to classify, got %v", err)
 	}
-	if out != "plain:z" {
-		t.Fatalf("partial output travels with the error (today's semantics), got %q", out)
+	if result.Output != "plain:z" {
+		t.Fatalf("partial output travels with the error (today's semantics), got %q", result.Output)
 	}
 }

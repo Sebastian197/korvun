@@ -37,6 +37,37 @@ func liveProductionModel(t *testing.T) model.Model {
 	return WithModelID(decorated, "llama3.2")
 }
 
+// textOnlyLiveModel deliberately hides ToolCallingModel so the production
+// brain must use the prompt protocol even though Ollama supports native calls.
+type textOnlyLiveModel struct{ inner model.Model }
+
+func (m textOnlyLiveModel) Generate(ctx context.Context, req *model.Request) (*model.Response, error) {
+	return m.inner.Generate(ctx, req)
+}
+
+func (m textOnlyLiveModel) Name() string { return m.inner.Name() }
+
+func TestLive_textLane_echoThroughPromptProtocol(t *testing.T) {
+	m := textOnlyLiveModel{inner: liveProductionModel(t)}
+	pub := &spyPublisher{}
+	a := NewAgentBrain(m, tool.Registry{"echo": tool.Echo()},
+		WithAgentLogger(quietLogger()), WithAgentToolAudit(pub, "live-text"),
+		WithAgentSystemPrompt("For the next request, your first reply must be exactly TOOL: echo(KORVUN_TEXT_7D9F). After the observation, answer normally."))
+
+	out, err := a.Handle(context.Background(),
+		inboundText("console", "live-text", "Reply first with exactly TOOL: echo(KORVUN_TEXT_7D9F). Do not answer directly."))
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+	if len(out) != 1 || strings.TrimSpace(out[0].Parts[0].Content) == "" {
+		t.Fatalf("no usable final answer: %+v", out)
+	}
+	events := pub.snapshot()
+	if len(events) != 1 || events[0].Tool != "echo" || events[0].Outcome != "ok" {
+		t.Fatalf("reply = %q audit = %+v, want one successful prompt-protocol echo", out[0].Parts[0].Content, events)
+	}
+}
+
 func TestLive_nativeLane_readFileThroughTheJail(t *testing.T) {
 	m := liveProductionModel(t)
 	if _, ok := m.(model.ToolCallingModel); !ok {

@@ -13,7 +13,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/action/executor"
 	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/conversation"
@@ -54,6 +53,8 @@ const nativeBaseInstruction = "You are a helpful assistant. Use the available to
 // debugging prefix lives ONLY in slog, never on the bus, the Activity feed,
 // or a metric label (the ADR-0024 §1 metadata-only law).
 const maxArgsLogRunes = 80
+
+type executionPlanContextKey struct{}
 
 // shadowObservation is the honest simulation observation a shadowed tool call
 // feeds back to the model (ADR-0041 §2; hardened 2026-08-09 after the live
@@ -107,13 +108,14 @@ type AgentBrain struct {
 	perTool        time.Duration
 	// exec is the Action Kernel's single execution path (never nil after
 	// NewAgentBrain).
-	exec         *executor.Executor
-	actions      ActionRecorder
-	identity     *ActionIdentity
-	effects      EffectClassifier
-	perModelCall time.Duration
-	fallback     string
-	systemPrompt string
+	exec            *executor.Executor
+	executionConfig executor.CoordinatorConfig
+	actions         ActionRecorder
+	identity        *ActionIdentity
+	effects         EffectClassifier
+	perModelCall    time.Duration
+	fallback        string
+	systemPrompt    string
 	// personaPrefix is the composed persona fragment (ComposePersona) prepended
 	// BEFORE the protocol block in the seed system message (builder-canvas spec
 	// FR-PERSONA-2, NC-4). Empty = today's prompt byte-for-byte.
@@ -400,11 +402,39 @@ func NewAgentBrain(m model.Model, tools tool.Registry, opts ...AgentOption) *Age
 	for _, opt := range opts {
 		opt(a)
 	}
-	// The Action Kernel's execution seam (Trust Layer Etapa 1, lote 3):
-	// built AFTER options so it sees the configured per-tool timeout and
-	// clock. From here on, the ONLY path to Tool.Execute is the executor —
-	// the tripwire test in internal/action/executor enforces it forever.
-	a.exec = executor.New(tools, a.perTool, a.now)
+	var governance *executor.Governance
+	if a.governance != nil {
+		governance = &executor.Governance{
+			Grants:      a.governance.Grants,
+			Attrs:       a.governance.Attrs,
+			Sensitivity: a.governance.Sensitivity,
+			Locality:    a.governance.Locality,
+		}
+	}
+	var identity *executor.IdentityConfig
+	if a.identity != nil {
+		identity = &executor.IdentityConfig{
+			Registry:      a.identity.Registry,
+			IntentID:      a.identity.IntentID,
+			GrantID:       a.identity.GrantID,
+			EffectCeiling: a.identity.EffectCeiling,
+		}
+	}
+	baseConfig := executor.CoordinatorConfig{
+		BrainName:              a.name,
+		Recorder:               a.actions,
+		Identity:               identity,
+		EffectClassifier:       executor.EffectClassifier(a.effects),
+		BoundOperation:         boundedArgs,
+		CloseClock:             a.now,
+		BeforeClose:            a.observeImmediateExecution,
+		BeforeRecord:           a.observeImmediateDecision,
+		BeforeIdentityFallback: a.observeIdentityFallback,
+	}
+	a.executionConfig = baseConfig
+	configured := baseConfig
+	configured.Governance = governance
+	a.exec = executor.NewCoordinator(tools, a.perTool, a.now, configured)
 	return a
 }
 
@@ -422,7 +452,8 @@ func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*env
 	// see and run (ADR-0041 §2): the ADVERTISED registry feeds the system
 	// prompt below, the decisions gate execution in runTool. Both are nil
 	// checks away from today's behavior when no governance is mounted.
-	advertised, decisions := a.effectiveTools(env)
+	advertised, decisions, plan := a.effectiveTools(ctx, env)
+	ctx = context.WithValue(ctx, executionPlanContextKey{}, plan)
 
 	// Lane pick (ADR-0042 §5): a model with the native capability gets the
 	// structured lane — no textual grammar, tools as specs; anything else
@@ -638,341 +669,200 @@ const (
 	laneNative = "native"
 )
 
-// ActionRecorder is the Action Kernel's persistence seam (lote 3, spec
-// FR-ADAPT): every attempt lands with its decision BEFORE any effect, and
-// executed attempts close with a terminal state. The interface lives on
-// the consumer side; the app adapts the kernel's sqlite store to it. A
-// nil recorder means recording off — the pre-kernel behavior verbatim.
-type ActionRecorder interface {
-	// RecordAttempt persists one attempt and its decision atomically.
-	RecordAttempt(ctx context.Context, env action.Envelope, outcome, rule string, state action.State) error
-	// Finish closes an AUTHORIZED action into SUCCEEDED or FAILED.
-	Finish(ctx context.Context, actionID string, to action.State, finishedAt time.Time) error
-}
-
-// actionResultRecorder is the OPTIONAL extension of the recorder seam
-// (Etapa 4, spec FR-LED): a recorder that can close an executed action
-// WITH the result digest, so the receipt attests what the tool produced
-// without the raw bytes ever traveling to the store (NC-3). Detected by
-// interface assertion, the RecordAttemptIdentified mold.
-type actionResultRecorder interface {
-	FinishWithResult(ctx context.Context, actionID string, to action.State, finishedAt time.Time, resultDigest string) error
-}
+// ActionRecorder preserves the brain's public persistence seam while the
+// canonical executor owns its use.
+type ActionRecorder = executor.Recorder
 
 // WithActionRecorder wires the kernel's persistence seam into the brain.
 func WithActionRecorder(r ActionRecorder) AgentOption {
 	return func(a *AgentBrain) { a.actions = r }
 }
 
-// runTool executes the named tool and returns the OBSERVATION body. A tool error
-// or an unknown tool is NOT fatal: it is returned as an observation string so the
-// model can react (ADR-0021 §2). The per-tool timeout (if set) bounds Execute so a
-// hung tool cannot stall the loop.
-//
-// Under governance (decisions non-nil, ADR-0041 §2) this is the EXECUTION half
-// of the two-point gate: nonexistence is checked first (honesty about a tool
-// that is not there beats governance theater), then the decision — a shadowed
-// call is NEVER executed and feeds the simulation observation back; a denied or
-// undecided call feeds the denial observation. The bounded args prefix goes to
-// LOCAL slog only (ADR-0024 §1 law).
+// runTool adapts one model tool call to the canonical executor and translates
+// its finite result back to the existing observation, log, and audit surfaces.
 func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisions map[string]policy.ToolDecision, lane, name, args string) string {
-	if !a.exec.Has(name) {
-		// A hallucinated tool name is exactly the behavior the audit
-		// surfaces exist to observe (estreno E-3 / red-team): a denial with
-		// its own rule, on the same grammar the cages emit. The MODEL
-		// controls this name, so the shared surfaces (metric labels, bus,
-		// /tools, SSE) carry the FINITE category "unknown" — the raw name
-		// would be unbounded label cardinality and could smuggle prompt
-		// content into metadata-only surfaces; it stays in the LOCAL log
-		// only, bounded (re-review follow-up).
+	plan, _ := ctx.Value(executionPlanContextKey{}).(*executor.DecisionPlan)
+	coordinator := a.exec
+	if plan == nil {
+		if a.governance == nil {
+			config := a.executionConfig
+			config.Governance = governanceFromDecisions(decisions)
+			coordinator = executor.NewCoordinator(a.tools, a.perTool, a.now, config)
+		}
+		_, selected, err := coordinator.SelectTools(ctx, env.Channel)
+		if err != nil {
+			a.logger.Error("agent: governance misconfigured, failing closed (deny-all)",
+				"envelope_id", env.ID, "channel", env.Channel, "cause", err)
+		}
+		plan = selected
+	}
+	request, err := coordinator.Prepare(executor.Submission{
+		Inbound: env, Lane: lane, Name: name, Arguments: args, Plan: plan,
+	})
+	if err != nil {
+		a.logger.Error("agent: canonical tool request rejected",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "cause", err)
+		return deniedObservation(name)
+	}
+	result, submitErr := coordinator.Submit(ctx, request)
+	if submitErr != nil && !errors.Is(submitErr, executor.ErrUnknownTool) && result.Branch != executor.BranchExecuted {
+		a.logger.Error("agent: canonical tool submission failed",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "cause", submitErr)
+		return deniedObservation(name)
+	}
+	return a.presentToolResult(ctx, env, result)
+}
+
+func (a *AgentBrain) presentToolResult(ctx context.Context, env *envelope.Envelope, result executor.Result) string {
+	name := result.Name
+	switch result.Branch {
+	case executor.BranchUnknown:
+		a.logAttemptDiagnostics(env, name, result)
+		return fmt.Sprintf("tool %q not found", name)
+	case executor.BranchEffectUndeclared:
+		a.logAttemptDiagnostics(env, name, result)
+		return deniedObservation(name)
+	case executor.BranchShadowed:
+		a.logAttemptDiagnostics(env, name, result)
+		return shadowObservation(name)
+	case executor.BranchPending:
+		a.logger.Info("agent: action parked for approval",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+			"approval_id", result.ApprovalID)
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "pending", Rule: "require_approval"})
+		return pendingApprovalObservation(name, result.ApprovalID, time.Time{})
+	case executor.BranchDenied:
+		a.logAttemptDiagnostics(env, name, result)
+		return deniedObservation(name)
+	case executor.BranchExecuted:
+		a.logCloseDiagnostic(result)
+		if result.ToolError != nil {
+			return fmt.Sprintf("tool %s failed: %v", name, result.ToolError)
+		}
+		return result.Output
+	default:
+		a.logger.Error("agent: canonical tool result has no branch",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name))
+		return deniedObservation(name)
+	}
+}
+
+func (a *AgentBrain) observeImmediateDecision(ctx context.Context, env *envelope.Envelope, result executor.Result) {
+	name := result.Name
+	args := result.Arguments
+	switch result.Branch {
+	case executor.BranchUnknown:
 		a.logger.Warn("agent: tool denied",
 			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name),
 			"rule", "unknown_tool", "args_prefix", boundedArgs(args))
 		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: "unknown", Outcome: "denied", Rule: "unknown_tool"})
-		a.recordAttempt(ctx, env, lane, boundedArgs(name), args, "deny", "unknown_tool", action.StateDenied)
-		return fmt.Sprintf("tool %q not found", name)
-	}
-	// The second wall of FR-REG-3 (Etapa 3): a tool that EXISTS but has no
-	// declared effect descriptor is denied with its stable rule — boot
-	// preflight already guards the front door; this guards any odd boot
-	// that slipped an undeclared tool into the registry. Only when the
-	// effect engine is wired (nil classifier = pre-stage behavior).
-	if a.effects != nil {
-		if _, declared := a.classifyEffect(name); !declared {
-			a.logger.Warn("agent: tool denied",
-				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-				"rule", "effect_undeclared", "args_prefix", boundedArgs(args))
-			a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: "effect_undeclared"})
-			a.recordAttempt(ctx, env, lane, name, args, "deny", "effect_undeclared", action.StateDenied)
-			return deniedObservation(name)
-		}
-	}
-	if decisions != nil {
-		d, decided := decisions[name]
-		switch {
-		case decided && d.Mode == policy.ToolShadow:
-			a.logger.Info("agent: tool shadowed",
-				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-				"args_prefix", boundedArgs(args))
-			a.auditTool(ctx, env, bus.Event{Type: bus.ToolShadowed, Tool: name, Outcome: "shadowed"})
-			a.recordAttempt(ctx, env, lane, name, args, "shadow", "shadow", action.StateShadowed)
-			return shadowObservation(name)
-		case !decided || d.Mode != policy.ToolAllow:
-			rule := policy.ToolRuleNotGranted
-			if decided {
-				rule = d.Rule
-			}
-			a.logger.Warn("agent: tool denied",
-				"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-				"rule", string(rule), "args_prefix", boundedArgs(args))
-			a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: string(rule)})
-			a.recordAttempt(ctx, env, lane, name, args, "deny", string(rule), action.StateDenied)
-			return deniedObservation(name)
-		}
-	}
-	// The effect tier of the gate (Etapa 3): ceiling, then approval, then
-	// prepare — one pure helper, deterministic precedence (§13.3 subset),
-	// judged AFTER the capability gate (shadow keeps observing intention
-	// without effect) and BEFORE the authorized record. No ceiling wired
-	// ("" — the root and production's derived grants today) plus no
-	// prepare demand (its descriptor field is RESERVED until E5/E6) =
-	// today's behavior byte-for-byte.
-	if a.identity != nil && a.effects != nil {
-		if descriptor, declared := a.effects(name); declared {
-			if rule := effectGateRule(descriptor.Class, a.identity.EffectCeiling, false); rule != "" {
-				// The Etapa-5 arm (spec FR-GATE, sealed): when the app
-				// wired the approval extension, the honest
-				// approval_unavailable becomes a FULL parked request —
-				// precedence untouched (the ceiling arm above this one
-				// never reaches here), shadow never reaches this block
-				// at all (it returns in the capability gate), and a
-				// failed birth falls CLOSED back to the E3 denial.
-				if rule == "approval_unavailable" {
-					if ar, ok := a.actions.(approvalRequester); ok {
-						e := a.buildActionEnvelope(env, lane, name, args)
-						if _, evOK := a.identify(env, &e, "require_approval"); !evOK {
-							// Unresolvable provenance: the identity law
-							// wins — fall through to the honest denial.
-							a.logger.Warn("agent: approval request refused (unresolved provenance)",
-								"envelope_id", env.ID, "channel", env.Channel, "tool", name)
-						} else if approvalID, err := ar.RequestApproval(ctx, e, "require_approval", args); err != nil {
-							a.logger.Warn("agent: approval request failed — falling closed",
-								"envelope_id", env.ID, "channel", env.Channel, "tool", name, "err", err)
-						} else {
-							a.logger.Info("agent: action parked for approval",
-								"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-								"approval_id", approvalID)
-							a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "pending", Rule: "require_approval"})
-							return pendingApprovalObservation(name, approvalID, time.Time{})
-						}
-					}
-				}
-				a.logger.Warn("agent: tool denied",
-					"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-					"rule", rule, "args_prefix", boundedArgs(args))
-				a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: rule})
-				a.recordAttempt(ctx, env, lane, name, args, "deny", rule, action.StateDenied)
-				return deniedObservation(name)
-			}
-		}
-	}
-	// The action gate WRAPS the existing decision, never replaces it: the
-	// attempt is AUTHORIZED here (granted, or ungoverned = today's allow)
-	// and must land durably BEFORE any effect. An unrecordable attempt
-	// fails CLOSED — proof is part of execution (blueprint §7.8) — with
-	// the finite record_failed rule on the audit surfaces.
-	grantRule := "granted"
-	if decisions == nil {
-		grantRule = "ungoverned"
-	}
-	actionID, recorded := a.recordAuthorized(ctx, env, lane, name, args, grantRule)
-	if !recorded {
+	case executor.BranchEffectUndeclared:
 		a.logger.Warn("agent: tool denied",
 			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-			"rule", "record_failed", "args_prefix", boundedArgs(args))
-		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: "record_failed"})
-		return deniedObservation(name)
+			"rule", "effect_undeclared", "args_prefix", boundedArgs(args))
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: "effect_undeclared"})
+	case executor.BranchShadowed:
+		a.logger.Info("agent: tool shadowed",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+			"args_prefix", boundedArgs(args))
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolShadowed, Tool: name, Outcome: "shadowed"})
+	case executor.BranchDenied:
+		a.logPreDenialDiagnostics(env, name, result)
+		a.logger.Warn("agent: tool denied",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
+			"rule", result.Rule, "args_prefix", boundedArgs(args))
+		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: result.Rule})
 	}
-	// Execution flows through the kernel's single seam: per-tool timeout,
-	// the OPTIONAL scope capability (minimal-memory FR-TOOL-2 — envelope
-	// facts only: the brain's own name and the conversation key, possibly
-	// empty) and the measured latency all live in the executor now.
-	conv := ""
-	if key, kerr := conversation.KeyFromEnvelope(env); kerr == nil {
-		conv = string(key)
+}
+
+func (a *AgentBrain) logPreDenialDiagnostics(env *envelope.Envelope, name string, result executor.Result) {
+	switch {
+	case result.ApprovalIdentityError:
+		a.logger.Warn("agent: approval request refused (unresolved provenance)",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", name)
+	case result.ApprovalError != nil:
+		a.logger.Warn("agent: approval request failed — falling closed",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", name, "err", result.ApprovalError)
+	case result.AuthorizationIdentityError:
+		a.logger.Warn("agent: unknown provenance, refusing to execute",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name))
+	case result.RecordError != nil && result.Rule == "record_failed":
+		a.logger.Warn("agent: action record failed",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", result.RecordError)
 	}
-	result, latency, err := a.exec.Run(ctx, name, tool.Scope{Brain: a.name, Conversation: conv}, args)
+}
 
-	// What did the wire establish before the run failed? Past its Do call,
-	// webhook_call says so with exactly one class — tool.ErrEffectDelivered (the receiver answered,
-	// not with a usable success), tool.ErrDeliveryUnknown (a connection, no
-	// answer) or tool.ErrNotSent (no connection); before Do (a scheme or
-	// allow-list refusal, a body that is not JSON) it wraps none, nor does a
-	// tool that does not observe the wire, and the error alone decides. Either way the class
-	// governs the STATE this attempt closes on, here exactly as on the
-	// approvals path.
-	//
-	// The approvals path is not the only way an irreversible tool runs: when
-	// the gate does not park (approvals off, no ceiling, a class below the
-	// bar), this is the path, and it closed StateFailed for every error. That
-	// is the same definite claim over the same effect, and this file said so in
-	// its own words — «the tool refused before any effect» — including for the
-	// cage's redirect refusal, which is raised over a response the host already
-	// answered.
-	//
-	// ONE function decides this, and the approvals path calls the same one:
-	// tool.CloseStateAfterRun. The two paths each grew their own copy of the
-	// rule and disagreed about a bare deadline until a second cure caught up —
-	// a rule with two homes is the defect, not the two homes' contents.
-	closeState := tool.CloseStateAfterRun(err)
-
-	// A cage/shield breach is a DENIAL rather than an executed-with-error use
-	// (ADR-0041 §4/§5): the tool's own rule refused it. The model still
-	// receives the tool's honest error observation below; the audit rule is
-	// what changes, and the state is judged by delivery, not by the rule.
-	if rule, breached := cageRule(err); breached {
+func (a *AgentBrain) observeImmediateExecution(ctx context.Context, env *envelope.Envelope, result executor.Result) {
+	name := result.Name
+	args := result.Arguments
+	if rule, breached := cageRule(result.ToolError); breached {
 		a.logger.Warn("agent: tool denied by its cage",
 			"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-			"rule", rule, "args_prefix", boundedArgs(args), "delivery", deliveryOf(err))
+			"rule", rule, "args_prefix", boundedArgs(args), "delivery", deliveryOf(result.ToolError))
 		a.auditTool(ctx, env, bus.Event{Type: bus.ToolDenied, Tool: name, Outcome: "denied", Rule: rule})
-		a.finishAction(ctx, actionID, closeState, "")
-		return fmt.Sprintf("tool %s failed: %v", name, err)
+		return
 	}
-
 	outcome := "ok"
-	if err != nil {
+	if result.ToolError != nil {
 		outcome = "error"
 	}
 	a.logger.Info("agent: tool used",
 		"envelope_id", env.ID, "channel", env.Channel, "tool", name,
-		"outcome", outcome, "latency", latency, "args_prefix", boundedArgs(args))
-	a.auditTool(ctx, env, bus.Event{Type: bus.ToolUsed, Tool: name, Outcome: outcome, Latency: latency})
-	if err != nil {
-		a.finishAction(ctx, actionID, closeState, "")
-		return fmt.Sprintf("tool %s failed: %v", name, err)
-	}
-	// NC-3: the digest is computed ON THE FLY over the observation; the
-	// raw result never travels to the recorder.
-	a.finishAction(ctx, actionID, action.StateSucceeded, action.HashCanonical(result))
-	return result
+		"outcome", outcome, "latency", result.Latency, "args_prefix", boundedArgs(args))
+	a.auditTool(ctx, env, bus.Event{Type: bus.ToolUsed, Tool: name, Outcome: outcome, Latency: result.Latency})
 }
 
-// buildActionEnvelope reifies one attempt as an ActionEnvelope v1 (lote 1
-// domain): fresh id, the inbound envelope as correlation, the lane as the
-// source protocol, and the canonical parameters digest.
-func (a *AgentBrain) buildActionEnvelope(env *envelope.Envelope, lane, name, args string) action.Envelope {
-	e := action.NewEnvelope(action.NewID(), env.ID,
-		action.Source{Kind: "agent_brain", Protocol: lane, Channel: env.Channel},
-		action.Operation{Namespace: "tool", Name: name, Version: 1},
-		args, a.now())
-	// The envelope wakes its REAL class from the registry (Etapa 3): the
-	// classifier's input is the NAME alone (§9.7). Undeclared operations
-	// keep the honest placeholder here — the gate's wall denies them
-	// before any effect, and denied-by-nonexistence rows stay honestly
-	// unclassifiable.
-	if class, declared := a.classifyEffect(name); declared {
-		e.Effect = action.Effect{Class: class}
-	}
-	return e
+func (a *AgentBrain) observeIdentityFallback(_ context.Context, env *envelope.Envelope, result executor.Result) {
+	a.logger.Warn("agent: unknown provenance, recording without identity",
+		"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(result.Name))
 }
 
-// recordAttempt persists a terminal decision outcome (DENIED/SHADOWED).
-// Recording is best-effort for outcomes that never execute: a failure is a
-// local WARN, never a behavior change — there is no effect to refuse.
-func (a *AgentBrain) recordAttempt(ctx context.Context, env *envelope.Envelope, lane, name, args, outcome, rule string, st action.State) {
-	if a.actions == nil {
+func governanceFromDecisions(decisions map[string]policy.ToolDecision) *executor.Governance {
+	if decisions == nil {
+		return nil
+	}
+	governance := &executor.Governance{
+		Sensitivity: policy.Public,
+		Locality:    policy.Local,
+		Attrs:       make(map[string]policy.ToolAttrs, len(decisions)),
+	}
+	for name, decision := range decisions {
+		attrs := policy.ToolAttrs{Network: decision.Shield}
+		if decision.Shield {
+			governance.Sensitivity = policy.Private
+		}
+		switch {
+		case decision.Mode == policy.ToolAllow || decision.Mode == policy.ToolShadow:
+			governance.Grants = append(governance.Grants, policy.ToolGrant{Name: name, Mode: decision.Mode})
+		case decision.Rule == policy.ToolRuleDenyGrant:
+			governance.Grants = append(governance.Grants, policy.ToolGrant{Name: name, Mode: policy.ToolDeny})
+		case decision.Rule == policy.ToolRuleChannel:
+			governance.Grants = append(governance.Grants, policy.ToolGrant{
+				Name: name, Mode: policy.ToolAllow, Channels: []string{"\x00"},
+			})
+		case decision.Rule == policy.ToolRuleSensitiveLocality:
+			attrs.Sensitive = true
+			governance.Locality = policy.Cloud
+			governance.Grants = append(governance.Grants, policy.ToolGrant{Name: name, Mode: policy.ToolAllow})
+		}
+		governance.Attrs[name] = attrs
+	}
+	return governance
+}
+
+func (a *AgentBrain) logAttemptDiagnostics(env *envelope.Envelope, name string, result executor.Result) {
+	if result.RecordError != nil && result.Rule != "record_failed" {
+		a.logger.Warn("agent: action record failed",
+			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", result.RecordError)
+	}
+}
+
+func (a *AgentBrain) logCloseDiagnostic(result executor.Result) {
+	if result.CloseError == nil {
 		return
 	}
-	e := a.buildActionEnvelope(env, lane, name, args)
-	// The identity-aware seam (Etapa 2, lote 4): a resolvable provenance
-	// records identified; an unknown channel degrades to the identity-less
-	// record with a WARN — NULL identity, never an invented principal.
-	if ir, ok := a.identifiedRecorder(); ok {
-		if evidence, resolved := a.identify(env, &e, rule); resolved {
-			if err := ir.RecordAttemptIdentified(ctx, e, outcome, rule, st, evidence); err != nil {
-				a.logger.Warn("agent: action record failed",
-					"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
-			}
-			return
-		}
-		a.logger.Warn("agent: unknown provenance, recording without identity",
-			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name))
-	}
-	if err := a.actions.RecordAttempt(ctx, e, outcome, rule, st); err != nil {
-		a.logger.Warn("agent: action record failed",
-			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
-	}
-}
-
-// recordAuthorized persists the AUTHORIZED attempt BEFORE the effect. A
-// nil recorder reports success with no id (recording off, pre-kernel
-// behavior); a store failure reports false so the caller fails closed.
-func (a *AgentBrain) recordAuthorized(ctx context.Context, env *envelope.Envelope, lane, name, args, rule string) (string, bool) {
-	if a.actions == nil {
-		return "", true
-	}
-	e := a.buildActionEnvelope(env, lane, name, args)
-	// The identity-aware seam (Etapa 2, lote 4): before an EFFECT, unknown
-	// provenance fails CLOSED — an attempt whose identity cannot be
-	// resolved cannot produce its identified record, and proof is part of
-	// execution (the E1 record_failed law, no principal ever invented).
-	if ir, ok := a.identifiedRecorder(); ok {
-		evidence, resolved := a.identify(env, &e, rule)
-		if !resolved {
-			a.logger.Warn("agent: unknown provenance, refusing to execute",
-				"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name))
-			return "", false
-		}
-		if err := ir.RecordAttemptIdentified(ctx, e, "allow", rule, action.StateAuthorized, evidence); err != nil {
-			a.logger.Warn("agent: action record failed",
-				"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
-			return "", false
-		}
-		return e.ActionID, true
-	}
-	if err := a.actions.RecordAttempt(ctx, e, "allow", rule, action.StateAuthorized); err != nil {
-		a.logger.Warn("agent: action record failed",
-			"envelope_id", env.ID, "channel", env.Channel, "tool", boundedArgs(name), "err", err)
-		return "", false
-	}
-	return e.ActionID, true
-}
-
-// finishAction closes an AUTHORIZED action after execution. The effect
-// already happened, so a failing terminal write is a local WARN — the
-// store's crash recovery will close the row honestly on the next boot.
-// resultDigest is the on-the-fly digest of the observation on SUCCESS
-// and honestly empty otherwise; a recorder carrying the optional
-// FinishWithResult extension receives it, any other recorder keeps the
-// plain Finish path verbatim.
-func (a *AgentBrain) finishAction(ctx context.Context, actionID string, to action.State, resultDigest string) {
-	if a.actions == nil || actionID == "" {
-		return
-	}
-	// The close does NOT ride the caller's context, exactly as on the approvals
-	// path: the effect already happened, and a context that ended while the
-	// tool ran would take this record down with it — the store never sees the
-	// query, and the attempt is left AUTHORIZED over an effect that is out in
-	// the world. WithoutCancel drops the deadline too, so this call has no
-	// context bound of its own; a wait for a lock is bounded by the store's
-	// `busy_timeout(5000)` and by nothing else.
-	closeCtx := context.WithoutCancel(ctx)
-	var err error
-	if rr, ok := a.actions.(actionResultRecorder); ok {
-		err = rr.FinishWithResult(closeCtx, actionID, to, a.now(), resultDigest)
-	} else {
-		err = a.actions.Finish(closeCtx, actionID, to, a.now())
-	}
-	if err != nil {
-		// SERIOUS noise (external-audit R4): the effect already happened
-		// in the real world and its terminal record could not be
-		// written — a loss of evidence, not a routine degradation. The
-		// honest gap until E6's reconciliation: inside the store,
-		// outcome and receipt are atomic; an external effect completed
-		// before a failed close is the one documented window.
-		a.logger.Error("agent: action finish failed AFTER the effect — evidence at risk",
-			"action_id", actionID, "rule", "record_failed", "err", err)
-	}
+	a.logger.Error("agent: action finish failed AFTER the effect — evidence at risk",
+		"action_id", result.Action.ActionID, "rule", "record_failed", "err", result.CloseError)
 }
 
 // cageRule classifies a tool error as a cage or shield denial (ADR-0041 §5).
@@ -1014,28 +904,22 @@ func (a *AgentBrain) auditTool(ctx context.Context, env *envelope.Envelope, ev b
 // gate execution. A misconfigured governance FAILS CLOSED (spec D-6): empty
 // advertisement, non-nil empty decisions so every call is denied, logged — a
 // gatekeeper that fails open is not a gatekeeper.
-func (a *AgentBrain) effectiveTools(env *envelope.Envelope) (tool.Registry, map[string]policy.ToolDecision) {
-	if a.governance == nil {
-		return a.tools, nil
-	}
-	g := a.governance
-	decisions, err := policy.SelectTools(g.Grants, g.Attrs, policy.ToolQuery{
-		Channel:     env.Channel,
-		Sensitivity: g.Sensitivity,
-		Locality:    g.Locality,
-	})
+func (a *AgentBrain) effectiveTools(ctx context.Context, env *envelope.Envelope) (tool.Registry, map[string]policy.ToolDecision, *executor.DecisionPlan) {
+	advertised, plan, err := a.exec.SelectTools(ctx, env.Channel)
 	if err != nil {
 		a.logger.Error("agent: governance misconfigured, failing closed (deny-all)",
 			"envelope_id", env.ID, "channel", env.Channel, "cause", err)
-		return tool.Registry{}, map[string]policy.ToolDecision{}
 	}
-	advertised := make(tool.Registry, len(a.tools))
-	for name, t := range a.tools {
-		if d, ok := decisions[name]; ok && (d.Mode == policy.ToolAllow || d.Mode == policy.ToolShadow) {
-			advertised[name] = t
-		}
+	decisions, governed, decisionErr := a.exec.Decisions(plan)
+	if decisionErr != nil {
+		a.logger.Error("agent: canonical decision plan unreadable, failing closed",
+			"envelope_id", env.ID, "channel", env.Channel, "cause", decisionErr)
+		return tool.Registry{}, map[string]policy.ToolDecision{}, plan
 	}
-	return advertised, decisions
+	if !governed {
+		decisions = nil
+	}
+	return advertised, decisions, plan
 }
 
 // loadHistory derives the conversation key and loads recent turns when a store is
