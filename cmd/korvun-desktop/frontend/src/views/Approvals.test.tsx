@@ -91,9 +91,17 @@ function happy(overrides: Partial<Record<string, Route>> = {}): Route {
     if (key === 'GET /api/approvals') return json(200, LIST)
     if (key === 'GET /api/approvals/apr_11111111111111111111111111111111') return json(200, DETAIL)
     if (key === 'POST /api/approvals/apr_11111111111111111111111111111111/approve')
-      return json(200, { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: 'rcp_t1' })
+      return json(200, {
+        outcome: 'executed',
+        digest: DIGEST,
+        result: 'ok',
+        receipt_id: 'rcpt_11111111111111111111111111111111',
+      })
     if (key === 'POST /api/approvals/apr_11111111111111111111111111111111/reject')
-      return json(200, { outcome: 'rejected', receipt_id: 'rcp_d1' })
+      return json(200, {
+        outcome: 'rejected',
+        receipt_id: 'rcpt_22222222222222222222222222222222',
+      })
     return raw(404, '<html>not here</html>')
   }
 }
@@ -949,8 +957,15 @@ describe('P3 · decisión', () => {
     fireEvent.click(btn)
     fireEvent.click(btn)
     expect(btn).toBeDisabled()
-    release(json(200, { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: 'rcp_t1' }))
-    expect(await screen.findByText(/rcp_t1/)).toBeInTheDocument()
+    release(
+      json(200, {
+        outcome: 'executed',
+        digest: DIGEST,
+        result: 'ok',
+        receipt_id: 'rcpt_11111111111111111111111111111111',
+      }),
+    )
+    expect(await screen.findByText(/rcpt_11111111111111111111111111111111/)).toBeInTheDocument()
     expect(posts('/approve').length).toBe(1)
     expect(screen.queryByText(/ya no está esperando decisión/)).toBeNull()
   })
@@ -1300,7 +1315,7 @@ describe('P4 · desenlaces', () => {
     expect(
       await screen.findByText('Rechazada. La acción aparcada se cierra con su recibo sellado.'),
     ).toBeInTheDocument()
-    expect(screen.getByText(/rcp_d1/)).toBeInTheDocument()
+    expect(screen.getByText(/rcpt_22222222222222222222222222222222/)).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/se le avis|tendrá que volver a pedirla/)
   })
 })
@@ -1459,7 +1474,7 @@ describe('MUT · lo curado llega al operador', () => {
             outcome: 'failed',
             digest: DIGEST,
             result: 'dial tcp: connection refused',
-            receipt_id: 'rcp_f1',
+            receipt_id: 'rcpt_33333333333333333333333333333333',
           }),
       }),
     )
@@ -1469,7 +1484,7 @@ describe('MUT · lo curado llega al operador', () => {
     // Y NO afirma que el efecto saliera: exec.Run también falla cuando la
     // herramienta rechaza sus argumentos sin tocar nada.
     expect(screen.queryByText(/El efecto salió de esta ventana/)).toBeNull()
-    expect(screen.getByText(/rcp_f1/)).toBeInTheDocument()
+    expect(screen.getByText(/rcpt_33333333333333333333333333333333/)).toBeInTheDocument()
     expect(screen.getByText(/dial tcp: connection refused/)).toBeInTheDocument()
     expect(screen.queryByText('No sabemos si el efecto llegó a ocurrir.')).toBeNull()
   })

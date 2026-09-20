@@ -29,6 +29,7 @@ const DIGEST = `sha256:${HEX}`
 const TAIL = HEX.slice(-6)
 const NOW = new Date('2026-09-08T14:00:00Z')
 const ID = 'apr_' + 'ab'.repeat(16)
+const RECEIPT = 'rcpt_' + 'cd'.repeat(16)
 
 const ROW = {
   id: ID,
@@ -186,16 +187,67 @@ describe('P2-10 · el protocolo de la respuesta a un POST', () => {
   // paints its state. It guards the cure from over-refusing.
   it('P2-10 · control: un 200 de approve exacto pinta «Ejecutada» con su recibo', async () => {
     await decide('approve', () =>
-      json(200, { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: 'rcp_ok' }),
+      json(200, { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: RECEIPT }),
     )
     expect(screen.getByText('Ejecutada')).toBeInTheDocument()
-    expect(screen.getByText('Recibo rcp_ok')).toBeInTheDocument()
+    expect(screen.getByText(`Recibo ${RECEIPT}`)).toBeInTheDocument()
   })
   it('P2-10 · control: un 200 de reject exacto pinta «Rechazada» con su recibo', async () => {
-    await decide('reject', () => json(200, { outcome: 'rejected', receipt_id: 'rcp_ok' }))
+    await decide('reject', () => json(200, { outcome: 'rejected', receipt_id: RECEIPT }))
     expect(screen.getByText(/^Rechazada\./)).toBeInTheDocument()
-    expect(screen.getByText('Recibo rcp_ok')).toBeInTheDocument()
+    expect(screen.getByText(`Recibo ${RECEIPT}`)).toBeInTheDocument()
   })
+
+  const incompleteExecution: Array<[string, unknown]> = [
+    ['receipt_id vacío, la reproducción original', { outcome: 'executed', receipt_id: '' }],
+    [
+      'receipt_id vacío con los demás campos válidos',
+      { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: '' },
+    ],
+    ['digest ausente', { outcome: 'executed', result: 'ok', receipt_id: RECEIPT }],
+    ['digest vacío', { outcome: 'executed', digest: '', result: 'ok', receipt_id: RECEIPT }],
+    [
+      'digest mal formado',
+      { outcome: 'executed', digest: 'sha256:no-son-64-hex', result: 'ok', receipt_id: RECEIPT },
+    ],
+    ['resultado ausente', { outcome: 'executed', digest: DIGEST, receipt_id: RECEIPT }],
+    ['resultado vacío', { outcome: 'executed', digest: DIGEST, result: '', receipt_id: RECEIPT }],
+    ['receipt_id ausente', { outcome: 'executed', digest: DIGEST, result: 'ok' }],
+    [
+      'receipt_id mal formado',
+      { outcome: 'executed', digest: DIGEST, result: 'ok', receipt_id: 'rcpt_not-hex' },
+    ],
+    ['failed sin digest', { outcome: 'failed', result: 'boom', receipt_id: RECEIPT }],
+    [
+      'failed con digest vacío',
+      { outcome: 'failed', digest: '', result: 'boom', receipt_id: RECEIPT },
+    ],
+    [
+      'failed con digest mal formado',
+      { outcome: 'failed', digest: 'sha256:short', result: 'boom', receipt_id: RECEIPT },
+    ],
+    ['failed sin resultado', { outcome: 'failed', digest: DIGEST, receipt_id: RECEIPT }],
+    [
+      'failed con resultado vacío',
+      { outcome: 'failed', digest: DIGEST, result: '', receipt_id: RECEIPT },
+    ],
+    ['failed sin receipt_id', { outcome: 'failed', digest: DIGEST, result: 'boom' }],
+    [
+      'failed con receipt_id vacío',
+      { outcome: 'failed', digest: DIGEST, result: 'boom', receipt_id: '' },
+    ],
+    [
+      'failed con receipt_id mal formado',
+      { outcome: 'failed', digest: DIGEST, result: 'boom', receipt_id: 'receipt-1' },
+    ],
+  ]
+  for (const [label, body] of incompleteExecution) {
+    it(`P2-10 · ${label}: respuesta no reconocida, sin afirmar ejecución`, async () => {
+      await decide('approve', () => json(200, body))
+      expect(screen.getByText(L_UNRECOGNISED)).toBeInTheDocument()
+      neverAffirmed()
+    })
+  }
 
   // Every other 2xx is unrecognised: literal 2, nothing affirmed.
   const unrecognised: Array<['approve' | 'reject', string, number, unknown]> = [
