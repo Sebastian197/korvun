@@ -115,8 +115,9 @@ path).
 
 Releases are **draft-until-complete**: the tag's release stays a draft until
 every artifact of both families (headless + desktop) is uploaded and signed —
-cosign keyless signatures and SPDX SBOMs per platform — and only then is it
-published. The packaged build passes the director's manual bug bash before
+cosign keyless signatures over each family's checksums, and an SPDX SBOM for
+each of the six headless archives (the desktop packages ship without one
+today) — and only then is it published. The packaged build passes the director's manual bug bash before
 any tag. See [SECURITY.md](SECURITY.md) for the verification commands.
 
 ## Pull requests

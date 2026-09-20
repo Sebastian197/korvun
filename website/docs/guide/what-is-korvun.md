@@ -47,7 +47,7 @@ Everything here is in the current release — nothing on this page is roadmap:
 - **Observability**: structured logs, Prometheus `/metrics`, `/healthz` —
   on an admin server that binds loopback by default.
 - **Signed releases**: every artifact covered by a cosign-signed checksum
-  manifest plus an SBOM, for six platforms.
+  manifest, and an SBOM for each of the six headless archives.
 
 ## Where next
 

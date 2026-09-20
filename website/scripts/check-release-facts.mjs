@@ -8,8 +8,13 @@
 // pointing at the v0.11.0 tag — because the version was hardcoded in
 // four places and only one was updated. The root fix: releaseFacts.ts
 // is the ONLY place in src/ allowed to spell a release version; every
-// component interpolates it. This guard fails the build if any version
+// component interpolates it. This script exits non-zero if any version
 // literal appears anywhere else under src/, naming file and line.
+//
+// Wiring, stated exactly (2026-09-19): no gate runs this script. Neither
+// `make website-check`, the Pages build nor any workflow calls it; it runs
+// only by hand, through `npm run check:release-facts` or `npm run check`.
+// Whether to wire it is an open decision of the director.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -54,10 +59,10 @@ function walk(dir) {
 
 // Phase 2 (2026-09-01, after the v0.14.1 lag): the fact must MATCH the
 // published reality. releaseFacts sat at v0.14.0 while the latest tag
-// was v0.14.1 — a stale token the literal sweep cannot see. In CI (and
-// any online run) the guard compares releaseFacts.tag against the
-// repository's published latest release and BREAKS on divergence;
-// offline it SKIPS OUT LOUD, never silently.
+// was v0.14.1 — a stale token the literal sweep cannot see. When run
+// online, the script compares releaseFacts.tag against the repository's
+// published latest release and exits non-zero on divergence; offline it
+// SKIPS OUT LOUD, never silently. No CI job runs it (see the header).
 async function checkAgainstLatest() {
   const factsSrc = readFileSync(factsFile, 'utf8');
   const tagMatch = factsSrc.match(/tag:\s*"(v\d+\.\d+\.\d+)"/);

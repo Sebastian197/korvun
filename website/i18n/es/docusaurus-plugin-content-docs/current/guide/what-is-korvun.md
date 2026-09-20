@@ -55,7 +55,8 @@ Todo lo de esta página está en la release actual — nada es hoja de ruta:
   `/healthz` — en un servidor de administración que escucha en loopback por
   defecto.
 - **Releases firmadas**: cada artefacto cubierto por un manifiesto de
-  checksums firmado con cosign más un SBOM, para seis plataformas.
+  checksums firmado con cosign, y un SBOM por cada uno de los seis archivos
+  headless.
 
 ## Por dónde seguir
 

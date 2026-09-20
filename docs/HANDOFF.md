@@ -1,5 +1,171 @@
 # HANDOFF — Korvun
 
+## Fichado para la v0.15.2 — lo que el bloque A de la v0.15.1 dejó escrito (2026-09-19)
+
+Cada ficha nombra su propia fuente en su cuerpo; ninguna se localiza aquí por
+orden. Las de A1, del error determinista de la purga y de la clase de efecto
+futura salen de `docs/cantos/V0151-A-2026-09-19.md` (commit `bcf5d80`, en
+master desde `e030202`). La de `ledger check` sobre un id reutilizado sale del
+papel del bloque B, `docs/superpowers/specs/2026-09-19-v0151-b-pretest.md`
+(fila P2-6, «verifier finding, filed»), ya en master con el bloque B
+(`9559447`, marcador `bc3ad4e`; la cura de code scanning, `0b4210c`, marcador
+`70850da`). Las demás salen de lecturas del código o de los adversarios de los
+bloques B y C, y así lo dicen.
+
+### A1 · el consumo único no resiste una restauración posterior al commit
+
+Decisión del director: acotar y fichar, sin rediseño. Lo que la cura de A1
+prueba es más estrecho: una restauración de `canonical_params` DENTRO de la
+propia transacción del claim (el trigger) se rehúsa. Nada impide que otra
+conexión la restaure después del commit.
+
+**Reproducción (ejecutada por el adversario de la pasada del diff, no por el
+tren; canto §5):** aprobar una petición y llamar `ExecuteApprovedAction`;
+mientras su `exec.Run` está en vuelo (el claim ya confirmó la purga y la acción
+sigue APPROVED), una segunda conexión real vuelve a escribir los bytes
+originales en `approvals.canonical_params`; un segundo `ExecuteApprovedAction`
+pasa todos los prechecks y los reclama. `runs=2`, igual en la base y bajo la
+cura. La ventana es toda la que la acción siga APPROVED tras el commit del
+claim, no solo la ejecución en vuelo: el adversario de la pasada del bloque C
+ejecutó también un primer execute cuyo cierre falla (un trigger bloquea el
+cambio de estado; la acción sigue APPROVED) y un claim seguido de una caída
+simulada; en los dos, restaurar y volver a ejecutar da `runs=2`. Una
+restauración después de que la acción cerrara no obtiene segunda ejecución
+(`runs=1`, ejecutado por ese mismo adversario; sin captura en el árbol). La
+conexión que restaura no obtiene nada por sí misma: hace falta un segundo
+execute. El adversario del bloque A capturó el mismo `runs=2` por `korvun
+approvals execute`.
+Los godocs que prometían más quedaron acotados en el tren:
+`ExecuteApprovedAction` (`internal/app/approvals.go`) y `approvalsExecute`
+(`internal/cli/approvals.go`).
+
+### El error determinista dentro de la purga se publica «unreadable»
+
+Hueco preexistente, declarado y no curado (canto §4). Un error DETERMINISTA
+dentro de la propia purga (un trigger con `RAISE`, una restricción NOT NULL)
+se publica `ErrApprovalUnreadable`, un almacén que no contestó, aunque sea
+permanente. Sitio: la rama de error del `ExecContext` de la purga en
+`ClaimApprovalParamsUnderDigest` (`internal/action/sqlite/approvals_v15.go`).
+
+**Reproducción:** ninguna ejecutada. El canto nombra las dos formas (un
+`RAISE` de trigger, una restricción NOT NULL) y el sitio del código; no trae
+molde ni captura.
+
+### Un aparcamiento confirmado puede devolver error
+
+Defecto preexistente, fuera del alcance del bloque B; fichado por lectura del
+código, no ejecutado. `CreateApprovalRequest`
+(`internal/action/sqlite/approvals.go`) confirma el aparcamiento y después
+devuelve `s.noteWrite(ctx)`. Cada `pruneEvery` escrituras, `noteWrite`
+(`internal/action/sqlite/store.go`) paga la poda y el barrido de expiraciones
+(`SweepExpiredApprovals`) y devuelve el error de cualquiera de los dos. Quien
+llama recibe entonces un fallo por una petición que sí quedó aparcada. Con el
+bloque B, ese error del barrido puede llevar `ErrApprovalEvidenceCorrupt` de
+OTRA fila. El llamador del cerebro (`internal/brain/agent.go`, el brazo
+`approval_unavailable` que llama a `RequestApproval`) trata un error de
+aparcamiento como fallo y cae cerrado a la denegación, así que el modelo oye
+una denegación sobre una acción que queda `PENDING_APPROVAL`.
+
+### La CLI imprime bytes guardados sin escapar fuera de `approvals`
+
+Fichado por decisión del director (2026-09-19), fuera del tren del bloque B.
+La CLI escribe en stderr los errores del almacén tal cual, y algunos llevan
+bytes guardados. La P2-1 del bloque B escapa el id y los campos que imprimen
+`show` y `list`; las líneas de error no las cubre ni las reclama.
+
+**Reproducción (reportada por el bloque B; captura en su evidencia):**
+`korvun approvals show` sobre una aprobación cuyo `action_digest` contiene
+U+202E sale con exit 1 y el digest, con el U+202E en crudo, dentro del mensaje
+`preview_args_mismatch`.
+
+**Y no solo en stderr: también en stdout, fuera de `approvals`.** Hallado y
+ejecutado por el adversario de la re-pasada del bloque C (2026-09-20) y
+capturado por el tren en
+`docs/superpowers/specs/evidence/v0151-c/finding-verifiers-stdout-raw-bytes.txt`
+(arnés temporal, borrado tras la captura; CLI in-process sobre buffers, fichero
+de almacén real, segunda conexión real para la escritura; el adversario de la
+cuarta pasada la reprodujo por su cuenta con el mismo desenlace).
+`escapeUntrusted`
+(`internal/cli/escape.go`) solo se llama desde `internal/cli/approvals.go`:
+`internal/cli/receipt.go` y `internal/cli/ledger.go` no lo llaman nunca. Con un
+tombstone cuyo `action_id` lleva U+202E — un campo que no entra en el preimagen
+del digest, así que la fila sigue re-derivando el digest sellado y llega a la
+rama de discrepancia — `korvun receipt verify` y `korvun ledger check` imprimen
+en stdout la línea `tombstone_action_mismatch` con el byte en crudo y salen con
+1.
+
+La mitad de stderr, la de `approvals show`, es la que viene del bloque B, ya en
+master: su canto (`docs/cantos/V0151-B-2026-09-19.md`, §4, «Found while
+moulding P3-b») y su captura,
+`docs/superpowers/specs/evidence/2026-09-19-v0151-b/green/finding-show-stderr-raw-digest.txt`,
+cuya propia cabecera dice `CAPTURE stdout=""`: no cubre stdout, y por eso la
+mitad de stdout tiene captura propia.
+
+### `GetApprovalByAction` devuelve su error de lectura sin clase
+
+Hallado por el adversario de la re-pasada del bloque C (2026-09-20), ejecutado
+sobre una copia del árbol; fichado para la v0.15.2. Con el contexto cancelado,
+todas las puertas de lectura de aprobaciones devuelven `ErrApprovalUnreadable`
+salvo `GetApprovalByAction` (`internal/action/sqlite/approvals.go`), que
+devuelve el error crudo, sin «corrupto» ni «ilegible». Es código de producción:
+lo llama el verificador de recibos (`internal/cli/receipt.go`). La clase única
+por lectura fallida del bloque B no cubre esta puerta.
+
+### `korvun approvals list` oculta una fila con un estado fuera de los cinco conocidos
+
+Preexistente, hallado por el adversario del delta del bloque B; fichado para la
+v0.15.2. El bucle de `internal/cli/approvals.go` (`approvalsList`) consulta uno
+a uno los cinco estados conocidos (`PENDING`, `APPROVED`, `REJECTED`, `EXPIRED`,
+`CANCELLED`) con `ListApprovals`; una fila cuyo `status` se reescribió fuera de
+ellos no sale en ninguna consulta, y si no queda otra la orden imprime «no
+approval requests recorded» con exit 0. Es corrupción disfrazada de ausencia.
+No se filtran bytes (el estrechamiento del escape del bloque B cuenta con
+ello), pero la fila desaparece. El bucle es idéntico en `e030202`.
+
+**Reproducción (del adversario del bloque B, sin captura en el árbol):** con
+una aprobación guardada, una segunda conexión ejecuta `UPDATE approvals SET
+status = <valor>`, con valores como `'REJ'`+U+202E+`'ECTED'`, `'pending'`, un
+BLOB `'PENDING'` o `'PENDING'`+NUL+U+202E; después `korvun approvals list`
+imprime «no approval requests recorded» y sale con exit 0.
+
+### La lista de pendientes nombra con id vacío la fila que salta
+
+Preexistente, hallado por el adversario en la pasada acotada a la cura de
+code scanning del bloque B (PR #46); fichado para la v0.15.2. El godoc de
+`scanApprovalAndPreview` (`internal/action/sqlite/approvals_v15.go`) promete
+devolver el id de la aprobación aunque falle una columna posterior, «because a
+row that cannot be served still has to be NAMED». Solo lo cumple cuando falla
+el parseo de un tiempo: si falla el propio `row.Scan` (un valor de tipo
+incorrecto en una columna tipada), devuelve `action.Approval{}` y un id vacío,
+y `ListPendingApprovals` añade a `Skipped` una entrada `SkippedApproval` con
+`ApprovalID` `""`. La fila se cuenta, pero sin nombre.
+
+**Reproducción (ejecutada por el adversario del delta del bloque C sobre una
+copia del árbol, 2026-09-20; sin captura en el árbol):** con una aprobación
+pendiente, escribir texto no numérico en `policy_version` y llamar a
+`ListPendingApprovals`. Devuelve `err = nil`, `rows = 0`, `skipped = 1`, y la
+entrada saltada lleva `ApprovalID = ""` con el texto del error del `Scan` como
+razón. La otra puerta, `ListApprovals`, sí clasifica la misma fila: falla como
+evidencia corrupta y no como ilegible.
+
+### Una clase de efecto futura se leería corrupta
+
+Declarado, predicho, no ejecutado (canto §5). Una clase de efecto escrita por un
+binario más nuevo sin subir el esquema quedaría fuera del dominio almacenado de
+este binario (`storedEffectClassInDomain`) y se leería como evidencia corrupta:
+falla cerrado y no ejecuta nada. No es un defecto de seguridad; es una nota de
+compatibilidad hacia delante para quien añada una clase.
+
+### `ledger check` falla el recibo de la vida ANTERIOR de un id reutilizado
+
+Defecto señalado como preexistente en la base `61ae582` por el papel del
+bloque B (fila P2-6, ya en master), fichado y no curado en ese tren. Captura
+pendiente: la evidencia de B no trae ninguna, verificado sobre master. Con un `action_id` reutilizado,
+`ledger check` falla el recibo de la vida anterior con `approval_mismatch`
+(«no approval row exists … while its action row remains»): el verificador lee
+la fila de acción de la vida nueva como si fuera la de la vieja. `ledger check`
+se detiene en ese primer eslabón roto y no llega al recibo de la vida nueva.
+
 ## Fichado — el tren de toolchain de los frontends (director, 2026-09-19)
 
 Tras v0.15.0 se cerraron sin fusionar tres grupos de Dependabot: #22
@@ -231,8 +397,12 @@ de administración sin decir «por defecto».
 
 Queda:
 
-- un comentario de `internal/action/sqlite/approvals_test.go` afirma que
-  `unknown_outcome` no tiene emisor alcanzable; el adaptador sí lo emite;
+- un comentario de `internal/controlapi/approvals_test.go` afirma que el único
+  emisor de `unknown_outcome` es el caso por defecto de `nameInBandRule`, al
+  que el almacén nunca llega; `internal/app/approvals_adapter.go` también lo
+  emite desde `runApproved` cuando el desenlace de una ejecución es
+  desconocido (fichero corregido el 2026-09-19: la ficha original citaba
+  `internal/action/sqlite/approvals_test.go`, que no lo menciona);
 - las cuatro salidas post-entrega de `webhook_call` están probadas en
   `internal/tool`, pero falta cobertura de composición en las dos rutas.
   **Reproducción (Codex):** eliminar el manejo de `ErrEffectDelivered` del
@@ -450,6 +620,18 @@ por su propio gate. El auto-examen PREPARA la puerta, no la sustituye.
 > Trust Layer).
 
 ## Ciclo de revisión cruzada con Codex (vigente desde 2026-08-15)
+
+> **SUPERADO por decisión del director (2026-09-19): esta sección entera,
+> «Ciclo de revisión cruzada con Codex», deja de regir.** Codex juzga versiones
+> (tags), no PRs, y el ejecutor no lo lanza: la puerta externa la dispara Chano
+> con el prompt del copiloto sobre la versión que se va a etiquetar, y cada PR
+> lleva el veredicto del auditor interno. Sus cinco pasos, el tope de una
+> re-review incluido, quedan sin efecto; rigen las reglas operativas (raíz del
+> repo), sección «The external Codex gate». **Sigue en pie, y no la retiró el
+> director, la prohibición de esta sección:** nada de `/codex:rescue` (rompe el
+> reparto de papeles) ni del review gate automático. Es coherente con la regla
+> nueva, que también impide al ejecutor lanzar o elegir a su revisor. El texto
+> se conserva como registro.
 
 En fases estructurales, tras quality gate verde y ANTES del push:
 
@@ -747,7 +929,12 @@ explicit decision.
 >   policy pin are decision terms inside `Approval.Digest()` → the v2
 >   receipt seals what the human read.
 > - **C3** `81994b4` — `korvun approvals execute`: the resume act for
->   a decide→execute crash; at most one executor start, ever.
+>   a decide→execute crash; at most one executor start against a restore
+>   inside the claim's own transaction (v0.15.1 A1). A restore committed by
+>   another connection after the claim commits, while the action is still
+>   APPROVED, followed by a second execute, yields two starts (`runs=2`); a
+>   restore after the action closed gets no second run. Filed for v0.15.2 in «Fichado para la v0.15.2 — lo que el bloque A de
+>   la v0.15.1 dejó escrito».
 > - **C4** `99cc845` — the THIRD door (`OpenOperator`): operator acts
 >   write but never run recovery/prune/migration (server boot owns
 >   those); CLI-beside-a-live-server is a permanent test.

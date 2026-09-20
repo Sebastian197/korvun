@@ -121,8 +121,8 @@ by our own commit is debt of the same train.
 
 `master` is PROTECTED. There is no direct push: a train travels on its
 OWN branch, gets the full `ensayo` rehearsal BEFORE the pull request is
-opened, then goes to a PR against `master` carrying the adversary's
-verdict and the external Codex report in its body, waits for the
+opened, then goes to a PR against `master` carrying the internal
+auditor's (the adversary's) verdict in its body, waits for the
 required checks, and the MERGE requires the director's explicit authorization.
 An integrator may execute that authorized decision under docs/INTEGRATION.md.
 
@@ -131,6 +131,13 @@ train STOPS and the director is told the check's exact name. The list is
 corrected; the gate is not bypassed.
 
 ## The external Codex gate (2026-09-08) — CRITICAL
+
+**Codex judges versions (tags), not PRs; every PR carries the internal
+auditor's verdict.** Director's decision, 2026-09-19. The reason: the
+executor must not choose its own reviewer, nor read that reviewer's verdict
+before the director does. The external gate is fired by Chano with the
+copilot's prompt, over a version about to be tagged; a PR is judged by the
+internal adversary, and its verdict travels in the PR body.
 
 ### Integration evidence workflow (local implementation, 2026-09-12)
 
@@ -161,11 +168,11 @@ Do not squash, accept an invalid marker or automatically write a repair marker.
 Keep current required checks intact. Do not activate the new requirement before
 server tests cover stale base/review state and the documented revocation window.
 
-The external review admits ZERO P1 and ZERO P2 within the implemented
-train before it may advance. A returned P1 or P2 is cured and the review
-repeats, with no round limit. P3 findings are adjudicated one by one. A
-future filing may defer work; it may NOT leave a known false public
-claim alive.
+The external review admits ZERO P1 and ZERO P2 within the version it
+judges before that version may be tagged. A returned P1 or P2 is cured
+and the review repeats, with no round limit. P3 findings are adjudicated
+one by one. A future filing may defer work; it may NOT leave a known
+false public claim alive.
 
 ## Comments carry no relative positions (2026-09-08) — CRITICAL
 
