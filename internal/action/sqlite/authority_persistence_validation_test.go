@@ -147,17 +147,17 @@ func TestAuthority_ActualUseFailsClosedOnlyWhenTermsNeedResolution(t *testing.T)
 		t.Fatalf("restricted unknown operation = %v", err)
 	}
 	pathIntent := action.IntentContractV2{
-		AllowedResources: []action.ResourceRef{{Kind: "path", ID: "/cage"}},
+		AllowedResources: []action.ResourceRef{{Kind: "path", ID: hostAbs("/cage")}},
 	}
-	if err := validateAuthorityActualUse(pathIntent, nil, "read_file", "/cage/file"); err != nil {
+	if err := validateAuthorityActualUse(pathIntent, nil, "read_file", hostAbs("/cage/file")); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateAuthorityActualUse(pathIntent, nil, "read_file", "/outside/file"); !errors.Is(err, action.ErrResourceOutOfScope) {
+	if err := validateAuthorityActualUse(pathIntent, nil, "read_file", hostAbs("/outside/file")); !errors.Is(err, action.ErrResourceOutOfScope) {
 		t.Fatalf("outside path error = %v", err)
 	}
-	grant := action.AuthorityGrantV2{AllowedResources: []action.ResourceRef{{Kind: "path", ID: "/cage/sub"}}}
+	grant := action.AuthorityGrantV2{AllowedResources: []action.ResourceRef{{Kind: "path", ID: hostAbs("/cage/sub")}}}
 	chain := []storedGrantV2{{signed: action.SignedAuthorityGrantV2{Grant: grant}}}
-	if err := validateAuthorityActualUse(pathIntent, chain, "read_file", "/cage/file"); !errors.Is(err, action.ErrResourceOutOfScope) {
+	if err := validateAuthorityActualUse(pathIntent, chain, "read_file", hostAbs("/cage/file")); !errors.Is(err, action.ErrResourceOutOfScope) {
 		t.Fatalf("grant narrowing error = %v", err)
 	}
 }

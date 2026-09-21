@@ -5,6 +5,7 @@ package action
 
 import (
 	"errors"
+	"path/filepath"
 	"testing"
 )
 
@@ -32,8 +33,8 @@ func TestAuthority_ResourceMatcherBindsActualArguments(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := []struct{ operation, args, wantID string }{
-		{"read_file", "/cage/a/report.txt", "/cage/a/report.txt"},
-		{"read_file", "/cage/a/../b/secret.txt", "/cage/b/secret.txt"},
+		{"read_file", hostAbs("/cage/a/report.txt"), filepath.Clean(hostAbs("/cage/a/report.txt"))},
+		{"read_file", hostAbs("/cage/a/../b/secret.txt"), filepath.Clean(hostAbs("/cage/b/secret.txt"))},
 		{"http_fetch", "https://a.example.evil/x", "https://a.example.evil/x"},
 		{"webhook_call", `https://b.example/hook {"note":"x"}`, "https://b.example/hook"},
 	}
@@ -47,11 +48,11 @@ func TestAuthority_ResourceMatcherBindsActualArguments(t *testing.T) {
 		}
 	}
 	grant := authorityTestChild()
-	use, err := registry.Analyze("read_file", "/cage/a/../b/secret.txt")
+	use, err := registry.Analyze("read_file", hostAbs("/cage/a/../b/secret.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant.AllowedResources = []ResourceRef{{Kind: "path", ID: "/cage/a/"}}
+	grant.AllowedResources = []ResourceRef{{Kind: "path", ID: hostAbs("/cage/a/")}}
 	if err := ValidateAuthorityUse(grant, use, ResourceMatchers{"path": PathResourceIncludes}); !errors.Is(err, ErrResourceOutOfScope) {
 		t.Fatalf("path escape under authority for cage A: error = %v, want %v", err, ErrResourceOutOfScope)
 	}

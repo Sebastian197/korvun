@@ -498,4 +498,48 @@ principal_local_operator_role|external_system
 principal_local_operator|human
 
 ========================================================================
+CI-windows-first-run-RED   [a RED GATE of this train, not a mutation]
+------------------------------------------------------------------------
+The first CI run of the cures went RED on windows-latest, green on macOS and
+ubuntu. Four moulds fed POSIX-literal paths to the read_file analyzer; such a
+path has no volume on Windows, is not absolute there, and the analyzer — like
+the tool — leaves it unresolved. The product agrees with its tool on Windows;
+the literals were the platform-specific part. The moulds build host-absolute
+paths now (hostAbs).
+
+--- FAIL: TestAuthority_ResourceMatcherBindsActualArguments (0.00s)
+    authority_as16_test.go:43: read_file: action: authority use unresolved
+--- FAIL: TestAuthorityOperationUse_ParsersAndScopeFailures (0.00s)
+    authority_contract_test.go:199: path use = action.OperationUse{Resources:[]action.ResourceRef(nil), Data:[]string(nil), Destinations:[]string(nil)}, action: authority use unresolved
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.670s
+--- FAIL: TestAuthority_StartDoorBindsActualResourceArguments (3.41s)
+    --- FAIL: TestAuthority_StartDoorBindsActualResourceArguments/a_leaf_scoped_to_one_directory (1.79s)
+        authority_door_integration_test.go:102: a path that leaves the leaf's directory: error = action: authority use unresolved, want action: resource out of authority scope
+        authority_door_integration_test.go:112: a path inside the leaf's directory: action: authority use unresolved
+        authority_door_integration_test.go:115: durable starts = 0, want the one inside the scope
+--- FAIL: TestAuthority_ActualUseFailsClosedOnlyWhenTermsNeedResolution (0.00s)
+    authority_persistence_validation_test.go:153: action: authority use unresolved
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	673.216s
+FAIL
+
+========================================================================
+W-hostabs-path-not-canonicalized   [RE-EXECUTED after the moulds' inputs changed; not counted again]
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_ResourceMatcherBindsActualArguments (0.00s)
+    authority_as16_test.go:47: read_file resources = []action.ResourceRef{action.ResourceRef{Kind:"path", ID:"/cage/a/../b/secret.txt"}}, want canonical "/cage/b/secret.txt"
+--- FAIL: TestAuthorityOperationUse_ParsersAndScopeFailures (0.00s)
+    authority_contract_test.go:199: path use = action.OperationUse{Resources:[]action.ResourceRef{action.ResourceRef{Kind:"path", ID:"/cage/a/../b"}}, Data:[]string(nil), Destinations:[]string(nil)}, 
+
+========================================================================
+W-hostabs-door-skips-use-check   [RE-EXECUTED after the moulds' inputs changed; not counted again]
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_StartDoorBindsActualResourceArguments (0.11s)
+    --- FAIL: TestAuthority_StartDoorBindsActualResourceArguments/a_leaf_scoped_to_one_directory (0.07s)
+        authority_door_integration_test.go:102: a path that leaves the leaf's directory: error = <nil>, want action: resource out of authority scope
+        authority_door_integration_test.go:105: budget debits after the refusal = 6, want 0
+        authority_door_integration_test.go:115: durable starts = 2, want the one inside the scope
+
+========================================================================
 TOTAL: 38 mutation captures, 6 pre-cure captures, 1 verbatim reproduction in separate OS processes.
