@@ -393,6 +393,17 @@ the rows «after the cures» ran over the tree this canto ships with.
 | F1, the report's reproduction verbatim | two compiled CLI binaries in separate OS processes, `f5762b8` and the cured tree: the cured CLI opens the profile the base's CLI touched; both principals stored, each as it was signed |
 | Probing mutations | first delivery: 97 reds under mutation in 100 entries (counted by script); the adversary's pass: 38 more, plus 6 pre-cure reproductions and the two-binary reproduction of F1; the copies identical to the tree afterwards |
 
+**The first CI run of the cures went RED on `windows-latest`** (macOS and
+ubuntu green), and the red was this session's own: four moulds fed POSIX-literal
+paths such as `/cage/a` to the `read_file` analyzer. A path with no volume is
+not absolute on Windows, and the rule the cures had just written — a path that
+is not absolute is unresolved — refused them. The product agrees with its tool
+there (the real tool does not take them as absolute either); the literals were
+what was platform-specific. The moulds build host-absolute paths now
+(`hostAbs`), two of their mutations were re-executed against the new inputs and
+are still red, and the capture of the red run is in the evidence file. No local
+run could have shown it: this session has no Windows.
+
 Gates of this session that did NOT pass at first, all recorded: `gofmt` refused
 a file this session had written; the first run of the batch that re-executed
 mutations was stopped by the session's own safety tooling, after which every

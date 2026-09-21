@@ -3,7 +3,12 @@
 
 package action
 
-import "time"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
 
 func authorityTestInt64(v int64) *int64 { return &v }
 
@@ -65,4 +70,16 @@ func authorityTestRemaining() AuthorityBudgetRemaining {
 
 func authorityTestMatchers() ResourceMatchers {
 	return ResourceMatchers{"url": func(parent, child string) bool { return len(child) >= len(parent) && child[:len(parent)] == parent }}
+}
+
+// hostAbs turns a slash-separated path into an ABSOLUTE one in the host's own
+// form, without cleaning it. A literal such as "/cage/a" has no volume on
+// Windows and is not absolute there; the read_file analyzer — like the tool
+// itself — treats a path that is not absolute as relative to a jail root it
+// does not know, and leaves it unresolved. The first run of these moulds on a
+// Windows runner said so, four times. Every path of a mould that reaches the
+// analyzer, and every resource it is judged against, goes through here, so both
+// carry the same volume.
+func hostAbs(slashPath string) string {
+	return filepath.VolumeName(os.TempDir()) + strings.ReplaceAll(slashPath, "/", string(filepath.Separator))
 }

@@ -84,9 +84,9 @@ func TestAuthority_StartDoorBindsActualResourceArguments(t *testing.T) {
 
 	t.Run("a leaf scoped to one directory", func(t *testing.T) {
 		f := newAuthoritySQLiteFixtureForTerms(t, 5, op,
-			[]action.ResourceRef{{Kind: "path", ID: "/cage"}})
+			[]action.ResourceRef{{Kind: "path", ID: hostAbs("/cage")}})
 		child := authorityChildForDoor(f, "grant_scoped_door")
-		child.AllowedResources = []action.ResourceRef{{Kind: "path", ID: "/cage/a"}}
+		child.AllowedResources = []action.ResourceRef{{Kind: "path", ID: hostAbs("/cage/a")}}
 		act := authorityActorAct(t, f.store, f.resolver, f.issuer,
 			"delegate", child.CanonicalBytes(), f.now.Add(time.Second))
 		if err := f.store.DelegateAuthority(context.Background(), child, act,
@@ -97,7 +97,7 @@ func TestAuthority_StartDoorBindsActualResourceArguments(t *testing.T) {
 
 		outside := authorityStartRequest(f, "resource-scope", f.now.Add(3*time.Second))
 		outside.Operation = action.Operation(op)
-		outside.Arguments = "/cage/a/../b/secret.txt"
+		outside.Arguments = hostAbs("/cage/a/../b/secret.txt")
 		if _, err := f.store.StartAuthorization(context.Background(), outside); !errors.Is(err, action.ErrResourceOutOfScope) {
 			t.Errorf("a path that leaves the leaf's directory: error = %v, want %v", err, action.ErrResourceOutOfScope)
 		}
@@ -107,7 +107,7 @@ func TestAuthority_StartDoorBindsActualResourceArguments(t *testing.T) {
 
 		inside := authorityStartRequest(f, "resource-scope", f.now.Add(4*time.Second))
 		inside.Operation = action.Operation(op)
-		inside.Arguments = "  /cage/a/report.txt  "
+		inside.Arguments = "  " + hostAbs("/cage/a/report.txt") + "  "
 		if _, err := f.store.StartAuthorization(context.Background(), inside); err != nil {
 			t.Errorf("a path inside the leaf's directory: %v", err)
 		}

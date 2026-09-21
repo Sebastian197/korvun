@@ -194,8 +194,8 @@ func TestAuthorityOperationUse_ParsersAndScopeFailures(t *testing.T) {
 			t.Fatalf("%s(%s) error = %v", tc.operation, tc.args, err)
 		}
 	}
-	pathUse, err := registry.Analyze("read_file", "  /cage/a/../b  ")
-	if err != nil || len(pathUse.Resources) != 1 || pathUse.Resources[0].ID != filepath.Clean("/cage/b") {
+	pathUse, err := registry.Analyze("read_file", "  "+hostAbs("/cage/a/../b")+"  ")
+	if err != nil || len(pathUse.Resources) != 1 || pathUse.Resources[0].ID != filepath.Clean(hostAbs("/cage/b")) {
 		t.Fatalf("path use = %#v, %v", pathUse, err)
 	}
 	urlUse, err := registry.Analyze("webhook_call", `HTTPS://EXAMPLE.COM/b/#fragment {"note":"x"}`)
