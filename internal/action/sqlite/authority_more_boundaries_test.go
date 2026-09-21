@@ -5,7 +5,9 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +43,7 @@ func TestAuthority_ActivationAndImportInputBoundaries(t *testing.T) {
 		}
 	})
 	t.Run("strict row cannot be adopted as legacy", func(t *testing.T) {
-		f, _, _ := authorityApprovalFixture(t, "act_strict_before_activation")
+		f, _ := authorityApprovalFixture(t)
 		if _, err := f.store.AuthorityActivationManifest(context.Background()); !errors.Is(err, ErrAuthorizationSnapshotCorrupt) {
 			t.Fatalf("error = %v", err)
 		}
@@ -64,8 +66,8 @@ func TestAuthority_ActivationAndImportInputBoundaries(t *testing.T) {
 		reason := "missing legacy evidence must fail"
 		act := authorityActorAct(t, f.store, f.resolver, f.issuer, "import",
 			CanonicalLegacyAuthorityImport("legacy_missing", grant, reason), f.now)
-		if err := f.store.ImportLegacyAuthority(context.Background(), "legacy_missing", grant, act, reason, f.now); err == nil {
-			t.Fatal("missing legacy grant imported")
+		if err := f.store.ImportLegacyAuthority(context.Background(), "legacy_missing", grant, act, reason, f.now); !errors.Is(err, ErrAuthorityMissing) {
+			t.Fatalf("import over a legacy grant that is not there: error = %v, want %v", err, ErrAuthorityMissing)
 		}
 	})
 	t.Run("inactive legacy grant", func(t *testing.T) {
@@ -95,8 +97,8 @@ func TestAuthority_SignerAndClosedStoreBoundaries(t *testing.T) {
 		f.store.SetAuthoritySigner(func(string, []byte) action.AuthoritySignature {
 			return action.AuthoritySignature{Digest: "sha256:unknown", SigningKeyID: "ed25519:unknown", Signature: "00"}
 		})
-		if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); err == nil {
-			t.Fatal("unknown signer key accepted")
+		if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("a seal under a key the store does not hold: error = %v, want %v", err, ErrNotFound)
 		}
 	})
 	t.Run("retired signer key", func(t *testing.T) {
@@ -113,19 +115,19 @@ func TestAuthority_SignerAndClosedStoreBoundaries(t *testing.T) {
 		if err := f.store.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.store.AuthorityActivationManifest(context.Background()); err == nil {
-			t.Fatal("manifest read succeeded on closed store")
+		if _, err := f.store.AuthorityActivationManifest(context.Background()); err == nil || !strings.Contains(err.Error(), "sql: database is closed") {
+			t.Fatalf("manifest on a closed store: error = %v, want the driver's «sql: database is closed»", err)
 		}
-		if err := f.store.IssueAuthority(context.Background(), f.root, "act", f.now); err == nil {
-			t.Fatal("issue succeeded on closed store")
+		if err := f.store.IssueAuthority(context.Background(), f.root, "act", f.now); err == nil || !strings.Contains(err.Error(), "sql: database is closed") {
+			t.Fatalf("issue on a closed store: error = %v, want the driver's «sql: database is closed»", err)
 		}
-		if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); err == nil {
-			t.Fatal("start succeeded on closed store")
+		if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); err == nil || !strings.Contains(err.Error(), "sql: database is closed") {
+			t.Fatalf("start on a closed store: error = %v, want the driver's «sql: database is closed»", err)
 		}
 		if _, err := f.store.ParkAuthorization(context.Background(), AuthorityPendingRequest{
 			ResolveEvidence: func(string) (identity.Evidence, error) { return identity.Evidence{}, nil },
-		}); err == nil {
-			t.Fatal("park succeeded on closed store")
+		}); err == nil || !strings.Contains(err.Error(), "sql: database is closed") {
+			t.Fatalf("park on a closed store: error = %v, want the driver's «sql: database is closed»", err)
 		}
 	})
 }
@@ -170,8 +172,8 @@ func TestAuthority_ConfigAndApprovedLegacyBoundaries(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = tx.Rollback() }()
-		if _, err := f.store.remainingBeforeAccountTx(context.Background(), tx, "missing", "tool/probe@1"); err == nil {
-			t.Fatal("missing budget account succeeded")
+		if _, err := f.store.remainingBeforeAccountTx(context.Background(), tx, "missing", "tool/probe@1"); !errors.Is(err, sql.ErrNoRows) {
+			t.Fatalf("remaining balance of an account that is not there: error = %v, want %v", err, sql.ErrNoRows)
 		}
 	})
 }
@@ -215,10 +217,30 @@ func TestAuthority_InternalSigningAndDoorFailuresRollBack(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
+	// Three doors pointed at an authority row that is not there — the grant to
+	// revoke, the parent to delegate under, the legacy grant to import (the
+	// import row lives in TestAuthority_ActivationAndImportInputBoundaries) —
+	// answered with the driver's bare sql.ErrNoRows. They name it now.
+	// Probing mutation executed: authorityAbsent returns the error it was given
+	// — red on all three rows with «error = sql: no rows in result set».
 	t.Run("missing revocation target", func(t *testing.T) {
 		f := newAuthoritySQLiteFixture(t, 2)
-		if err := f.store.RevokeAuthority(context.Background(), "grant_missing", "", "reason", f.now); err == nil {
-			t.Fatal("missing grant was revoked")
+		if err := f.store.RevokeAuthority(context.Background(), "grant_missing", "", "reason", f.now); !errors.Is(err, ErrAuthorityMissing) {
+			t.Fatalf("revoke of a grant that is not there: error = %v, want %v", err, ErrAuthorityMissing)
+		}
+	})
+	t.Run("missing delegation parent", func(t *testing.T) {
+		f := newAuthoritySQLiteFixture(t, 2)
+		child := f.root
+		child.GrantID = "grant_orphan"
+		child.ParentGrantID, child.ParentGrantVersion = "grant_parent_missing", 1
+		child.DelegationDepthRemaining = f.root.DelegationDepthRemaining - 1
+		act := authorityActorAct(t, f.store, f.resolver, f.issuer, "delegate", child.CanonicalBytes(), f.now)
+		if err := f.store.DelegateAuthority(context.Background(), child, act, f.now); !errors.Is(err, ErrAuthorityMissing) {
+			t.Fatalf("delegation under a parent that is not there: error = %v, want %v", err, ErrAuthorityMissing)
+		}
+		if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM grant_heads WHERE grant_id='grant_orphan'`); n != 0 {
+			t.Fatalf("orphan grants born = %d, want 0", n)
 		}
 	})
 	t.Run("import actor binding", func(t *testing.T) {
@@ -239,8 +261,8 @@ func TestAuthority_InternalSigningAndDoorFailuresRollBack(t *testing.T) {
 		act := authorityActorAct(t, f.store, f.resolver, f.issuer, "activate",
 			CanonicalAuthorityActivation(f.intent.ProfileID, manifest, reason), f.now)
 		f.store.SetAuthoritySigner(nil)
-		if _, err := f.store.ActivateAuthority(context.Background(), f.intent.ProfileID, act, reason, f.now); err == nil {
-			t.Fatal("activation without signer succeeded")
+		if _, err := f.store.ActivateAuthority(context.Background(), f.intent.ProfileID, act, reason, f.now); !errors.Is(err, ErrAuthoritySignerUnavailable) {
+			t.Fatalf("activation with no signer: error = %v, want %v", err, ErrAuthoritySignerUnavailable)
 		}
 	})
 	t.Run("activation legacy event signer", func(t *testing.T) {
@@ -261,8 +283,8 @@ func TestAuthority_InternalSigningAndDoorFailuresRollBack(t *testing.T) {
 			}
 			return action.SignAuthorityBytes(f.private, domain, canonical)
 		})
-		if _, err := f.store.ActivateAuthority(context.Background(), f.intent.ProfileID, act, reason, f.now); err == nil {
-			t.Fatal("unsigned adopted event succeeded")
+		if _, err := f.store.ActivateAuthority(context.Background(), f.intent.ProfileID, act, reason, f.now); !errors.Is(err, action.ErrAuthorityEvidenceCorrupt) {
+			t.Fatalf("error = %v, want %v", err, action.ErrAuthorityEvidenceCorrupt)
 		}
 	})
 	t.Run("activation head signer", func(t *testing.T) {
@@ -282,8 +304,8 @@ func TestAuthority_InternalSigningAndDoorFailuresRollBack(t *testing.T) {
 			}
 			return action.SignAuthorityBytes(f.private, domain, canonical)
 		})
-		if _, err := f.store.ActivateAuthority(context.Background(), f.intent.ProfileID, act, reason, f.now); err == nil {
-			t.Fatal("unsigned activation head succeeded")
+		if _, err := f.store.ActivateAuthority(context.Background(), f.intent.ProfileID, act, reason, f.now); !errors.Is(err, action.ErrAuthorityEvidenceCorrupt) {
+			t.Fatalf("error = %v, want %v", err, action.ErrAuthorityEvidenceCorrupt)
 		}
 	})
 	for _, withClause := range []bool{false, true} {
@@ -300,8 +322,8 @@ func TestAuthority_InternalSigningAndDoorFailuresRollBack(t *testing.T) {
 			}
 			f.store.SetAuthoritySigner(nil)
 			if _, err := f.store.SyncConfigAuthorityClauses(context.Background(), f.intent.ProfileID,
-				f.root.SubjectPrincipalID, clauses, f.now.Add(time.Second)); err == nil {
-				t.Fatal("config sync without signer succeeded")
+				f.root.SubjectPrincipalID, clauses, f.now.Add(time.Second)); !errors.Is(err, ErrAuthoritySignerUnavailable) {
+				t.Fatalf("config sync with no signer: error = %v, want %v", err, ErrAuthoritySignerUnavailable)
 			}
 		})
 	}

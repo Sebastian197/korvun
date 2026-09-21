@@ -86,6 +86,7 @@ func TestAuthority_ImmediateStartCannotClaimArbitraryApproval(t *testing.T) {
 
 func TestAuthority_StartProofRejectsUnsignedProjectionRewrite(t *testing.T) {
 	f := newAuthoritySQLiteFixture(t, 2)
+	activation := activateAuthorityFixture(t, f)
 	started, err := f.store.StartAuthorization(context.Background(),
 		authorityStartRequest(f, "", f.now))
 	if err != nil {
@@ -96,7 +97,7 @@ func TestAuthority_StartProofRejectsUnsignedProjectionRewrite(t *testing.T) {
 		started.ActionID); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.store.Recover(context.Background(), f.now.Add(time.Second)); !errors.Is(err, ErrAuthorizationSnapshotCorrupt) {
+	if err := authorityStrictBootRecover(f, activation); !errors.Is(err, ErrAuthorizationSnapshotCorrupt) {
 		t.Fatalf("rewritten start proof error = %v", err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 
 func TestAuthority_EvidenceSurvivesActionPrune(t *testing.T) {
 	f := newAuthoritySQLiteFixture(t, 2)
+	activation := activateAuthorityFixture(t, f)
 	req := authorityStartRequest(f, "prune-proof", f.now)
 	req.CorrelationID = "request-prune-proof"
 	ingress, err := f.issuer.Issue(req.CorrelationID, "forged-operator")
@@ -48,7 +49,7 @@ func TestAuthority_EvidenceSurvivesActionPrune(t *testing.T) {
 			t.Fatalf("%s rows = %d, want %d", table, n, want)
 		}
 	}
-	if err := f.store.Recover(context.Background(), f.now.Add(2)); err != nil {
+	if err := authorityStrictBootRecover(f, activation); err != nil {
 		t.Fatalf("verify surviving start proof: %v", err)
 	}
 }

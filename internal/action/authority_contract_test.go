@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -111,8 +112,8 @@ func TestAuthorityGrantV2_RejectsMalformedTermsAndWire(t *testing.T) {
 		badWires = append(badWires, raw)
 	}
 	for _, raw := range badWires {
-		if _, err := ParseAuthorityGrantV2(raw); err == nil {
-			t.Fatalf("malformed wire parsed: %s", raw)
+		if _, err := ParseAuthorityGrantV2(raw); !errors.Is(err, ErrAuthorityMalformed) {
+			t.Fatalf("malformed wire %s: error = %v, want %v", raw, err, ErrAuthorityMalformed)
 		}
 	}
 }
@@ -173,20 +174,31 @@ func TestAuthorityOperationUse_ParsersAndScopeFailures(t *testing.T) {
 		args      string
 	}{
 		{"missing", `{}`},
-		{"read_file", `{}`},
-		{"read_file", `not-json`},
-		{"http_fetch", `{"url":"relative"}`},
-		{"webhook_call", `{"url":"https://user@example.com/x"}`},
+		{"read_file", ""},
+		{"read_file", "   "},
+		// A relative path: the tool joins it to a jail root this layer does
+		// not know, so it is unresolved rather than judged from another base.
+		{"read_file", "relative/file.txt"},
+		{"http_fetch", "relative"},
+		{"http_fetch", ""},
+		{"webhook_call", `https://user@example.com/x {}`},
+		// webhook_call is the URL, one space, then a JSON body.
+		{"webhook_call", "https://example.com/x"},
+		{"webhook_call", "https://example.com/x not-json"},
+		// A URL path that is not already clean is refused, not cleaned: the
+		// tool sends it as written.
+		{"http_fetch", "https://example.com/a//b"},
+		{"http_fetch", "https://example.com/a/./b"},
 	} {
 		if _, err := registry.Analyze(tc.operation, tc.args); !errors.Is(err, ErrAuthorityUseUnresolved) {
 			t.Fatalf("%s(%s) error = %v", tc.operation, tc.args, err)
 		}
 	}
-	pathUse, err := registry.Analyze("read_file", `{"path":"./a/../b"}`)
-	if err != nil || len(pathUse.Resources) != 1 || !strings.HasSuffix(pathUse.Resources[0].ID, "/b") {
+	pathUse, err := registry.Analyze("read_file", "  /cage/a/../b  ")
+	if err != nil || len(pathUse.Resources) != 1 || pathUse.Resources[0].ID != filepath.Clean("/cage/b") {
 		t.Fatalf("path use = %#v, %v", pathUse, err)
 	}
-	urlUse, err := registry.Analyze("webhook_call", `{"url":"HTTPS://EXAMPLE.COM/a/../b#fragment","body":"x"}`)
+	urlUse, err := registry.Analyze("webhook_call", `HTTPS://EXAMPLE.COM/b/#fragment {"note":"x"}`)
 	if err != nil || urlUse.Resources[0].ID != "https://example.com/b" ||
 		!bytes.Equal([]byte(strings.Join(urlUse.Data, ",")), []byte("payload")) ||
 		urlUse.Destinations[0] != "example.com" {
@@ -302,8 +314,8 @@ func TestAuthorizationSnapshotV1_ClosedWireAndSignature(t *testing.T) {
 		bytes.Replace(raw, []byte(snapshot.RecordedAt.Format(time.RFC3339Nano)), []byte("not-a-time"), 1),
 		bytes.Replace(raw, []byte(`"schema_version":1`), []byte(`"schema_version":1, "extra":true`), 1),
 	} {
-		if _, err := ParseAuthorizationSnapshotV1(malformed); err == nil {
-			t.Fatalf("malformed snapshot parsed: %s", malformed)
+		if _, err := ParseAuthorizationSnapshotV1(malformed); !errors.Is(err, ErrAuthorizationSnapshotMalformed) {
+			t.Fatalf("malformed snapshot %s: error = %v, want %v", malformed, err, ErrAuthorizationSnapshotMalformed)
 		}
 	}
 }

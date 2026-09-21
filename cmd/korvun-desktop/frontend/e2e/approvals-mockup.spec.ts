@@ -869,6 +869,14 @@ test('FR-UI-68 · two consecutive spaces in the parameters and the purpose are p
 // ---------------------------------------------------------------------------
 // AS-AUTH-UI-04 · signed parked authority, exact bytes, loopback only
 // ---------------------------------------------------------------------------
+// The scenario posts only what an operator CONFIGURES: the intent's id, its
+// purpose and its budget, and how many ordinary starts to spend AFTER the park.
+// The harness parks through the production door (ParkAuthorization), so the
+// requester, the principal chain and the remainder painted here are the ones the
+// STORE established and signed — an earlier shape posted them itself and read
+// its own strings back. One start is spent after the park, so the live
+// remainder is 1 while the parked snapshot says 2: a screen or a detail showing
+// live data as if it were the snapshot fails the «máximo 2 inicios» line.
 test('AS-AUTH-UI-04 · real Chromium paints the stored authority snapshot and stays on loopback', async ({
   page,
 }) => {
@@ -882,11 +890,10 @@ test('AS-AUTH-UI-04 · real Chromium paints the stored authority snapshot and st
   const res = await page.request.post(APPROVALS_BASE + '/__test/park', {
     data: {
       authority: {
-        requester_principal_id: 'principal_channel_telegram',
         intent_id: 'int_supplier_payments_v3',
         intent_purpose: 'Pay\u202e approved supplier invoices',
-        principal_chain: ['principal_console_admin', 'principal_brain_operaciones'],
-        budget: { kind: 'finite', remaining: 2 },
+        budget: { kind: 'finite', total: 2 },
+        spend_after_park: 1,
       },
     },
   })
@@ -899,7 +906,7 @@ test('AS-AUTH-UI-04 · real Chromium paints the stored authority snapshot and st
   await expect(authority).toContainText('principal_channel_telegram')
   await expect(authority).toContainText('int_supplier_payments_v3')
   await expect(authority).toContainText('Pay<U+202E> approved supplier invoices')
-  await expect(authority).toContainText('principal_console_admin → principal_brain_operaciones')
+  await expect(authority).toContainText('principal_brain_asistente → principal_brain_operaciones')
   await expect(authority).toContainText('máximo 2 inicios')
   expect(outside).toEqual([])
 })

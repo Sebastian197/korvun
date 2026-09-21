@@ -32,10 +32,10 @@ func TestAuthority_ResourceMatcherBindsActualArguments(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := []struct{ operation, args, wantID string }{
-		{"read_file", `{"path":"/cage/a/report.txt"}`, "/cage/a/report.txt"},
-		{"read_file", `{"path":"/cage/a/../b/secret.txt"}`, "/cage/b/secret.txt"},
-		{"http_fetch", `{"url":"https://a.example.evil/x"}`, "https://a.example.evil/x"},
-		{"webhook_call", `{"url":"https://b.example/hook","body":"secret"}`, "https://b.example/hook"},
+		{"read_file", "/cage/a/report.txt", "/cage/a/report.txt"},
+		{"read_file", "/cage/a/../b/secret.txt", "/cage/b/secret.txt"},
+		{"http_fetch", "https://a.example.evil/x", "https://a.example.evil/x"},
+		{"webhook_call", `https://b.example/hook {"note":"x"}`, "https://b.example/hook"},
 	}
 	for _, tc := range cases {
 		use, err := registry.Analyze(tc.operation, tc.args)
@@ -47,7 +47,7 @@ func TestAuthority_ResourceMatcherBindsActualArguments(t *testing.T) {
 		}
 	}
 	grant := authorityTestChild()
-	use, err := registry.Analyze("read_file", `{"path":"/cage/a/../b/secret.txt"}`)
+	use, err := registry.Analyze("read_file", "/cage/a/../b/secret.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestAuthority_ResourceMatcherBindsActualArguments(t *testing.T) {
 	if URLResourceIncludes("https://a.example/safe", "https://a.example/safe/../secret") {
 		t.Fatal("non-canonical URL traversal widened the parent path")
 	}
-	urlUse, err := registry.Analyze("http_fetch", `{"url":"https://a.example.evil/safe"}`)
+	urlUse, err := registry.Analyze("http_fetch", "https://a.example.evil/safe")
 	if err != nil {
 		t.Fatal(err)
 	}

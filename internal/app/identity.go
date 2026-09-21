@@ -161,6 +161,17 @@ func phase1IdentityRuntime(cfg *config.Config) (identity.Registry, *identity.Res
 	return registry, resolver, issuers, nil
 }
 
+// IdentityRuntime builds the identity resolver and the ingress issuers, keyed
+// by channel type, exactly as the boot derives them from cfg. It opens nothing
+// and registers nothing. It exists for a process that must mint evidence
+// through the registry the boot registered: the desktop e2e harness parks its
+// strict scenario through ParkAuthorization, the production door, and that door
+// resolves identity through a real resolver.
+func IdentityRuntime(cfg *config.Config) (*identity.Resolver, map[string]*identity.Issuer, error) {
+	_, resolver, issuers, err := phase1IdentityRuntime(cfg)
+	return resolver, issuers, err
+}
+
 func wireIdentitySigners(store *actionsqlite.Store, privateKey ed25519.PrivateKey) {
 	store.SetIdentitySigners(
 		func(e identity.Evidence) identity.SignedEvidence {

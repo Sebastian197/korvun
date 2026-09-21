@@ -23,7 +23,13 @@ commit boundary: it verifies current evidence and scope, consumes the intent
 and every applicable grant budget, records the authorization proof, records
 the allow decision, and, for an approved request, claims its parameters in one
 transaction. Only a committed start hands the executor an invocation
-capability. Existing non-strict profiles retain their current behavior.
+capability. Existing non-strict profiles retain their current behavior. That
+sentence was FALSE in the first delivery of this phase for one population: the
+operator CLI re-used the phase-1 principal id of its operator role with a new
+KIND, a principal's kind is identity, and every sealed CLI verb died on any
+profile the earlier CLI had touched. The human operator is now a principal of
+its own (`principal_local_operator`); the earlier row stays exactly as it was
+signed. Pinned by `TestOperatorCLI_OpensAProfileTheBaseCLITouched`.
 
 The phase also makes the approval document show only facts persisted in its
 authorization snapshot. Monetary budgets, guaranteed child reservations,
@@ -81,6 +87,29 @@ The 2026-09-19 paper assumed an earlier tree. This implementation starts at
   the envelope. An operation without an analyzer may start only when its
   verified intent and authority terms contain no runtime resource, data, or
   destination restriction; otherwise it returns `ErrAuthorityUseUnresolved`.
+  An analyzer that IS registered and cannot resolve the arguments it was given
+  refuses the start whatever the terms say: "no analyzer" and "the analyzer
+  failed on these bytes" are two classes (`ErrOperationUseNoAnalyzer` is the
+  first, and only it may take the unrestricted path).
+  **The analyzers speak the argument grammar their TOOLS speak**, because the
+  string they are handed is the string the executor hands the tool: `read_file`
+  is the whole trimmed string as the path; `http_fetch` is the whole trimmed
+  string as the URL; `webhook_call` is the URL, one space, then the JSON body.
+  The first delivery of this phase parsed a JSON object no shipped tool
+  accepts, so against the real tools a scoped grant refused every start and an
+  unscoped one bound nothing. The agreement is held by
+  `TestAuthorityUse_AnalyzersSpeakTheRealToolsGrammar`, which runs the real
+  tools and the analyzers over the same strings. Four rules follow from
+  judging what actually travels: a RELATIVE `read_file` path is unresolved (the
+  tool joins it to a jail root this layer does not know); a URL path that is
+  not already clean is refused, not cleaned (the tools send the URL as
+  written); a resource scoped by its query includes only that query; and the
+  scope binds the REQUESTED target only. Where a tool goes from there — the
+  redirects `http_fetch` follows under its host allow-list, the symbolic links
+  `read_file` resolves under its jail — is the cage's and not this layer's.
+  FILED by name: "authority scope across http_fetch redirects".
+  Authority is closed-world for an operation that has an analyzer: an intent
+  or grant that lists no allowed resource includes none.
 - **FR-AUTH-04** `Store.IssueAuthority` starts a write transaction, reads and
   verifies the active intent and actor evidence in that transaction, validates
   the root grant against the intent, and persists signed terms, lifecycle
@@ -128,9 +157,13 @@ The 2026-09-19 paper assumed an earlier tree. This implementation starts at
   `ErrAuthorityMissing`; more than one returns `ErrAuthorityAmbiguous`.
   `Envelope.AuthorityRefs` is never a selector: strict start ignores its input,
   derives the verified ordered refs, and overwrites the envelope field before
-  persistence. An opaque executor decision plan carries only the current
-  config clause identity produced by `SelectTools`; callers cannot construct
-  or replace it.
+  persistence. **There is no executor decision plan carrying a clause
+  identity in this phase**, and an earlier text of this line said there was:
+  the executor carries nothing about config clauses. The store selects the
+  clause itself, inside the start transaction, by the actor's brain principal,
+  the tool name and the channel, from the persisted signed head
+  (`configAuthorityClauseTx`). FILED by name: "the config clause carried by an
+  opaque executor plan".
 - **FR-AUTH-08** The start transaction verifies operation, actual channel,
   actual resource arguments, data tags, destinations, effect class, approval
   requirement, validity windows, and current configuration policy. Authority
@@ -141,7 +174,10 @@ The 2026-09-19 paper assumed an earlier tree. This implementation starts at
   operation_key)` for the intent and every grant in the chain. It verifies
   counters against the append-only debit history and updates the total and
   operation counters with bounded predicates before recording the decision.
-  A repeated action id returns `ErrActionAlreadyStarted` and adds no debit.
+  A repeated action id returns `ErrActionAlreadyStarted` and adds no debit —
+  on the approved door too, where the check is the FIRST judgement after the
+  approval row is read (in the first delivery the purged parameters answered
+  first, with «parameters column empty … action not found»).
 - **FR-AUTH-09a** Strict action ids are store-minted as
   `act3_1_<random>` after immediate `StartAuthorization` or strict pending
   birth has acquired SQLite write ownership. The `1` is the schema-15 evidence
@@ -156,7 +192,20 @@ The 2026-09-19 paper assumed an earlier tree. This implementation starts at
   capability. Approved `StartAuthorization` is deliberately different: it
   reuses the exact parked action id and verifies the stored signed identity and
   pending snapshot; it neither mints an id nor needs the vanished ingress
-  capability. The durable `authorization_starts` row survives action pruning,
+  capability. What it DOES need is that the stored identity evidence is still
+  valid AT THE RESUME INSTANT, expiry included: the resume re-judges it then,
+  the way phase 1's claim does and for the threat phase 1 named («evidence
+  expires … while approval waits → old authentication starts a new effect»). An
+  expired one is refused as `ErrIdentityEvidenceExpired` and consumes nothing.
+  The production numbers make this a PRODUCT consequence and not a detail: the
+  ingress evidence lives five minutes (`internal/app/identity.go`), the approval
+  window is one hour by default (`defaultApprovalTTL`), so a strict approval
+  can be resumed only within five minutes of its birth. The phase-1 claim judges
+  the same way — `ClaimApprovalParamsUnderDigest` calls
+  `validateActionIdentityTx` at the claim instant — and this phase does not
+  touch it. FILED by name, for the
+  director's adjudication: "the ingress TTL against the approval window". The
+  durable `authorization_starts` row survives action pruning,
   so a confirmed id remains exact replay evidence and is rejected as
   `ErrActionAlreadyStarted`.
 - **FR-AUTH-10** Shared ancestor accounts make sibling ceilings maxima, not
@@ -196,8 +245,13 @@ The 2026-09-19 paper assumed an earlier tree. This implementation starts at
   the marker is the signed approval-birth EVENT, whose canonical bytes carry the
   `strict_required` bit beside the snapshot digest; and that event exists only
   under an ACTIVATED profile, so a store with no activation has a marker that
-  nothing signed protects. Detail and approved
-  start do not trust that marker or namespace as the source of truth. Strict
+  nothing signed protects. On a store INSTANCE armed with the activation digest — the server under a
+  strict config, and the CLI's `approvals approve` and `approvals execute` —
+  detail and approved start do not trust that marker or namespace as the source
+  of truth: they verify the birth ledger first. The arming is state of the
+  process, not of the database. An un-armed instance over the same activated
+  file trusts the row's marker; the CLI's `approvals list`, `show` and `reject`
+  open un-armed, and none of them reads or prints authority. Strict
   mode requires an explicit administrative `authority activate` act before the
   profile can boot. Its writer transaction creates the signed
   `approval_birth_heads` genesis and one signed non-strict
@@ -262,8 +316,15 @@ The 2026-09-19 paper assumed an earlier tree. This implementation starts at
 - **FR-UI-01** `GET /api/approvals/{id}` extends `ApprovalDetail` with one
   `authority` object read from the stored authorization snapshot: requester,
   intent id, intent purpose, ordered principal chain, and the minimum remaining
-  budget before this attempt. The object is absent only for legacy/non-strict
-  approvals.
+  budget before this attempt. The object is absent for legacy/non-strict
+  approvals AND for a strict approval that is no longer pending: a decided row
+  is served unjudged, before the authority read. An earlier text said "only for
+  legacy/non-strict". The SCREEN enforces nothing about it: a document under a
+  strict id with no authority object is painted as any other, and what refuses
+  a pending strict row with no snapshot is the server, on an instance armed
+  with the activation digest (FR-AUTH-12b). FILED by name, for a UX decision
+  the director owns: "the screen's answer to a strict id with no authority
+  object".
 - **FR-UI-02** `Approvals.tsx` renders an `AUTORIDAD` section immediately
   after `ORIGEN`. Its exact labels are `QUIÉN PIDIÓ`, `BAJO QUÉ CONTRATO`,
   `CADENA` and `PRESUPUESTO ANTES DE ESTE INTENTO`. Finite remaining budget is
@@ -283,12 +344,15 @@ The authority chain never comes from action-row data.
    walks its exact parent versions to the intent. A different, missing, or
    ambiguous version is a refusal.
 3. If the binding has no grant triple, the store reads the exact current signed
-   config head for the actor's brain and requires one clause id carried by the
-   opaque executor plan. It recomputes that clause from action operation,
-   channel, effect, and current cage digest and requires membership in the
-   head's signed clause set.
-4. Strict calls made outside an executor plan can use a persisted exact grant
-   binding only. They cannot nominate a config clause or an envelope ref.
+   config head for the actor's brain and selects the ONE clause of its signed
+   set whose tool name is the operation's and whose channels include the
+   request's. Nothing is carried by the executor and nothing is recomputed: the
+   clause's cage digest is the one recorded when the clauses were synced at
+   boot, and the start does NOT re-derive the current cage to compare it (an
+   earlier text of this step said it did). FILED by name: "the cage digest
+   recomputed at start".
+4. No caller can nominate a config clause or an envelope ref: neither is an
+   input of the start.
 5. After verification, the store writes the ordered grant/config refs into the
    action row. Those refs explain the decision; they never choose it.
 
@@ -417,7 +481,19 @@ The stable classes are `authority_missing`, `authority_ambiguous`,
 `approval_required`, `authority_use_unresolved`, `budget_exhausted`,
 `budget_evidence_corrupt`, `authorization_snapshot_corrupt`,
 `action_already_started`, `authority_store_busy`, and
-`authority_evidence_corrupt`. No class is derived by matching error text.
+`authority_evidence_corrupt`. Three classes ARE derived from text, and an
+earlier version of this line said none was: the SQLite busy family is
+recognized by the pinned driver's wording (`busy`, `locked`, `interrupted`),
+pinned by `TestAuthority_TheDriversOwnBusyIsClassifiedBusy` over the driver's
+real error; a second start proof for one action is recognized by the driver's
+`unique` wording and named `action_already_started`; and a budget dimension is
+recognized by the `budget_` prefix of an attenuation dimension and named
+`budget_exhausted`. FILED by name: "typed driver-error classification".
+A failed READ of authority evidence has exactly one class: a store that did not
+answer — a context that is over, the busy family — is `authority_store_busy`
+and keeps its cause; only an absent or unconvertible row is corruption
+(`authorityReadFailure`). A driver I/O failure that is neither still reads as
+corruption, which fails closed.
 
 ## Acceptance scenarios and exact mutations
 
@@ -433,7 +509,7 @@ The stable classes are `authority_missing`, `authority_ambiguous`,
 | **AS-AUTH-08** `TestAuthority_BusyIsNotBudgetExhaustion` | A held external writer past the retry window yields `ErrAuthorityStoreBusy`, no debit, and no dispatch. | Map busy to budget exhaustion. |
 | **AS-AUTH-09** `TestAuthority_StartDebitAndApprovalClaimAreAtomic` | A probe failure after debit but before commit preserves balance and approval parameters and creates no start. | Commit debit or purge separately. |
 | **AS-AUTH-10** `TestAuthority_RepeatedActionIDCannotSpendOrStartTwice` | Two callers reusing a committed action id get one start/debit/dispatch and one `ErrActionAlreadyStarted`. | Remove start uniqueness or accept the conflict. |
-| **AS-AUTH-11** `TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome` | A child process reports reaching named probes `before_commit` and `after_commit_before_return`; the parent kills it at each probe. Before leaves no start; after retains debit, recovers `OUTCOME_UNKNOWN`, and never retries dispatch. | Delete each named probe separately; refund on recovery; enqueue the tool again. |
+| **AS-AUTH-11** `TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome` | A child process — this test binary re-executed — ends ITSELF with `os.Exit` at the named probes `before_commit` and `after_commit_before_return`; it is not a signal from the parent. Recovery is the strict boot's own, through `RequireAuthorityActivation` and `RecoverPreviousLife`. Before leaves no start; after retains debit, recovers `OUTCOME_UNKNOWN`, and never retries dispatch. | Delete each named probe separately; refund on recovery; enqueue the tool again. |
 | **AS-AUTH-12** `TestAuthority_ConfigMigrationPreservesToolChannelRelation` | Clause derivation equals `SelectTools` for distinct-channel and unrestricted tools and creates no cartesian grants. | Reintroduce the global channel union. |
 | **AS-AUTH-13** `TestAuthority_IssuerComesFromAuthenticatedActor` | A forged issuer fails ordinary delegation with `ErrIssuerMismatch`; the admin door records the operator as actor. | Copy parent subject into issuer. |
 | **AS-AUTH-14** `TestAuthority_SignedInvalidChainStillFails` | Correctly signed cycles, foreign intents, or incompatible parents fail with exact chain errors and no dispatch. | Return allow immediately after signature verification. |
@@ -498,7 +574,7 @@ has its own executed mutation.
 | `TestAuthority_EveryMutationDoorConsumesExactActorAct` | Issue, delegate, revoke, and import accept only a signed one-shot action for the exact operation and canonical parameter digest; every administrative variant requires an enabled human. | Per door, omit identity, signature, operation, parameter, uniqueness, or human checks one at a time. |
 | `TestAuthority_StrictModeRequiresStorage` | Config validation returns the exact `authority.mode` storage error. | Remove the validation. |
 | `TestAuthority_StrictEffectRequiresPrincipalIntentAndAuthority` | Separate absent principal, binding, intent and authority rows return their exact sentinels, with zero start/debit/dispatch. | Permit each absence separately. |
-| `TestConsole_StrictModeWithoutIssuerRejects` | Strict handler answers 503 `identity_unavailable` and dispatch count zero. | Restore issuer-less dispatch. |
+| `TestConsole_StrictModeWithoutIssuerRejects` | Strict handler answers 503 with the free-text body `{"error":"identity unavailable"}` — text, not a stable code — and dispatch count zero. | Restore issuer-less dispatch. |
 | `TestAuthority_ApprovedResumeUsesStartAuthorization` | Revoked/exhausted authority leaves approved params intact, no debit, no dispatch. | Call the legacy claim from strict resume. |
 | `TestAuthority_ApprovedResumeAfterRestartKeepsActionIdentity` | A strict pending request created in process A resumes successfully in process B without ingress; approval, evidence, both snapshots, debits, start, decision, and proof all cross-link the original action id. | Mint a new id or call the ingress resolver on approved resume. |
 | `TestAuthority_ExplicitLegacyImportKeepsBaseline` | V1 stays inactive until import; imported account starts at exact `budget_spent`; duplicate import is refused. | Auto-import or baseline zero. |
@@ -558,6 +634,37 @@ all). The canto says, mould by mould, which of these has had its probing
 mutation executed and which has not. And AS-AUTH-14 was MOVED: the commissioned mould attacked
 `VerifyAuthorityChain`, a function production never called; the function is gone
 and the mould now enters through the real coordinator and the real store.
+
+**After the adversary's pass over the complete diff** (one pass, verdict VETO
+MANTENIDO over `12e9d76`, written verbatim to
+`.claude/adversary/p3-f3-diff-verdict-12e9d76.md` before any cure) these moulds
+were added or rebuilt, each with its executed mutation in its godoc and in the
+evidence file:
+`TestOperatorCLI_OpensAProfileTheBaseCLITouched` (F1);
+`TestAuthorityUse_AnalyzersSpeakTheRealToolsGrammar`,
+`TestAuthority_URLMatcherJudgesWhatTravels` and the rebuilt
+`TestAuthority_StartDoorBindsActualResourceArguments` (F2);
+`TestAuthority_ApprovedStartPurgeIsInsideTheStart` (F3);
+`TestApprovalDetail_ShowsTheParkedSnapshotNotTheLiveBudget`, which replaces
+`…RoundTripsExactDisplayFacts`, and AS-AUTH-UI-04 rebuilt on the production
+park door with a start spent after the park (F4);
+`TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence` (F5);
+`TestAuthority_TheDriversOwnBusyIsClassifiedBusy` (F8);
+`TestAuthorizationSnapshotV1_EmptyEvidenceDigestIsMalformed`,
+`TestAuthority_LegacyClaimRefusesAStrictBornApproval`,
+`TestBuildApprovalExecutor_HonoursTheStrictConfigItIsGiven` and
+`TestAuthority_TheActivatingOperatorIsJudgedAtTheActivation` (F9, the last one
+a prediction of the report executed and confirmed here);
+`TestAuthority_EverySignedLedgerRowIsHeldByItsSignature`,
+`TestIdentityRuntime_MintsEvidenceTheBootsRegistryAccepts` and
+`TestApprovalsAdapter_DetailCarriesTheStoredAuthority` (coverage, by real
+attacks; the last one is FR-UI-01 at the production adapter, which no Go test
+had executed).
+Two store doors production never called are GONE, and the moulds that stood on
+them stand on production doors now: `Store.CreateAuthorizedApprovalRequest`
+(the detail moulds and the Chromium harness park through `ParkAuthorization`)
+and `Store.Recover` (the crash mould recovers through
+`RequireAuthorityActivation` and `RecoverPreviousLife`, the strict boot's own).
 
 ## Existing approved tests that may change
 

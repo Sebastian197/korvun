@@ -5,6 +5,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -148,15 +149,15 @@ func TestAuthority_ActualUseFailsClosedOnlyWhenTermsNeedResolution(t *testing.T)
 	pathIntent := action.IntentContractV2{
 		AllowedResources: []action.ResourceRef{{Kind: "path", ID: "/cage"}},
 	}
-	if err := validateAuthorityActualUse(pathIntent, nil, "read_file", `{"path":"/cage/file"}`); err != nil {
+	if err := validateAuthorityActualUse(pathIntent, nil, "read_file", "/cage/file"); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateAuthorityActualUse(pathIntent, nil, "read_file", `{"path":"/outside/file"}`); !errors.Is(err, action.ErrResourceOutOfScope) {
+	if err := validateAuthorityActualUse(pathIntent, nil, "read_file", "/outside/file"); !errors.Is(err, action.ErrResourceOutOfScope) {
 		t.Fatalf("outside path error = %v", err)
 	}
 	grant := action.AuthorityGrantV2{AllowedResources: []action.ResourceRef{{Kind: "path", ID: "/cage/sub"}}}
 	chain := []storedGrantV2{{signed: action.SignedAuthorityGrantV2{Grant: grant}}}
-	if err := validateAuthorityActualUse(pathIntent, chain, "read_file", `{"path":"/cage/file"}`); !errors.Is(err, action.ErrResourceOutOfScope) {
+	if err := validateAuthorityActualUse(pathIntent, chain, "read_file", "/cage/file"); !errors.Is(err, action.ErrResourceOutOfScope) {
 		t.Fatalf("grant narrowing error = %v", err)
 	}
 }
@@ -178,7 +179,7 @@ func TestAuthority_BindingAndChainFailureStates(t *testing.T) {
 	if _, err := f.store.authorityChainTx(ctx, tx, f.root.GrantID, f.root.Version, f.root.ExpiresAt); !errors.Is(err, ErrAuthorityExpired) {
 		t.Fatalf("expired chain error = %v", err)
 	}
-	if _, err := f.store.authorityChainTx(ctx, tx, "grant_missing", 1, f.now); err == nil {
-		t.Fatal("missing grant chain succeeded")
+	if _, err := f.store.authorityChainTx(ctx, tx, "grant_missing", 1, f.now); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("chain whose FIRST link is not there: error = %v, want %v (an absent first link is «missing» to its callers)", err, sql.ErrNoRows)
 	}
 }

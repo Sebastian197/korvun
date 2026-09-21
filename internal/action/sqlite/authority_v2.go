@@ -42,6 +42,9 @@ var (
 	ErrAuthorityExpired = errors.New("action/sqlite: authority expired")
 	// ErrAuthorityMissing reports that no store-owned leaf applies.
 	ErrAuthorityMissing = errors.New("action/sqlite: authority missing")
+	// ErrAuthoritySignerUnavailable reports a store asked to seal authority
+	// evidence with no authority signer wired.
+	ErrAuthoritySignerUnavailable = errors.New("action/sqlite: authority signer unavailable")
 	// ErrAuthorityAmbiguous reports more than one equally applicable leaf.
 	ErrAuthorityAmbiguous = errors.New("action/sqlite: authority ambiguous")
 	// ErrAuthorityApprovalRequired reports an immediate start whose verified
@@ -368,16 +371,20 @@ func (s *Store) RequireAuthorityActivation(ctx context.Context, profileID, activ
 	if profileID == "" {
 		rows, err := tx.QueryContext(ctx, `SELECT profile_id FROM approval_birth_heads WHERE activation_digest=? ORDER BY profile_id`, activationDigest)
 		if err != nil {
-			return ErrAuthorizationSnapshotCorrupt
+			return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 		}
 		var profiles []string
 		for rows.Next() {
 			var profile string
 			if err := rows.Scan(&profile); err != nil {
 				_ = rows.Close()
-				return ErrAuthorizationSnapshotCorrupt
+				return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 			}
 			profiles = append(profiles, profile)
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 		}
 		_ = rows.Close()
 		if len(profiles) != 1 {
@@ -408,20 +415,23 @@ func (s *Store) verifyAuthorityActivationTx(ctx context.Context, tx *sql.Tx, pro
 		Scan(&stored.ProfileID, &stored.ActivationDigest, &stored.Sequence,
 			&stored.LastEventDigest, &actorActionID, &canonical, &digest, &keyID,
 			&signature); err != nil {
-		return ErrAuthorizationSnapshotCorrupt
+		return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 	}
 	if stored.ProfileID != profileID || stored.ActivationDigest != activationDigest ||
 		!bytes.Equal(canonical, mustAuthorityJSON(stored)) {
 		return ErrAuthorizationSnapshotCorrupt
 	}
 	pub, _, err := publicKeyTx(ctx, tx, keyID)
-	if err != nil || action.VerifyAuthorityBytes(pub, authorityBirthHeadDomain, canonical,
+	if err != nil {
+		return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+	}
+	if action.VerifyAuthorityBytes(pub, authorityBirthHeadDomain, canonical,
 		action.AuthoritySignature{Digest: digest, SigningKeyID: keyID, Signature: signature}) != nil {
 		return ErrAuthorizationSnapshotCorrupt
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT sequence,approval_id,action_id,action_digest,strict_required,snapshot_digest,previous_event_digest,canonical_event,digest,signing_key_id,signature FROM approval_birth_events WHERE profile_id=? ORDER BY sequence`, profileID)
 	if err != nil {
-		return ErrAuthorizationSnapshotCorrupt
+		return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 	}
 	defer func() { _ = rows.Close() }()
 	expected := int64(0)
@@ -436,7 +446,7 @@ func (s *Store) verifyAuthorityActivationTx(ctx context.Context, tx *sql.Tx, pro
 		if err := rows.Scan(&sequence, &event.ApprovalID, &event.ActionID,
 			&event.ActionDigest, &strict, &event.SnapshotDigest, &event.PreviousDigest,
 			&raw, &eventDigest, &eventKey, &eventSignature); err != nil {
-			return ErrAuthorizationSnapshotCorrupt
+			return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 		}
 		if sequence != expected || event.PreviousDigest != previous {
 			return ErrAuthorizationSnapshotCorrupt
@@ -455,13 +465,25 @@ func (s *Store) verifyAuthorityActivationTx(ctx context.Context, tx *sql.Tx, pro
 				!bytes.Equal(raw, mustAuthorityJSON(root)) {
 				return ErrAuthorizationSnapshotCorrupt
 			}
-			if _, err := time.Parse(time.RFC3339Nano, root.At); err != nil {
+			activatedAt, err := time.Parse(time.RFC3339Nano, root.At)
+			if err != nil {
 				return ErrAuthorizationSnapshotCorrupt
 			}
 			operator, err := principalTx(ctx, tx, root.Actor)
-			if err != nil || operator.Kind != identity.PrincipalHuman ||
-				!operator.DisabledAt.IsZero() || verifyPrincipalProjectionTx(ctx, tx, operator) != nil {
+			if err != nil {
+				return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+			}
+			// The actor is judged AT THE ACTIVATION, which is what it signed.
+			// Demanding it enabled NOW made disabling that human later — an
+			// ordinary act — read as a corrupt ledger on every start. A disable
+			// dated at or before the activation is the other thing: the
+			// recorded actor could not have activated anything.
+			if operator.Kind != identity.PrincipalHuman ||
+				(!operator.DisabledAt.IsZero() && !operator.DisabledAt.After(activatedAt)) {
 				return ErrAuthorizationSnapshotCorrupt
+			}
+			if err := verifyPrincipalProjectionTx(ctx, tx, operator); err != nil {
+				return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 			}
 		} else {
 			event.ProfileID, event.Sequence, event.StrictRequired = profileID, sequence, strict == 1
@@ -471,26 +493,32 @@ func (s *Store) verifyAuthorityActivationTx(ctx context.Context, tx *sql.Tx, pro
 			seen[event.ApprovalID] = event
 		}
 		pub, _, err := publicKeyTx(ctx, tx, eventKey)
-		if err != nil || action.VerifyAuthorityBytes(pub, domain, raw,
+		if err != nil {
+			return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+		}
+		if action.VerifyAuthorityBytes(pub, domain, raw,
 			action.AuthoritySignature{Digest: eventDigest, SigningKeyID: eventKey, Signature: eventSignature}) != nil {
 			return ErrAuthorizationSnapshotCorrupt
 		}
 		previous = eventDigest
 		expected++
 	}
-	if err := rows.Err(); err != nil || expected-1 != stored.Sequence || previous != stored.LastEventDigest {
+	if err := rows.Err(); err != nil {
+		return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+	}
+	if expected-1 != stored.Sequence || previous != stored.LastEventDigest {
 		return ErrAuthorizationSnapshotCorrupt
 	}
 	approvalRows, err := tx.QueryContext(ctx, `SELECT approval_id,action_id,action_digest,authority_snapshot_required FROM approvals`)
 	if err != nil {
-		return ErrAuthorizationSnapshotCorrupt
+		return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 	}
 	defer func() { _ = approvalRows.Close() }()
 	for approvalRows.Next() {
 		var id, actionID, actionDigest string
 		var strict int
 		if err := approvalRows.Scan(&id, &actionID, &actionDigest, &strict); err != nil {
-			return ErrAuthorizationSnapshotCorrupt
+			return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 		}
 		event, ok := seen[id]
 		if !ok || event.ActionID != actionID || event.ActionDigest != actionDigest ||
@@ -502,14 +530,20 @@ func (s *Store) verifyAuthorityActivationTx(ctx context.Context, tx *sql.Tx, pro
 				return ErrAuthorizationSnapshotCorrupt
 			}
 			var snapshotDigest string
-			if err := tx.QueryRowContext(ctx, `SELECT authorization_digest FROM authorization_snapshots WHERE action_id=? AND approval_id=?`, actionID, id).Scan(&snapshotDigest); err != nil || snapshotDigest != event.SnapshotDigest {
+			if err := tx.QueryRowContext(ctx, `SELECT authorization_digest FROM authorization_snapshots WHERE action_id=? AND approval_id=?`, actionID, id).Scan(&snapshotDigest); err != nil {
+				return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+			}
+			if snapshotDigest != event.SnapshotDigest {
 				return ErrAuthorizationSnapshotCorrupt
 			}
 		} else if !strings.HasPrefix(id, "apr_") || event.SnapshotDigest != "" {
 			return ErrAuthorizationSnapshotCorrupt
 		}
 	}
-	return approvalRows.Err()
+	if err := approvalRows.Err(); err != nil {
+		return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+	}
+	return nil
 }
 
 func mustAuthorityJSON(value any) []byte {
@@ -636,15 +670,47 @@ func (s *Store) beginAuthorityWrite(ctx context.Context) (*sql.Tx, error) {
 	}
 }
 
+// authorityAbsent names an authority row a door was pointed at and that is not
+// there: the grant to revoke, the parent to delegate under, the legacy grant to
+// import. Those doors returned the driver's bare sql.ErrNoRows, a class with no
+// name of its own at a door an operator reads the error of. Every other error
+// keeps the name it came with.
+func authorityAbsent(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("%w: %w", ErrAuthorityMissing, err)
+	}
+	return err
+}
+
 func mapAuthorityStoreError(err error) error {
 	if err == nil {
 		return nil
 	}
 	message := strings.ToLower(err.Error())
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) || strings.Contains(message, "busy") || strings.Contains(message, "locked") || strings.Contains(message, "interrupted") {
-		return fmt.Errorf("%w: %v", ErrAuthorityStoreBusy, err)
+		return fmt.Errorf("%w: %w", ErrAuthorityStoreBusy, err)
 	}
 	return err
+}
+
+// authorityReadFailure names a failed READ of authority evidence with exactly
+// one class. A store that did not answer — the context is over, or the error
+// belongs to the SQLite busy family — is ErrAuthorityStoreBusy and keeps its
+// cause in the chain. Everything else (the row that must exist is absent, a
+// column will not convert) is the corruption sentinel the caller names. Calling
+// an intact book corrupt because a deadline landed one statement after the
+// write lock sends the operator after tampering that is not there (the
+// adversary's pass over piece 3 phase 3, F5; the house precedent is
+// classifyApprovalRead). Declared limit: a driver I/O failure that is neither
+// of the two still reads as corruption, which fails closed.
+func authorityReadFailure(ctx context.Context, err error, corrupt error) error {
+	if mapped := mapAuthorityStoreError(err); errors.Is(mapped, ErrAuthorityStoreBusy) {
+		return mapped
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return mapAuthorityStoreError(ctxErr)
+	}
+	return corrupt
 }
 
 // IssueAuthority persists a root grant only after actor, intent and terms are
@@ -742,7 +808,7 @@ func (s *Store) delegateAuthority(ctx context.Context, child action.AuthorityGra
 	}
 	parents, err := s.authorityChainTx(ctx, tx, child.ParentGrantID, child.ParentGrantVersion, at)
 	if err != nil {
-		return err
+		return authorityAbsent(err)
 	}
 	parent := parents[len(parents)-1]
 	if !administrative && (actor != parent.signed.Grant.SubjectPrincipalID || child.IssuerPrincipalID != actor) {
@@ -799,7 +865,7 @@ func (s *Store) revokeAuthority(ctx context.Context, grantID, actorActionID, rea
 	defer func() { _ = tx.Rollback() }()
 	stored, err := s.readGrantHeadTx(ctx, tx, grantID)
 	if err != nil {
-		return err
+		return authorityAbsent(err)
 	}
 	actor, err := s.validateAuthorityActorTx(ctx, tx, actorActionID, "revoke", CanonicalAuthorityRevoke(grantID, reason), administrative, at)
 	if err != nil {
@@ -852,7 +918,7 @@ func (s *Store) ImportLegacyAuthority(ctx context.Context, legacyGrantID string,
 	}
 	legacy, err := legacyGrantTx(ctx, tx, legacyGrantID)
 	if err != nil {
-		return err
+		return authorityAbsent(err)
 	}
 	if legacy.Status != action.LifecycleActive {
 		return ErrAuthorityInactive
@@ -1279,7 +1345,7 @@ func canonicalGrantEvent(grantID string, version, revision int, from, to action.
 
 func (s *Store) signAuthorityTx(ctx context.Context, tx *sql.Tx, domain string, canonical []byte) (action.AuthoritySignature, error) {
 	if s.authoritySigner == nil {
-		return action.AuthoritySignature{}, errors.New("action/sqlite: authority signer unavailable")
+		return action.AuthoritySignature{}, ErrAuthoritySignerUnavailable
 	}
 	seal := s.authoritySigner(domain, canonical)
 	pub, retired, err := publicKeyTx(ctx, tx, seal.SigningKeyID)
@@ -1644,6 +1710,18 @@ func (s *Store) startApprovedAuthorization(ctx context.Context, approvalID strin
 	if err != nil {
 		return AuthorityApprovedStartResult{}, err
 	}
+	// A repeated start is named FIRST, as the precedence list puts it. Its
+	// first life purged the parked parameters and moved the action on, so any
+	// belt judged before this one names that purge or that state instead —
+	// «parameters column empty … action not found», about an action that
+	// exists and has started.
+	var already int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM authorization_starts WHERE action_id=?`, a.ActionID).Scan(&already); err != nil {
+		return AuthorityApprovedStartResult{}, authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+	}
+	if already != 0 {
+		return AuthorityApprovedStartResult{}, ErrActionAlreadyStarted
+	}
 	if a.Status != action.ApprovalApproved {
 		return AuthorityApprovedStartResult{}, ErrApprovalNoLongerApproved
 	}
@@ -1707,13 +1785,6 @@ func (s *Store) startApprovedAuthorization(ctx context.Context, approvalID strin
 	if storedIntent != resolved.intent.IntentID || refsRaw != string(wantRefs) ||
 		!sameStringSlice(pending.PrincipalChain, resolved.principalChain) {
 		return AuthorityApprovedStartResult{}, ErrAuthorityRevoked
-	}
-	var already int
-	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM authorization_starts WHERE action_id=?`, a.ActionID).Scan(&already); err != nil {
-		return AuthorityApprovedStartResult{}, err
-	}
-	if already != 0 {
-		return AuthorityApprovedStartResult{}, ErrActionAlreadyStarted
 	}
 	for _, account := range resolved.accounts {
 		if _, err := s.debitAccountTx(ctx, tx, a.ActionID, account, resolved.operationKey, at); err != nil {
@@ -1993,7 +2064,7 @@ func (s *Store) resolveAuthorityTx(ctx context.Context, tx *sql.Tx, actor, chann
 		if err := tx.QueryRowContext(ctx, `SELECT generation FROM config_authority_heads
 			WHERE profile_id=? AND brain_principal_id=?`, intent.ProfileID, actor).
 			Scan(&resolved.configGeneration); err != nil {
-			return resolvedAuthority{}, action.ErrAuthorityEvidenceCorrupt
+			return resolvedAuthority{}, authorityReadFailure(ctx, err, action.ErrAuthorityEvidenceCorrupt)
 		}
 		resolved.principalChain = []string{intent.OwnerPrincipalID, actor}
 		if err := s.ensureBudgetAccountTx(ctx, tx, intent.ProfileID, "config",
@@ -2076,7 +2147,7 @@ func grantOriginActorTx(ctx context.Context, tx *sql.Tx, grantID string,
 	if err := tx.QueryRowContext(ctx, `SELECT actor_principal_id,administrative
 		FROM grant_events WHERE grant_id=? AND grant_version=? AND revision=1`,
 		grantID, version).Scan(&actor, &administrative); err != nil {
-		return "", false, action.ErrAuthorityEvidenceCorrupt
+		return "", false, authorityReadFailure(ctx, err, action.ErrAuthorityEvidenceCorrupt)
 	}
 	return actor, administrative == 1, nil
 }
@@ -2114,6 +2185,11 @@ func validateAuthorityActualUse(intent action.IntentContractV2, chain []storedGr
 		return err
 	}
 	use, err := registry.Analyze(operation, arguments)
+	if err != nil && !errors.Is(err, action.ErrOperationUseNoAnalyzer) {
+		// An analyzer IS registered and could not resolve these arguments:
+		// they cannot be proved inside any grant, whatever the terms say.
+		return action.ErrAuthorityUseUnresolved
+	}
 	if err != nil {
 		restricted := len(intent.AllowedResources) != 0 || len(intent.DeniedResources) != 0 ||
 			len(intent.DataScope) != 0 || len(intent.OutputDestinations) != 0
@@ -2326,9 +2402,15 @@ func (s *Store) verifyDebitTailTx(ctx context.Context, tx *sql.Tx, account, oper
 	spent, sequence int64, tail string) error {
 	if sequence == 0 {
 		var count int
-		if spent != 0 || tail != "" || tx.QueryRowContext(ctx,
+		if spent != 0 || tail != "" {
+			return ErrBudgetEvidenceCorrupt
+		}
+		if err := tx.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM budget_debits WHERE account_id=? AND operation_key=?`,
-			account, operation).Scan(&count) != nil || count != 0 {
+			account, operation).Scan(&count); err != nil {
+			return authorityReadFailure(ctx, err, ErrBudgetEvidenceCorrupt)
+		}
+		if count != 0 {
 			return ErrBudgetEvidenceCorrupt
 		}
 		return nil
@@ -2342,7 +2424,7 @@ func (s *Store) verifyDebitTailTx(ctx context.Context, tx *sql.Tx, account, oper
 		ORDER BY sequence DESC LIMIT 1`, account, operation).
 		Scan(&actionID, &rowSequence, &prior, &cumulative, &canonical, &digest,
 			&keyID, &signature); err != nil {
-		return ErrBudgetEvidenceCorrupt
+		return authorityReadFailure(ctx, err, ErrBudgetEvidenceCorrupt)
 	}
 	var record authorityDebitRecord
 	if err := json.Unmarshal(canonical, &record); err != nil ||
@@ -2357,7 +2439,10 @@ func (s *Store) verifyDebitTailTx(ctx context.Context, tx *sql.Tx, account, oper
 		return ErrBudgetEvidenceCorrupt
 	}
 	pub, _, err := publicKeyTx(ctx, tx, keyID)
-	if err != nil || action.VerifyAuthorityBytes(pub, authorityDebitDomain, canonical,
+	if err != nil {
+		return authorityReadFailure(ctx, err, ErrBudgetEvidenceCorrupt)
+	}
+	if action.VerifyAuthorityBytes(pub, authorityDebitDomain, canonical,
 		action.AuthoritySignature{Digest: digest, SigningKeyID: keyID,
 			Signature: signature}) != nil {
 		return ErrBudgetEvidenceCorrupt
@@ -2367,12 +2452,15 @@ func (s *Store) verifyDebitTailTx(ctx context.Context, tx *sql.Tx, account, oper
 	if err := tx.QueryRowContext(ctx, `SELECT canonical_counter,digest,signing_key_id,signature
 		FROM budget_counters WHERE account_id=? AND operation_key=?`, account, operation).
 		Scan(&headCanonical, &headDigest, &headKeyID, &headSignature); err != nil {
-		return ErrBudgetEvidenceCorrupt
+		return authorityReadFailure(ctx, err, ErrBudgetEvidenceCorrupt)
 	}
 	head := authorityBudgetHead{AccountID: account, OperationKey: operation,
 		Spent: spent, Sequence: sequence, TailDigest: tail}
 	pub, _, err = publicKeyTx(ctx, tx, headKeyID)
-	if err != nil || !bytes.Equal(headCanonical, mustAuthorityJSON(head)) ||
+	if err != nil {
+		return authorityReadFailure(ctx, err, ErrBudgetEvidenceCorrupt)
+	}
+	if !bytes.Equal(headCanonical, mustAuthorityJSON(head)) ||
 		action.VerifyAuthorityBytes(pub, authorityBudgetHeadDomain, headCanonical,
 			action.AuthoritySignature{Digest: headDigest, SigningKeyID: headKeyID,
 				Signature: headSignature}) != nil {
@@ -2517,7 +2605,7 @@ func (s *Store) verifyAuthorizationStartsTx(ctx context.Context, tx *sql.Tx) err
 		intent_digest,grant_chain,debit_set_digest,authorization_time,canonical_start,
 		digest,signing_key_id,signature FROM authorization_starts ORDER BY action_id`)
 	if err != nil {
-		return ErrAuthorizationSnapshotCorrupt
+		return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
@@ -2528,7 +2616,7 @@ func (s *Store) verifyAuthorizationStartsTx(ctx context.Context, tx *sql.Tx) err
 			&record.IntentVersion, &record.IntentDigest, &record.GrantChain,
 			&record.DebitSetDigest, &record.AuthorizationTime, &canonical,
 			&digest, &keyID, &signature); err != nil {
-			return ErrAuthorizationSnapshotCorrupt
+			return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 		}
 		var signedRecord authorityStartRecord
 		if err := json.Unmarshal(canonical, &signedRecord); err != nil ||
@@ -2548,37 +2636,26 @@ func (s *Store) verifyAuthorizationStartsTx(ctx context.Context, tx *sql.Tx) err
 			return ErrAuthorizationSnapshotCorrupt
 		}
 		debitDigest, err := debitSetDigestTx(ctx, tx, record.ActionID)
-		if err != nil || debitDigest != record.DebitSetDigest {
+		if err != nil {
+			return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+		}
+		if debitDigest != record.DebitSetDigest {
 			return ErrAuthorizationSnapshotCorrupt
 		}
 		pub, _, err := publicKeyTx(ctx, tx, keyID)
-		if err != nil || action.VerifyAuthorityBytes(pub, authorityStartDomain, canonical,
+		if err != nil {
+			return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
+		}
+		if action.VerifyAuthorityBytes(pub, authorityStartDomain, canonical,
 			action.AuthoritySignature{Digest: digest, SigningKeyID: keyID,
 				Signature: signature}) != nil {
 			return ErrAuthorizationSnapshotCorrupt
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return ErrAuthorizationSnapshotCorrupt
+		return authorityReadFailure(ctx, err, ErrAuthorizationSnapshotCorrupt)
 	}
 	return nil
-}
-
-// Recover is the phase-3 convenience used by the crash mold.
-func (s *Store) Recover(ctx context.Context, _ time.Time) error {
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return err
-	}
-	if err := s.verifyAuthorizationStartsTx(ctx, tx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	_, err = s.RecoverPreviousLife(ctx)
-	return err
 }
 
 // Ensure the stored grant canonical bytes are not signer-mutated.

@@ -307,7 +307,9 @@ func ParseAuthorityGrantV2(raw []byte) (AuthorityGrantV2, error) {
 		return AuthorityGrantV2{}, fmt.Errorf("%w: %v", ErrAuthorityMalformed, err)
 	}
 	if err := ensureJSONEOF(dec); err != nil {
-		return AuthorityGrantV2{}, err
+		// One class for every malformed wire: a second JSON value after the
+		// grant is a malformed grant, not an error with no name.
+		return AuthorityGrantV2{}, fmt.Errorf("%w: %w", ErrAuthorityMalformed, err)
 	}
 	from, err := time.Parse(time.RFC3339Nano, w.ValidFrom)
 	if err != nil {
@@ -597,53 +599,85 @@ func (r *OperationUseRegistry) Register(operation string, analyzer OperationUseA
 	r.analyzers[operation] = analyzer
 	return nil
 }
+
+// ErrOperationUseNoAnalyzer is Analyze's answer for an operation NOBODY
+// registered an analyzer for. It wraps ErrAuthorityUseUnresolved, and it is a
+// class of its own on purpose: FR-AUTH-03 lets an operation WITHOUT an analyzer
+// start when no term restricts it, and lets nothing else through. An analyzer
+// that IS registered and cannot resolve the arguments it was given is the other
+// case — arguments that cannot be proved inside the grant — and fails closed
+// whatever the terms say. Folding the two into one error let a registered
+// analyzer's failure pass as «no analyzer» and start with nothing bound (the
+// adversary's pass over piece 3 phase 3, F2).
+var ErrOperationUseNoAnalyzer = fmt.Errorf("%w: no analyzer registered for the operation", ErrAuthorityUseUnresolved)
+
 func (r *OperationUseRegistry) Analyze(operation, args string) (OperationUse, error) {
 	if r == nil || r.analyzers[operation] == nil {
-		return OperationUse{}, ErrAuthorityUseUnresolved
+		return OperationUse{}, ErrOperationUseNoAnalyzer
 	}
 	return r.analyzers[operation](args)
 }
 
-// RegisterBuiltInOperationUse registers the three effectful resource parsers.
+// RegisterBuiltInOperationUse registers the analyzers of the three effectful
+// built-in tools. Each one speaks the argument grammar ITS TOOL speaks, because
+// the string it is handed is the very string the executor hands the tool:
+//
+//   - read_file: the whole trimmed string is the path (internal/tool/readfile.go);
+//   - http_fetch: the whole trimmed string is the URL (internal/tool/httpfetch.go);
+//   - webhook_call: the URL, one space, then the JSON body
+//     (internal/tool/webhookcall.go).
+//
+// An earlier shape parsed a JSON object — {"path":…}, {"url":…,"body":…} — that
+// no shipped tool accepts, so against the real tools a scoped grant refused
+// every start and an unscoped one bound nothing (F2 of the same pass). The
+// agreement with the real tools is held by a mould in package tool that runs
+// both over the same strings.
+//
+// What an analyzer binds is the REQUESTED target, judged lexically. Where the
+// tool goes from there is its cage's business and not this layer's: read_file
+// resolves symbolic links under its jail, http_fetch follows redirects under
+// its host allow-list. Both are FILED by name in the phase's canto.
+//
+// A RELATIVE read_file path is refused as unresolved: the tool joins it to a
+// jail root this layer does not know, and a path judged from one base and read
+// from another is exactly the ambiguity FR-AUTH-03 fails closed on.
 func RegisterBuiltInOperationUse(r *OperationUseRegistry) error {
 	pathAnalyzer := func(raw string) (OperationUse, error) {
-		var w struct {
-			Path string `json:"path"`
-		}
-		if json.Unmarshal([]byte(raw), &w) != nil || w.Path == "" {
-			return OperationUse{}, ErrAuthorityUseUnresolved
-		}
-		p, err := filepath.Abs(w.Path)
-		if err != nil {
+		p := strings.TrimSpace(raw)
+		if p == "" || !filepath.IsAbs(p) {
 			return OperationUse{}, ErrAuthorityUseUnresolved
 		}
 		return OperationUse{Resources: []ResourceRef{{Kind: "path", ID: filepath.Clean(p)}}}, nil
 	}
-	urlAnalyzer := func(raw string) (OperationUse, error) {
-		var w struct {
-			URL  string `json:"url"`
-			Body string `json:"body"`
-		}
-		if json.Unmarshal([]byte(raw), &w) != nil {
-			return OperationUse{}, ErrAuthorityUseUnresolved
-		}
-		u, err := canonicalAuthorityURL(w.URL)
+	fetchAnalyzer := func(raw string) (OperationUse, error) {
+		u, err := canonicalAuthorityURL(strings.TrimSpace(raw))
 		if err != nil {
 			return OperationUse{}, ErrAuthorityUseUnresolved
 		}
-		use := OperationUse{Resources: []ResourceRef{{Kind: "url", ID: u}}, Destinations: []string{mustAuthorityHost(u)}}
-		if w.Body != "" {
-			use.Data = []string{"payload"}
+		return OperationUse{Resources: []ResourceRef{{Kind: "url", ID: u}},
+			Destinations: []string{mustAuthorityHost(u)}}, nil
+	}
+	callAnalyzer := func(raw string) (OperationUse, error) {
+		parts := strings.SplitN(strings.TrimSpace(raw), " ", 2)
+		if len(parts) < 2 || !json.Valid([]byte(strings.TrimSpace(parts[1]))) {
+			return OperationUse{}, ErrAuthorityUseUnresolved
 		}
-		return use, nil
+		u, err := canonicalAuthorityURL(parts[0])
+		if err != nil {
+			return OperationUse{}, ErrAuthorityUseUnresolved
+		}
+		// A webhook call always carries a body out: the payload tag is not
+		// conditional on what the body says.
+		return OperationUse{Resources: []ResourceRef{{Kind: "url", ID: u}},
+			Data: []string{"payload"}, Destinations: []string{mustAuthorityHost(u)}}, nil
 	}
 	if err := r.Register("read_file", pathAnalyzer); err != nil {
 		return err
 	}
-	if err := r.Register("http_fetch", urlAnalyzer); err != nil {
+	if err := r.Register("http_fetch", fetchAnalyzer); err != nil {
 		return err
 	}
-	return r.Register("webhook_call", urlAnalyzer)
+	return r.Register("webhook_call", callAnalyzer)
 }
 
 // canonicalAuthorityURL returns the one form of raw the matcher judges, or an
@@ -670,10 +704,19 @@ func canonicalAuthorityURL(raw string) (string, error) {
 	if u.RawPath != "" {
 		return "", errors.New("URL path is not canonically encoded")
 	}
+	// A path that is not ALREADY clean is refused too, not cleaned. The tool
+	// sends the URL as it was written — it resolves nothing — so a cleaned copy
+	// would be judged while another path travelled, and which of the two the
+	// server honours is the server's choice. A trailing slash is the one
+	// difference allowed: it does not move a path in or out of any resource.
+	cleaned := path.Clean("/" + strings.TrimPrefix(u.Path, "/"))
+	if written := "/" + strings.TrimPrefix(u.Path, "/"); written != cleaned && written != cleaned+"/" {
+		return "", errors.New("URL path is not in its clean form")
+	}
 	u.Fragment = ""
 	u.Scheme = strings.ToLower(u.Scheme)
 	u.Host = strings.ToLower(u.Host)
-	u.Path = path.Clean("/" + strings.TrimPrefix(u.Path, "/"))
+	u.Path = cleaned
 	return u.String(), nil
 }
 func mustAuthorityHost(raw string) string {
@@ -708,6 +751,12 @@ func URLResourceIncludes(parent, child string) bool {
 	p, _ := url.Parse(canonicalParent)
 	c, _ := url.Parse(canonicalChild)
 	if !strings.EqualFold(p.Scheme, c.Scheme) || !strings.EqualFold(p.Host, c.Host) {
+		return false
+	}
+	// A resource scoped BY its query includes only that query. Ignoring the
+	// query made «…/x?tenant=1» silently every tenant. A resource with no query
+	// says nothing about it, and includes any.
+	if p.RawQuery != "" && p.RawQuery != c.RawQuery {
 		return false
 	}
 	base := strings.TrimSuffix(p.Path, "/")

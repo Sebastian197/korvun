@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 func TestAuthority_ApprovedResumeRejectsMovedEvidence(t *testing.T) {
@@ -67,12 +68,31 @@ func TestAuthority_ApprovedResumeRejectsMovedEvidence(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
+	// The strict resume re-judges the parked action's identity evidence AT THE
+	// RESUME INSTANT, expiry included — the threat row phase 1 accepted: «evidence
+	// expires … while approval waits → old authentication starts a new effect».
+	// So an approval outlives its ingress evidence only as a refusal, by name,
+	// that consumes nothing. With production's five-minute ingress TTL against a
+	// one-hour approval window this is a PRODUCT consequence the director owns
+	// (the adversary's pass over this phase, F6, its probe P-J); what this row
+	// pins is that the refusal is this one, and that it costs nothing.
+	// Probing mutation executed: the resume judges expiry at the evidence's own
+	// observation instant — red with «error = <nil>» and «budget debits = 4».
 	t.Run("identity expired", func(t *testing.T) {
 		f, approval := approvedAuthorityResumeFixture(t)
 		_, err := f.store.StartApprovedAuthorization(context.Background(), approval.ApprovalID,
 			PolicyPin{Version: 1, Digest: "sha256:authority-law"}, approval.ActionDigest, f.now.Add(2*time.Minute))
-		if err == nil {
-			t.Fatal("expired identity resumed")
+		if !errors.Is(err, identity.ErrIdentityEvidenceExpired) {
+			t.Errorf("error = %v, want %v", err, identity.ErrIdentityEvidenceExpired)
+		}
+		if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM budget_debits`); n != 0 {
+			t.Errorf("budget debits = %d, want 0", n)
+		}
+		if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM authorization_starts`); n != 0 {
+			t.Errorf("durable starts = %d, want 0", n)
+		}
+		if params, err := f.store.ApprovalParams(context.Background(), approval.ApprovalID); err != nil || string(params) != `{}` {
+			t.Errorf("parked parameters = %q, %v; want them retained", params, err)
 		}
 	})
 	t.Run("action state moved", func(t *testing.T) {
@@ -156,8 +176,8 @@ func TestAuthority_StartRejectsMovedIntentBindingAndGrantEvidence(t *testing.T) 
 			if _, err := f.store.db.Exec(mutation); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); err == nil {
-				t.Fatal("corrupt grant evidence authorized")
+			if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); !errors.Is(err, action.ErrAuthorityEvidenceCorrupt) {
+				t.Fatalf("corrupt grant evidence: error = %v, want %v", err, action.ErrAuthorityEvidenceCorrupt)
 			}
 		})
 	}

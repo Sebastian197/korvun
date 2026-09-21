@@ -46,6 +46,10 @@ var approvalSentinels = map[string]error{
 	// 11 → 12. Declared in approvals.go, so the closed-set scan reads BOTH
 	// files.
 	"ErrApprovalWriteFailed": ErrApprovalWriteFailed,
+	// CHANGED 2026-09-21 (piece 3 phase 3, the adversary's pass, F9): 12 → 13.
+	// The legacy claim's refusal of a strict-born row. The closed-set mould
+	// refused the tree until it was listed here, which is what it is for.
+	"ErrApprovalRequiresAuthority": ErrApprovalRequiresAuthority,
 }
 
 // TestApprovalSentinels_noneIsReachableFromAnother is the direction, both ways,

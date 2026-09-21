@@ -417,5 +417,7 @@ func BuildApprovalExecutor(cfg *config.Config, preview action.ActionPreview) (*e
 	if err != nil {
 		return nil, fmt.Errorf("app: approval executor: %w", err)
 	}
-	return BuildApprovalExecutorFromCage(cage, preview)
+	// It is handed the configuration, so it honours what the configuration
+	// says: under a strict profile the resume goes through the authority door.
+	return BuildApprovalExecutorFromCageMode(cage, preview, cfg.StrictAuthority())
 }

@@ -93,6 +93,14 @@ var (
 	// back whole, so nothing was consumed and nothing was handed to an executor.
 	ErrApprovalNoLongerApproved = errors.New("action/sqlite: the approval or its action was not APPROVED inside the claim")
 
+	// ErrApprovalRequiresAuthority is the legacy claim refusing a row born
+	// under the strict marker. Such a row starts only through
+	// StartApprovedAuthorization, which debits and proves the start in the same
+	// transaction that purges the parameters; the legacy claim does neither. The
+	// fence reads the ROW, so it holds whatever the caller's configuration says.
+	// The claim rolls back whole: nothing was consumed.
+	ErrApprovalRequiresAuthority = errors.New("action/sqlite: a strict-born approval starts only through the authority door")
+
 	// ErrApprovalMovedUnderTheClaim is a claim whose transaction read an
 	// approval row that differs, in any column action.Approval carries, from
 	// the row the caller read before it. Two columns were checked before this;
@@ -441,6 +449,11 @@ func (s *Store) approvalAuthoritySnapshotTx(ctx context.Context, tx *sql.Tx, app
 	}
 	pub, _, err := publicKeyTx(ctx, tx, keyID)
 	if err != nil {
+		// One class: a key read the store did not answer is unreadable, and
+		// only a key that is not there is corruption of the evidence.
+		if busy := authorityReadFailure(ctx, err, nil); busy != nil {
+			return nil, fmt.Errorf("action/sqlite: approval %q authority key: %w: %w", approval.ApprovalID, ErrApprovalUnreadable, busy)
+		}
 		return nil, fmt.Errorf("action/sqlite: approval %q authority key: %w", approval.ApprovalID, ErrAuthorizationSnapshotCorrupt)
 	}
 	snapshot, err := action.VerifyAuthorizationSnapshotBytesV1(pub, canonical, action.AuthoritySignature{
@@ -717,6 +730,17 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 				"action/sqlite: approval %q moved under the claim (%s): %w",
 				approvalID, column, ErrApprovalMovedUnderTheClaim)
 		}
+	}
+	// The strict marker, read from the row inside this transaction. Anything
+	// but an explicit 0 is refused: 1 is a strict birth, and a value that is
+	// neither is not this door's to interpret.
+	var strictBorn int
+	if err := tx.QueryRowContext(ctx, `SELECT authority_snapshot_required FROM approvals WHERE approval_id=?`,
+		approvalID).Scan(&strictBorn); err != nil {
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: claim marker %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	}
+	if strictBorn != 0 {
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalRequiresAuthority)
 	}
 	if law != nil {
 		if rule, dim := action.ValidateApprovalBinding(a, a.ActionDigest, law.Version, law.Digest); rule != "" {
