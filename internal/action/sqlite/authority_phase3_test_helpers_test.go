@@ -150,3 +150,19 @@ func authorityScalar(t *testing.T, store *Store, query string, args ...any) int 
 	}
 	return n
 }
+
+// authorityStrictBootRecover runs over an existing store what a strict boot
+// runs, through the PRODUCTION doors and in the boot's own order: verify the
+// activation ledger and every start proof (RequireAuthorityActivation, the door
+// app.PrepareStrictAuthority calls), then close the previous life's open
+// actions (RecoverPreviousLife). An earlier convenience, Store.Recover, did the
+// same from inside production code that no production caller ever reached; the
+// moulds stood on a door of their own (the adversary's pass over this phase,
+// F8). It is gone.
+func authorityStrictBootRecover(f authoritySQLiteFixture, activation string) error {
+	if err := f.store.RequireAuthorityActivation(context.Background(), f.intent.ProfileID, activation); err != nil {
+		return err
+	}
+	_, err := f.store.RecoverPreviousLife(context.Background())
+	return err
+}

@@ -108,7 +108,7 @@ func TestAuthority_StoreOwnsApplicableLeaf(t *testing.T) {
 // moves this list, and the mould below notices.
 var authorityProtectedDoors = []string{
 	"ActivateAuthority", "ImportLegacyAuthority", "ParkAuthorization",
-	"StartAuthorization", "SyncConfigAuthorityClauses", "createApprovalPartsWithIdentityAndAuthority",
+	"StartAuthorization", "SyncConfigAuthorityClauses",
 	"delegateAuthority", "issueAuthority", "revokeAuthority", "startApprovedAuthorization",
 }
 
@@ -204,12 +204,7 @@ func TestAuthority_WriteOwnershipPrecedesProtectedReads(t *testing.T) {
 				}
 				doors = append(doors, fn.Name.Name)
 				for _, call := range calls {
-					// createApprovalPartsWithIdentityAndAuthority opens the legacy,
-					// non-strict transaction on the OTHER arm of the same `if`
-					// that takes ownership on the strict arm. That BeginTx sits
-					// textually before the ownership call and is never on its
-					// path, so it is the one exception, named here.
-					if call.Pos() < ownership && fn.Name.Name != "createApprovalPartsWithIdentityAndAuthority" {
+					if call.Pos() < ownership {
 						t.Errorf("%s: %s makes a database call before it takes write ownership",
 							fset.Position(call.Pos()), fn.Name.Name)
 					}

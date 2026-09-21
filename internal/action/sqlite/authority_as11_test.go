@@ -33,6 +33,10 @@ import (
 // no dispatcher to retry with. What is proved is that recovery leaves the
 // action terminal (OUTCOME_UNKNOWN), which is the state no coordinator resumes.
 //
+// The recovery it runs is the strict boot's own, through the production doors
+// (see authorityStrictBootRecover), over a profile activated before the child is
+// spawned — not a convenience only tests could reach.
+//
 // Evidence level: COMPILED TEST BINARY IN A SEPARATE OS PROCESS, terminated at
 // the exact named probe; the parent reads the file afterwards through its own
 // connection.
@@ -88,6 +92,7 @@ func TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome(t *testing.T) {
 	for _, mode := range []AuthorityStartProbe{AuthorityProbeBeforeCommit, AuthorityProbeAfterCommitBeforeReturn} {
 		t.Run(string(mode), func(t *testing.T) {
 			f := newAuthoritySQLiteFixture(t, 2)
+			activation := activateAuthorityFixture(t, f)
 			// #nosec G204 -- os.Args[0] is this test binary and the sole argument is a fixed test selector.
 			cmd := exec.Command(os.Args[0], "-test.run=^TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome$")
 			cmd.Env = append(os.Environ(), "KORVUN_AUTH_CRASH_CHILD="+string(mode), "KORVUN_AUTH_CRASH_DB="+f.store.path, "KORVUN_AUTH_CRASH_KEY="+hex.EncodeToString(f.private))
@@ -116,7 +121,7 @@ func TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome(t *testing.T) {
 				t.Fatalf("after-commit debits = %d, want the 4 of one committed start", debits)
 			}
 			for pass := 1; pass <= 2; pass++ {
-				if err := f.store.Recover(context.Background(), f.now.Add(time.Duration(pass)*time.Second)); err != nil {
+				if err := authorityStrictBootRecover(f, activation); err != nil {
 					t.Fatalf("recovery pass %d: %v", pass, err)
 				}
 				if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM actions JOIN authorization_starts USING(action_id) WHERE state=?`, string(action.StateOutcomeUnknown)); n != 1 {

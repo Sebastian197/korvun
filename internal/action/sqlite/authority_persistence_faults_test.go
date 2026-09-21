@@ -221,8 +221,8 @@ func TestAuthority_SignerAndSnapshotFailureBoundaries(t *testing.T) {
 	t.Run("missing signer", func(t *testing.T) {
 		f := newAuthoritySQLiteFixture(t, 2)
 		f.store.SetAuthoritySigner(nil)
-		if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); err == nil || !strings.Contains(err.Error(), "signer unavailable") {
-			t.Fatalf("error = %v", err)
+		if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); !errors.Is(err, ErrAuthoritySignerUnavailable) {
+			t.Fatalf("error = %v, want %v", err, ErrAuthoritySignerUnavailable)
 		}
 	})
 	t.Run("mutating signer", func(t *testing.T) {
@@ -230,8 +230,8 @@ func TestAuthority_SignerAndSnapshotFailureBoundaries(t *testing.T) {
 		f.store.SetAuthoritySigner(func(domain string, canonical []byte) action.AuthoritySignature {
 			return action.SignAuthorityBytes(f.private, domain+".wrong", canonical)
 		})
-		if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); err == nil {
-			t.Fatal("invalid authority signature was accepted")
+		if _, err := f.store.StartAuthorization(context.Background(), authorityStartRequest(f, "", f.now)); !errors.Is(err, action.ErrAuthorityEvidenceCorrupt) {
+			t.Fatalf("error = %v, want %v", err, action.ErrAuthorityEvidenceCorrupt)
 		}
 	})
 	t.Run("snapshot identity mismatch", func(t *testing.T) {

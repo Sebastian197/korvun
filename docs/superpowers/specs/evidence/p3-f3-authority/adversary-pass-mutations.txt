@@ -1,0 +1,501 @@
+P3/F3 authority — captures of the cures that followed the adversary's pass
+Date: 2026-09-21
+Verdict cured: .claude/adversary/p3-f3-diff-verdict-12e9d76.md (VETO MANTENIDO over 12e9d76)
+
+Same method as delivery-mutations.txt: every MUTATION entry is one mutation
+applied ALONE to a copy of the tree, the named mould run while it was present,
+its output captured here, and the production file restored from the tree before
+the next command. A PRE-CURE entry is the mould run against the tree BEFORE its
+cure existed: the reproduction of the adversary's finding in this session's own
+hands, which is not a mutation and is not counted as one.
+
+What each mutation was is written in the godoc of the mould it reddens. One
+mutation of this pass first came back GREEN because it was aimed at a column
+that does not exist and its query error was swallowed: it was re-aimed and then
+reddened (F4c-M4). A mutation that does not bite is neither a red nor a
+survivor, and it is not counted.
+
+========================================================================
+F1-operator-id-reused
+------------------------------------------------------------------------
+--- FAIL: TestOperatorCLI_OpensAProfileTheBaseCLITouched (0.06s)
+    authority_upgrade_test.go:96: intent create on the base's profile: code=1 stdout="" stderr="korvun intent create: register local CLI identity: action/sqlite: principal \"principal_local_operator_role\" conflicts with configured identity\n"
+    authority_upgrade_test.go:105: approvals reject on the base's profile: code=1 stderr="korvun approvals reject: register local CLI identity: action/sqlite: principal \"principal_local_operator_role\" conflicts with configured identity\n", want the ordinary «approval row absent»
+    authority_upgrade_test.go:112: authority activate on the base's profile: code=1 stdout="" stderr="korvun authority activate: register local CLI identity: action/sqlite: principal \"principal_local_operator_role\" conflicts with configured identity\n"
+    authority_upgrade_test.go:123: human operator rows under "principal_local_operator_role" = 0, want 1
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.902s
+FAIL
+
+========================================================================
+F2-analyzers-parse-the-json-grammar-again
+------------------------------------------------------------------------
+--- FAIL: TestAuthorityUse_AnalyzersSpeakTheRealToolsGrammar (0.00s)
+    --- FAIL: TestAuthorityUse_AnalyzersSpeakTheRealToolsGrammar/read_file (0.00s)
+        authority_use_grammar_test.go:62: analyzer error = action: authority use unresolved over arguments the real tool accepts
+    --- FAIL: TestAuthorityUse_AnalyzersSpeakTheRealToolsGrammar/http_fetch (0.00s)
+        authority_use_grammar_test.go:96: analyzer error = action: authority use unresolved over arguments the real tool parses
+    --- FAIL: TestAuthorityUse_AnalyzersSpeakTheRealToolsGrammar/webhook_call (0.00s)
+        authority_use_grammar_test.go:122: analyzer error = action: authority use unresolved over arguments the real tool parses
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/tool	0.462s
+FAIL
+
+========================================================================
+F2-analyzer-failure-swallowed-again
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_StartDoorBindsActualResourceArguments (0.11s)
+    --- FAIL: TestAuthority_StartDoorBindsActualResourceArguments/a_registered_analyzer_that_cannot_resolve_refuses_even_with_no_restriction (0.05s)
+        authority_door_integration_test.go:125: error = <nil>, want action: authority use unresolved
+        authority_door_integration_test.go:128: budget debits = 4, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.616s
+FAIL
+
+========================================================================
+F2-door-skips-the-actual-use-check
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_StartDoorBindsActualResourceArguments (0.12s)
+    --- FAIL: TestAuthority_StartDoorBindsActualResourceArguments/a_leaf_scoped_to_one_directory (0.07s)
+        authority_door_integration_test.go:101: a path that leaves the leaf's directory: error = <nil>, want action: resource out of authority scope
+        authority_door_integration_test.go:104: budget debits after the refusal = 6, want 0
+        authority_door_integration_test.go:114: durable starts = 2, want the one inside the scope
+    --- FAIL: TestAuthority_StartDoorBindsActualResourceArguments/a_registered_analyzer_that_cannot_resolve_refuses_even_with_no_restriction (0.05s)
+        authority_door_integration_test.go:125: error = <nil>, want action: authority use unresolved
+        authority_door_integration_test.go:128: budget debits = 4, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.627s
+FAIL
+
+========================================================================
+F2-unclean-path-cleaned-instead-of-refused
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_URLMatcherJudgesWhatTravels (0.00s)
+    authority_as16_canonical_test.go:137: https://a.example/safe//report: error = <nil>, want action: authority use unresolved
+    authority_as16_canonical_test.go:140: https://a.example/safe//report was judged included: a path nobody cleaned is what travels
+    authority_as16_canonical_test.go:137: https://a.example/safe/./report: error = <nil>, want action: authority use unresolved
+    authority_as16_canonical_test.go:140: https://a.example/safe/./report was judged included: a path nobody cleaned is what travels
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.416s
+FAIL
+
+========================================================================
+F2-query-comparison-dropped
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_URLMatcherJudgesWhatTravels (0.00s)
+    authority_as16_canonical_test.go:150: a resource scoped to one query included another
+    authority_as16_canonical_test.go:153: a resource scoped to one query included the same path with no query
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.413s
+FAIL
+
+========================================================================
+F2-AS16-path-not-canonicalized
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_ResourceMatcherBindsActualArguments (0.00s)
+    authority_as16_test.go:46: read_file resources = []action.ResourceRef{action.ResourceRef{Kind:"path", ID:"/cage/a/../b/secret.txt"}}, want canonical "/cage/b/secret.txt"
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.412s
+FAIL
+
+========================================================================
+F3-M1-purge-committed-separately
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_ApprovedStartPurgeIsInsideTheStart (0.12s)
+    --- FAIL: TestAuthority_ApprovedStartPurgeIsInsideTheStart/a_purge_that_cannot_be_written_is_a_start_that_did_not_happen (0.06s)
+        authority_as09_test.go:135: budget debits = 4, want 0: the start committed without its purge
+        authority_as09_test.go:135: durable starts = 1, want 0: the start committed without its purge
+        authority_as09_test.go:135: action state = AUTHORIZED, <nil>; want APPROVED
+        authority_as09_test.go:141: the approval could not start once the purge could be written: action/sqlite: the approval or its action was not APPROVED inside the claim
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.632s
+FAIL
+
+========================================================================
+F3-commit-before-the-before-commit-probe
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_ApprovedStartPurgeIsInsideTheStart (0.28s)
+    --- FAIL: TestAuthority_ApprovedStartPurgeIsInsideTheStart/a_purge_that_cannot_be_written_is_a_start_that_did_not_happen (0.22s)
+        authority_as09_test.go:141: the approval could not start once the purge could be written: sql: transaction has already been committed or rolled back
+    --- FAIL: TestAuthority_ApprovedStartPurgeIsInsideTheStart/a_purge_already_written_is_undone_with_the_rest (0.05s)
+        authority_as09_test.go:165: budget debits = 4, want 0: the start committed without its purge
+        authority_as09_test.go:165: durable starts = 1, want 0: the start committed without its purge
+        authority_as09_test.go:165: action state = AUTHORIZED, <nil>; want APPROVED
+        authority_as09_test.go:165: parked parameters = "", action/sqlite: approval "apr3_412e5100db968ebe9f90e915ae433ccf" params purged: action/sqlite: approval parameters column empty: action/sqlite: action not found; want them intact
+        authority_as09_test.go:168: the approval could not start after a rolled-back attempt: action/sqlite: approval parameters column empty: action/sqlite: action not found
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.782s
+FAIL
+
+========================================================================
+F4c-M4-live-remainder-in-the-detail
+------------------------------------------------------------------------
+--- FAIL: TestApprovalDetail_ShowsTheParkedSnapshotNotTheLiveBudget (0.06s)
+    authority_snapshot_test.go:108: budget kind = "finite", remaining = 3, want the parked 5
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.572s
+FAIL
+
+========================================================================
+F4c-M4-in-real-chromium
+------------------------------------------------------------------------
+npm notice run 'playwright' test e2e/approvals-mockup.spec.ts -g AS-AUTH-UI-04 --reporter=line
+[1/1] [chromium] › e2e/approvals-mockup.spec.ts:880:1 › AS-AUTH-UI-04 · real Chromium paints the stored authority snapshot and stays on loopback
+  1) [chromium] › e2e/approvals-mockup.spec.ts:880:1 › AS-AUTH-UI-04 · real Chromium paints the stored authority snapshot and stays on loopback 
+    Expected substring: "máximo 2 inicios"
+    Received string:    "AUTORIDADQUIÉN PIDIÓprincipal_channel_telegramBAJO QUÉ CONTRATOint_supplier_payments_v3Pay<U+202E> approved supplier invoicesCADENAprincipal_brain_asistente → principal_brain_operacionesPRESUPUESTO ANTES DE ESTE INTENTOmáximo 1 inicios
+    > 910 |   await expect(authority).toContainText('máximo 2 inicios')
+  1 failed
+    [chromium] › e2e/approvals-mockup.spec.ts:880:1 › AS-AUTH-UI-04 · real Chromium paints the stored authority snapshot and stays on loopback 
+PW_EXIT=1
+
+========================================================================
+F4-detail-signature-not-verified
+------------------------------------------------------------------------
+--- FAIL: TestApprovalDetail_AuthoritySnapshotSignatureIsRequired (0.05s)
+    authority_snapshot_test.go:47: detail error = <nil>, want action/sqlite: authorization snapshot corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.569s
+FAIL
+
+========================================================================
+F4-detail-missing-snapshot-read-as-none
+------------------------------------------------------------------------
+--- FAIL: TestApprovalDetail_MissingRequiredSnapshotIsCorrupt (0.05s)
+    authority_snapshot_test.go:65: detail error = <nil>, want action/sqlite: authorization snapshot corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.562s
+FAIL
+
+========================================================================
+F4-identity-runtime-drops-the-channels
+------------------------------------------------------------------------
+--- FAIL: TestIdentityRuntime_MintsEvidenceTheBootsRegistryAccepts (0.00s)
+    identity_runtime_test.go:43: no ingress issuer for channel "telegram": issuers = map[console:0xe5680b21a00]
+
+========================================================================
+F7-adapter-drops-the-authority-object
+------------------------------------------------------------------------
+--- FAIL: TestApprovalsAdapter_DetailCarriesTheStoredAuthority (0.06s)
+    authority_detail_door_test.go:61: the document carries no authority object
+
+========================================================================
+F7-adapter-stops-naming-a-corrupt-snapshot
+------------------------------------------------------------------------
+--- FAIL: TestApprovalsAdapter_DetailCarriesTheStoredAuthority (0.06s)
+    authority_detail_door_test.go:88: detail over a snapshot that no longer verifies: error = approvals: store unavailable, want approvals: stored evidence does not verify
+
+========================================================================
+F5-red-before-cure   [PRE-CURE, not a mutation]
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence (0.06s)
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/activation_ledger (0.00s)
+        authority_unreadable_test.go:98: error = action/sqlite: authorization snapshot corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action/sqlite: authorization snapshot corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action/sqlite: authorization snapshot corrupt: an intact store that did not answer was named action/sqlite: authorization snapshot corrupt
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/start_proofs (0.00s)
+        authority_unreadable_test.go:98: error = action/sqlite: authorization snapshot corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action/sqlite: authorization snapshot corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action/sqlite: authorization snapshot corrupt: an intact store that did not answer was named action/sqlite: authorization snapshot corrupt
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/debit_tail (0.00s)
+        authority_unreadable_test.go:98: error = action/sqlite: budget evidence corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action/sqlite: budget evidence corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action/sqlite: budget evidence corrupt: an intact store that did not answer was named action/sqlite: budget evidence corrupt
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/empty_debit_tail (0.00s)
+        authority_unreadable_test.go:98: error = action/sqlite: budget evidence corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action/sqlite: budget evidence corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action/sqlite: budget evidence corrupt: an intact store that did not answer was named action/sqlite: budget evidence corrupt
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/grant_origin (0.00s)
+        authority_unreadable_test.go:98: error = action: authority evidence corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action: authority evidence corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action: authority evidence corrupt: an intact store that did not answer was named action: authority evidence corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.583s
+FAIL
+
+========================================================================
+F5-classifier-always-corrupt
+------------------------------------------------------------------------
+        authority_unreadable_test.go:98: error = action/sqlite: authorization snapshot corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action/sqlite: authorization snapshot corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action/sqlite: authorization snapshot corrupt: an intact store that did not answer was named action/sqlite: authorization snapshot corrupt
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/start_proofs (0.00s)
+        authority_unreadable_test.go:98: error = action/sqlite: authorization snapshot corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action/sqlite: authorization snapshot corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action/sqlite: authorization snapshot corrupt: an intact store that did not answer was named action/sqlite: authorization snapshot corrupt
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/debit_tail (0.00s)
+        authority_unreadable_test.go:98: error = action/sqlite: budget evidence corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action/sqlite: budget evidence corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action/sqlite: budget evidence corrupt: an intact store that did not answer was named action/sqlite: budget evidence corrupt
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/empty_debit_tail (0.00s)
+        authority_unreadable_test.go:98: error = action/sqlite: budget evidence corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action/sqlite: budget evidence corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action/sqlite: budget evidence corrupt: an intact store that did not answer was named action/sqlite: budget evidence corrupt
+    --- FAIL: TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence/grant_origin (0.00s)
+        authority_unreadable_test.go:98: error = action: authority evidence corrupt, want action/sqlite: authority store busy
+        authority_unreadable_test.go:101: error = action: authority evidence corrupt, want the cause context canceled kept in the chain
+        authority_unreadable_test.go:104: error = action: authority evidence corrupt: an intact store that did not answer was named action: authority evidence corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.584s
+FAIL
+
+========================================================================
+F6-expiry-judged-at-the-park-instant
+------------------------------------------------------------------------
+        authority_integrity_failures_test.go:86: error = <nil>, want identity: authenticated ingress expired
+        authority_integrity_failures_test.go:89: budget debits = 4, want 0
+        authority_integrity_failures_test.go:92: durable starts = 1, want 0
+        authority_integrity_failures_test.go:95: parked parameters = "", action/sqlite: approval "apr3_db88442fcc0fc268b5b97268564a44e3" params purged: action/sqlite: approval parameters column empty: action/sqlite: action not found; want them retained
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.568s
+FAIL
+
+========================================================================
+F7c-red-before-cure   [PRE-CURE, not a mutation]
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_StrictPendingDoesNotSpendAndApprovedResumeReusesAction (0.06s)
+    authority_strict_flow_test.go:111: second approved start: error = action/sqlite: approval parameters column empty: action/sqlite: action not found, want action/sqlite: action already started
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.571s
+FAIL
+
+========================================================================
+F7c-repeat-check-neutralized
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_StrictPendingDoesNotSpendAndApprovedResumeReusesAction (0.06s)
+    authority_strict_flow_test.go:111: second approved start: error = action/sqlite: approval parameters column empty: action/sqlite: action not found, want action/sqlite: action already started
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.571s
+FAIL
+
+========================================================================
+F8-absent-row-doors-unnamed
+------------------------------------------------------------------------
+        authority_more_boundaries_test.go:70: import over a legacy grant that is not there: error = sql: no rows in result set, want action/sqlite: authority missing
+        authority_more_boundaries_test.go:229: revoke of a grant that is not there: error = sql: no rows in result set, want action/sqlite: authority missing
+        authority_more_boundaries_test.go:240: delegation under a parent that is not there: error = sql: no rows in result set, want action/sqlite: authority missing
+
+========================================================================
+F8-AS11-refund-on-recovery-through-the-boot-doors
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome (0.21s)
+    --- FAIL: TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome/after_commit_before_return (0.08s)
+        authority_as11_test.go:131: after recovery pass 1, debits = 0, want the same 4: a confirmed start is never refunded
+        authority_as11_test.go:125: recovery pass 2: action/sqlite: authorization snapshot corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.737s
+FAIL
+
+========================================================================
+F8-M2-driver-busy-text-unclassified
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_TheDriversOwnBusyIsClassifiedBusy (0.05s)
+    authority_as08_test.go:99: the driver's own busy was not classified busy: driver said "database is locked (5) (SQLITE_BUSY)", classifier answered database is locked (5) (SQLITE_BUSY)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.563s
+FAIL
+
+========================================================================
+F8-store-accepts-a-seal-it-did-not-verify
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_InternalSigningAndDoorFailuresRollBack/activation_legacy_event_signer (0.05s)
+        authority_more_boundaries_test.go:287: error = <nil>, want action: authority evidence corrupt
+    --- FAIL: TestAuthority_InternalSigningAndDoorFailuresRollBack/activation_head_signer (0.04s)
+        authority_more_boundaries_test.go:308: error = <nil>, want action: authority evidence corrupt
+    --- FAIL: TestAuthority_SignerAndSnapshotFailureBoundaries/mutating_signer (0.05s)
+        authority_persistence_faults_test.go:234: error = <nil>, want action: authority evidence corrupt
+
+========================================================================
+F8-signer-refusal-unnamed
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_InternalSigningAndDoorFailuresRollBack/activation_root_signer (0.04s)
+        authority_more_boundaries_test.go:265: activation with no signer: error = action/sqlite: some other refusal, want action/sqlite: authority signer unavailable
+    --- FAIL: TestAuthority_InternalSigningAndDoorFailuresRollBack/config_head_signer (0.05s)
+        authority_more_boundaries_test.go:326: config sync with no signer: error = action/sqlite: some other refusal, want action/sqlite: authority signer unavailable
+    --- FAIL: TestAuthority_InternalSigningAndDoorFailuresRollBack/config_clause_signer (0.05s)
+        authority_more_boundaries_test.go:326: config sync with no signer: error = action/sqlite: some other refusal, want action/sqlite: authority signer unavailable
+    --- FAIL: TestAuthority_SignerAndSnapshotFailureBoundaries/missing_signer (0.04s)
+        authority_persistence_faults_test.go:225: error = action/sqlite: some other refusal, want action/sqlite: authority signer unavailable
+
+========================================================================
+F8-trailing-json-red-before-cure   [PRE-CURE, not a mutation]
+------------------------------------------------------------------------
+--- FAIL: TestAuthorityGrantV2_RejectsMalformedTermsAndWire (0.00s)
+    authority_contract_test.go:116: malformed wire {"grant_id":"grant_child","schema_version":2,"version":1,"profile_id":"profile_a","intent_id":"int_pay","intent_version":3,"intent_digest":"sha256:b3
+--- FAIL: TestAuthorizationSnapshotV1_ClosedWireAndSignature (0.00s)
+    authority_contract_test.go:318: malformed snapshot {"schema_version":1,"snapshot_kind":"pending","action_id":"act3_1","approval_id":"apr3_1","requester_principal_id":"principal_requester","actor_p
+
+========================================================================
+F8-trailing-json-unclassed-grant
+------------------------------------------------------------------------
+    authority_contract_test.go:116: malformed wire {"grant_id":"grant_child","schema_version":2,"version":1,"profile_id":"profile_a","intent_id":"int_pay","inte
+
+========================================================================
+F8-trailing-json-unclassed-snapshot
+------------------------------------------------------------------------
+    authority_contract_test.go:318: malformed snapshot {"schema_version":1,"snapshot_kind":"pending","action_id":"act3_1","approval_id":"apr3_1","requester_prin
+
+========================================================================
+F8-prepare-activation-check-skipped
+------------------------------------------------------------------------
+    authority_prepare_test.go:26: strict preparation over a missing activation root: error = <nil>, want action/sqlite: authorization snapshot corrupt
+
+========================================================================
+F8-grant-history-not-verified
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_StartRejectsMovedIntentBindingAndGrantEvidence/event_time (0.04s)
+        authority_integrity_failures_test.go:180: corrupt grant evidence: error = <nil>, want action: authority evidence corrupt
+    --- FAIL: TestAuthority_StartRejectsMovedIntentBindingAndGrantEvidence/event_seal (0.04s)
+        authority_integrity_failures_test.go:180: corrupt grant evidence: error = <nil>, want action: authority evidence corrupt
+    --- FAIL: TestAuthority_StartRejectsMovedIntentBindingAndGrantEvidence/head_digest (0.04s)
+        authority_integrity_failures_test.go:180: corrupt grant evidence: error = <nil>, want action: authority evidence corrupt
+    --- FAIL: TestAuthority_StartRejectsMovedIntentBindingAndGrantEvidence/head_revision (0.04s)
+        authority_integrity_failures_test.go:180: corrupt grant evidence: error = <nil>, want action: authority evidence corrupt
+
+========================================================================
+F8-grant-terms-signature-not-verified
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_StartRejectsMovedIntentBindingAndGrantEvidence/grant_seal (0.04s)
+        authority_integrity_failures_test.go:180: corrupt grant evidence: error = <nil>, want action: authority evidence corrupt
+
+========================================================================
+F8b-debit-signature-not-verified
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_EverySignedLedgerRowIsHeldByItsSignature (0.22s)
+    --- FAIL: TestAuthority_EverySignedLedgerRowIsHeldByItsSignature/the_last_debit_of_an_account (0.06s)
+        authority_signed_rows_test.go:63: the next start: error = <nil>, want action/sqlite: budget evidence corrupt
+        authority_signed_rows_test.go:63: budget debits after the refusal = 8, want the 4 there were
+        authority_signed_rows_test.go:63: durable starts after the refusal = 2, want the 1 there were
+
+========================================================================
+F8b-counter-head-signature-not-verified
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_EverySignedLedgerRowIsHeldByItsSignature (0.21s)
+    --- FAIL: TestAuthority_EverySignedLedgerRowIsHeldByItsSignature/the_signed_counter_head_of_an_account (0.05s)
+        authority_signed_rows_test.go:72: the next start: error = <nil>, want action/sqlite: budget evidence corrupt
+        authority_signed_rows_test.go:72: budget debits after the refusal = 8, want the 4 there were
+        authority_signed_rows_test.go:72: durable starts after the refusal = 2, want the 1 there were
+
+========================================================================
+F8b-start-proof-signature-not-verified
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_EverySignedLedgerRowIsHeldByItsSignature (0.21s)
+    --- FAIL: TestAuthority_EverySignedLedgerRowIsHeldByItsSignature/a_start_proof (0.05s)
+        authority_signed_rows_test.go:83: the strict boot's verification: error = <nil>, want action/sqlite: authorization snapshot corrupt
+
+========================================================================
+F8b-birth-event-signature-not-verified
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_EverySignedLedgerRowIsHeldByItsSignature (0.22s)
+    --- FAIL: TestAuthority_EverySignedLedgerRowIsHeldByItsSignature/an_approval-birth_event (0.06s)
+        authority_signed_rows_test.go:98: the strict boot's verification: error = <nil>, want action/sqlite: authorization snapshot corrupt
+        authority_signed_rows_test.go:100: the next start: error = <nil>, want action/sqlite: authorization snapshot corrupt
+        authority_signed_rows_test.go:100: budget debits after the refusal = 4, want the 0 there were
+        authority_signed_rows_test.go:100: durable starts after the refusal = 1, want the 0 there were
+
+========================================================================
+F9-empty-digest-red-before-cure   [PRE-CURE, not a mutation]
+------------------------------------------------------------------------
+--- FAIL: TestAuthorizationSnapshotV1_EmptyEvidenceDigestIsMalformed (0.00s)
+    authorization_snapshot_digest_test.go:36: error = <nil>, want action: authorization snapshot malformed
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.437s
+FAIL
+
+========================================================================
+F9-empty-digest-refusal-neutralized
+------------------------------------------------------------------------
+    authorization_snapshot_digest_test.go:36: error = <nil>, want action: authorization snapshot malformed
+    authorization_snapshot_digest_test.go:39: a refused parse returned content: action.AuthorizationSnapshotV1{Kind:"pending", ActionID:"act3_1", ApprovalID:"apr3_1", ConversationID:"", RequesterPrincipalID:"principal_requester", ActorPrincipalID:"principal_agent", IdentityEvidenceDigest:"", IntentID:"int_a", IntentVersion:1, IntentDigest:"sha256:intent", IntentPurpose:"Send an approved update", PrincipalChain:[]string{"principal_operator", "principal_agent"}, BudgetKind:"finite", BudgetRemaining:(*int64)(0x6c4a7244a70), RecordedAt:time.Date(2026, time.September, 21, 12, 0, 0, 0, time.UTC)}
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.425s
+FAIL
+
+========================================================================
+F9-legacy-claim-fence-neutralized
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_LegacyClaimRefusesAStrictBornApproval (0.05s)
+    authority_legacy_claim_fence_test.go:35: legacy claim over a strict-born approval: error = <nil>, want action/sqlite: a strict-born approval starts only through the authority door
+    authority_legacy_claim_fence_test.go:38: the refused claim handed out parameters: "{}"
+    authority_legacy_claim_fence_test.go:50: parked parameters after the refused claim = "", action/sqlite: approval "apr3_b1f90bdc219c912c7fcbaf6831d85e39" params purged: action/sqlite: approval parameters column empty: action/sqlite: action not found; want them intact
+    authority_legacy_claim_fence_test.go:55: the strict door could not start the approval afterwards: action/sqlite: approval parameters column empty: action/sqlite: action not found
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.550s
+FAIL
+
+========================================================================
+F9-builder-red-before-cure   [PRE-CURE, not a mutation]
+------------------------------------------------------------------------
+--- FAIL: TestBuildApprovalExecutor_HonoursTheStrictConfigItIsGiven (0.00s)
+    authority_approval_executor_test.go:67: resume under a strict config over a legacy-only store: error = executor: resume approved at claim: probe: the legacy claim was asked, want stage "claim" naming action: authority evidence corrupt
+    authority_approval_executor_test.go:71: legacy claims asked = 1, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.604s
+FAIL
+
+========================================================================
+F9-builder-ignores-the-config
+------------------------------------------------------------------------
+--- FAIL: TestBuildApprovalExecutor_HonoursTheStrictConfigItIsGiven (0.00s)
+    authority_approval_executor_test.go:67: resume under a strict config over a legacy-only store: error = executor: resume approved at claim: probe: the legacy claim was asked, want stage "claim" naming action: authority evidence corrupt
+    authority_approval_executor_test.go:71: legacy claims asked = 1, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.604s
+FAIL
+
+========================================================================
+F9-operator-disabled-later-red-before-cure   [PRE-CURE, not a mutation]
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_TheActivatingOperatorIsJudgedAtTheActivation (0.23s)
+    --- FAIL: TestAuthority_TheActivatingOperatorIsJudgedAtTheActivation/disabled_after_the_activation:_the_ledger_still_stands (0.18s)
+        authority_activation_operator_test.go:45: the strict boot's verification after a LATER disable: error = action/sqlite: authorization snapshot corrupt, want none
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.714s
+FAIL
+
+========================================================================
+F9-operator-must-be-enabled-now
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_TheActivatingOperatorIsJudgedAtTheActivation (0.10s)
+    --- FAIL: TestAuthority_TheActivatingOperatorIsJudgedAtTheActivation/disabled_after_the_activation:_the_ledger_still_stands (0.06s)
+        authority_activation_operator_test.go:47: the strict boot's verification after a LATER disable: error = action/sqlite: authorization snapshot corrupt, want none
+        authority_activation_operator_test.go:55: the next start of a brain that human answers for: error = action/sqlite: authorization snapshot corrupt, want identity: principal disabled
+
+========================================================================
+F9-operator-disable-ignored
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_TheActivatingOperatorIsJudgedAtTheActivation (0.10s)
+    --- FAIL: TestAuthority_TheActivatingOperatorIsJudgedAtTheActivation/disabled_at_or_before_the_activation:_the_ledger's_actor_could_not_have_acted (0.04s)
+        authority_activation_operator_test.go:67: the strict boot's verification: error = <nil>, want action/sqlite: authorization snapshot corrupt
+
+========================================================================
+F1-two-binaries-verbatim   [VERBATIM REPRODUCTION of the report, not a mutation]
+------------------------------------------------------------------------
+Two compiled binaries in separate OS processes: korvun-old built from f5762b8,
+korvun-new from the cured tree. Steps and numbering are the report's.
+
+## 1-3. the BASE's CLI (f5762b8) touches the profile
+intent int_4f45da1522f23fc34a12d6cdce556be9 created (DRAFT)
+exit=0
+principal row: principal_local_operator_role|external_system
+schema: 14
+## 4. the head's migrating door lifts the schema
+migrating open ok
+schema: 15
+principal row: principal_local_operator_role|external_system
+## 5. the CURED CLI: intent create
+intent int_033640d69885bb2663fe2a6aa20efc0d created (DRAFT)
+exit=0
+## 6a. the CURED CLI: approvals reject over an absent row
+korvun approvals reject: action/sqlite: approval "apr_00000000000000000000000000000000": action/sqlite: approval row absent: action/sqlite: action not found
+exit=1
+## 6b. the CURED CLI: authority activate
+authority activated for profile_local
+activation_digest: sha256:<digest>
+exit=0
+## afterwards: both principals, each as it was signed
+principal_local_operator_role|external_system
+principal_local_operator|human
+
+========================================================================
+TOTAL: 38 mutation captures, 6 pre-cure captures, 1 verbatim reproduction in separate OS processes.

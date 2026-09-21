@@ -50,7 +50,7 @@ func TestAuthority_URLMatcherRefusesNonCanonicalEncoding(t *testing.T) {
 	matchers := ResourceMatchers{"url": URLResourceIncludes}
 
 	t.Run("the analyzer refuses to derive a use from a non-canonical encoding", func(t *testing.T) {
-		_, err := registry.Analyze("http_fetch", `{"url":"`+nonCanonical+`"}`)
+		_, err := registry.Analyze("http_fetch", nonCanonical)
 		if !errors.Is(err, ErrAuthorityUseUnresolved) {
 			t.Errorf("error = %v, want %v", err, ErrAuthorityUseUnresolved)
 		}
@@ -73,7 +73,7 @@ func TestAuthority_URLMatcherRefusesNonCanonicalEncoding(t *testing.T) {
 	})
 
 	t.Run("the canonical form of the same URL is inside the grant", func(t *testing.T) {
-		use, err := registry.Analyze("http_fetch", `{"url":"`+canonical+`"}`)
+		use, err := registry.Analyze("http_fetch", canonical)
 		if err != nil {
 			t.Fatalf("the canonical URL was refused: %v", err)
 		}
@@ -105,4 +105,57 @@ func TestAuthority_URLMatcherRefusesNonCanonicalEncoding(t *testing.T) {
 			t.Errorf("error = %v, want %v", err, ErrResourceOutOfScope)
 		}
 	})
+}
+
+// TestAuthority_URLMatcherJudgesWhatTravels pins the two rules that became
+// REACHABLE the moment the analyzers started speaking the real tools' grammar
+// (the adversary's pass over piece 3 phase 3, F2, its bypass classes ii and
+// iii). Both are about the same thing: the matcher must judge the URL that
+// actually travels, not a tidier relative of it.
+//
+//   - A path that is not already clean is REFUSED, not cleaned. http_fetch and
+//     webhook_call send the URL as it was written; a cleaned copy would be
+//     judged while another path travelled. The rows use harmless forms — a
+//     doubled slash, a single-dot segment — because the rule is about the form,
+//     and the hostile corpus stays FILED by name. A trailing slash is the one
+//     difference allowed.
+//   - A resource scoped BY its query includes only that query; a resource with
+//     no query says nothing about it.
+//
+// Evidence level: unit, in-process; no store, no network.
+// Probing mutations executed, each alone: (1) clean the path instead of
+// refusing it — red on both unclean rows with «error = <nil>»; (2) drop the
+// query comparison — red with «a resource scoped to one query included
+// another».
+func TestAuthority_URLMatcherJudgesWhatTravels(t *testing.T) {
+	registry := NewOperationUseRegistry()
+	if err := RegisterBuiltInOperationUse(registry); err != nil {
+		t.Fatal(err)
+	}
+	for _, unclean := range []string{"https://a.example/safe//report", "https://a.example/safe/./report"} {
+		if _, err := registry.Analyze("http_fetch", unclean); !errors.Is(err, ErrAuthorityUseUnresolved) {
+			t.Errorf("%s: error = %v, want %v", unclean, err, ErrAuthorityUseUnresolved)
+		}
+		if URLResourceIncludes("https://a.example/safe", unclean) {
+			t.Errorf("%s was judged included: a path nobody cleaned is what travels", unclean)
+		}
+	}
+	use, err := registry.Analyze("http_fetch", "https://a.example/safe/")
+	if err != nil || len(use.Resources) != 1 || use.Resources[0].ID != "https://a.example/safe" {
+		t.Errorf("a trailing slash: use = %#v, %v; want it resolved to the same resource", use, err)
+	}
+
+	const scoped = "https://api.example/orders?tenant=1"
+	if URLResourceIncludes(scoped, "https://api.example/orders?tenant=2") {
+		t.Error("a resource scoped to one query included another")
+	}
+	if URLResourceIncludes(scoped, "https://api.example/orders") {
+		t.Error("a resource scoped to one query included the same path with no query")
+	}
+	if !URLResourceIncludes(scoped, "https://api.example/orders?tenant=1") {
+		t.Error("a resource scoped to one query refused that very query")
+	}
+	if !URLResourceIncludes("https://api.example/orders", "https://api.example/orders?tenant=2") {
+		t.Error("a resource with no query refused a query: it says nothing about queries")
+	}
 }

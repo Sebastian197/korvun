@@ -5,6 +5,7 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -96,10 +97,25 @@ func TestAuthority_StrictPendingDoesNotSpendAndApprovedResumeReusesAction(t *tes
 	if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM budget_debits WHERE action_id=?`, parked.ActionID); n != 4 {
 		t.Fatalf("debits = %d, want total and operation for intent and grant", n)
 	}
-	if _, err := f.store.StartApprovedAuthorization(context.Background(), approval.ApprovalID,
+	// A repeated start is named as what it IS. The first life purged the parked
+	// parameters, so a belt that looked at them first answered «approval
+	// parameters column empty … action not found» about an action that exists
+	// and has started (the adversary's pass over this phase, F7c): the spec's
+	// precedence puts the repeated action first.
+	// Probing mutation executed: neutralize the repeated-start check, so the
+	// parameter belts answer first again — red with «approval parameters column
+	// empty: … action not found, want … action already started».
+	_, err = f.store.StartApprovedAuthorization(context.Background(), approval.ApprovalID,
 		PolicyPin{Version: 1, Digest: "sha256:authority-law"}, approval.ActionDigest,
-		f.now.Add(3*time.Second)); err == nil {
-		t.Fatal("second approved start succeeded")
+		f.now.Add(3*time.Second))
+	if !errors.Is(err, ErrActionAlreadyStarted) {
+		t.Errorf("second approved start: error = %v, want %v", err, ErrActionAlreadyStarted)
+	}
+	if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM budget_debits WHERE action_id=?`, parked.ActionID); n != 4 {
+		t.Errorf("debits after the refused repeat = %d, want the first life's 4", n)
+	}
+	if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM authorization_starts WHERE action_id=?`, parked.ActionID); n != 1 {
+		t.Errorf("starts after the refused repeat = %d, want 1", n)
 	}
 	if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM authorization_snapshots WHERE action_id=? AND snapshot_kind='pending'`, parked.ActionID); n != 1 {
 		t.Fatalf("pending snapshots = %d", n)

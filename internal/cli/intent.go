@@ -138,9 +138,18 @@ func openOperatorStoreSealed(configPath string) (*actionsqlite.Store, error) {
 	return store, nil
 }
 
+// localCLIResponsible is the HUMAN the local operator's acts answer to, and the
+// one the administrative authority doors name. It is deliberately NOT the id
+// the phase-1 CLI registered its operator role under
+// ("principal_local_operator_role", an external system): a principal's kind is
+// identity, its stored row sits under a signed lifecycle event, and
+// RegisterIdentity refuses a kind that moved. Re-using that id with a new kind
+// locked this CLI out of every profile the earlier one had touched (the
+// adversary's pass over piece 3 phase 3, F1). The earlier row is history and
+// stays exactly as it was signed; the human is a principal of its own.
 const (
 	localCLIRequester   = "principal_local_profile"
-	localCLIResponsible = "principal_local_operator_role"
+	localCLIResponsible = "principal_local_operator"
 )
 
 func localCLIRegistry() identityv2.Registry {
@@ -151,7 +160,7 @@ func localCLIRegistry() identityv2.Registry {
 			{ID: action.OperatorPrincipal().PrincipalID, Kind: identityv2.PrincipalWorkload,
 				DisplayName: "Local CLI operator workload"},
 			{ID: localCLIResponsible, Kind: identityv2.PrincipalHuman,
-				DisplayName: "Local operator role"},
+				DisplayName: "Local operator"},
 		},
 		Bindings: []identityv2.Binding{{
 			ID: "binding_cli", Provider: "cli", Channel: "cli",

@@ -146,7 +146,7 @@ func ParseAuthorizationSnapshotV1(raw []byte) (AuthorizationSnapshotV1, error) {
 		return AuthorizationSnapshotV1{}, ErrAuthorizationSnapshotMalformed
 	}
 	if err := ensureJSONEOF(dec); err != nil {
-		return AuthorizationSnapshotV1{}, err
+		return AuthorizationSnapshotV1{}, fmt.Errorf("%w: %w", ErrAuthorizationSnapshotMalformed, err)
 	}
 	recordedAt, err := time.Parse(time.RFC3339Nano, wire.RecordedAt)
 	if err != nil {
@@ -161,8 +161,13 @@ func ParseAuthorizationSnapshotV1(raw []byte) (AuthorizationSnapshotV1, error) {
 		IntentPurpose: wire.IntentPurpose, PrincipalChain: wire.PrincipalChain,
 		BudgetKind: wire.BudgetKind, BudgetRemaining: wire.BudgetRemaining, RecordedAt: recordedAt.UTC(),
 	}
-	if err := snapshot.Validate(); err != nil || snapshot.IdentityEvidenceDigest == "" {
+	if err := snapshot.Validate(); err != nil {
 		return AuthorizationSnapshotV1{}, err
+	}
+	// Its own refusal, with its own error: folded into the line above it
+	// returned the zero snapshot under a NIL error.
+	if snapshot.IdentityEvidenceDigest == "" {
+		return AuthorizationSnapshotV1{}, fmt.Errorf("%w: identity evidence digest is empty", ErrAuthorizationSnapshotMalformed)
 	}
 	if !bytes.Equal(raw, snapshot.CanonicalBytes()) {
 		return AuthorizationSnapshotV1{}, fmt.Errorf("%w: non-canonical bytes", ErrAuthorizationSnapshotMalformed)

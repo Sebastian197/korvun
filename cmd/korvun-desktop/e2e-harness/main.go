@@ -787,14 +787,18 @@ func (tc testControl) park(w http.ResponseWriter, r *http.Request) {
 		Purpose    string `json:"purpose"`
 		Channel    string `json:"channel"`
 		TTLSeconds int    `json:"ttl_seconds"`
-		Authority  *struct {
-			RequesterPrincipalID string   `json:"requester_principal_id"`
-			IntentID             string   `json:"intent_id"`
-			IntentPurpose        string   `json:"intent_purpose"`
-			PrincipalChain       []string `json:"principal_chain"`
-			Budget               struct {
-				Kind      string `json:"kind"`
-				Remaining *int64 `json:"remaining"`
+		// Authority parks the STRICT scenario. It carries only what an operator
+		// configures — the intent's id, purpose and budget — and how many
+		// ordinary starts to spend AFTER the park. Who requested, who acts and
+		// through which chain are the store's to establish, not the test's to
+		// dictate.
+		Authority *struct {
+			IntentID       string `json:"intent_id"`
+			IntentPurpose  string `json:"intent_purpose"`
+			SpendAfterPark int    `json:"spend_after_park"`
+			Budget         struct {
+				Kind  string `json:"kind"`
+				Total *int64 `json:"total"`
 			} `json:"budget"`
 		} `json:"authority"`
 	}
@@ -810,6 +814,12 @@ func (tc testControl) park(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Params == "" {
 		body.Params = `{"url":"https://hooks.acme.io/pedidos","body":"1"}`
+		if body.Authority != nil {
+			// The strict scenario goes through the production door, whose
+			// analyzer speaks the REAL webhook_call grammar: the URL, one
+			// space, then the JSON body.
+			body.Params = `https://hooks.acme.io/pedidos {"pedido":1}`
+		}
 	}
 	if body.Channel == "" {
 		body.Channel = "telegram"
@@ -853,105 +863,21 @@ func (tc testControl) park(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Authority != nil {
-		privateKey, err := app.EnsureSigningKey(r.Context(), store, filepath.Dir(app.StoragePath(cfg)))
+		parked, err := tc.parkStrict(r.Context(), cfg, store, pin, body.Operation, body.Params, body.Channel, ttl,
+			body.Authority.IntentID, body.Authority.IntentPurpose, body.Authority.Budget.Kind,
+			body.Authority.Budget.Total, body.Authority.SpendAfterPark)
 		if err != nil {
-			http.Error(w, "load profile key: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		store.SetIdentitySigners(
-			func(e identity.Evidence) identity.SignedEvidence { return identity.SignEvidence(privateKey, e) },
-			func(e identity.PrincipalEvent) identity.SignedPrincipalEvent {
-				return identity.SignPrincipalEvent(privateKey, e)
-			},
-		)
-		store.SetIntentV2Signer(
-			func(c action.IntentContractV2) action.SignedIntentContractV2 {
-				return action.SignIntentContractV2(privateKey, c)
-			},
-			func(e action.IntentEventV1) action.SignedIntentEventV1 {
-				return action.SignIntentEventV1(privateKey, e)
-			},
-		)
-		store.SetAuthoritySigner(func(domain string, canonical []byte) action.AuthoritySignature {
-			return action.SignAuthorityBytes(privateKey, domain, canonical)
-		})
-		if body.Authority.RequesterPrincipalID != "principal_channel_telegram" {
-			http.Error(w, "authority requester does not match authenticated harness ingress", http.StatusBadRequest)
-			return
-		}
-		budget := action.IntentBudgetV2{}
-		switch body.Authority.Budget.Kind {
-		case string(action.AuthorizationBudgetFinite):
-			if body.Authority.Budget.Remaining == nil {
-				http.Error(w, "finite authority budget needs remaining", http.StatusBadRequest)
-				return
-			}
-			budget.Total = body.Authority.Budget.Remaining
-		case string(action.AuthorizationBudgetUnlimited):
-		default:
-			http.Error(w, "unknown authority budget", http.StatusBadRequest)
-			return
-		}
-		contract := action.IntentContractV2{
-			IntentID: body.Authority.IntentID, SchemaVersion: 2, Version: 1,
-			ProfileID: "profile_harness", OwnerPrincipalID: env.Principal.PrincipalID,
-			Purpose:       body.Authority.IntentPurpose,
-			Operations:    []action.OperationRef{{Namespace: "tool", Name: body.Operation, Version: 1}},
-			EffectClasses: []action.EffectClass{action.EffectWriteIrreversible}, Budget: budget,
-			ValidFrom: time.Now().UTC().Add(-time.Minute), ExpiresAt: time.Now().UTC().Add(time.Hour),
-			MaxDelegationDepth: 4,
-		}
-		if err := store.CreateIntentV2(r.Context(), contract, contract.OwnerPrincipalID, time.Now().UTC()); err != nil {
-			http.Error(w, "create harness intent: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := store.ActivateIntentV2(r.Context(), contract.IntentID, contract.Version, contract.OwnerPrincipalID, time.Now().UTC()); err != nil {
-			http.Error(w, "activate harness intent: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		env = bound.Envelope()
-		env.IntentID = contract.IntentID
-		env.Principal.ResponsibleHumanID = "principal_console_admin"
-		bound, err = action.NewBoundApprovalRequestWithID(env, body.Params, action.ApprovalContext{
-			IntentPurpose: contract.Purpose,
-			GrantID:       "grant_harness", GrantDepth: 1, CostLine: "maximum",
-			ToolCage:      body.Operation,
-			Descriptor:    action.EffectDescriptor{Class: action.EffectWriteIrreversible, DataEgress: true},
-			HasDescriptor: true, LawVersion: pin.Version, LawDigest: pin.Digest,
-			Rule: "require_approval", Now: time.Now().UTC(), TTL: ttl,
-		}, action.NewStrictApprovalID())
-		if err != nil {
-			http.Error(w, "bind authorized approval: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		approval := bound.Approval()
-		at := time.Now().UTC()
-		evidence := identity.Evidence{
-			EvidenceID: "evd_harness_" + body.ID, ActionID: env.ActionID,
-			RequestID: env.CorrelationID, RequesterPrincipalID: body.Authority.RequesterPrincipalID,
-			ActorPrincipalID:       env.Principal.PrincipalID,
-			ResponsiblePrincipalID: env.Principal.ResponsibleHumanID,
-			BindingID:              "binding_telegram", BindingGeneration: 1,
-			AdapterInstanceID: "adapter_harness", Provider: "telegram", Method: "polling",
-			CredentialClass: "bot_token_session", Issuer: "telegram",
-			SubjectNamespace: "telegram_subject", VerifiedSubject: "shared_telegram_credential",
-			SubjectClaim: "harness-subject", ObservedAt: at, ExpiresAt: at.Add(5 * time.Minute),
-			ClaimsDigest: action.HashCanonical("harness-authority-claims"),
-		}
-		snapshot := action.AuthorizationSnapshotV1{
-			Kind: action.AuthorizationSnapshotPending, ActionID: env.ActionID,
-			ApprovalID: approval.ApprovalID, RequesterPrincipalID: evidence.RequesterPrincipalID,
-			ActorPrincipalID: evidence.ActorPrincipalID, IntentID: contract.IntentID,
-			IntentVersion: contract.Version, IntentDigest: contract.Digest(),
-			IntentPurpose:   contract.Purpose,
-			PrincipalChain:  append([]string(nil), body.Authority.PrincipalChain...),
-			BudgetKind:      action.AuthorizationBudgetKind(body.Authority.Budget.Kind),
-			BudgetRemaining: body.Authority.Budget.Remaining, RecordedAt: at,
-		}
-		if err := store.CreateAuthorizedApprovalRequest(r.Context(), bound, evidence, snapshot); err != nil {
 			http.Error(w, "park authorized: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"approval_id": parked.ApprovalID,
+			"action_id":   parked.ActionID,
+			"digest": action.Digest(action.Operation{Namespace: "tool", Name: body.Operation, Version: 1},
+				body.Params),
+		})
+		return
 	} else if err := store.CreateApprovalRequest(r.Context(), bound); err != nil {
 		http.Error(w, "park: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -962,6 +888,202 @@ func (tc testControl) park(w http.ResponseWriter, r *http.Request) {
 		"action_id":   body.ID,
 		"digest":      bound.Approval().ActionDigest,
 	})
+}
+
+// parkStrict parks the strict scenario through ParkAuthorization — the door
+// production parks through — over an authority built only through the store's
+// exported doors: an active intent owned by one brain, a root grant that brain
+// issues to itself, a delegation to the parking brain, and the execution binding
+// that makes that leaf applicable. Identity evidence comes from the same
+// resolver and issuers the boot derives from the config. NOTHING the screen
+// shows about the authority is a string this function wrote into a snapshot:
+// the store computes the requester, the actor, the chain and the remainder, and
+// signs them.
+//
+// An earlier shape parked through a store door production never called and
+// handed it a snapshot assembled from the request body, so the browser read back
+// what the test had posted (the adversary's pass over piece 3 phase 3, F4). That
+// door no longer exists.
+//
+// spendAfterPark ordinary strict starts are then committed against the same
+// intent and the same grants, so the LIVE remainder differs from the parked one
+// and a screen showing live data as if it were the snapshot is caught.
+func (tc testControl) parkStrict(ctx context.Context, cfg *config.Config, store *actionsqlite.Store,
+	pin actionsqlite.PolicyPin, operationName, params, channel string, ttl time.Duration,
+	intentID, purpose, budgetKind string, total *int64, spendAfterPark int) (actionsqlite.AuthorityPendingResult, error) {
+	var none actionsqlite.AuthorityPendingResult
+	privateKey, err := app.EnsureSigningKey(ctx, store, filepath.Dir(app.StoragePath(cfg)))
+	if err != nil {
+		return none, fmt.Errorf("load profile key: %w", err)
+	}
+	store.SetIdentitySigners(
+		func(e identity.Evidence) identity.SignedEvidence { return identity.SignEvidence(privateKey, e) },
+		func(e identity.PrincipalEvent) identity.SignedPrincipalEvent {
+			return identity.SignPrincipalEvent(privateKey, e)
+		},
+	)
+	store.SetIntentV2Signer(
+		func(c action.IntentContractV2) action.SignedIntentContractV2 {
+			return action.SignIntentContractV2(privateKey, c)
+		},
+		func(e action.IntentEventV1) action.SignedIntentEventV1 {
+			return action.SignIntentEventV1(privateKey, e)
+		},
+	)
+	store.SetAuthoritySigner(func(domain string, canonical []byte) action.AuthoritySignature {
+		return action.SignAuthorityBytes(privateKey, domain, canonical)
+	})
+	resolver, issuers, err := app.IdentityRuntime(cfg)
+	if err != nil {
+		return none, fmt.Errorf("identity runtime: %w", err)
+	}
+	issuer := issuers[channel]
+	if issuer == nil {
+		return none, fmt.Errorf("no authenticated ingress for channel %q", channel)
+	}
+	budget := action.IntentBudgetV2{}
+	switch budgetKind {
+	case string(action.AuthorizationBudgetFinite):
+		if total == nil {
+			return none, errors.New("a finite authority budget needs its total")
+		}
+		budget.Total = total
+	case string(action.AuthorizationBudgetUnlimited):
+	default:
+		return none, fmt.Errorf("unknown authority budget %q", budgetKind)
+	}
+
+	const ownerBrain = "asistente"
+	owner, actor := "principal_brain_"+ownerBrain, "principal_brain_"+parkingBrain
+	operation := action.Operation{Namespace: "tool", Name: operationName, Version: 1}
+	operations := []action.OperationRef{{Namespace: "tool", Name: operationName, Version: 1}}
+	effects := []action.EffectClass{action.EffectWriteIrreversible}
+	now := time.Now().UTC()
+	sequence := 0
+	// evidenceFor mints one ingress and returns the resolver bound to it, the
+	// way an adapter authenticates one request for one brain.
+	evidenceFor := func(brain string) (string, func(string) (identity.Evidence, error), error) {
+		sequence++
+		requestID := fmt.Sprintf("harness-%s-%d-%d", intentID, now.UnixNano(), sequence)
+		ingress, err := issuer.Issue(requestID, "harness-subject")
+		if err != nil {
+			return "", nil, err
+		}
+		return requestID, func(actionID string) (identity.Evidence, error) {
+			return resolver.Resolve(ingress, identity.ResolveRequest{
+				ActionID: actionID, RequestID: requestID, Channel: channel, Brain: brain,
+			})
+		}, nil
+	}
+	// actorAct records the owner brain's own authenticated act for one
+	// authority verb: the one-shot act every authority mutation answers to.
+	actorAct := func(verb string, canonical []byte) (string, error) {
+		requestID, resolve, err := evidenceFor(ownerBrain)
+		if err != nil {
+			return "", err
+		}
+		actID := fmt.Sprintf("act_harness_%s_%d", verb, now.UnixNano())
+		evidence, err := resolve(actID)
+		if err != nil {
+			return "", err
+		}
+		env := action.NewEnvelope(actID, requestID,
+			action.Source{Kind: "agent_brain", Protocol: "text", Channel: channel},
+			action.Operation{Namespace: "authority", Name: verb, Version: 1}, string(canonical), now)
+		env.Effect = action.Effect{Class: string(action.EffectWriteReversible)}
+		env.Principal = action.PrincipalRef{PrincipalID: evidence.ActorPrincipalID,
+			ResponsibleHumanID: evidence.ResponsiblePrincipalID, EvidenceID: evidence.EvidenceID}
+		return actID, store.RecordAttemptAuthenticated(ctx, env,
+			actionsqlite.Decision{Outcome: "allow", Rule: "administrative"}, action.StateAuthorized, evidence)
+	}
+
+	// The scope an operator would write for this webhook: the receiver's
+	// origin as the resource and the destination, and the payload as the data
+	// that may leave. Authority is closed-world for an operation that has an
+	// analyzer: what is not listed is out of scope.
+	resources := []action.ResourceRef{{Kind: "url", ID: "https://hooks.acme.io"}}
+	data, destinations := []string{"payload"}, []string{"hooks.acme.io"}
+	contract := action.IntentContractV2{
+		IntentID: intentID, SchemaVersion: 2, Version: 1, ProfileID: "profile_harness",
+		OwnerPrincipalID: owner, Purpose: purpose, Operations: operations, EffectClasses: effects,
+		AllowedResources: resources, DataScope: data, OutputDestinations: destinations,
+		Budget: budget, ValidFrom: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour),
+		MaxDelegationDepth: 4,
+	}
+	if err := store.CreateIntentV2(ctx, contract, owner, now); err != nil {
+		return none, fmt.Errorf("create intent: %w", err)
+	}
+	if err := store.ActivateIntentV2(ctx, contract.IntentID, contract.Version, owner, now); err != nil {
+		return none, fmt.Errorf("activate intent: %w", err)
+	}
+	root := action.AuthorityGrantV2{
+		GrantID: "grant_harness_root_" + intentID, SchemaVersion: 2, Version: 1, ProfileID: contract.ProfileID,
+		IntentID: contract.IntentID, IntentVersion: contract.Version, IntentDigest: contract.Digest(),
+		IssuerPrincipalID: owner, SubjectPrincipalID: owner, Operations: operations,
+		AllowedResources: resources, AllowedData: data, OutputDestinations: destinations,
+		Channels: []string{channel}, EffectClasses: effects, EffectCeiling: action.EffectWriteIrreversible,
+		Budget: budget, ValidFrom: contract.ValidFrom, ExpiresAt: contract.ExpiresAt,
+		DelegationDepthRemaining: 1, Status: action.LifecycleActive,
+	}
+	act, err := actorAct("issue", root.CanonicalBytes())
+	if err != nil {
+		return none, fmt.Errorf("the owner's issue act: %w", err)
+	}
+	if err := store.IssueAuthority(ctx, root, act, now); err != nil {
+		return none, fmt.Errorf("issue the root grant: %w", err)
+	}
+	leaf := root
+	leaf.GrantID = "grant_harness_leaf_" + intentID
+	leaf.SubjectPrincipalID = actor
+	leaf.ParentGrantID, leaf.ParentGrantVersion = root.GrantID, root.Version
+	leaf.DelegationDepthRemaining = 0
+	if act, err = actorAct("delegate", leaf.CanonicalBytes()); err != nil {
+		return none, fmt.Errorf("the owner's delegate act: %w", err)
+	}
+	if err := store.DelegateAuthority(ctx, leaf, act, now); err != nil {
+		return none, fmt.Errorf("delegate to the parking brain: %w", err)
+	}
+	if err := store.PutExecutionBinding(ctx, action.ExecutionBinding{
+		BindingID: "binding_harness_" + intentID, ActorPrincipalID: actor, Channel: channel,
+		IntentID: contract.IntentID, IntentVersion: contract.Version, IntentDigest: contract.Digest(),
+		GrantID: leaf.GrantID, GrantVersion: leaf.Version, GrantDigest: leaf.Digest(),
+		Revision: 1, Status: action.BindingActive,
+	}); err != nil {
+		return none, fmt.Errorf("bind the leaf: %w", err)
+	}
+
+	requestID, resolve, err := evidenceFor(parkingBrain)
+	if err != nil {
+		return none, err
+	}
+	parked, err := store.ParkAuthorization(ctx, actionsqlite.AuthorityPendingRequest{
+		ActorPrincipalID: actor, CorrelationID: requestID, SourceProtocol: "text", Channel: channel,
+		Operation: operation, Arguments: params, EffectClass: action.EffectWriteIrreversible, At: now,
+		ApprovalContext: action.ApprovalContext{
+			GrantID: leaf.GrantID, GrantDepth: 2, CostLine: "maximum", ToolCage: operationName,
+			Descriptor:    action.EffectDescriptor{Class: action.EffectWriteIrreversible, DataEgress: true},
+			HasDescriptor: true, LawVersion: pin.Version, LawDigest: pin.Digest,
+			Rule: "require_approval", TTL: ttl,
+		},
+		ResolveEvidence: resolve,
+	})
+	if err != nil {
+		return none, fmt.Errorf("park through the production door: %w", err)
+	}
+	for i := 0; i < spendAfterPark; i++ {
+		requestID, resolve, err := evidenceFor(parkingBrain)
+		if err != nil {
+			return none, err
+		}
+		if _, err := store.StartAuthorization(ctx, actionsqlite.AuthorityStartRequest{
+			ActorPrincipalID: actor, Channel: channel, Operation: operation, Arguments: params,
+			EffectClass: action.EffectWriteIrreversible, At: time.Now().UTC(),
+			CorrelationID: requestID, ResolveEvidence: resolve,
+		}); err != nil {
+			return none, fmt.Errorf("live start %d after the park: %w", i+1, err)
+		}
+	}
+	return parked, nil
 }
 
 func firstNonEmpty(a, b string) string {
