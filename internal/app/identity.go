@@ -12,9 +12,11 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
+	"github.com/Sebastian197/korvun/internal/action/executor"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/envelope"
@@ -168,6 +170,9 @@ func wireIdentitySigners(store *actionsqlite.Store, privateKey ed25519.PrivateKe
 			return identity.SignPrincipalEvent(privateKey, e)
 		},
 	)
+	store.SetAuthoritySigner(func(domain string, canonical []byte) action.AuthoritySignature {
+		return action.SignAuthorityBytes(privateKey, domain, canonical)
+	})
 }
 
 // authenticatedFixtureChannel gives a channel supplied through
@@ -327,6 +332,84 @@ func derivedConfigGrant(bc config.BrainConfig) (action.AuthorityGrant, bool) {
 	return action.DeriveConfigGrant(bc.Name, operations, resources), true
 }
 
+// deriveConfigAuthorityClauses preserves each governance row's exact
+// tool-channel relation. It never builds the v1 global-channel union.
+func deriveConfigAuthorityClauses(profileID string, bc config.BrainConfig) ([]action.ConfigAuthorityClause, error) {
+	if profileID == "" || bc.Name == "" || bc.Agent == nil {
+		return nil, nil
+	}
+	cageDigest, err := policyDigestFor(bc, effectSnapshot())
+	if err != nil {
+		return nil, err
+	}
+	governed := len(bc.Agent.Governance) > 0
+	byTool := make(map[string]config.ToolGrantConfig, len(bc.Agent.Governance))
+	for _, grant := range bc.Agent.Governance {
+		if _, exists := byTool[grant.Tool]; exists {
+			return nil, fmt.Errorf("app: duplicate authority clause for tool %q", grant.Tool)
+		}
+		byTool[grant.Tool] = grant
+	}
+	clauses := make([]action.ConfigAuthorityClause, 0, len(bc.Agent.Tools))
+	for _, toolName := range bc.Agent.Tools {
+		channels := []string{"*"}
+		if governed {
+			grant, ok := byTool[toolName]
+			if !ok || grant.Mode != "allow" {
+				continue
+			}
+			if len(grant.Channels) > 0 {
+				channels = append([]string(nil), grant.Channels...)
+				sort.Strings(channels)
+			}
+		}
+		clause := action.ConfigAuthorityClause{
+			SchemaVersion: 1, ProfileID: profileID,
+			BrainPrincipal: "principal_brain_" + bc.Name,
+			ToolName:       toolName, Channels: channels, CageDigest: cageDigest,
+		}
+		clause.ClauseID = "cfg_" + strings.TrimPrefix(clause.Digest(), "sha256:")
+		if err := clause.Validate(); err != nil {
+			return nil, err
+		}
+		clauses = append(clauses, clause)
+	}
+	return clauses, nil
+}
+
+// PrepareStrictAuthority verifies the externally pinned activation root and
+// persists the current exact config clauses. Server boot and operator approval
+// resumption share this door so the CLI cannot run with stale authority.
+func PrepareStrictAuthority(ctx context.Context, cfg *config.Config,
+	store *actionsqlite.Store) error {
+	if cfg == nil || !cfg.StrictAuthority() {
+		return nil
+	}
+	if store == nil {
+		return errors.New("app: strict authority requires an action store")
+	}
+	if err := store.RequireAuthorityActivation(ctx, "", cfg.Authority.ActivationDigest); err != nil {
+		return fmt.Errorf("app: verify strict authority activation: %w", err)
+	}
+	profileID := store.ActivatedAuthorityProfile()
+	for _, configuredBrain := range cfg.Brains {
+		if configuredBrain.Agent == nil {
+			continue
+		}
+		clauses, err := deriveConfigAuthorityClauses(profileID, configuredBrain)
+		if err != nil {
+			return fmt.Errorf("app: derive strict authority for brain %q: %w",
+				configuredBrain.Name, err)
+		}
+		if _, err := store.SyncConfigAuthorityClauses(ctx, profileID,
+			"principal_brain_"+configuredBrain.Name, clauses, time.Now().UTC()); err != nil {
+			return fmt.Errorf("app: persist strict authority for brain %q: %w",
+				configuredBrain.Name, err)
+		}
+	}
+	return nil
+}
+
 // StoragePath exposes the shared storage-path resolution to the CLI
 // (Etapa 2, lote 5): ONE resolution for the conversation store, the
 // kernel store and the operator's CLI, so "the same file" stays true by
@@ -382,4 +465,25 @@ func (r actionRecorder) RecordAttemptAuthenticated(ctx context.Context, env acti
 			Outcome: outcome, Rule: rule,
 			PolicyVersion: r.pin.Version, PolicyDigest: r.pin.Digest,
 		}, state, evidence)
+}
+
+// StartAuthorization hands an effectful allow to the strict store gate. The
+// policy pin is adapter-owned, like every other durable decision.
+func (r actionRecorder) StartAuthorization(ctx context.Context, request executor.AuthorityStartRequest) (executor.AuthorityStartResult, error) {
+	started, err := r.store.StartAuthorization(ctx, actionsqlite.AuthorityStartRequest{
+		ActorPrincipalID: request.ActorPrincipalID,
+		CorrelationID:    request.CorrelationID, SourceProtocol: request.SourceProtocol,
+		Channel: request.Channel, ConversationID: request.ConversationID,
+		Operation: request.Operation, Arguments: request.Arguments,
+		EffectClass: request.EffectClass, At: request.At,
+		PolicyVersion: r.pin.Version, PolicyDigest: r.pin.Digest,
+		ResolveEvidence: request.ResolveEvidence,
+	})
+	if err != nil {
+		return executor.AuthorityStartResult{}, err
+	}
+	return executor.AuthorityStartResult{
+		ActionID: started.ActionID, IntentID: started.IntentID,
+		AuthorityRefs: append([]string(nil), started.AuthorityRefs...), Evidence: started.Evidence,
+	}, nil
 }

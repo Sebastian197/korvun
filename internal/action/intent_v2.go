@@ -411,6 +411,9 @@ type ExecutionBinding struct {
 	BindingID, ActorPrincipalID, Channel, ConversationID, IntentID string
 	IntentVersion                                                  int
 	IntentDigest                                                   string
+	GrantID                                                        string
+	GrantVersion                                                   int
+	GrantDigest                                                    string
 	Revision                                                       int
 	Status                                                         BindingStatus
 }

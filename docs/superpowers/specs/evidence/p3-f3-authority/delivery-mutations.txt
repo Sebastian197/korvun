@@ -1,0 +1,806 @@
+P3/F3 authority — probing mutations executed by the DELIVERY session
+Date: 2026-09-21
+Base: f5762b8
+
+Every entry below is one mutation applied ALONE to a copy of the delivered tree,
+the named mould run while it was present, its output captured here, and the
+production file restored from the tree before the next command. After the last
+one the copies were compared with the tree: no mutation survived in them.
+
+This file holds the CAPTURES. What each mutation was, and which guard it moved,
+is written in the godoc of the mould it reddens and in the canto. Three entries
+record something other than a red, and say so in their names: a taxonomy row
+that stayed GREEN under its first mutation (the row was re-aimed and the same
+mutation then reddened it); the delivered
+sequential AS-AUTH-05 staying GREEN under the spec's own mutation, and
+AS-AUTH-16's mould RED before its cure existed.
+
+Two taxonomy rows were re-aimed after their first mutation SURVIVED. For the
+intent-approval row only the capture against the re-aimed row is kept; for the
+unpinned-process row both are kept, the survivor under its own name.
+
+========================================================================
+APP-adapter-turns-refusal-into-start
+------------------------------------------------------------------------
+    authority_strict_doors_test.go:334: immediate start after the revocation: error=<nil> branch="executed", want action/sqlite: authority revoked and denied
+    authority_strict_doors_test.go:341: dispatches after the revocation: probe=2 launch=1, want both still 1
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.922s
+FAIL
+
+========================================================================
+APP-prepare-activation-check-skipped
+------------------------------------------------------------------------
+    authority_strict_doors_test.go:382: preparation pass 1 under the pinned digest: app: persist strict authority for brain "alpha": action: authority evidence corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.660s
+FAIL
+
+========================================================================
+AS01-one-mutation-per-dimension
+------------------------------------------------------------------------
+AS-AUTH-01 / profile
+  mutation: `{child.ProfileID != parent.ProfileID || child.ProfileID != intent.ProfileID, "profile",` -> `{false, "profile",`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "profile"
+
+AS-AUTH-01 / intent
+  mutation: `{child.IntentID != parent.IntentID || child.IntentID != intent.IntentID, "intent",` -> `{false, "intent",`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "intent"
+
+AS-AUTH-01 / intent_version
+  mutation: `{child.IntentVersion != parent.IntentVersion || child.IntentVersion != intent.Version, "intent_version",` -> `{false, "intent_version",`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "intent_version"
+
+AS-AUTH-01 / intent_digest
+  mutation: `{child.IntentDigest != parent.IntentDigest || child.IntentDigest != intent.Digest(), "intent_digest",` -> `{false, "intent_digest",`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "intent_digest"
+
+AS-AUTH-01 / parent
+  mutation: `{child.ParentGrantID != parent.GrantID || child.ParentGrantVersion != parent.Version, "parent",` -> `{false, "parent",`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "parent"
+
+AS-AUTH-01 / issuer
+  mutation: `{child.IssuerPrincipalID != parent.SubjectPrincipalID, "issuer",` -> `{false, "issuer",`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "issuer"
+
+AS-AUTH-01 / operations
+  mutation: `if !operationSubset(child.Operations, parent.Operations) || !operationSubset(child.Operations, intent.Operations) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "operations"
+
+AS-AUTH-01 / channels
+  mutation: `if !stringSubset(child.Channels, parent.Channels) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "channels"
+
+AS-AUTH-01 / allowed_resources
+  mutation: `if !resourcesIncluded(child.AllowedResources, parent.AllowedResources, matchers) || !resourcesIncluded(child.AllowedResources, intent.AllowedResources, matchers) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "allowed_resources"
+
+AS-AUTH-01 / denied_resources
+  mutation: `if !resourceSuperset(child.DeniedResources, append(slices.Clone(parent.DeniedResources), intent.DeniedResources...)) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "denied_resources"
+
+AS-AUTH-01 / allowed_data
+  mutation: `if !stringSubset(child.AllowedData, parent.AllowedData) || !stringSubset(child.AllowedData, intent.DataScope) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "allowed_data"
+
+AS-AUTH-01 / denied_data
+  mutation: `if !stringSuperset(child.DeniedData, parent.DeniedData) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "denied_data"
+
+AS-AUTH-01 / destinations
+  mutation: `if !stringSubset(child.OutputDestinations, parent.OutputDestinations) || !stringSubset(child.OutputDestinations, intent.OutputDestinations) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "destinations"
+
+AS-AUTH-01 / effect_classes
+  mutation: `if !effectSubset(child.EffectClasses, parent.EffectClasses) || !effectSubset(child.EffectClasses, intent.EffectClasses) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "effect_classes"
+
+AS-AUTH-01 / effect_ceiling
+  mutation: `if parent.EffectCeiling != "" && (child.EffectCeiling == "" || child.EffectCeiling.Rank() > parent.EffectCeiling.Rank()) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "effect_ceiling"
+
+AS-AUTH-01 / budget_total_remaining
+  mutation: `if remaining.Total != nil && (child.Budget.Total == nil || *child.Budget.Total > *remaining.Total) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "budget_total_remaining"
+
+AS-AUTH-01 / budget_operation_remaining
+  mutation: `if childMaximum > maximum {` -> `if childMaximum > maximum && false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "budget_operation_remaining"
+
+AS-AUTH-01 / valid_from
+  mutation: `if child.ValidFrom.Before(parent.ValidFrom) || child.ValidFrom.Before(intent.ValidFrom) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "valid_from"
+
+AS-AUTH-01 / expires_at
+  mutation: `if child.ExpiresAt.After(parent.ExpiresAt) || child.ExpiresAt.After(intent.ExpiresAt) {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "expires_at"
+
+AS-AUTH-01 / depth
+  mutation: `if parent.DelegationDepthRemaining <= 0 || child.DelegationDepthRemaining < 0 || child.DelegationDepthRemaining >= parent.DelegationDepthRemaining || child.DelegationDepthRemaining > intent.MaxDelegationDepth {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "depth"
+
+AS-AUTH-01 / approval
+  mutation: `if (parent.Approval.Required || intent.Approval.Required) && !child.Approval.Required {` -> `if false {`
+  exit: 1  red: True
+  authority_as01_test.go:63: error = <nil>, want attenuation dimension "approval"
+
+========================================================================
+AS02-mutations
+------------------------------------------------------------------------
+AS-AUTH-02 / subset-becomes-overlap (strings)
+  exit: 1  red: True  compiled: True
+  authority_as02_test.go:72: accepted=true independent oracle=false error=<nil>
+  authority_as02_test.go:72: accepted=true independent oracle=false error=<nil>
+  authority_as02_test.go:72: accepted=true independent oracle=false error=<nil>
+
+AS-AUTH-02 / inherited-denied-resources-omitted
+  exit: 1  red: True  compiled: True
+  authority_as02_test.go:72: accepted=true independent oracle=false error=<nil>
+  authority_as02_test.go:205: denial declared by intent or parent accepted=true oracle=false error=<nil>
+
+AS-AUTH-02 / inherited-denied-data-omitted
+  exit: 1  red: True  compiled: True
+  authority_as02_test.go:72: accepted=true independent oracle=false error=<nil>
+
+AS-AUTH-02 / intent-denied-resources-omitted-from-the-inherited-set
+  exit: 1  red: True  compiled: True
+  authority_as02_test.go:205: denial declared by intent or parent accepted=true oracle=false error=<nil>
+
+AS-AUTH-02 / absent-total-budget-means-unlimited
+  exit: 1  red: True  compiled: True
+  authority_as02_test.go:171: absent-or-finite total budget accepted=true oracle=false error=<nil>
+
+AS-AUTH-02 / absent-effect-ceiling-means-unlimited
+  exit: 1  red: True  compiled: True
+  authority_as02_test.go:183: absent-or-ranked effect ceiling accepted=true oracle=false error=<nil>
+
+========================================================================
+AS03-contract-maximum
+------------------------------------------------------------------------
+    authority_as03_test.go:28: error = <nil>, want budget remaining refusal
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.108s
+FAIL
+
+========================================================================
+AS04-inherited-limit-dropped
+------------------------------------------------------------------------
+    authority_as04_test.go:19: normalized per-operation maximum = 0, want remaining maximum 2
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.673s
+FAIL
+
+========================================================================
+AS05-codex-sequential-stays-GREEN-under-mutation
+------------------------------------------------------------------------
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.714s
+
+========================================================================
+AS05-pretransaction-parent-read
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_DelegateAndRevokeSerialize (0.06s)
+    authority_as05_test.go:127: error = <nil>, want action/sqlite: authority revoked
+    authority_as05_test.go:146: child terms = 1 rows, want 0: the refused delegation left something behind
+    authority_as05_test.go:146: child head = 1 rows, want 0: the refused delegation left something behind
+    authority_as05_test.go:146: child lifecycle events = 1 rows, want 0: the refused delegation left something behind
+    authority_as05_test.go:146: child budget account = 1 rows, want 0: the refused delegation left something behind
+    authority_as05_test.go:146: consumed delegate act = 1 rows, want 0: the refused delegation left something behind
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.582s
+FAIL
+
+========================================================================
+AS06-leaf-only
+------------------------------------------------------------------------
+    authority_as06_test.go:28: error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.868s
+FAIL
+
+========================================================================
+AS07-leaf-account-only
+------------------------------------------------------------------------
+    authority_as07_test.go:77: committed=24 exhausted=24
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.990s
+FAIL
+
+========================================================================
+AS08-busy-as-exhaustion
+------------------------------------------------------------------------
+    authority_as08_test.go:35: error = action/sqlite: authority budget exhausted: context deadline exceeded
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	5.754s
+FAIL
+
+========================================================================
+AS09-debits-committed-apart
+------------------------------------------------------------------------
+    authority_as09_test.go:56: budget debits = 4, want 0: the interrupted start committed part of itself
+    authority_as09_test.go:70: the approval could not start after a rolled-back attempt: constraint failed: UNIQUE constraint failed: budget_debits.action_id, budget_debits.account_id, budget_debits.operation_key (1555)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.708s
+FAIL
+
+========================================================================
+AS10-existing-start-accepted
+------------------------------------------------------------------------
+        authority_as10_test.go:37: second = <nil>, want action/sqlite: action already started
+        authority_as10_test.go:97: started=8 refused=0, want exactly 1 and 7
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.896s
+FAIL
+
+========================================================================
+AS11-a-before-commit-probe-removed
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome (0.15s)
+    --- FAIL: TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome/before_commit (0.07s)
+        authority_as11_test.go:95: child = exit status 95
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.006s
+FAIL
+
+========================================================================
+AS11-b-after-commit-probe-removed
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome (0.14s)
+    --- FAIL: TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome/after_commit_before_return (0.07s)
+        authority_as11_test.go:95: child = exit status 95
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.961s
+FAIL
+
+========================================================================
+AS11-c-refund-on-recovery
+------------------------------------------------------------------------
+        authority_as11_test.go:125: after recovery pass 1, debits = 0, want the same 4: a confirmed start is never refunded
+        authority_as11_test.go:119: recovery pass 2: action/sqlite: authorization snapshot corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.931s
+FAIL
+
+========================================================================
+AS12-channel-union
+------------------------------------------------------------------------
+    authority_as12_test.go:84: webhook_call on console: the derived clauses admit=true, SelectTools allows=false
+    authority_as12_test.go:84: read_file on telegram: the derived clauses admit=true, SelectTools allows=false
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.879s
+FAIL
+
+========================================================================
+AS13-issuer-copied-from-parent
+------------------------------------------------------------------------
+    authority_as13_test.go:19: error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.736s
+FAIL
+
+========================================================================
+AS14-a-signature-only
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_SignedInvalidChainStillFails/root_legitimately_issued_under_a_FOREIGN_intent (0.06s)
+        authority_as14_test.go:206: record error = <nil>, want action: delegation widens authority
+        authority_as14_test.go:211: record error = <nil>, want attenuation dimension "intent"
+        authority_as14_test.go:215: branch = "executed", want "denied"
+        authority_as14_test.go:218: dispatcher calls = 1, want 0: a signed invalid chain reached the physical effect
+        authority_as14_test.go:225: durable starts = 1, want 0
+        authority_as14_test.go:225: budget debits = 4, want 0
+    --- FAIL: TestAuthority_SignedInvalidChainStillFails/child_that_widens_its_signed_parent (0.05s)
+        authority_as14_test.go:206: record error = <nil>, want action: delegation widens authority
+        authority_as14_test.go:211: record error = <nil>, want attenuation dimension "operations"
+        authority_as14_test.go:215: branch = "executed", want "denied"
+        authority_as14_test.go:218: dispatcher calls = 1, want 0: a signed invalid chain reached the physical effect
+        authority_as14_test.go:225: durable starts = 1, want 0
+        authority_as14_test.go:225: budget debits = 6, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.730s
+FAIL
+
+========================================================================
+AS14-b-cycle-accepted
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_SignedInvalidChainStillFails/cycle (0.05s)
+        authority_as14_test.go:206: record error = action: delegation widens authority: parent (root grant has a parent), want action: authority evidence corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.722s
+FAIL
+
+========================================================================
+AS14-c-broken-link-as-missing
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_SignedInvalidChainStillFails/parent_link_naming_a_version_that_does_not_exist (0.05s)
+        authority_as14_test.go:206: record error = action/sqlite: authority missing, want action: authority evidence corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.886s
+FAIL
+
+========================================================================
+AS15-mutable-counter-trusted
+------------------------------------------------------------------------
+    authority_as15_test.go:21: error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.955s
+FAIL
+
+========================================================================
+AS16-RED-before-cure
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_URLMatcherRefusesNonCanonicalEncoding (0.00s)
+    --- FAIL: TestAuthority_URLMatcherRefusesNonCanonicalEncoding/the_analyzer_refuses_to_derive_a_use_from_a_non-canonical_encoding (0.00s)
+        authority_as16_canonical_test.go:55: error = <nil>, want action: authority use unresolved
+    --- FAIL: TestAuthority_URLMatcherRefusesNonCanonicalEncoding/the_matcher_never_includes_a_non-canonical_encoding (0.00s)
+        authority_as16_canonical_test.go:61: a non-canonical encoding was judged included
+        authority_as16_canonical_test.go:65: error = <nil>, want action: resource out of authority scope
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.428s
+FAIL
+
+========================================================================
+AS16-a-noncanonical-refusal-removed
+------------------------------------------------------------------------
+        authority_as16_canonical_test.go:55: error = <nil>, want action: authority use unresolved
+        authority_as16_canonical_test.go:61: a non-canonical encoding was judged included
+        authority_as16_canonical_test.go:65: error = <nil>, want action: resource out of authority scope
+        authority_as16_canonical_test.go:71: a non-canonically encoded grant was accepted as a parent
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.427s
+FAIL
+
+========================================================================
+AS16-b-bare-string-prefix
+------------------------------------------------------------------------
+        authority_as16_canonical_test.go:101: a path sharing only a textual prefix was judged included
+        authority_as16_canonical_test.go:105: error = <nil>, want action: resource out of authority scope
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.488s
+FAIL
+
+========================================================================
+AS16-c-raw-path-argument
+------------------------------------------------------------------------
+    authority_as16_test.go:46: read_file resources = <elided>, want canonical "/cage/b/secret.txt"
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.423s
+FAIL
+
+========================================================================
+CANONICAL-absent-vs-empty-domain
+------------------------------------------------------------------------
+    authority_contract_test.go:338: one set of terms, two digests: sha256:921a13e0fa162e9c3cf20b9504adb4450846831f8c1cdbe7f1a71b192b496a73 and sha256:36ba9f4113
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action	0.434s
+FAIL
+
+========================================================================
+CANONICAL-absent-vs-empty-store
+------------------------------------------------------------------------
+    authority_supporting_test.go:760: stored digest = sha256:9381ae7b722da897fd6cf941296ebe29aa79e7950bd8061e1a2f3bcea7c4aaf8, want the authorized sha256:2dd6410f5ba66612b7ed272b8f4d07028fec8b98e11768
+    authority_supporting_test.go:764: a start under a binding made with the authorized digest = action: authority evidence corrupt, want a start
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.588s
+FAIL
+
+========================================================================
+CLI-act-closed-succeeded-on-failure
+------------------------------------------------------------------------
+        authority_test.go:125: FAILED revoke acts = 0, want 1: a refused act must not close as succeeded
+        authority_test.go:143: FAILED issue acts = 0, want 1
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	1.313s
+FAIL
+
+========================================================================
+CLI-admin-issue-routed-to-ordinary-door
+------------------------------------------------------------------------
+    authority_test.go:256: admin-issue: code=1 stdout="" stderr="korvun authority admin-issue: identity: ingress binding mismatch\n"
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.673s
+FAIL
+
+========================================================================
+CLI-delegate-routed-to-admin-door
+------------------------------------------------------------------------
+    authority_test.go:301: delegate with a forged issuer: code=1 stderr="korvun authority delegate: identity: ingress binding mismatch\n", want 1 naming the issuer mismatch
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.685s
+FAIL
+
+========================================================================
+EXEC-a-dispatch-on-refused-start
+------------------------------------------------------------------------
+        authority_strict_test.go:222: record error=strict store: start refused branch="executed", want the store's refusal and "denied"
+        authority_strict_test.go:225: dispatches=1 legacy records=0, want 0 and 0: a refused strict start fell back
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/executor	0.735s
+FAIL
+
+========================================================================
+EXEC-b-pending-routed-to-legacy
+------------------------------------------------------------------------
+        authority_strict_test.go:317: branch="pending" approval="apr_legacy" action="act_52cedefa43297f5160d96e53e80a154a", want pending under the store's ids
+        authority_strict_test.go:320: dispatches=0 strict parks=0 legacy parks=1 starts=0, want 0, 1, 0, 0
+        authority_strict_test.go:335: approval error=<nil> branch="pending", want the store's refusal and "denied"
+        authority_strict_test.go:338: dispatches=0 legacy parks=1, want 0 and 0: a refused strict birth fell back
+        authority_strict_test.go:352: identity flag=false branch="pending", want true and "denied"
+        authority_strict_test.go:355: dispatches=0 legacy parks=1, want 0 and 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/executor	0.766s
+FAIL
+
+========================================================================
+EXEC-c-resume-uses-legacy-claim
+------------------------------------------------------------------------
+        authority_strict_test.go:403: dispatches=1 args="{\"legacy\":true}", want 1 with the strictly claimed bytes
+        authority_strict_test.go:406: strict starts=0 legacy claims=1, want 1 and 0
+        authority_strict_test.go:420: error = <nil>, want the store's refusal at stage "claim"
+        authority_strict_test.go:423: dispatches=1 legacy claims=1 closed="SUCCEEDED", want 0, 0 and nothing closed
+        authority_strict_test.go:434: error = <nil>, want action: authority evidence corrupt at stage "claim"
+        authority_strict_test.go:437: dispatches=1 legacy claims=1, want 0 and 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/executor	0.940s
+FAIL
+
+========================================================================
+GUARD-admin-human
+------------------------------------------------------------------------
+    authority_administrative_test.go:29: event = issuer "principal_external_issuer" actor "principal_brain_alpha" admin 1 reason "operator recovers an externally issued grant"
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.677s
+FAIL
+
+========================================================================
+GUARD-approval-link
+------------------------------------------------------------------------
+    authority_postreview_test.go:76: arbitrary approval claim error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.728s
+FAIL
+
+========================================================================
+GUARD-approval-state
+------------------------------------------------------------------------
+    authority_strict_flow_test.go:91: started action state = APPROVED, <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.957s
+FAIL
+
+========================================================================
+GUARD-delegate-attenuation-door
+------------------------------------------------------------------------
+    authority_door_integration_test.go:25: error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.702s
+FAIL
+
+========================================================================
+GUARD-delegate-counter-seal
+------------------------------------------------------------------------
+    authority_postreview_test.go:142: error = action/sqlite: authority budget exhausted: action: delegation widens authority: budget_operation_remaining (operation exceeds remainin
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.965s
+FAIL
+
+========================================================================
+GUARD-detail-downgrade
+------------------------------------------------------------------------
+    authority_snapshot_test.go:138: downgraded detail error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.635s
+FAIL
+
+========================================================================
+GUARD-signed-debit
+------------------------------------------------------------------------
+    authority_postreview_test.go:66: rewritten signed tail error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.735s
+FAIL
+
+========================================================================
+GUARD-start-actual-use-door
+------------------------------------------------------------------------
+    authority_door_integration_test.go:81: error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.582s
+FAIL
+
+========================================================================
+GUARD-start-chain-door
+------------------------------------------------------------------------
+    authority_door_integration_test.go:60: signed invalid chain: error = <nil>, want the attenuation dimension "operations"
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.567s
+FAIL
+
+========================================================================
+GUARD-start-proof
+------------------------------------------------------------------------
+    authority_postreview_test.go:100: rewritten start proof error = <nil>
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.814s
+FAIL
+
+========================================================================
+GUARD-strict-console
+------------------------------------------------------------------------
+    authority_strict_test.go:29: response = 202 ""
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/controlapi	0.817s
+FAIL
+
+========================================================================
+GUARD-strict-prep
+------------------------------------------------------------------------
+    authority_prepare_test.go:25: strict preparation accepted a missing activation root
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.695s
+FAIL
+
+========================================================================
+ISSUE-pretransaction-intent-read
+------------------------------------------------------------------------
+    authority_commit_order_test.go:147: error = <nil>, want action: intent revoked
+    authority_commit_order_test.go:159: consumed issue act = 1 rows, want 0: the refused issuance left something behind
+    authority_commit_order_test.go:159: grant terms = 1 rows, want 0: the refused issuance left something behind
+    authority_commit_order_test.go:159: grant head = 1 rows, want 0: the refused issuance left something behind
+    authority_commit_order_test.go:159: grant events = 1 rows, want 0: the refused issuance left something behind
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.652s
+FAIL
+
+========================================================================
+RESUME-rewritten-parameters
+------------------------------------------------------------------------
+    authority_supporting_test.go:835: error = <nil>, want action/sqlite: the stored parameters no longer re-derive the approved digest
+    authority_supporting_test.go:838: the refused resume handed out parameters "{\"rewritten\":true}"
+    authority_supporting_test.go:845: durable starts = 1, want 0
+    authority_supporting_test.go:845: budget debits = 4, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.571s
+FAIL
+
+========================================================================
+RESUME-row-disagrees-with-signed-snapshot
+------------------------------------------------------------------------
+        authority_supporting_test.go:508: error = action/sqlite: authority revoked, want action/sqlite: authorization snapshot corrupt
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.703s
+FAIL
+
+========================================================================
+START-order1-stale-lifecycle-read
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_StartAndRevokeFollowCommitOrder/the_revocation_commits_first:_the_start_is_refused_and_nothing_is_spent (0.06s)
+        authority_commit_order_test.go:205: error = <nil>, want action/sqlite: authority revoked
+        authority_commit_order_test.go:216: durable starts = 1, want 0: a start ordered after the revocation left something behind
+        authority_commit_order_test.go:216: budget debits = 4, want 0: a start ordered after the revocation left something behind
+        authority_commit_order_test.go:216: strict actions = 1, want 0: a start ordered after the revocation left something behind
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.654s
+FAIL
+
+========================================================================
+START-order2-post-commit-recheck
+------------------------------------------------------------------------
+    --- FAIL: TestAuthority_StartAndRevokeFollowCommitOrder/the_start_commits_first:_its_capability_stands,_and_the_NEXT_start_is_refused (0.05s)
+        authority_commit_order_test.go:276: committed start = {ActionID: IntentID: AuthorityRefs:[] RemainingBefore:<nil> Evidence:<nil>}, action/sqlite: authority revoked; want its capability: a later revocation cannot retract a committed start
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.627s
+FAIL
+
+========================================================================
+SUPPORTING-leaf-first-matching-grant
+------------------------------------------------------------------------
+        authority_supporting_test.go:55: authority refs = [grant_root], want the verified chain [grant_root grant_narrow_leaf]
+        authority_supporting_test.go:63: persisted authority_refs "[\"grant_root\"]" does not name "grant_narrow_leaf"
+        authority_supporting_test.go:69: second start under the exhausted leaf = <nil>, want action/sqlite: authority budget exhausted
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.564s
+FAIL
+
+========================================================================
+SUPPORTING-mutations
+------------------------------------------------------------------------
+RECEIVER intent reader on the pool
+  mould: TestAuthority_ProtectedReadersUseTransactionReceiver
+  exit: 1  red: True  compiled: True
+  panic: TestAuthority_ProtectedReadersUseTransactionReceiver: a protected reader is waiting for the one connection its own transaction holds
+  /private/tmp/korvun-p3f3-work/copy/internal/action/sqlite/authority_supporting_test.go:249 +0x25
+
+RECEIVER config-head reader on the pool
+  mould: TestAuthority_ProtectedReadersUseTransactionReceiver
+  exit: 1  red: True  compiled: True
+  authority_supporting_test.go:307: the door did not complete on the one-connection store: action: authority evidence corrupt
+
+RECEIVER config-clause reader on the pool
+  mould: TestAuthority_ProtectedReadersUseTransactionReceiver
+  exit: 1  red: True  compiled: True
+  authority_supporting_test.go:307: the door did not complete on the one-connection store: context deadline exceeded
+
+ACCOUNT clause identity inside the account scope
+  mould: TestAuthority_BudgetAccountSurvivesVersionAndReload
+  exit: 1  red: True  compiled: True
+  authority_supporting_test.go:368: config accounts = 3, want 1: the reload opened a new account
+  authority_supporting_test.go:371: sql: no rows in result set
+
+RESUME claims without re-resolving authority
+  mould: TestAuthority_ApprovedResumeUsesStartAuthorization
+  exit: 1  red: True  compiled: True
+  authority_supporting_test.go:504: error = action/sqlite: budget evidence corrupt, want action/sqlite: authority revoked
+
+RESUME resolves under the empty conversation
+  mould: TestAuthority_ApprovedResumeKeepsConversationScope
+  exit: 1  red: True  compiled: True
+  authority_supporting_test.go:581: resume under the scoped leaf = action/sqlite: authority revoked, want a start
+
+ACTIVATION actor act not verified
+  mould: TestAuthority_ActivationRequiresAuthenticatedOneShotAct
+  exit: 1  red: True  compiled: True
+  authority_supporting_test.go:430: error = <nil>, want identity: authenticated ingress missing
+  authority_supporting_test.go:433: activation digest = "sha256:40c0c4ed27b3e470ac4536a0a9b64c964fd8c65de4ea0a410f657221b26395d3", want none
+  authority_supporting_test.go:440: birth heads = 1, want 0: a refused activation left a root behind
+  authority_supporting_test.go:440: birth events = 1, want 0: a refused activation left a root behind
+
+========================================================================
+SUPPORTING-order-a-pool-read-before-ownership
+------------------------------------------------------------------------
+    authority_supporting_test.go:213: authority_v2.go:731:6: delegateAuthority makes a database call before it takes write ownership
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.800s
+FAIL
+
+========================================================================
+SUPPORTING-order-b-select-before-lock
+------------------------------------------------------------------------
+    authority_supporting_test.go:198: beginAuthorityWrite's first transaction statement is "SELECT COUNT(*) FROM grant_heads", want the lock UPDATE
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.529s
+FAIL
+
+========================================================================
+SUPPORTING-receiver-a-actor-act-reader
+------------------------------------------------------------------------
+panic: TestAuthority_ProtectedReadersUseTransactionReceiver: a protected reader is waiting for the one connection its own transaction holds
+	/private/tmp/korvun-p3f3-work/copy/internal/action/sqlite/authority_supporting_test.go:249 +0x25
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	90.631s
+FAIL
+
+========================================================================
+SUPPORTING-receiver-b-grant-reader
+------------------------------------------------------------------------
+panic: TestAuthority_ProtectedReadersUseTransactionReceiver: a protected reader is waiting for the one connection its own transaction holds
+	/private/tmp/korvun-p3f3-work/copy/internal/action/sqlite/authority_supporting_test.go:249 +0x25
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	90.536s
+FAIL
+
+========================================================================
+TAXONOMY-1-intent-approval
+------------------------------------------------------------------------
+        authority_supporting_test.go:719: error = <nil>, want action/sqlite: authority approval required
+        authority_supporting_test.go:727: durable starts = 1, want 0
+        authority_supporting_test.go:727: budget debits = 3, want 0
+        authority_supporting_test.go:727: strict actions = 1, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.150s
+FAIL
+
+========================================================================
+TAXONOMY-2-grant-approval
+------------------------------------------------------------------------
+        authority_supporting_test.go:719: error = <nil>, want action/sqlite: authority approval required
+        authority_supporting_test.go:727: durable starts = 1, want 0
+        authority_supporting_test.go:727: budget debits = 6, want 0
+        authority_supporting_test.go:727: strict actions = 1, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.051s
+FAIL
+
+========================================================================
+TAXONOMY-3-ghost-leaf
+------------------------------------------------------------------------
+        authority_supporting_test.go:719: error = sql: no rows in result set, want action/sqlite: authority missing
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	1.012s
+FAIL
+
+========================================================================
+TAXONOMY-4-FIRST-ATTEMPT-SURVIVED-the-row-stayed-green
+------------------------------------------------------------------------
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.853s
+
+========================================================================
+TAXONOMY-4-unpinned-process
+------------------------------------------------------------------------
+        authority_supporting_test.go:750: error = <nil>, want action/sqlite: authority missing
+        authority_supporting_test.go:758: durable starts = 1, want 0
+        authority_supporting_test.go:758: budget debits = 3, want 0
+        authority_supporting_test.go:758: strict actions = 1, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.822s
+FAIL
+
+========================================================================
+TAXONOMY-5-channel-outside-grant
+------------------------------------------------------------------------
+        authority_supporting_test.go:750: error = identity: ingress binding mismatch, want action: delegation widens authority
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.838s
+FAIL
+
+========================================================================
+TAXONOMY-6-someone-elses-leaf
+------------------------------------------------------------------------
+        authority_supporting_test.go:750: error = <nil>, want action/sqlite: authority issuer mismatch
+        authority_supporting_test.go:758: durable starts = 1, want 0
+        authority_supporting_test.go:758: budget debits = 6, want 0
+        authority_supporting_test.go:758: strict actions = 1, want 0
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.898s
+FAIL
+
+========================================================================
+UI-01-block-removed
+------------------------------------------------------------------------
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-AUTH-UI-01 · AUTORIDAD sigue a ORIGEN con cuatro etiquetas y máximo
+AssertionError: expected -1 to be 5 // Object.is equality
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-AUTH-UI-01 · abre el identificador estricto apr3 acuñado por el store
+      Tests  2 failed | 147 skipped (149)
+
+========================================================================
+UI-02-escape-bypassed
+------------------------------------------------------------------------
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-AUTH-UI-02 · todos los valores de autoridad pasan por el escape visible
+AssertionError: expected [ '<U+202E>', '<U+202E>', …(2) ] to have a length of 5 but got 4
+      Tests  1 failed | 148 skipped (149)
+
+========================================================================
+UI-03-negative-remainder-accepted
+------------------------------------------------------------------------
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-AUTH-UI-03 · finite negativo rehúsa el documento completo
+TestingLibraryElementError: Unable to find an element with the text: El núcleo no ha contestado nada legible.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+      Tests  1 failed | 12 passed | 136 skipped (149)
+
+========================================================================
+UI-04-chromium-maximo-removed
+------------------------------------------------------------------------
+    Error: expect(locator).toContainText(expected) failed
+    Expected substring: "máximo 2 inicios"
+    Received string:    "AUTORIDADQUIÉN PIDIÓprincipal_channel_telegramBAJO QUÉ CONTRATOint_supplier_payments_v3Pay<U+202E> approved supplier invoicesCADENAprincipal_console_admin → principal_brain_operacionesPRESUPUESTO ANTES DE ESTE INTENTO2 inicios"
+      901 |   await expect(authority).toContainText('Pay<U+202E> approved supplier invoices')
+      902 |   await expect(authority).toContainText('principal_console_admin → principal_brain_operaciones')
+    > 903 |   await expect(authority).toContainText('máximo 2 inicios')
+      904 |   expect(outside).toEqual([])
+  1 failed
+
+========================================================================
+UI-strict-id-legacy-validator
+------------------------------------------------------------------------
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/Approvals.test.tsx > P2 · detalle > AS-AUTH-UI-01 · abre el identificador estricto apr3 acuñado por el store
+TestingLibraryElementError: Unable to find role="button" and name `/tool\/webhook_call/`
+      Tests  1 failed | 148 skipped (149)

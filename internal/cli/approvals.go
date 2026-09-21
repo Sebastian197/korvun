@@ -200,6 +200,12 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 	}
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
+	if verb == "approve" && cfg.StrictAuthority() {
+		if err := app.PrepareStrictAuthority(ctx, cfg, store); err != nil {
+			_, _ = fmt.Fprintf(c.stderr, "korvun approvals approve: %v\n", err)
+			return 1
+		}
+	}
 	decision := action.DecisionRejected
 	if verb == "approve" {
 		decision = action.DecisionApproved
@@ -245,7 +251,7 @@ func (c *cli) approvalsDecide(args []string, verb string) int {
 		return 0
 	}
 	// approve: the lote-3 deferred execution of the EXACT object.
-	return c.runApprovedExecution(ctx, store, cage, approvalID, law, "approve", "approved")
+	return c.runApprovedExecution(ctx, store, cage, approvalID, law, cfg.StrictAuthority(), "approve", "approved")
 }
 
 // approvalsExecute implements `korvun approvals execute` (C3): the
@@ -286,6 +292,12 @@ func (c *cli) approvalsExecute(args []string) int {
 	}
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
+	if cfg.StrictAuthority() {
+		if err := app.PrepareStrictAuthority(ctx, cfg, store); err != nil {
+			_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
+			return 1
+		}
+	}
 	_, p, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
@@ -297,7 +309,7 @@ func (c *cli) approvalsExecute(args []string) int {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals execute: %v\n", err)
 		return 1
 	}
-	return c.runApprovedExecution(ctx, store, cage, approvalID, law, "execute", "resumed")
+	return c.runApprovedExecution(ctx, store, cage, approvalID, law, cfg.StrictAuthority(), "execute", "resumed")
 }
 
 // runApprovedExecution is the one deferred-execution path shared by
@@ -308,13 +320,13 @@ func (c *cli) approvalsExecute(args []string) int {
 // headline: each outcome builds its own, because a single headline handed in by
 // the caller said «executed the exact approved object» over every branch,
 // including the one whose next line says the outcome is unknown.
-func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Store, cage *app.EffectiveCage, approvalID string, law actionsqlite.PolicyPin, verb, decided string) int {
+func (c *cli) runApprovedExecution(ctx context.Context, store *actionsqlite.Store, cage *app.EffectiveCage, approvalID string, law actionsqlite.PolicyPin, strict bool, verb, decided string) int {
 	a, p, err := store.GetApproval(ctx, approvalID)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1
 	}
-	exec, err := app.BuildApprovalExecutorFromCage(cage, p)
+	exec, err := app.BuildApprovalExecutorFromCageMode(cage, p, strict)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun approvals %s: %v\n", verb, err)
 		return 1

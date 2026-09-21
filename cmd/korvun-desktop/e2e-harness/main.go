@@ -66,6 +66,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/config"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
 	"github.com/Sebastian197/korvun/internal/shell"
 
 	"github.com/Sebastian197/korvun/internal/action"
@@ -786,6 +787,16 @@ func (tc testControl) park(w http.ResponseWriter, r *http.Request) {
 		Purpose    string `json:"purpose"`
 		Channel    string `json:"channel"`
 		TTLSeconds int    `json:"ttl_seconds"`
+		Authority  *struct {
+			RequesterPrincipalID string   `json:"requester_principal_id"`
+			IntentID             string   `json:"intent_id"`
+			IntentPurpose        string   `json:"intent_purpose"`
+			PrincipalChain       []string `json:"principal_chain"`
+			Budget               struct {
+				Kind      string `json:"kind"`
+				Remaining *int64 `json:"remaining"`
+			} `json:"budget"`
+		} `json:"authority"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
@@ -841,7 +852,107 @@ func (tc testControl) park(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bind the approval: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := store.CreateApprovalRequest(r.Context(), bound); err != nil {
+	if body.Authority != nil {
+		privateKey, err := app.EnsureSigningKey(r.Context(), store, filepath.Dir(app.StoragePath(cfg)))
+		if err != nil {
+			http.Error(w, "load profile key: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		store.SetIdentitySigners(
+			func(e identity.Evidence) identity.SignedEvidence { return identity.SignEvidence(privateKey, e) },
+			func(e identity.PrincipalEvent) identity.SignedPrincipalEvent {
+				return identity.SignPrincipalEvent(privateKey, e)
+			},
+		)
+		store.SetIntentV2Signer(
+			func(c action.IntentContractV2) action.SignedIntentContractV2 {
+				return action.SignIntentContractV2(privateKey, c)
+			},
+			func(e action.IntentEventV1) action.SignedIntentEventV1 {
+				return action.SignIntentEventV1(privateKey, e)
+			},
+		)
+		store.SetAuthoritySigner(func(domain string, canonical []byte) action.AuthoritySignature {
+			return action.SignAuthorityBytes(privateKey, domain, canonical)
+		})
+		if body.Authority.RequesterPrincipalID != "principal_channel_telegram" {
+			http.Error(w, "authority requester does not match authenticated harness ingress", http.StatusBadRequest)
+			return
+		}
+		budget := action.IntentBudgetV2{}
+		switch body.Authority.Budget.Kind {
+		case string(action.AuthorizationBudgetFinite):
+			if body.Authority.Budget.Remaining == nil {
+				http.Error(w, "finite authority budget needs remaining", http.StatusBadRequest)
+				return
+			}
+			budget.Total = body.Authority.Budget.Remaining
+		case string(action.AuthorizationBudgetUnlimited):
+		default:
+			http.Error(w, "unknown authority budget", http.StatusBadRequest)
+			return
+		}
+		contract := action.IntentContractV2{
+			IntentID: body.Authority.IntentID, SchemaVersion: 2, Version: 1,
+			ProfileID: "profile_harness", OwnerPrincipalID: env.Principal.PrincipalID,
+			Purpose:       body.Authority.IntentPurpose,
+			Operations:    []action.OperationRef{{Namespace: "tool", Name: body.Operation, Version: 1}},
+			EffectClasses: []action.EffectClass{action.EffectWriteIrreversible}, Budget: budget,
+			ValidFrom: time.Now().UTC().Add(-time.Minute), ExpiresAt: time.Now().UTC().Add(time.Hour),
+			MaxDelegationDepth: 4,
+		}
+		if err := store.CreateIntentV2(r.Context(), contract, contract.OwnerPrincipalID, time.Now().UTC()); err != nil {
+			http.Error(w, "create harness intent: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if err := store.ActivateIntentV2(r.Context(), contract.IntentID, contract.Version, contract.OwnerPrincipalID, time.Now().UTC()); err != nil {
+			http.Error(w, "activate harness intent: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		env = bound.Envelope()
+		env.IntentID = contract.IntentID
+		env.Principal.ResponsibleHumanID = "principal_console_admin"
+		bound, err = action.NewBoundApprovalRequestWithID(env, body.Params, action.ApprovalContext{
+			IntentPurpose: contract.Purpose,
+			GrantID:       "grant_harness", GrantDepth: 1, CostLine: "maximum",
+			ToolCage:      body.Operation,
+			Descriptor:    action.EffectDescriptor{Class: action.EffectWriteIrreversible, DataEgress: true},
+			HasDescriptor: true, LawVersion: pin.Version, LawDigest: pin.Digest,
+			Rule: "require_approval", Now: time.Now().UTC(), TTL: ttl,
+		}, action.NewStrictApprovalID())
+		if err != nil {
+			http.Error(w, "bind authorized approval: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		approval := bound.Approval()
+		at := time.Now().UTC()
+		evidence := identity.Evidence{
+			EvidenceID: "evd_harness_" + body.ID, ActionID: env.ActionID,
+			RequestID: env.CorrelationID, RequesterPrincipalID: body.Authority.RequesterPrincipalID,
+			ActorPrincipalID:       env.Principal.PrincipalID,
+			ResponsiblePrincipalID: env.Principal.ResponsibleHumanID,
+			BindingID:              "binding_telegram", BindingGeneration: 1,
+			AdapterInstanceID: "adapter_harness", Provider: "telegram", Method: "polling",
+			CredentialClass: "bot_token_session", Issuer: "telegram",
+			SubjectNamespace: "telegram_subject", VerifiedSubject: "shared_telegram_credential",
+			SubjectClaim: "harness-subject", ObservedAt: at, ExpiresAt: at.Add(5 * time.Minute),
+			ClaimsDigest: action.HashCanonical("harness-authority-claims"),
+		}
+		snapshot := action.AuthorizationSnapshotV1{
+			Kind: action.AuthorizationSnapshotPending, ActionID: env.ActionID,
+			ApprovalID: approval.ApprovalID, RequesterPrincipalID: evidence.RequesterPrincipalID,
+			ActorPrincipalID: evidence.ActorPrincipalID, IntentID: contract.IntentID,
+			IntentVersion: contract.Version, IntentDigest: contract.Digest(),
+			IntentPurpose:   contract.Purpose,
+			PrincipalChain:  append([]string(nil), body.Authority.PrincipalChain...),
+			BudgetKind:      action.AuthorizationBudgetKind(body.Authority.Budget.Kind),
+			BudgetRemaining: body.Authority.Budget.Remaining, RecordedAt: at,
+		}
+		if err := store.CreateAuthorizedApprovalRequest(r.Context(), bound, evidence, snapshot); err != nil {
+			http.Error(w, "park authorized: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else if err := store.CreateApprovalRequest(r.Context(), bound); err != nil {
 		http.Error(w, "park: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

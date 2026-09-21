@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 14
+const schemaVersionCurrent = 15
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -512,6 +512,166 @@ CREATE TABLE IF NOT EXISTS identity_evidence_v2 (
     signing_key_id           TEXT NOT NULL REFERENCES signing_keys(key_id),
     signature                TEXT NOT NULL
 ) WITHOUT ROWID;`,
+	// v14->v15 (Piece 3, phase 3): immutable signed authority terms,
+	// lifecycle heads, shared budget evidence, durable starts, config clauses,
+	// approval provenance and one physical writer-ownership row.
+	14: `
+CREATE TABLE IF NOT EXISTS authority_write_lock (
+    singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton=1),
+    revision  INTEGER NOT NULL
+) WITHOUT ROWID;
+INSERT OR IGNORE INTO authority_write_lock(singleton,revision) VALUES(1,0);
+CREATE TABLE IF NOT EXISTS grant_versions (
+    grant_id       TEXT NOT NULL,
+    version        INTEGER NOT NULL,
+    schema_version INTEGER NOT NULL,
+    profile_id     TEXT NOT NULL,
+    intent_id      TEXT NOT NULL,
+    intent_version INTEGER NOT NULL,
+    intent_digest  TEXT NOT NULL,
+    parent_grant_id TEXT NOT NULL,
+    parent_version INTEGER NOT NULL,
+    issuer_principal_id TEXT NOT NULL,
+    subject_principal_id TEXT NOT NULL,
+    canonical_terms BLOB NOT NULL,
+    digest          TEXT NOT NULL,
+    signing_key_id  TEXT NOT NULL REFERENCES signing_keys(key_id),
+    signature       TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    PRIMARY KEY(grant_id,version)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS grant_events (
+    event_id        TEXT NOT NULL PRIMARY KEY,
+    grant_id        TEXT NOT NULL,
+    grant_version   INTEGER NOT NULL,
+    revision        INTEGER NOT NULL,
+    from_status     TEXT NOT NULL,
+    to_status       TEXT NOT NULL,
+    actor_action_id TEXT NOT NULL UNIQUE,
+    actor_principal_id TEXT NOT NULL,
+    administrative INTEGER NOT NULL CHECK(administrative IN (0,1)),
+    reason          TEXT NOT NULL,
+    occurred_at     TEXT NOT NULL,
+    previous_event_digest TEXT NOT NULL,
+    canonical_event BLOB NOT NULL,
+    digest          TEXT NOT NULL,
+    signing_key_id  TEXT NOT NULL REFERENCES signing_keys(key_id),
+    signature       TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS grant_events_by_grant ON grant_events(grant_id,revision);
+CREATE TABLE IF NOT EXISTS grant_heads (
+    grant_id         TEXT NOT NULL PRIMARY KEY,
+    active_version   INTEGER NOT NULL,
+    revision         INTEGER NOT NULL,
+    last_event_digest TEXT NOT NULL,
+    status           TEXT NOT NULL CHECK(status IN ('ACTIVE','EXPIRED','REVOKED'))
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS budget_accounts (
+    account_id      TEXT NOT NULL PRIMARY KEY,
+    profile_id      TEXT NOT NULL,
+    scope_kind      TEXT NOT NULL,
+    stable_scope_id TEXT NOT NULL,
+    max_total       INTEGER,
+    per_operation   TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    UNIQUE(profile_id,scope_kind,stable_scope_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS budget_counters (
+    account_id    TEXT NOT NULL REFERENCES budget_accounts(account_id),
+    operation_key TEXT NOT NULL,
+    spent         INTEGER NOT NULL CHECK(spent>=0),
+    sequence      INTEGER NOT NULL CHECK(sequence>=0),
+    tail_digest   TEXT NOT NULL,
+	canonical_counter BLOB NOT NULL,
+	digest        TEXT NOT NULL,
+	signing_key_id TEXT NOT NULL REFERENCES signing_keys(key_id),
+	signature     TEXT NOT NULL,
+    PRIMARY KEY(account_id,operation_key)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS budget_debits (
+    action_id      TEXT NOT NULL,
+    account_id     TEXT NOT NULL REFERENCES budget_accounts(account_id),
+    operation_key  TEXT NOT NULL,
+    sequence       INTEGER NOT NULL,
+    previous_digest TEXT NOT NULL,
+    cumulative_spent INTEGER NOT NULL,
+    canonical_debit BLOB NOT NULL,
+    digest          TEXT NOT NULL,
+    signing_key_id  TEXT NOT NULL REFERENCES signing_keys(key_id),
+    signature       TEXT NOT NULL,
+    PRIMARY KEY(action_id,account_id,operation_key)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS budget_debits_tail ON budget_debits(account_id,operation_key,sequence DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS budget_debits_sequence ON budget_debits(account_id,operation_key,sequence);
+CREATE TABLE IF NOT EXISTS authorization_starts (
+    action_id       TEXT NOT NULL PRIMARY KEY,
+    generation      INTEGER NOT NULL,
+    intent_id       TEXT NOT NULL,
+    intent_version  INTEGER NOT NULL,
+    intent_digest   TEXT NOT NULL,
+    grant_chain     TEXT NOT NULL,
+    debit_set_digest TEXT NOT NULL,
+    authorization_time TEXT NOT NULL,
+    canonical_start BLOB NOT NULL,
+    digest          TEXT NOT NULL,
+    signing_key_id  TEXT NOT NULL REFERENCES signing_keys(key_id),
+    signature       TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS config_authority_snapshots (
+    profile_id TEXT NOT NULL,
+    brain_principal_id TEXT NOT NULL,
+    generation INTEGER NOT NULL,
+    clause_id TEXT NOT NULL,
+    canonical_clause BLOB NOT NULL,
+    digest TEXT NOT NULL,
+    signing_key_id TEXT NOT NULL,
+    signature TEXT NOT NULL,
+    PRIMARY KEY(profile_id,brain_principal_id,generation,clause_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS config_authority_heads (
+    profile_id TEXT NOT NULL,
+    brain_principal_id TEXT NOT NULL,
+    generation INTEGER NOT NULL,
+    clause_set_digest TEXT NOT NULL,
+    canonical_head BLOB NOT NULL,
+    digest TEXT NOT NULL,
+    signing_key_id TEXT NOT NULL,
+    signature TEXT NOT NULL,
+    PRIMARY KEY(profile_id,brain_principal_id)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS approval_birth_events (
+    profile_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    approval_id TEXT NOT NULL UNIQUE,
+    action_id TEXT NOT NULL,
+    action_digest TEXT NOT NULL,
+    strict_required INTEGER NOT NULL,
+    snapshot_digest TEXT NOT NULL,
+    previous_event_digest TEXT NOT NULL,
+    canonical_event BLOB NOT NULL,
+    digest TEXT NOT NULL,
+    signing_key_id TEXT NOT NULL,
+    signature TEXT NOT NULL,
+    PRIMARY KEY(profile_id,sequence)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS approval_birth_heads (
+    profile_id TEXT NOT NULL PRIMARY KEY,
+    activation_digest TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    last_event_digest TEXT NOT NULL,
+    actor_action_id TEXT NOT NULL UNIQUE,
+    canonical_head BLOB NOT NULL,
+    digest TEXT NOT NULL,
+    signing_key_id TEXT NOT NULL,
+    signature TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS legacy_authority_imports (
+    grant_id TEXT NOT NULL PRIMARY KEY,
+    imported_version INTEGER NOT NULL,
+    actor_action_id TEXT NOT NULL UNIQUE,
+    baseline_spent INTEGER NOT NULL,
+    imported_at TEXT NOT NULL
+) WITHOUT ROWID;`,
 }
 
 // migrationsPost holds the destructive tail of a hybrid step (R8-Z1):
@@ -560,6 +720,43 @@ var migrationCopies = map[int]func(*sql.Tx) error{
 	10: copyTombstonesV10toV11,
 	11: revalidateTombstonesV11toV12,
 	13: addIdentityV14Columns,
+	14: addAuthorityV15Columns,
+}
+
+func addAuthorityV15Columns(tx *sql.Tx) error {
+	for _, table := range []struct {
+		name    string
+		columns []string
+	}{
+		{name: "execution_bindings", columns: []string{
+			"grant_id TEXT", "grant_version INTEGER", "grant_digest TEXT",
+		}},
+		{name: "approvals", columns: []string{
+			"authority_snapshot_required INTEGER NOT NULL DEFAULT 0 CHECK(authority_snapshot_required IN (0,1))",
+		}},
+		{name: "authorization_snapshots", columns: []string{
+			"snapshot_kind TEXT NOT NULL DEFAULT ''", "approval_id TEXT NOT NULL DEFAULT ''",
+			"intent_purpose TEXT NOT NULL DEFAULT ''", "principal_chain TEXT NOT NULL DEFAULT ''",
+			"budget_kind TEXT NOT NULL DEFAULT ''", "budget_remaining INTEGER",
+			"recorded_at TEXT NOT NULL DEFAULT ''", "signing_key_id TEXT NOT NULL DEFAULT ''",
+			"signature TEXT NOT NULL DEFAULT ''",
+		}},
+	} {
+		existing, err := tableColumns(tx, table.name)
+		if err != nil {
+			return err
+		}
+		for _, declaration := range table.columns {
+			name := strings.Fields(declaration)[0]
+			if existing[name] {
+				continue
+			}
+			if _, err := tx.Exec("ALTER TABLE " + table.name + " ADD COLUMN " + declaration); err != nil {
+				return fmt.Errorf("action/sqlite: add schema v15 column %s.%s: %w", table.name, name, err)
+			}
+		}
+	}
+	return nil
 }
 
 func addIdentityV14Columns(tx *sql.Tx) error {
@@ -1083,12 +1280,22 @@ type Store struct {
 	// sealer, when non-nil, signs and appends one receipt per terminal
 	// outcome INSIDE the recording transaction (Etapa 4, FR-LED). The app
 	// injects it with the active profile key; nil = pre-stage behavior.
-	sealer                 func(action.Receipt) action.Receipt
-	intentContractSigner   func(action.IntentContractV2) action.SignedIntentContractV2
-	intentEventSigner      func(action.IntentEventV1) action.SignedIntentEventV1
-	identityEvidenceSigner func(identity.Evidence) identity.SignedEvidence
-	principalEventSigner   func(identity.PrincipalEvent) identity.SignedPrincipalEvent
-	identityNow            func() time.Time
+	sealer                    func(action.Receipt) action.Receipt
+	intentContractSigner      func(action.IntentContractV2) action.SignedIntentContractV2
+	intentEventSigner         func(action.IntentEventV1) action.SignedIntentEventV1
+	identityEvidenceSigner    func(identity.Evidence) identity.SignedEvidence
+	principalEventSigner      func(identity.PrincipalEvent) identity.SignedPrincipalEvent
+	authoritySigner           func(string, []byte) action.AuthoritySignature
+	authorityNewActionID      func(int64) string
+	authorityProfileID        string
+	authorityActivationDigest string
+	identityNow               func() time.Time
+	// authorityBeforeWriter, when non-nil, runs at the top of
+	// beginAuthorityWrite: after a protected door has validated its arguments
+	// and BEFORE it asks SQLite for write ownership. That is the last instant
+	// at which a fact learned earlier can go stale, so it is where a mould
+	// parks a door while a second real connection commits. nil in production.
+	authorityBeforeWriter func()
 	// writes counts RecordAttempt commits toward the periodic prune;
 	// mutex-guarded because callers are concurrent brain workers (the DB
 	// pool serializes statements, not this counter).
@@ -1229,7 +1436,7 @@ func open(path string) (*Store, error) {
 	}
 	return &Store{
 		db: db, path: abs, capRows: defaultCapRows, pruneEvery: defaultPruneEvery,
-		identityNow: time.Now,
+		identityNow: time.Now, authorityNewActionID: newAuthorityActionID,
 	}, nil
 }
 

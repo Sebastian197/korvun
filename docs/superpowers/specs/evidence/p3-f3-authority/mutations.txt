@@ -1,0 +1,317 @@
+P3/F3 authority mutation evidence
+Date: 2026-09-21
+Base: f5762b8
+
+Each mutation below was applied alone after its corresponding mold existed and
+had first failed against the unimplemented production surface. The named mold
+was run while the mutation was present, its failure was observed, and the
+production line was restored before the next mutation.
+
+AS-AUTH-01
+Mutation: omit the operations attenuation check.
+Observed RED: dimension "operations" returned error=<nil>.
+
+AS-AUTH-02
+Mutation: replace subset with non-empty intersection in the production matcher.
+Observed RED: independent finite-model oracle rejected parent=[a], child=[a b]
+while production accepted it.
+
+AS-AUTH-03
+Mutation: validate delegation against the contractual maximum instead of the
+remaining parent balance.
+Observed RED: an already-spent parent accepted the child; error=<nil>.
+
+AS-AUTH-04
+Mutation: retain only child-supplied per-operation budget keys.
+Observed RED: the omitted inherited operation normalized to 0, want 2.
+
+AS-AUTH-05
+Mutation: make revocation persist no state transition.
+Observed RED: delegation committed after a later revocation; error=<nil>.
+
+AS-AUTH-06
+Mutation: verify only the leaf status at start.
+Observed RED: a revoked ancestor still authorized the start; error=<nil>.
+
+AS-AUTH-07
+Mutation: debit only the leaf account, not every applicable ancestor account.
+Observed RED with two independent sql.DB pools: committed=24, exhausted=24;
+the shared ancestor maximum was 12.
+
+AS-AUTH-08
+Mutation: map writer-lock timeout to budget exhaustion.
+Observed RED: got budget exhausted, want ErrAuthorityStoreBusy.
+
+AS-AUTH-09
+Mutation: execute the crash probe after committing the debit.
+Observed RED: rollback mold found 4 durable debit rows, want 0.
+
+AS-AUTH-10
+Mutation: accept an existing authority start for the same action_id.
+Observed RED: the second start returned error=<nil>.
+
+AS-AUTH-11
+Mutation A: remove the pre-commit crash probe.
+Observed RED: subprocess exited 95 because the expected crash point was absent.
+Mutation B: remove the post-commit crash probe.
+Observed RED: subprocess exited 95 because the expected crash point was absent.
+
+AS-AUTH-12
+Mutation: migrate the union of all configured channels onto every tool.
+Observed RED: read_file acquired console+telegram instead of its exact clause.
+
+AS-AUTH-13
+Mutation: overwrite the authenticated issuer with the claimed parent actor.
+Observed RED: forged issuer was accepted; error=<nil>.
+
+AS-AUTH-14
+Mutation: stop traversal after signature verification and skip cycle checks.
+Observed RED: a signed cyclic authority chain was accepted.
+
+AS-AUTH-15
+Mutation: trust the mutable balance counter without replaying signed debits.
+Observed RED: counter tampering restored apparent budget; error=<nil>.
+
+AS-AUTH-16
+Mutation: authorize raw path arguments without canonicalization.
+Observed RED: /cage/a/../b/secret.txt was matched as the non-canonical path
+instead of /cage/b/secret.txt.
+
+AS-AUTH-UI-01
+Mutation: remove the AUTORIDAD block.
+Observed RED: expected block position 5 after ORIGEN, got -1.
+
+AS-AUTH-UI-02
+Mutation: bypass escapeUntrusted for requester_principal_id.
+Observed RED: expected 5 escaped authority values, got 4.
+
+AS-AUTH-UI-03
+Mutation: accept a negative finite remaining balance.
+Command: npm test -- src/views/Approvals.test.tsx -t 'finite negativo' --reporter=dot
+Observed RED: the malformed document rendered "máximo -1 inicios" instead of
+the unreadable-document state; 1 failed, 147 skipped.
+
+AS-AUTH-UI-04
+Mutation: remove the word "máximo" from the browser-visible budget copy.
+Observed RED in real Chromium: expected "máximo 2 inicios", received
+"2 inicios"; the signed request remained outside the tracking tree.
+
+After restoration:
+Command: npm test -- src/views/Approvals.test.tsx -t 'AS-AUTH-UI' --reporter=dot
+Observed GREEN: 15 passed, 133 skipped.
+
+Executed command captures after the final ledger hardening
+==========================================================
+
+Every command below ran with only its named production mutation present. Each
+exited 1. The production hunk was restored with `apply_patch` before the next
+command.
+
+AS-AUTH-01
+Command: go test ./internal/action -run
+  '^TestAuthority_EveryDimensionRejectsWidening/operations$' -count=1
+Output:
+  authority_as01_test.go:47: error = <nil>, want attenuation dimension
+  "operations"
+
+AS-AUTH-02
+Command: go test ./internal/action -run
+  '^TestAuthority_PropertySubsetAgainstFiniteModel$' -count=1
+Output:
+  channel: accepted=true independent oracle=false error=<nil>
+  channel masks parent=001 child=010 accepted=true oracle=false error=<nil>
+
+AS-AUTH-03
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_DelegateUsesRemainingBudget$' -count=1
+Output:
+  authority_as03_test.go:25: error = <nil>, want budget remaining refusal
+
+AS-AUTH-04
+Command: go test ./internal/action -run
+  '^TestAuthority_PerOperationBudgetCannotDisappear$' -count=1
+Output:
+  authority_as04_test.go:19: normalized per-operation maximum = 0, want
+  remaining maximum 2
+
+AS-AUTH-05
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_DelegateAndRevokeSerialize$' -count=1
+Output:
+  authority_as05_test.go:21: error = <nil>
+
+AS-AUTH-06
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_AncestorRevocationStopsLeaf$' -count=1
+Output:
+  authority_as06_test.go:25: error = <nil>
+
+AS-AUTH-07
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_ConcurrentStartsShareAncestorBudget$' -count=1
+Output:
+  authority_as07_test.go:74: committed=24 exhausted=24
+
+AS-AUTH-08
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_BusyIsNotBudgetExhaustion$' -count=1
+Output:
+  authority_as08_test.go:32: error = action/sqlite: authority budget exhausted:
+  context deadline exceeded
+
+AS-AUTH-09
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_StartDebitAndApprovalClaimAreAtomic$' -count=1
+Output:
+  authority_as09_test.go:23: probe did not abort start
+
+AS-AUTH-10
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_RepeatedActionIDCannotSpendOrStartTwice$' -count=1
+Output:
+  authority_as10_test.go:16: second = <nil>
+
+AS-AUTH-11-A
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome/before_commit$'
+  -count=1
+Output:
+  authority_as11_test.go:68: child = exit status 95
+
+AS-AUTH-11-B
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome/'
+  'after_commit_before_return$' -count=1
+Output:
+  authority_as11_test.go:68: child = exit status 95
+
+AS-AUTH-12
+Command: go test ./internal/app -run
+  '^TestAuthority_ConfigMigrationPreservesToolChannelRelation$' -count=1
+Output:
+  authority_as12_test.go:36: read_file inherited channels
+  [console telegram]
+
+AS-AUTH-13
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_IssuerComesFromAuthenticatedActor$' -count=1
+Output:
+  authority_as13_test.go:16: error = <nil>
+
+AS-AUTH-14
+Command: go test ./internal/action -run
+  '^TestAuthority_SignedInvalidChainStillFails$' -count=1
+Output:
+  correctly signed cycle, foreign-intent root, and incompatible parent were
+  all accepted by the signature-only mutation
+
+AS-AUTH-15
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_CounterTamperingDoesNotRestoreBudget$' -count=1
+Output:
+  authority_as15_test.go:18: error = <nil>
+
+AS-AUTH-16
+Command: go test ./internal/action -run
+  '^TestAuthority_ResourceMatcherBindsActualArguments$' -count=1
+Output:
+  authority_as16_test.go:38: non-canonical URL traversal widened the parent
+  path
+
+Hostile-review guard mutations
+------------------------------
+
+SIGNED-DEBIT
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_SignedDebitTailRejectsCoherentProjectionRewrite$' -count=1
+Mutation: bypass signed debit-tail and signed counter-head verification.
+Exit 1:
+  authority_postreview_test.go:66: rewritten signed tail error = <nil>
+
+START-PROOF
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_StartProofRejectsUnsignedProjectionRewrite$' -count=1
+Mutation: bypass the signed authorization-start reader.
+Exit 1:
+  authority_postreview_test.go:100: rewritten start proof error = <nil>
+
+APPROVAL-LINK
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_ImmediateStartCannotClaimArbitraryApproval$' -count=1
+Mutation: remove the immediate path's `ApprovalID` rejection.
+Exit 1:
+  authority_postreview_test.go:76: arbitrary approval claim error = <nil>
+
+APPROVAL-STATE
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_StrictPendingDoesNotSpendAndApprovedResumeReusesAction$'
+  -count=1
+Mutation: leave the action `APPROVED` when its durable start commits.
+Exit 1:
+  authority_strict_flow_test.go:91: started action state = APPROVED, <nil>
+
+ADMIN-HUMAN
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_AdministrativeActsKeepOperatorSeparateFromGrantIssuer$'
+  -count=1
+Mutation: attribute the act to the workload instead of its authenticated
+human operator.
+Exit 1:
+  authority_administrative_test.go:29: actor "principal_brain_alpha"
+
+DETAIL-DOWNGRADE
+Command: go test ./internal/action/sqlite -run
+  '^TestApprovalDetail_ActivatedLedgerPreventsLegacyDowngrade$' -count=1
+Mutation: skip the pinned approval-birth ledger on the detail path.
+Exit 1:
+  authority_snapshot_test.go:138: downgraded detail error = <nil>
+
+STRICT-CONSOLE
+Command: go test ./internal/controlapi -run
+  '^TestConsole_StrictModeWithoutIssuerRejects$' -count=1
+Mutation: restore issuer-less strict dispatch.
+Exit 1:
+  authority_strict_test.go:29: response = 202 ""
+
+STRICT-PREP
+Command: go test ./internal/app -run
+  '^TestPrepareStrictAuthority_RefusesUnverifiedActivation$' -count=1
+Mutation: bypass pinned activation and current config-clause preparation.
+Exit 1:
+  authority_prepare_test.go:25: strict preparation accepted a missing
+  activation root
+
+Final door mutations after hostile review
+=========================================
+
+STRICT-ID-UI
+Command: npm test -- src/views/Approvals.test.tsx -t
+  'abre el identificador estricto apr3' --reporter=dot
+Mutation: restore the legacy-only `apr_` client validator.
+Exit 1: the `apr3_` row was rendered as an unreadable identifier and had no
+button, detail request, or authority document.
+
+DELEGATE-COUNTER-SEAL
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_DelegateRejectsRewrittenCounter$' -count=1
+Mutation: bypass signed debit-tail verification in delegation.
+Exit 1: the door returned `ErrBudgetExhausted` instead of
+`ErrBudgetEvidenceCorrupt` after the mutable counter rewrite.
+
+DELEGATE-ATTENUATION-DOOR
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_DelegateDoorInvokesFullAttenuation$' -count=1
+Mutation: persist the child without calling the attenuation normalizer.
+Exit 1: `error = <nil>` and the widened child reached the store.
+
+START-CHAIN-DOOR
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_StartDoorRejectsSignedInvalidChain$' -count=1
+Mutation: bypass stored-chain semantic validation after signature checks.
+Exit 1: `signed invalid chain started`.
+
+START-ACTUAL-USE-DOOR
+Command: go test ./internal/action/sqlite -run
+  '^TestAuthority_StartDoorBindsActualResourceArguments$' -count=1
+Mutation: bypass actual-argument validation in `resolveAuthorityTx`.
+Exit 1: the canonical path escape started with `error = <nil>`.

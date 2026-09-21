@@ -83,6 +83,35 @@ func (r approvalRecorder) RequestApprovalAuthenticated(ctx context.Context, env 
 	return b.Approval().ApprovalID, nil
 }
 
+// RequestAuthorizationApproval hands strict pending birth to the store. The
+// adapter contributes the already resolved law, descriptor and TTL; the store
+// replaces identity, intent, grant and budget display facts with values read
+// under its writer transaction.
+func (r approvalRecorder) RequestAuthorizationApproval(ctx context.Context, request executor.AuthorityApprovalRequest) (executor.AuthorityApprovalResult, error) {
+	approvalContext := r.resolveApprovalContext(ctx, request.Draft, "require_approval")
+	parked, err := r.store.ParkAuthorization(ctx, actionsqlite.AuthorityPendingRequest{
+		ActorPrincipalID: request.ActorPrincipalID,
+		CorrelationID:    request.CorrelationID,
+		SourceProtocol:   request.SourceProtocol,
+		Channel:          request.Channel,
+		ConversationID:   request.ConversationID,
+		Operation:        request.Operation,
+		Arguments:        request.Arguments,
+		EffectClass:      request.EffectClass,
+		At:               request.At,
+		ApprovalContext:  approvalContext,
+		ResolveEvidence:  request.ResolveEvidence,
+	})
+	if err != nil {
+		return executor.AuthorityApprovalResult{}, err
+	}
+	return executor.AuthorityApprovalResult{
+		ActionID: parked.ActionID, ApprovalID: parked.ApprovalID,
+		IntentID: parked.IntentID, AuthorityRefs: parked.AuthorityRefs,
+		Evidence: parked.Evidence,
+	}, nil
+}
+
 // resolveApprovalContext gathers the facts the factory cannot derive
 // itself: the intent's purpose, the grant identity and its budget line
 // (absent facts are stated as absent, never invented), the declared
@@ -166,6 +195,14 @@ func (s approvedExecutionStore) Close(ctx context.Context, actionID string, stat
 func (s approvedExecutionStore) ReadReceipt(ctx context.Context, approvalID string) (string, error) {
 	approval, _, err := s.store.GetApproval(ctx, approvalID)
 	return approval.DecisionReceiptID, err
+}
+
+func (s approvedExecutionStore) StartApprovedAuthorization(ctx context.Context, approvalID string) ([]byte, action.Operation, string, error) {
+	started, err := s.store.StartApprovedAuthorization(ctx, approvalID, s.law, s.approvedDigest, time.Now().UTC())
+	if err != nil {
+		return nil, action.Operation{}, "", err
+	}
+	return started.Params, started.Operation, started.ActionID, nil
 }
 
 // ExecuteApprovedAction runs the EXACT stored envelope of an APPROVED
@@ -331,6 +368,12 @@ func ResolveApprovalLaw(cfg *config.Config, brainName string) (*EffectiveCage, a
 // ALREADY-resolved cage (R6-X3: no second resolution on the operator
 // path). The C1 depth check and the agent-block guard ride here.
 func BuildApprovalExecutorFromCage(cage *EffectiveCage, preview action.ActionPreview) (*executor.Executor, error) {
+	return BuildApprovalExecutorFromCageMode(cage, preview, false)
+}
+
+// BuildApprovalExecutorFromCageMode keeps compatibility construction intact
+// while allowing strict profiles to require the authority-aware resume seam.
+func BuildApprovalExecutorFromCageMode(cage *EffectiveCage, preview action.ActionPreview, strict bool) (*executor.Executor, error) {
 	toolName := preview.Operation
 	if i := strings.LastIndex(toolName, "/"); i >= 0 {
 		toolName = toolName[i+1:]
@@ -353,7 +396,8 @@ func BuildApprovalExecutorFromCage(cage *EffectiveCage, preview action.ActionPre
 	if err != nil {
 		return nil, fmt.Errorf("app: approval executor for %s/%s: %w", cage.BrainName, toolName, err)
 	}
-	return executor.New(tool.Registry{toolName: t}, 0, time.Now), nil
+	return executor.NewCoordinator(tool.Registry{toolName: t}, 0, time.Now,
+		executor.CoordinatorConfig{StrictAuthority: strict}), nil
 }
 
 // BuildApprovalExecutor builds the executor for ONE approved action's

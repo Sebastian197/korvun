@@ -51,6 +51,13 @@ const DETAIL = {
   parameters: 'https://hooks.acme.io/pedidos {"id":1}',
   parameters_state: 'present',
 }
+const AUTHORITY = {
+  requester_principal_id: 'principal_alice',
+  intent_id: 'int_supplier_payments_v3',
+  intent_purpose: 'Pay approved supplier invoices',
+  principal_chain: ['operator_chano', 'agent_accounts', 'agent_payments'],
+  budget: { kind: 'finite', remaining: 2 },
+}
 const GATE = { approvals_enabled: true, brains_total: 3, brains_can_park: 2 }
 const LIST = { gate: GATE, rows: [ROW] }
 
@@ -712,6 +719,105 @@ describe('P2 · detalle', () => {
     const origin = await screen.findByTestId('approval-origin')
     expect(origin.textContent).toContain('<U+202E>')
     expect(origin.textContent).not.toContain('‮')
+  })
+
+  it('AS-AUTH-UI-01 · AUTORIDAD sigue a ORIGEN con cuatro etiquetas y máximo', async () => {
+    await openDetail(
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, authority: AUTHORITY }),
+      }),
+    )
+    const article = await screen.findByRole('article')
+    const headings = within(article)
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent)
+    expect(headings.indexOf('AUTORIDAD')).toBe(headings.indexOf('ORIGEN') + 1)
+    expect(headings.indexOf('LA LEY QUE LO EXIGIÓ')).toBe(headings.indexOf('AUTORIDAD') + 1)
+    const authority = screen.getByTestId('approval-authority')
+    for (const label of [
+      'QUIÉN PIDIÓ',
+      'BAJO QUÉ CONTRATO',
+      'CADENA',
+      'PRESUPUESTO ANTES DE ESTE INTENTO',
+    ]) {
+      expect(within(authority).getByText(label)).toBeInTheDocument()
+    }
+    expect(within(authority).getByText('máximo 2 inicios')).toBeInTheDocument()
+  })
+
+  it('AS-AUTH-UI-01 · abre el identificador estricto apr3 acuñado por el store', async () => {
+    const strictID = 'apr3_33333333333333333333333333333333'
+    await renderList((c) => {
+      const path = c.url.replace(/^https?:\/\/[^/]+/, '')
+      if (c.method === 'GET' && path === '/api/approvals') {
+        return json(200, { ...LIST, rows: [{ ...ROW, id: strictID }] })
+      }
+      if (c.method === 'GET' && path === `/api/approvals/${strictID}`) {
+        return json(200, { ...DETAIL, id: strictID, authority: AUTHORITY })
+      }
+      return raw(404, '<html>not here</html>')
+    })
+    fireEvent.click(await screen.findByRole('button', { name: /tool\/webhook_call/ }))
+    await waitFor(() => expect(gets(`/api/approvals/${strictID}`)).toHaveLength(1))
+    expect(await screen.findByTestId('approval-authority')).toBeVisible()
+  })
+
+  it('AS-AUTH-UI-02 · todos los valores de autoridad pasan por el escape visible', async () => {
+    const invisible = '\u202e'
+    await openDetail(
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, {
+            ...DETAIL,
+            authority: {
+              requester_principal_id: `principal${invisible}alice`,
+              intent_id: `intent${invisible}payments`,
+              intent_purpose: `Pay${invisible}suppliers`,
+              principal_chain: [`operator${invisible}chano`, `agent${invisible}payments`],
+              budget: { kind: 'unlimited' },
+            },
+          }),
+      }),
+    )
+    const authority = await screen.findByTestId('approval-authority')
+    expect(authority.textContent?.match(/<U\+202E>/g)).toHaveLength(5)
+    expect(authority.textContent).not.toContain(invisible)
+    expect(within(authority).getByText('máximo sin límite declarado')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['requester ausente', { ...AUTHORITY, requester_principal_id: undefined }],
+    ['requester no string', { ...AUTHORITY, requester_principal_id: 7 }],
+    ['intent ausente', { ...AUTHORITY, intent_id: undefined }],
+    ['purpose ausente', { ...AUTHORITY, intent_purpose: undefined }],
+    ['cadena no array', { ...AUTHORITY, principal_chain: 'operator_chano' }],
+    ['cadena vacía', { ...AUTHORITY, principal_chain: [] }],
+    ['elemento de cadena vacío', { ...AUTHORITY, principal_chain: ['operator_chano', ''] }],
+    ['budget ausente', { ...AUTHORITY, budget: undefined }],
+    ['kind desconocido', { ...AUTHORITY, budget: { kind: 'approximate', remaining: 2 } }],
+    ['finite sin saldo', { ...AUTHORITY, budget: { kind: 'finite' } }],
+    ['finite negativo', { ...AUTHORITY, budget: { kind: 'finite', remaining: -1 } }],
+    [
+      'finite inseguro',
+      { ...AUTHORITY, budget: { kind: 'finite', remaining: Number.MAX_SAFE_INTEGER + 1 } },
+    ],
+  ])('AS-AUTH-UI-03 · %s rehúsa el documento completo', async (_name, authority) => {
+    await openDetail(
+      happy({
+        'GET /api/approvals/apr_11111111111111111111111111111111': () =>
+          json(200, { ...DETAIL, authority }),
+      }),
+    )
+    expect(await screen.findByText('El núcleo no ha contestado nada legible.')).toBeInTheDocument()
+    expect(screen.queryByTestId('approval-authority')).toBeNull()
+    expect(approveBtn()).toBeNull()
+  })
+
+  it('AS-AUTH-UI-03 · detalle legacy omite AUTORIDAD sin cambiar el documento', async () => {
+    await openDetail()
+    expect(await screen.findByRole('article')).toBeInTheDocument()
+    expect(screen.queryByTestId('approval-authority')).toBeNull()
   })
 
   it('AS-41 · parámetros con una URL: cero elementos <a> en el documento', async () => {

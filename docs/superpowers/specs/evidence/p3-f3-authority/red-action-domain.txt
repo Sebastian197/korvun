@@ -1,0 +1,47 @@
+P3-F3 authority RED capture — action domain
+Date: 2026-09-21
+Base: f5762b8
+Production authority-v2 implementation present: no
+
+$ go test -tags auth_red_01 ./internal/action -run '^TestAuthority_' -count=1
+exit 1
+undefined: AuthorityGrantV2
+undefined: AuthorityBudgetRemaining
+undefined: ResourceMatchers
+undefined: NormalizeAuthorityDelegation
+AS-AUTH-01 RED: every-dimension mold cannot compile before the v2 contract exists.
+
+$ go test -tags auth_red_02 ./internal/action -run '^TestAuthority_' -count=1
+exit 1
+undefined: AuthorityGrantV2
+undefined: AuthorityBudgetRemaining
+undefined: ResourceMatchers
+undefined: NormalizeAuthorityDelegation
+AS-AUTH-02 RED: independent finite-model mold cannot compile before the validator exists.
+
+$ go test -tags auth_red_04 ./internal/action -run '^TestAuthority_' -count=1
+exit 1
+undefined: AuthorityGrantV2
+undefined: AuthorityBudgetRemaining
+undefined: ResourceMatchers
+undefined: NormalizeAuthorityDelegation
+undefined: AttenuationError
+AS-AUTH-04 RED: inherited per-operation limit has no normalizer yet.
+
+$ go test -tags auth_red_14 ./internal/action -run '^TestAuthority_' -count=1
+exit 1
+undefined: AuthorityGrantV2
+undefined: SignedAuthorityGrantV2
+undefined: SignAuthorityGrantV2
+undefined: VerifyAuthorityChain
+AS-AUTH-14 RED: signed-chain verifier does not exist yet.
+
+$ go test -tags auth_red_16 ./internal/action -run '^TestAuthority_' -count=1
+exit 1
+undefined: AuthorityGrantV2
+undefined: NewOperationUseRegistry
+undefined: RegisterBuiltInOperationUse
+undefined: ValidateAuthorityUse
+undefined: ResourceMatchers
+undefined: PathResourceIncludes
+AS-AUTH-16 RED: actual-argument analyzer and matcher do not exist yet.

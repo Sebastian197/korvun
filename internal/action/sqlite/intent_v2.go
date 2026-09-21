@@ -259,7 +259,7 @@ func (s *Store) PutExecutionBinding(ctx context.Context, b action.ExecutionBindi
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO execution_bindings(binding_id,actor_principal_id,channel,conversation_id,intent_id,intent_version,intent_digest,revision,status) VALUES(?,?,?,?,?,?,?,?,?)`, b.BindingID, b.ActorPrincipalID, b.Channel, nullString(b.ConversationID), b.IntentID, b.IntentVersion, b.IntentDigest, b.Revision, string(b.Status)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO execution_bindings(binding_id,actor_principal_id,channel,conversation_id,intent_id,intent_version,intent_digest,grant_id,grant_version,grant_digest,revision,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, b.BindingID, b.ActorPrincipalID, b.Channel, nullString(b.ConversationID), b.IntentID, b.IntentVersion, b.IntentDigest, nullString(b.GrantID), nullableInt(b.GrantVersion), nullString(b.GrantDigest), b.Revision, string(b.Status)); err != nil {
 		return err
 	}
 	at := time.Now().UTC()
@@ -267,6 +267,13 @@ func (s *Store) PutExecutionBinding(ctx context.Context, b action.ExecutionBindi
 		return err
 	}
 	return tx.Commit()
+}
+
+func nullableInt(value int) any {
+	if value == 0 {
+		return nil
+	}
+	return value
 }
 
 // ResolveExecutionBinding selects the most specific binding and verifies it.

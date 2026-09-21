@@ -1,0 +1,47 @@
+P3-F3 authority UI RED evidence, 2026-09-21
+
+Command:
+  cd cmd/korvun-desktop/frontend
+  npm test -- src/views/Approvals.test.tsx -t AS-AUTH-UI --reporter=verbose
+
+Result: FAIL (exit 1)
+  Test Files  1 failed (1)
+  Tests       14 failed | 1 passed | 133 skipped (148)
+  AS-AUTH-UI-01: expected AUTORIDAD after ORIGEN, heading index was -1.
+  AS-AUTH-UI-02: [data-testid="approval-authority"] was absent.
+  AS-AUTH-UI-03: every malformed variant painted the approval document instead
+  of the unreadable response. The legacy-absence control passed.
+
+The first attempted invocation exited 127 because a new worktree has no
+node_modules. `npm ci --include=optional` installed the checked-in lockfile;
+the evidence above is the first test execution.
+
+Command:
+  npm run build
+  npm run e2e -- --grep AS-AUTH-UI-04 --reporter=line
+
+Result: FAIL (exit 1), real Chromium
+  Running 1 test using 1 worker
+  Locator: getByTestId('approval-authority')
+  Expected: visible
+  Error: element(s) not found
+  1 failed
+
+The build step is recorded because the initial browser invocation served the
+committed placeholder and did not reach the new mold. After the ordinary Vite
+build, Chromium reached the approval document and failed at the missing block.
+
+Command:
+  go test ./internal/action/sqlite -run '^TestApprovalDetail_AuthoritySnapshot' -count=1
+
+Result: FAIL (exit 1)
+  AuthorizationSnapshotV1, CreateAuthorizedApprovalRequest,
+  ErrAuthorizationSnapshotCorrupt, and ApprovalDetailRow.Authority were
+  undefined. The three store/API snapshot molds existed before their cure.
+
+Command:
+  go test ./internal/config -run '^TestAuthority_StrictMode' -count=1
+
+Result: FAIL (exit 1)
+  AuthorityConfig and Config.Authority were undefined. The strict-storage and
+  pinned-activation validation molds existed before their cure.

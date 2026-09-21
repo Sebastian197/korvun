@@ -865,3 +865,41 @@ test('FR-UI-68 · two consecutive spaces in the parameters and the purpose are p
     expect(seen.painted, `${id}: painted text equals the text`).toBe(seen.text)
   }
 })
+
+// ---------------------------------------------------------------------------
+// AS-AUTH-UI-04 · signed parked authority, exact bytes, loopback only
+// ---------------------------------------------------------------------------
+test('AS-AUTH-UI-04 · real Chromium paints the stored authority snapshot and stays on loopback', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1100, height: 760 })
+  const harnessOrigin = new URL(APPROVALS_BASE).origin
+  const outside: string[] = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).origin !== harnessOrigin) outside.push(request.url())
+  })
+  await boot(page)
+  const res = await page.request.post(APPROVALS_BASE + '/__test/park', {
+    data: {
+      authority: {
+        requester_principal_id: 'principal_channel_telegram',
+        intent_id: 'int_supplier_payments_v3',
+        intent_purpose: 'Pay\u202e approved supplier invoices',
+        principal_chain: ['principal_console_admin', 'principal_brain_operaciones'],
+        budget: { kind: 'finite', remaining: 2 },
+      },
+    },
+  })
+  expect(res.ok(), `park failed: ${res.status()} ${await res.text()}`).toBe(true)
+  const parked = (await res.json()) as Parked
+  await openParked(page, parked)
+
+  const authority = page.getByTestId('approval-authority')
+  await expect(authority).toBeVisible()
+  await expect(authority).toContainText('principal_channel_telegram')
+  await expect(authority).toContainText('int_supplier_payments_v3')
+  await expect(authority).toContainText('Pay<U+202E> approved supplier invoices')
+  await expect(authority).toContainText('principal_console_admin → principal_brain_operaciones')
+  await expect(authority).toContainText('máximo 2 inicios')
+  expect(outside).toEqual([])
+})

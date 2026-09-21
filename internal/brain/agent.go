@@ -116,6 +116,7 @@ type AgentBrain struct {
 	actions           ActionRecorder
 	identity          *ActionIdentity
 	principalResolver *identity.Resolver
+	strictAuthority   bool
 	effects           EffectClassifier
 	perModelCall      time.Duration
 	fallback          string
@@ -429,6 +430,7 @@ func NewAgentBrain(m model.Model, tools tool.Registry, opts ...AgentOption) *Age
 		Recorder:               a.actions,
 		Identity:               identity,
 		PrincipalResolver:      a.principalResolver,
+		StrictAuthority:        a.strictAuthority,
 		EffectClassifier:       executor.EffectClassifier(a.effects),
 		BoundOperation:         boundedArgs,
 		CloseClock:             a.now,

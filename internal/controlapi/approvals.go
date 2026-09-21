@@ -263,6 +263,26 @@ type ApprovalDetail struct {
 	// would leave the request unclosable. Reject does not consult the law, so
 	// the screen degrades to reject-only and still finishes the request.
 	BrainGone bool `json:"brain_gone,omitempty"`
+	// Authority is the exact signed pending snapshot. Legacy and non-strict
+	// requests omit it; callers must not infer authority from other fields.
+	Authority *ApprovalAuthority `json:"authority,omitempty"`
+}
+
+// ApprovalAuthority is the display-safe projection of one verified signed
+// authorization snapshot.
+type ApprovalAuthority struct {
+	RequesterPrincipalID string                  `json:"requester_principal_id"`
+	IntentID             string                  `json:"intent_id"`
+	IntentPurpose        string                  `json:"intent_purpose"`
+	PrincipalChain       []string                `json:"principal_chain"`
+	Budget               ApprovalAuthorityBudget `json:"budget"`
+}
+
+// ApprovalAuthorityBudget is either finite with Remaining or unlimited with
+// no numeric value.
+type ApprovalAuthorityBudget struct {
+	Kind      string `json:"kind"`
+	Remaining *int64 `json:"remaining,omitempty"`
 }
 
 // ApprovalGate is what the list says about the profile itself. Without it "no

@@ -128,6 +128,9 @@ func openOperatorStoreSealed(configPath string) (*actionsqlite.Store, error) {
 	}, func(event action.IntentEventV1) action.SignedIntentEventV1 {
 		return action.SignIntentEventV1(priv, event)
 	})
+	store.SetAuthoritySigner(func(domain string, canonical []byte) action.AuthoritySignature {
+		return action.SignAuthorityBytes(priv, domain, canonical)
+	})
 	if err := wireOperatorIdentity(store, priv, time.Now().UTC()); err != nil {
 		_ = store.Close()
 		return nil, err
@@ -147,7 +150,7 @@ func localCLIRegistry() identityv2.Registry {
 				DisplayName: "Local profile credential"},
 			{ID: action.OperatorPrincipal().PrincipalID, Kind: identityv2.PrincipalWorkload,
 				DisplayName: "Local CLI operator workload"},
-			{ID: localCLIResponsible, Kind: identityv2.PrincipalExternalSystem,
+			{ID: localCLIResponsible, Kind: identityv2.PrincipalHuman,
 				DisplayName: "Local operator role"},
 		},
 		Bindings: []identityv2.Binding{{

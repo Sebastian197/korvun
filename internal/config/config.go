@@ -19,6 +19,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -71,6 +72,9 @@ type Config struct {
 	// block means open a durable store at boot. An empty Path defaults to an
 	// OS-appropriate data dir, resolved in internal/app.
 	Storage *StorageConfig `json:"storage,omitempty"`
+	// Authority enables the strict v2 start gate. Strict mode requires durable
+	// storage and a root activation digest created by the explicit operator act.
+	Authority *AuthorityConfig `json:"authority,omitempty"`
 	// Approvals configures the human-approval workflow (Trust Layer
 	// Etapa 5). Absent means OFF: the E3 honest denial
 	// (approval_unavailable) stands byte-for-byte.
@@ -151,6 +155,18 @@ type ApprovalsConfig struct {
 
 type StorageConfig struct {
 	Path string `json:"path"`
+}
+
+// AuthorityConfig pins the explicit activation root used by strict starts.
+// Absence preserves the legacy compatibility path.
+type AuthorityConfig struct {
+	Mode             string `json:"mode"`
+	ActivationDigest string `json:"activation_digest"`
+}
+
+// StrictAuthority reports whether the fail-closed v2 gate is configured.
+func (c *Config) StrictAuthority() bool {
+	return c != nil && c.Authority != nil && c.Authority.Mode == "strict"
 }
 
 // DefaultObservabilityAddr is the admin server's default bind address: loopback
@@ -639,6 +655,9 @@ func (c *Config) Validate() error {
 	if err := c.validateTimeouts(); err != nil {
 		return err
 	}
+	if err := c.validateAuthority(); err != nil {
+		return err
+	}
 	channelNames, err := c.validateChannels()
 	if err != nil {
 		return err
@@ -661,6 +680,26 @@ func (c *Config) Validate() error {
 	}
 	if c.Routes == nil {
 		c.Routes = []RouteConfig{}
+	}
+	return nil
+}
+
+func (c *Config) validateAuthority() error {
+	if c.Authority == nil {
+		return nil
+	}
+	if c.Authority.Mode != "strict" {
+		return fmt.Errorf("%w: authority.mode: unknown mode %q (supported: strict)", ErrInvalidConfig, c.Authority.Mode)
+	}
+	if c.Storage == nil {
+		return fmt.Errorf("%w: authority.mode: strict requires the storage block", ErrInvalidConfig)
+	}
+	digest := c.Authority.ActivationDigest
+	if len(digest) != len("sha256:")+64 || !strings.HasPrefix(digest, "sha256:") || digest != strings.ToLower(digest) {
+		return fmt.Errorf("%w: authority.activation_digest: must be sha256 plus 64 lowercase hex characters", ErrInvalidConfig)
+	}
+	if raw, err := hex.DecodeString(strings.TrimPrefix(digest, "sha256:")); err != nil || len(raw) != 32 {
+		return fmt.Errorf("%w: authority.activation_digest: must be sha256 plus 64 lowercase hex characters", ErrInvalidConfig)
 	}
 	return nil
 }

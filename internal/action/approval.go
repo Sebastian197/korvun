@@ -127,9 +127,8 @@ type Approval struct {
 	DecisionReceiptID string
 }
 
-// approvalIDShape is the only shape NewApprovalID mints: "apr_" and 32
-// lowercase hex characters.
-var approvalIDShape = regexp.MustCompile(`^apr_[0-9a-f]{32}$`)
+// approvalIDShape accepts the compatibility and strict store-minted shapes.
+var approvalIDShape = regexp.MustCompile(`^(?:apr|apr3)_[0-9a-f]{32}$`)
 
 // ValidApprovalID reports whether id has the shape NewApprovalID mints. Every
 // door that takes an approval id from outside — the CLI verbs, the control
@@ -146,6 +145,13 @@ func NewApprovalID() string {
 	// crypto/rand.Read is documented (Go ≥1.24) to always succeed.
 	_, _ = rand.Read(b)
 	return "apr_" + hex.EncodeToString(b)
+}
+
+// NewStrictApprovalID generates the store-only strict approval identity.
+func NewStrictApprovalID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return "apr3_" + hex.EncodeToString(b)
 }
 
 // Digest returns the deterministic digest of the CONSUMED DECISION

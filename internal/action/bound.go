@@ -74,6 +74,16 @@ func (b BoundApprovalRequest) RawParams() string { return b.params }
 // refuses at birth as preview_effect_mismatch), the law from the pin,
 // the rule from the gate.
 func NewBoundApprovalRequest(env Envelope, rawParams string, actx ApprovalContext) (BoundApprovalRequest, error) {
+	return NewBoundApprovalRequestWithID(env, rawParams, actx, NewApprovalID())
+}
+
+// NewBoundApprovalRequestWithID is the strict-store variant. The caller must
+// mint the id while it owns the durable writer; all story fields remain
+// derived by the same factory.
+func NewBoundApprovalRequestWithID(env Envelope, rawParams string, actx ApprovalContext, approvalID string) (BoundApprovalRequest, error) {
+	if !ValidApprovalID(approvalID) {
+		return BoundApprovalRequest{}, fmt.Errorf("action: bound approval: malformed approval id")
+	}
 	if actx.Rule == "" {
 		return BoundApprovalRequest{}, fmt.Errorf("action: bound approval: an empty gate rule cannot park anything")
 	}
@@ -129,7 +139,7 @@ func NewBoundApprovalRequest(env Envelope, rawParams string, actx ApprovalContex
 		RequiredRule:  actx.Rule,
 	}
 	approval := Approval{
-		ApprovalID:    NewApprovalID(),
+		ApprovalID:    approvalID,
 		SchemaVersion: 1,
 		ActionID:      env.ActionID,
 		ActionDigest:  env.ParametersDigest,
