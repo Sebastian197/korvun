@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/identity"
 	"github.com/go-telegram/bot"
 )
 
@@ -85,6 +86,7 @@ type config struct {
 	logger              *slog.Logger
 	extraLibraryOptions []bot.Option
 	injectedBotForTests botClient
+	ingressIssuer       *identity.Issuer
 }
 
 // Option configures the Adapter at construction time. Options are
@@ -199,6 +201,12 @@ func WithReverseProxyTermination() Option {
 // Defaults to slog.Default().
 func WithLogger(l *slog.Logger) Option {
 	return func(c *config) { c.logger = l }
+}
+
+// WithIngressIssuer configures the adapter capability minted only from the
+// authenticated polling callback or after webhook-secret validation.
+func WithIngressIssuer(issuer *identity.Issuer) Option {
+	return func(c *config) { c.ingressIssuer = issuer }
 }
 
 // WithLibraryOptions appends extra bot.Option values to the slice

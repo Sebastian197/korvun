@@ -8,6 +8,7 @@ package brain
 import (
 	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/action/executor"
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 // ActionIdentity is the boot-wired identity context: the config-pinned
@@ -37,4 +38,10 @@ type IdentifiedRecorder = executor.IdentifiedRecorder
 // WithActionIdentity wires the identity context into the brain.
 func WithActionIdentity(id ActionIdentity) AgentOption {
 	return func(a *AgentBrain) { a.identity = &id }
+}
+
+// WithPrincipalResolver requires opaque authenticated ingress for every tool
+// action handled by this brain.
+func WithPrincipalResolver(resolver *identity.Resolver) AgentOption {
+	return func(a *AgentBrain) { a.principalResolver = resolver }
 }

@@ -183,7 +183,10 @@ func readChain(ctx context.Context, t *testing.T, db *sql.DB) []action.Receipt {
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
 		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
-		        schema_version, approval_digest
+		        schema_version, approval_digest, identity_status,
+		        requester_principal_id, actor_principal_id,
+		        responsible_principal_id, identity_evidence_digest,
+		        identity_snapshot_digest
 		   FROM receipts ORDER BY chain_seq ASC`)
 	if err != nil {
 		t.Fatalf("read the chain: %v", err)
@@ -202,7 +205,10 @@ func readChain(ctx context.Context, t *testing.T, db *sql.DB) []action.Receipt {
 			&r.AuthorityDigest, &r.DecisionDigest, &r.ActionDigest, &class, &r.Attempt,
 			&r.Outcome, &r.ResultDigest, &started, &finished, &r.Partition, &r.ChainSeq,
 			&r.PreviousReceiptHash, &r.ReceiptHash, &r.SigningKeyID, &r.Signature,
-			&r.SchemaVersion, &approval); err != nil {
+			&r.SchemaVersion, &approval, &r.IdentityStatus,
+			&r.RequesterPrincipalID, &r.ActorPrincipalID,
+			&r.ResponsiblePrincipalID, &r.IdentityEvidenceDigest,
+			&r.IdentitySnapshotDigest); err != nil {
 			t.Fatalf("scan a receipt: %v", err)
 		}
 		r.EffectClass = action.EffectClass(class)

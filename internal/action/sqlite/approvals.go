@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 // ErrUnknownDecision reports a decision verb outside the finite set.
@@ -58,12 +59,26 @@ func (s *Store) CreateApprovalRequest(ctx context.Context, b action.BoundApprova
 		a, b.Preview(), b.RawParams())
 }
 
+// CreateApprovalRequestAuthenticated births the parked action, decision,
+// approval, signed snapshot, and full identity evidence in one transaction.
+func (s *Store) CreateApprovalRequestAuthenticated(ctx context.Context, b action.BoundApprovalRequest, evidence identity.Evidence) error {
+	a := b.Approval()
+	return s.createApprovalPartsWithIdentity(ctx, b.Envelope(),
+		Decision{Outcome: a.Reason, Rule: a.Reason,
+			PolicyVersion: a.PolicyVersion, PolicyDigest: a.PolicyDigest},
+		a, b.Preview(), b.RawParams(), &evidence)
+}
+
 // createApprovalParts is the birth mechanics behind the bundle door:
 // park the action PENDING_APPROVAL with its decision, approval row,
 // sealed preview and canonical params in one transaction, the whole
 // R1 cross-link belt enforced by name. Unexported on purpose — the
 // factory-validated bundle is the only way in from outside.
 func (s *Store) createApprovalParts(ctx context.Context, env action.Envelope, d Decision, a action.Approval, p action.ActionPreview, rawParams string) error {
+	return s.createApprovalPartsWithIdentity(ctx, env, d, a, p, rawParams, nil)
+}
+
+func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.Envelope, d Decision, a action.Approval, p action.ActionPreview, rawParams string, evidence *identity.Evidence) error {
 	// C6: the resource-bound invariant at the door — parked params are
 	// the one user-driven blob this table holds; cap them at birth.
 	if len(rawParams) > maxApprovalParamsBytes {
@@ -92,21 +107,50 @@ func (s *Store) createApprovalParts(ctx context.Context, env action.Envelope, d 
 		return fmt.Errorf("action/sqlite: begin approval request: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO actions (action_id, schema_version, correlation_id,
+	if evidence == nil {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO actions (action_id, schema_version, correlation_id,
 		    source_kind, source_protocol, source_channel,
 		    op_namespace, op_name, op_version,
 		    parameters_digest, effect_class, state, requested_at,
 		    principal_id, intent_id)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		env.ActionID, env.SchemaVersion, env.CorrelationID,
-		env.Source.Kind, env.Source.Protocol, env.Source.Channel,
-		env.Operation.Namespace, env.Operation.Name, env.Operation.Version,
-		env.ParametersDigest, env.Effect.Class, string(action.StatePendingApproval),
-		env.RequestedAt.UTC().Format(time.RFC3339Nano),
-		nullable(env.Principal.PrincipalID), nullable(env.IntentID),
-	); err != nil {
-		return fmt.Errorf("action/sqlite: park action %q: %w", env.ActionID, err)
+			env.ActionID, env.SchemaVersion, env.CorrelationID,
+			env.Source.Kind, env.Source.Protocol, env.Source.Channel,
+			env.Operation.Namespace, env.Operation.Name, env.Operation.Version,
+			env.ParametersDigest, env.Effect.Class, string(action.StatePendingApproval),
+			env.RequestedAt.UTC().Format(time.RFC3339Nano),
+			nullable(env.Principal.PrincipalID), nullable(env.IntentID),
+		); err != nil {
+			return fmt.Errorf("action/sqlite: park action %q: %w", env.ActionID, err)
+		}
+	} else {
+		if err := validateResolvedEvidenceTx(ctx, tx, *evidence, env, s.identityNow().UTC()); err != nil {
+			return err
+		}
+		signed, err := s.signEvidenceTx(ctx, tx, *evidence)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO actions (action_id,schema_version,correlation_id,
+			 source_kind,source_protocol,source_channel,op_namespace,op_name,op_version,
+			 parameters_digest,effect_class,state,requested_at,principal_id,intent_id,
+			 identity_version,identity_evidence_digest,identity_canonical_evidence,
+			 identity_signing_key_id,identity_signature)
+			 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,2,?,?,?,?)`,
+			env.ActionID, env.SchemaVersion, env.CorrelationID,
+			env.Source.Kind, env.Source.Protocol, env.Source.Channel,
+			env.Operation.Namespace, env.Operation.Name, env.Operation.Version,
+			env.ParametersDigest, env.Effect.Class, string(action.StatePendingApproval),
+			env.RequestedAt.UTC().Format(time.RFC3339Nano), evidence.ActorPrincipalID,
+			nullable(env.IntentID), signed.Digest, signed.Canonical,
+			signed.SigningKeyID, signed.Signature); err != nil {
+			return fmt.Errorf("action/sqlite: park authenticated action %q: %w", env.ActionID, err)
+		}
+		if err := insertEvidenceTx(ctx, tx, signed); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at, policy_version, policy_digest)
@@ -395,7 +439,7 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 		return fmt.Errorf("action/sqlite: stamp finish %q: %w", actionID, err)
 	}
 	// decided: the parked action leaves PENDING_APPROVAL through a decision.
-	r, err := s.receiptForFinish(ctx, tx, actionID, action.StateRejected, at, "", true)
+	r, err := s.receiptForFinish(ctx, tx, actionID, action.StateRejected, at, "", true, false)
 	if err != nil {
 		return err
 	}
@@ -792,7 +836,10 @@ func (s *Store) recordDecisionActTx(ctx context.Context, tx *sql.Tx, env action.
 	); err != nil {
 		return "", fmt.Errorf("action/sqlite: decision-act decision %q: %w", env.ActionID, err)
 	}
-	r := s.receiptForRecord(ctx, tx, env, d, action.StateSucceeded)
+	r, err := s.receiptForRecord(ctx, tx, env, d, action.StateSucceeded)
+	if err != nil {
+		return "", err
+	}
 	if err := s.appendReceiptTx(ctx, tx, r); err != nil {
 		return "", err
 	}

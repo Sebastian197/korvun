@@ -658,6 +658,11 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 	if err := verifyApprovalStoryTyped(ctx, tx, a, p); err != nil {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, err)
 	}
+	// Identity is re-verified in this claiming transaction before the purge.
+	// Legacy actions carry the exact zero/empty snapshot and remain unchanged.
+	if err := validateActionIdentityTx(ctx, tx, a.ActionID, s.identityNow().UTC()); err != nil {
+		return nil, action.Operation{}, err
+	}
 
 	op, _, err := ternaOf(ctx, tx, a.ActionID)
 	if err != nil {

@@ -11,10 +11,13 @@
 package action
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 	"time"
+
+	identityv2 "github.com/Sebastian197/korvun/internal/identity"
 )
 
 func testRegistry() ProvenanceRegistry {
@@ -54,32 +57,55 @@ func TestResolve_forgedSenderNeverBecomesTheOperator(t *testing.T) {
 
 func TestResolve_consoleIsTheOperator(t *testing.T) {
 	t.Parallel()
-	principal, evidence, err := ResolvePrincipal(testRegistry(), "console", "whatever-the-ui-sent", atE2)
+	resolver, issuer := phase1Resolver(t, "console")
+	ingress, err := issuer.Issue("console-request", "local_profile")
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	evidence, err := resolver.Resolve(ingress, identityv2.ResolveRequest{
+		ActionID: "act-console", RequestID: "console-request",
+		Channel: "console", Brain: "alpha",
+	})
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if principal.Type != PrincipalOperatorHuman || principal.PrincipalID != OperatorPrincipal().PrincipalID {
-		t.Fatalf("console provenance IS the operator, got %+v", principal)
+	if evidence.RequesterPrincipalID != "principal_shared_console" ||
+		evidence.RequesterPrincipalID == OperatorPrincipal().PrincipalID {
+		t.Fatalf("console bearer must resolve a shared capability, got %+v", evidence)
 	}
-	if evidence.Credential != CredentialLoopbackInProcess {
-		t.Fatalf("console evidence credential = %s", evidence.Credential)
+	if evidence.SubjectClaim != "local_profile" || evidence.Method != "bearer" {
+		t.Fatalf("console evidence = %+v", evidence)
 	}
 }
 
 func TestResolve_principalPerChannelSenderIsOnlySubject(t *testing.T) {
 	t.Parallel()
-	a, evA, err := ResolvePrincipal(testRegistry(), "telegram", "user-1", atE2)
+	resolver, issuer := phase1Resolver(t, "telegram")
+	ingressA, err := issuer.Issue("request-a", "user-1")
+	if err != nil {
+		t.Fatalf("issue a: %v", err)
+	}
+	ingressB, err := issuer.Issue("request-b", "user-2")
+	if err != nil {
+		t.Fatalf("issue b: %v", err)
+	}
+	evA, err := resolver.Resolve(ingressA, identityv2.ResolveRequest{
+		ActionID: "act-a", RequestID: "request-a", Channel: "telegram", Brain: "alpha",
+	})
 	if err != nil {
 		t.Fatalf("resolve a: %v", err)
 	}
-	b, evB, err := ResolvePrincipal(testRegistry(), "telegram", "user-2", atE2)
+	evB, err := resolver.Resolve(ingressB, identityv2.ResolveRequest{
+		ActionID: "act-b", RequestID: "request-b", Channel: "telegram", Brain: "alpha",
+	})
 	if err != nil {
 		t.Fatalf("resolve b: %v", err)
 	}
-	if a.PrincipalID != b.PrincipalID {
-		t.Fatalf("sealed decision 4: ONE principal per channel; got %q vs %q", a.PrincipalID, b.PrincipalID)
+	if evA.RequesterPrincipalID != evB.RequesterPrincipalID {
+		t.Fatalf("one shared requester per credential: %q vs %q",
+			evA.RequesterPrincipalID, evB.RequesterPrincipalID)
 	}
-	if evA.Subject == evB.Subject {
+	if evA.SubjectClaim == evB.SubjectClaim {
 		t.Fatal("the individual sender must survive as the evidence subject")
 	}
 	if evA.ClaimsDigest == evB.ClaimsDigest {
@@ -134,25 +160,77 @@ func TestBrainPrincipal_carriesTheResponsibleHuman(t *testing.T) {
 
 func TestEvidence_shapeAndNoSecretByConstruction(t *testing.T) {
 	t.Parallel()
-	_, evidence, err := ResolvePrincipal(testRegistry(), "telegram", "user-7", atE2)
+	resolver, issuer := phase1Resolver(t, "telegram")
+	ingress, err := issuer.Issue("request-secret-shape", "user-7")
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	evidence, err := resolver.Resolve(ingress, identityv2.ResolveRequest{
+		ActionID: "act-secret-shape", RequestID: "request-secret-shape",
+		Channel: "telegram", Brain: "alpha",
+	})
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
 	if !strings.HasPrefix(evidence.EvidenceID, "evd_") {
 		t.Fatalf("evidence ids carry the evd_ prefix, got %q", evidence.EvidenceID)
 	}
-	if !evidence.IssuedAt.Equal(atE2) || evidence.IssuedAt.Location() != time.UTC {
-		t.Fatalf("issued_at must be the request instant in UTC, got %v", evidence.IssuedAt)
+	if !evidence.ObservedAt.Equal(atE2) || evidence.ObservedAt.Location() != time.UTC {
+		t.Fatalf("observed_at must be the request instant in UTC, got %v", evidence.ObservedAt)
 	}
-	if evidence.TransportBinding != "telegram" {
-		t.Fatalf("transport binding names the channel, got %q", evidence.TransportBinding)
+	if evidence.Issuer != "telegram" || evidence.BindingID != "binding_telegram" {
+		t.Fatalf("transport binding names the configured issuer, got %+v", evidence)
 	}
 	if !strings.HasPrefix(evidence.ClaimsDigest, "sha256:") {
 		t.Fatalf("claims digest reuses the pinned-algorithm form, got %q", evidence.ClaimsDigest)
 	}
-	// B10 standard, by construction: the evidence type has NO field that
-	// could hold secret material — only names, kinds, digests and times.
-	// (Enforced structurally; this test documents the contract.)
+	raw, err := json.Marshal(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, canary := range []string{"CANARY-TOKEN", "CANARY-HEADER", "CANARY-PROMPT", "CANARY-PAYLOAD"} {
+		if strings.Contains(string(raw), canary) ||
+			strings.Contains(string(identityv2.CanonicalEvidence(evidence)), canary) {
+			t.Fatalf("secret canary %q entered evidence", canary)
+		}
+	}
+}
+
+func phase1Resolver(t *testing.T, channel string) (*identityv2.Resolver, *identityv2.Issuer) {
+	t.Helper()
+	requester := "principal_shared_" + channel
+	resolver, err := identityv2.NewResolver(identityv2.Registry{
+		Principals: []identityv2.Principal{
+			{ID: requester, Kind: identityv2.PrincipalExternalSystem},
+			{ID: "principal_brain_alpha", Kind: identityv2.PrincipalWorkload},
+			{ID: "principal_responsible_role", Kind: identityv2.PrincipalExternalSystem},
+		},
+		Bindings: []identityv2.Binding{{
+			ID: "binding_" + channel, Provider: channel, Channel: channel,
+			CredentialRef: "CONFIG_REFERENCE", SubjectNamespace: channel + "_subject",
+			VerifiedSubject: "shared_" + channel + "_credential",
+			PrincipalID:     requester, Generation: 1, Status: identityv2.BindingActive,
+		}},
+		Workloads: []identityv2.Workload{{
+			Brain: "alpha", PrincipalID: "principal_brain_alpha",
+			ResponsiblePrincipalID: "principal_responsible_role",
+		}},
+	}, func() time.Time { return atE2 })
+	if err != nil {
+		t.Fatal(err)
+	}
+	method := "bot_session"
+	if channel == "console" {
+		method = "bearer"
+	}
+	issuer, err := resolver.NewIssuer(identityv2.IssuerConfig{
+		BindingID: "binding_" + channel, Method: method,
+		CredentialClass: "shared_credential", TTL: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolver, issuer
 }
 
 func TestHashCanonical_reusesTheFuzzedCanonicalizer(t *testing.T) {

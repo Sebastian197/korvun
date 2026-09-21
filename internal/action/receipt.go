@@ -61,6 +61,14 @@ type Receipt struct {
 	// approved and refused alike; "" is honest only where no approval
 	// ever existed for the action.
 	ApprovalDigest string
+	// Phase 1 identity attribution is present only in schema v3. A corrupt
+	// recovery carries status and the encountered snapshot digest, but no ids.
+	IdentityStatus         string
+	RequesterPrincipalID   string
+	ActorPrincipalID       string
+	ResponsiblePrincipalID string
+	IdentityEvidenceDigest string
+	IdentitySnapshotDigest string
 	// StartedAt / FinishedAt bound the attempt, UTC.
 	StartedAt  time.Time
 	FinishedAt time.Time
@@ -128,6 +136,35 @@ type receiptWireV2 struct {
 	PreviousReceiptHash string `json:"previous_receipt_hash"`
 }
 
+// receiptWireV3 adds explicit requester, actor, responsibility, and the two
+// identity digests. Every signed term has its own durable receipt column.
+type receiptWireV3 struct {
+	SchemaVersion          int    `json:"schema_version"`
+	ReceiptID              string `json:"receipt_id"`
+	ActionID               string `json:"action_id"`
+	IntentDigest           string `json:"intent_digest"`
+	PrincipalID            string `json:"principal_id"`
+	AuthorityDigest        string `json:"authority_digest"`
+	DecisionDigest         string `json:"decision_digest"`
+	ActionDigest           string `json:"action_digest"`
+	ApprovalDigest         string `json:"approval_digest"`
+	IdentityStatus         string `json:"identity_status"`
+	RequesterPrincipalID   string `json:"requester_principal_id"`
+	ActorPrincipalID       string `json:"actor_principal_id"`
+	ResponsiblePrincipalID string `json:"responsible_principal_id"`
+	IdentityEvidenceDigest string `json:"identity_evidence_digest"`
+	IdentitySnapshotDigest string `json:"identity_snapshot_digest"`
+	EffectClass            string `json:"effect_class"`
+	Attempt                int    `json:"attempt"`
+	Outcome                string `json:"outcome"`
+	ResultDigest           string `json:"result_digest"`
+	StartedAt              string `json:"started_at"`
+	FinishedAt             string `json:"finished_at"`
+	Partition              string `json:"partition"`
+	ChainSeq               int64  `json:"chain_seq"`
+	PreviousReceiptHash    string `json:"previous_receipt_hash"`
+}
+
 // CanonicalReceipt returns the deterministic signable byte form of a
 // receipt, dispatching on its era: SchemaVersion 0/1 renders the
 // FROZEN v1 wire byte-for-byte (historical hashes recompute forever);
@@ -135,6 +172,30 @@ type receiptWireV2 struct {
 // ReceiptHash, SigningKeyID and Signature stay EXCLUDED (they seal
 // these bytes). Rides the fuzzed E1 canonicalizer.
 func CanonicalReceipt(r Receipt) []byte {
+	if r.SchemaVersion >= 3 {
+		wire := receiptWireV3{
+			SchemaVersion: r.SchemaVersion, ReceiptID: r.ReceiptID,
+			ActionID: r.ActionID, IntentDigest: r.IntentDigest,
+			PrincipalID: r.PrincipalID, AuthorityDigest: r.AuthorityDigest,
+			DecisionDigest: r.DecisionDigest, ActionDigest: r.ActionDigest,
+			ApprovalDigest: r.ApprovalDigest, IdentityStatus: r.IdentityStatus,
+			RequesterPrincipalID:   r.RequesterPrincipalID,
+			ActorPrincipalID:       r.ActorPrincipalID,
+			ResponsiblePrincipalID: r.ResponsiblePrincipalID,
+			IdentityEvidenceDigest: r.IdentityEvidenceDigest,
+			IdentitySnapshotDigest: r.IdentitySnapshotDigest,
+			EffectClass:            string(r.EffectClass), Attempt: r.Attempt,
+			Outcome: r.Outcome, ResultDigest: r.ResultDigest,
+			StartedAt: timeTerm(r.StartedAt), FinishedAt: timeTerm(r.FinishedAt),
+			Partition: r.Partition, ChainSeq: r.ChainSeq,
+			PreviousReceiptHash: r.PreviousReceiptHash,
+		}
+		raw, err := json.Marshal(wire)
+		if err != nil {
+			panic("action: canonical receipt v3 encoding failed: " + err.Error())
+		}
+		return raw
+	}
 	if r.SchemaVersion >= 2 {
 		wire := receiptWireV2{
 			SchemaVersion:       r.SchemaVersion,
@@ -251,6 +312,36 @@ func ParseCanonicalReceipt(raw []byte) (Receipt, error) {
 			Partition:           w2.Partition,
 			ChainSeq:            w2.ChainSeq,
 			PreviousReceiptHash: w2.PreviousReceiptHash,
+		}, nil
+	case 3:
+		var w3 receiptWireV3
+		if err := strictUnmarshal(raw, &w3); err != nil {
+			return Receipt{}, fmt.Errorf("action: parse canonical receipt v3: %w", err)
+		}
+		startedAt, err := parseTimeTerm(w3.StartedAt)
+		if err != nil {
+			return Receipt{}, fmt.Errorf("action: parse receipt v3 started_at: %w", err)
+		}
+		finishedAt, err := parseTimeTerm(w3.FinishedAt)
+		if err != nil {
+			return Receipt{}, fmt.Errorf("action: parse receipt v3 finished_at: %w", err)
+		}
+		return Receipt{
+			SchemaVersion: w3.SchemaVersion, ReceiptID: w3.ReceiptID,
+			ActionID: w3.ActionID, IntentDigest: w3.IntentDigest,
+			PrincipalID: w3.PrincipalID, AuthorityDigest: w3.AuthorityDigest,
+			DecisionDigest: w3.DecisionDigest, ActionDigest: w3.ActionDigest,
+			ApprovalDigest: w3.ApprovalDigest, IdentityStatus: w3.IdentityStatus,
+			RequesterPrincipalID:   w3.RequesterPrincipalID,
+			ActorPrincipalID:       w3.ActorPrincipalID,
+			ResponsiblePrincipalID: w3.ResponsiblePrincipalID,
+			IdentityEvidenceDigest: w3.IdentityEvidenceDigest,
+			IdentitySnapshotDigest: w3.IdentitySnapshotDigest,
+			EffectClass:            EffectClass(w3.EffectClass), Attempt: w3.Attempt,
+			Outcome: w3.Outcome, ResultDigest: w3.ResultDigest,
+			StartedAt: startedAt, FinishedAt: finishedAt,
+			Partition: w3.Partition, ChainSeq: w3.ChainSeq,
+			PreviousReceiptHash: w3.PreviousReceiptHash,
 		}, nil
 	default:
 		return Receipt{}, fmt.Errorf("action: parse canonical receipt: unknown schema version %d", sniff.SchemaVersion)

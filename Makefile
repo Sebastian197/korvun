@@ -139,8 +139,11 @@ dmg: desktop
 		cmd/korvun-desktop/build/bin/korvun-desktop_$(ARTIFACT_VERSION)_darwin_universal.dmg
 	@echo "Wrapped cmd/korvun-desktop/build/bin/korvun-desktop_$(ARTIFACT_VERSION)_darwin_universal.dmg"
 
+# -timeout is EXPLICIT here too, and matches the CI gate: Go's default of
+# 10m per package was an inheritance, not a choice, and master 551f9770
+# already ran internal/action/sqlite to 599.835s on the windows runner.
 test:
-	go test -race $(GO_PKGS)
+	go test -race -timeout 30m $(GO_PKGS)
 
 vet:
 	go vet $(GO_PKGS)
@@ -163,7 +166,7 @@ lint: fmt vet
 # target, and the threshold check has no fallback to hide behind.
 # scripts/verify-cover-fails.sh re-demonstrates the guarantee on demand.
 cover:
-	@go test -race -coverprofile=coverage.out ./internal/...
+	@go test -race -timeout 30m -coverprofile=coverage.out ./internal/...
 	@total=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | tr -d '%'); \
 	echo "Coverage: $${total}%"; \
 	if [ "$$(echo "$${total} < $(COVERAGE_THRESHOLD)" | bc)" -eq 1 ]; then \

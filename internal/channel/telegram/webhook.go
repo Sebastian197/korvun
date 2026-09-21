@@ -78,7 +78,7 @@ func (a *Adapter) webhookHandler() http.HandlerFunc {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		a.dispatchUpdate(r.Context(), &u)
+		a.dispatchAuthenticatedUpdate(r.Context(), &u)
 		w.WriteHeader(http.StatusOK)
 	}
 }

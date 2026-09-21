@@ -311,7 +311,7 @@ func TestMigrationV13AddsIntentV2Tables(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	if v, _ := store.SchemaVersion(context.Background()); v != 13 {
+	if v, _ := store.SchemaVersion(context.Background()); v != schemaVersionCurrent {
 		t.Fatalf("schema = %d", v)
 	}
 	for _, table := range []string{"intent_versions", "intent_events", "intent_heads", "execution_bindings", "authorization_snapshots"} {

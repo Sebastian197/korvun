@@ -22,33 +22,58 @@ import (
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 func TestProvenanceRegistry_fromConfig(t *testing.T) {
 	t.Parallel()
 	cfg := &config.Config{Channels: []config.ChannelConfig{
-		{Type: "telegram"}, {Type: "webhook"}, {Type: "discord"},
-	}}
-	reg := provenanceRegistry(cfg)
-	want := map[string]action.Provenance{
-		"console":  {Class: "console", Credential: action.CredentialLoopbackInProcess},
-		"telegram": {Class: "telegram", Credential: action.CredentialBotTokenSession},
-		"webhook":  {Class: "webhook", Credential: action.CredentialInboundBearer},
-		"discord":  {Class: "discord", Credential: action.CredentialGatewaySession},
+		{Type: "telegram", Mode: "polling", TokenEnv: "TELEGRAM_TOKEN"},
+		{Type: "webhook", TokenEnv: "WEBHOOK_SECRET"},
+		{Type: "discord", TokenEnv: "DISCORD_TOKEN"},
+	}, Brains: []config.BrainConfig{{Name: "alpha"}},
+		Admin: &config.AdminConfig{TokenEnv: "CONSOLE_TOKEN"}}
+	registry, resolver, issuers, err := phase1IdentityRuntime(cfg)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(reg) != len(want) {
-		t.Fatalf("registry = %+v, want %d entries", reg, len(want))
+	if len(registry.Bindings) != 4 || len(issuers) != 4 {
+		t.Fatalf("bindings=%d issuers=%d, want console plus three configured doors",
+			len(registry.Bindings), len(issuers))
 	}
-	for name, provenance := range want {
-		if reg[name] != provenance {
-			t.Fatalf("registry[%q] = %+v, want %+v", name, reg[name], provenance)
+	if len(registry.Workloads) != 1 ||
+		registry.Workloads[0].PrincipalID != "principal_brain_alpha" {
+		t.Fatalf("workload registry = %+v", registry.Workloads)
+	}
+	wantCredentials := map[string]string{
+		"binding_console": "CONSOLE_TOKEN", "binding_discord": "DISCORD_TOKEN",
+		"binding_telegram": "TELEGRAM_TOKEN", "binding_webhook": "WEBHOOK_SECRET",
+	}
+	for _, binding := range registry.Bindings {
+		if binding.CredentialRef != wantCredentials[binding.ID] {
+			t.Fatalf("%s credential ref = %q, want %q",
+				binding.ID, binding.CredentialRef, wantCredentials[binding.ID])
+		}
+		if binding.VerifiedSubject == "" || binding.SubjectNamespace == "" {
+			t.Fatalf("%s lacks honest subject facts: %+v", binding.ID, binding)
 		}
 	}
-	// A channel-less boot still carries the console: the operator's own
-	// hands are in-process provenance, not config.
-	bare := provenanceRegistry(&config.Config{})
-	if len(bare) != 1 || bare["console"].Credential != action.CredentialLoopbackInProcess {
-		t.Fatalf("the console is always present, got %+v", bare)
+	if _, err := resolver.Resolve(identity.AuthenticatedIngress{}, identity.ResolveRequest{
+		ActionID: "act-label", RequestID: "request-label",
+		Channel: "console", Brain: "alpha",
+	}); !errors.Is(err, identity.ErrIdentityEvidenceMissing) {
+		t.Fatalf("a configured channel label certified a request: %v", err)
+	}
+	ingress, err := issuers["console"].Issue("request-console", "local_profile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := resolver.Resolve(ingress, identity.ResolveRequest{
+		ActionID: "act-console", RequestID: "request-console",
+		Channel: "console", Brain: "alpha",
+	})
+	if err != nil || evidence.RequesterPrincipalID != consoleRequesterPrincipal {
+		t.Fatalf("console evidence=%+v err=%v", evidence, err)
 	}
 }
 

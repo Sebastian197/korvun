@@ -53,13 +53,13 @@ func (c *cli) grantCmd(args []string) int {
 // recordDeniedAct leaves the DENIED receipt of a pre-validated refusal:
 // the act never runs, the trail says why.
 func recordDeniedAct(ctx context.Context, store *actionsqlite.Store, namespace, name, params, rule string) error {
-	env, identity, err := operatorEnvelope(namespace, name, params)
+	env, evidence, err := operatorAuthenticatedEnvelope(store, namespace, name, params)
 	if err != nil {
 		return err
 	}
-	return store.RecordAttemptIdentified(ctx, env,
+	return store.RecordAttemptAuthenticated(ctx, env,
 		actionsqlite.Decision{Outcome: "deny", Rule: rule},
-		action.StateDenied, identity)
+		action.StateDenied, evidence)
 }
 
 // grantFlags is the shared flag surface of issue and delegate.

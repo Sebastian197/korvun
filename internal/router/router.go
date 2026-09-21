@@ -14,6 +14,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 // EventPublisher is the optional, best-effort lifecycle-event sink the router
@@ -105,7 +106,14 @@ type Router struct {
 type brainWorker struct {
 	name  string
 	brain brain.Brain
-	queue chan *envelope.Envelope
+	queue chan inboundWork
+}
+
+// inboundWork owns authentication evidence across the asynchronous queue.
+// Context is created later by the worker and is not the authority carrier.
+type inboundWork struct {
+	envelope *envelope.Envelope
+	ingress  identity.AuthenticatedIngress
 }
 
 // channelWorker pairs a registered channel with its bounded outbound
@@ -224,7 +232,7 @@ func (r *Router) RegisterBrain(name string, b brain.Brain) error {
 	bw := &brainWorker{
 		name:  name,
 		brain: b,
-		queue: make(chan *envelope.Envelope, r.queueCapacity),
+		queue: make(chan inboundWork, r.queueCapacity),
 	}
 	r.brains[name] = bw
 	workers := r.brainWorkers
@@ -349,7 +357,7 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 	// failure.
 	if r.enqueueTimeout <= 0 {
 		select {
-		case bw.queue <- env:
+		case bw.queue <- inboundWork{envelope: env, ingress: env.AuthenticatedIngress()}:
 			r.publishReceived(env, brainName)
 			return nil
 		case <-ctx.Done():
@@ -360,7 +368,7 @@ func (r *Router) DispatchInbound(ctx context.Context, env *envelope.Envelope) er
 	timer := time.NewTimer(r.enqueueTimeout)
 	defer timer.Stop()
 	select {
-	case bw.queue <- env:
+	case bw.queue <- inboundWork{envelope: env, ingress: env.AuthenticatedIngress()}:
 		r.publishReceived(env, brainName)
 		return nil
 	case <-ctx.Done():
@@ -430,11 +438,16 @@ func (r *Router) runBrainWorker(bw *brainWorker) {
 	defer r.brainWg.Done()
 	for {
 		select {
-		case env, ok := <-bw.queue:
+		case <-r.ctx.Done():
+			return
+		default:
+		}
+		select {
+		case work, ok := <-bw.queue:
 			if !ok {
 				return
 			}
-			r.handleAndReply(bw.name, bw.brain, env)
+			r.handleAndReply(bw.name, bw.brain, work)
 		case <-r.ctx.Done():
 			return
 		}
@@ -515,17 +528,26 @@ func (r *Router) dispatchFromPump(channelName string, env *envelope.Envelope) {
 // WithBrainHandlerTimeout) and, on success, enqueues every reply on
 // its target channel's outbound queue. Errors from Handle are routed
 // to the error hook.
-func (r *Router) handleAndReply(brainName string, b brain.Brain, env *envelope.Envelope) {
+func (r *Router) handleAndReply(brainName string, b brain.Brain, work inboundWork) {
+	env := work.envelope
 	var (
 		out []*envelope.Envelope
 		err error
 	)
 	if r.brainHandlerTimeout > 0 {
 		ctx, cancel := context.WithTimeout(r.ctx, r.brainHandlerTimeout)
-		out, err = b.Handle(ctx, env)
+		if authenticated, ok := b.(brain.AuthenticatedBrain); ok {
+			out, err = authenticated.HandleAuthenticated(ctx, env, work.ingress)
+		} else {
+			out, err = b.Handle(ctx, env)
+		}
 		cancel()
 	} else {
-		out, err = b.Handle(r.ctx, env)
+		if authenticated, ok := b.(brain.AuthenticatedBrain); ok {
+			out, err = authenticated.HandleAuthenticated(r.ctx, env, work.ingress)
+		} else {
+			out, err = b.Handle(r.ctx, env)
+		}
 	}
 	if err != nil {
 		r.notifyError(RouterError{
