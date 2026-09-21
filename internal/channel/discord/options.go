@@ -9,6 +9,8 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"time"
+
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 // ChannelName is the unique identifier of the Discord channel (the value of
@@ -80,7 +82,8 @@ type config struct {
 	clock           gwClock
 	// rnd returns a fraction in [0,1); it feeds BOTH the heartbeat startup jitter
 	// and the full-jitter reconnect backoff. Tests inject a deterministic value.
-	rnd func() float64
+	rnd           func() float64
+	ingressIssuer *identity.Issuer
 }
 
 func defaultConfig() *config {
@@ -120,6 +123,12 @@ func WithLogger(l *slog.Logger) Option {
 			c.logger = l
 		}
 	}
+}
+
+// WithIngressIssuer configures evidence minted only inside a READY or RESUMED
+// Gateway session.
+func WithIngressIssuer(issuer *identity.Issuer) Option {
+	return func(c *config) { c.ingressIssuer = issuer }
 }
 
 // withGatewayURLForTests overrides the Gateway URL so tests can dial a fake server

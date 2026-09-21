@@ -21,6 +21,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 // ChannelName is the registered type name of the webhook channel, mirroring
@@ -62,6 +63,7 @@ type Adapter struct {
 	path          string
 	secret        string
 	outboundToken string
+	ingressIssuer *identity.Issuer
 	mu            sync.RWMutex
 	server        *http.Server
 	boundAddr     string
@@ -179,6 +181,18 @@ func (a *Adapter) InboundHandler() http.Handler {
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+		if a.ingressIssuer != nil {
+			if authenticated, _ := r.Context().Value(authenticatedRequestKey{}).(bool); !authenticated {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			ingress, err := a.ingressIssuer.Issue(env.ID, env.Sender.ID)
+			if err != nil {
+				http.Error(w, "identity unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			env.SetAuthenticatedIngress(ingress)
 		}
 
 		// X-Idempotency-Key opts the SENDER into router-side dedup of its

@@ -15,9 +15,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
 	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
@@ -73,23 +75,28 @@ func identityHarness(t *testing.T) (*AgentBrain, *identifiedFakeRecorder, *[]str
 // digest byte-identical to the E1 form.
 func TestIdentity_identifiedActionCarriesTheFullChain(t *testing.T) {
 	t.Parallel()
-	a, rec, journal := identityHarness(t)
+	a, rec, journal, issuer := authenticatedIdentityHarness(t, "console")
 	env := &envelope.Envelope{ID: "env-i", Channel: "console",
 		Sender: envelope.Participant{ID: "console-user"}}
+	ingress, err := issuer.Issue(env.ID, "local_profile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), authenticatedIngressContextKey{}, ingress)
 	decisions := map[string]policy.ToolDecision{"journal": {Mode: policy.ToolAllow}}
-	out := a.runTool(context.Background(), env, decisions, laneText, "journal", `{"a":1}`)
+	out := a.runTool(ctx, env, decisions, laneText, "journal", `{"a":1}`)
 	if out != "done" {
 		t.Fatalf("observation = %q — the outside must not move", out)
 	}
-	want := []string{"record-identified:AUTHORIZED", "execute", "finish:SUCCEEDED"}
+	want := []string{"record-authenticated:AUTHORIZED", "execute", "finish:SUCCEEDED"}
 	if strings.Join(*journal, ",") != strings.Join(want, ",") {
 		t.Fatalf("record-before-effect holds on the identified path too: %v", *journal)
 	}
-	e := rec.identifiedEnvs[0]
-	if e.Principal.PrincipalID != action.BrainPrincipal("asistente").PrincipalID {
+	e := rec.authenticatedEnvs[0]
+	if e.Principal.PrincipalID != "principal_brain_asistente" {
 		t.Fatalf("the acting principal is the brain, got %q", e.Principal.PrincipalID)
 	}
-	if e.Principal.ResponsibleHumanID != action.OperatorPrincipal().PrincipalID {
+	if e.Principal.ResponsibleHumanID != "principal_responsible_role" {
 		t.Fatalf("§14.2: the brain answers to the operator, got %q", e.Principal.ResponsibleHumanID)
 	}
 	if e.IntentID != action.RootIntentID {
@@ -98,14 +105,14 @@ func TestIdentity_identifiedActionCarriesTheFullChain(t *testing.T) {
 	if len(e.AuthorityRefs) != 1 || !strings.HasPrefix(e.AuthorityRefs[0], "grant_cfg_") {
 		t.Fatalf("the granted rule gains its explaining derived grant, got %v", e.AuthorityRefs)
 	}
-	if rec.identifiedRules[0] != "granted" {
-		t.Fatalf("rule = %q", rec.identifiedRules[0])
+	if rec.authenticatedRules[0] != "granted" {
+		t.Fatalf("rule = %q", rec.authenticatedRules[0])
 	}
-	ev := rec.evidences[0]
-	if ev.Provider != "console" || ev.Credential != action.CredentialLoopbackInProcess {
+	ev := rec.authenticatedEvidence[0]
+	if ev.Provider != "console" || ev.Method != "bearer" {
 		t.Fatalf("console evidence: %+v", ev)
 	}
-	if ev.Subject != "console-user" || ev.TransportBinding != "console" {
+	if ev.SubjectClaim != "local_profile" || ev.Issuer != "console" {
 		t.Fatalf("the sender survives as the evidence subject, got %+v", ev)
 	}
 	if e.Principal.EvidenceID != ev.EvidenceID {
@@ -123,21 +130,88 @@ func TestIdentity_identifiedActionCarriesTheFullChain(t *testing.T) {
 // evidence subject.
 func TestIdentity_forgedSenderEndToEnd(t *testing.T) {
 	t.Parallel()
-	a, rec, _ := identityHarness(t)
+	a, rec, _, issuer := authenticatedIdentityHarness(t, "webhook")
 	forged := &envelope.Envelope{ID: "env-f", Channel: "webhook",
 		Sender: envelope.Participant{ID: action.OperatorPrincipal().PrincipalID}}
-	_ = a.runTool(context.Background(), forged, nil, laneText, "journal", `{}`)
-	e := rec.identifiedEnvs[0]
+	ingress, err := issuer.Issue(forged.ID, action.OperatorPrincipal().PrincipalID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(context.Background(), authenticatedIngressContextKey{}, ingress)
+	_ = a.runTool(ctx, forged, nil, laneText, "journal", `{}`)
+	e := rec.authenticatedEnvs[0]
 	if e.Principal.PrincipalID == action.OperatorPrincipal().PrincipalID {
 		t.Fatal("AS-1: a forged Sender must NEVER mint the operator on the recorded row")
 	}
-	ev := rec.evidences[0]
-	if ev.Credential != action.CredentialInboundBearer || ev.Provider != "webhook" {
+	ev := rec.authenticatedEvidence[0]
+	if ev.CredentialClass != "shared_secret" || ev.Provider != "webhook" {
 		t.Fatalf("the evidence names THAT channel's transport, got %+v", ev)
 	}
-	if ev.Subject != action.OperatorPrincipal().PrincipalID {
-		t.Fatalf("the forged claim survives only as the subject, got %q", ev.Subject)
+	if ev.SubjectClaim != action.OperatorPrincipal().PrincipalID {
+		t.Fatalf("the forged claim survives only as the subject, got %q", ev.SubjectClaim)
 	}
+}
+
+type authenticatedFakeRecorder struct {
+	fakeRecorder
+	authenticatedEnvs     []action.Envelope
+	authenticatedRules    []string
+	authenticatedEvidence []identity.Evidence
+}
+
+func (f *authenticatedFakeRecorder) RecordAttemptAuthenticated(_ context.Context, env action.Envelope, _, rule string, state action.State, evidence identity.Evidence) error {
+	*f.journal = append(*f.journal, "record-authenticated:"+string(state))
+	f.authenticatedEnvs = append(f.authenticatedEnvs, env)
+	f.authenticatedRules = append(f.authenticatedRules, rule)
+	f.authenticatedEvidence = append(f.authenticatedEvidence, evidence)
+	return nil
+}
+
+func authenticatedIdentityHarness(t *testing.T, channel string) (*AgentBrain, *authenticatedFakeRecorder, *[]string, *identity.Issuer) {
+	t.Helper()
+	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+	requester := "principal_" + channel
+	registry := identity.Registry{
+		Principals: []identity.Principal{
+			{ID: requester, Kind: identity.PrincipalExternalSystem},
+			{ID: "principal_brain_asistente", Kind: identity.PrincipalWorkload},
+			{ID: "principal_responsible_role", Kind: identity.PrincipalExternalSystem},
+		},
+		Bindings: []identity.Binding{{
+			ID: "binding_" + channel, Provider: channel, Channel: channel,
+			CredentialRef: "CONFIG_REFERENCE", SubjectNamespace: channel + "_subject",
+			VerifiedSubject: "shared_" + channel + "_credential",
+			PrincipalID:     requester, Generation: 1, Status: identity.BindingActive,
+		}},
+		Workloads: []identity.Workload{{
+			Brain: "asistente", PrincipalID: "principal_brain_asistente",
+			ResponsiblePrincipalID: "principal_responsible_role",
+		}},
+	}
+	resolver, err := identity.NewResolver(registry, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	method := "bearer"
+	issuer, err := resolver.NewIssuer(identity.IssuerConfig{
+		BindingID: "binding_" + channel, Method: method,
+		CredentialClass: "shared_secret", TTL: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal := &[]string{}
+	recorder := &authenticatedFakeRecorder{fakeRecorder: fakeRecorder{journal: journal}}
+	grant := action.DeriveConfigGrant("asistente", []string{"journal"}, []string{"*"})
+	a := NewAgentBrain(
+		&scriptedModel{}, tool.Registry{"journal": &journalTool{journal: journal}},
+		WithAgentName("asistente"), WithActionRecorder(recorder),
+		WithPrincipalResolver(resolver),
+		WithActionIdentity(ActionIdentity{
+			IntentID: action.RootIntentID, GrantID: grant.GrantID,
+		}),
+	)
+	return a, recorder, journal, issuer
 }
 
 // TestIdentity_ungovernedRecordsNoAuthorityRefs: today's ungoverned

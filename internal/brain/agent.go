@@ -17,6 +17,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/bus"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
 	"github.com/Sebastian197/korvun/internal/metrics"
 	"github.com/Sebastian197/korvun/internal/model"
 	"github.com/Sebastian197/korvun/internal/model/fanout"
@@ -26,6 +27,7 @@ import (
 
 // Compile-time assertion that *AgentBrain satisfies the Brain seam (ADR-0021 §1).
 var _ Brain = (*AgentBrain)(nil)
+var _ AuthenticatedBrain = (*AgentBrain)(nil)
 
 // DefaultAgentMaxIterations is the hard loop cap when the operator does not set one
 // (ADR-0021 §2): an unbounded model→tool→model loop is an infinite loop burning
@@ -55,6 +57,7 @@ const nativeBaseInstruction = "You are a helpful assistant. Use the available to
 const maxArgsLogRunes = 80
 
 type executionPlanContextKey struct{}
+type authenticatedIngressContextKey struct{}
 
 // shadowObservation is the honest simulation observation a shadowed tool call
 // feeds back to the model (ADR-0041 §2; hardened 2026-08-09 after the live
@@ -108,14 +111,15 @@ type AgentBrain struct {
 	perTool        time.Duration
 	// exec is the Action Kernel's single execution path (never nil after
 	// NewAgentBrain).
-	exec            *executor.Executor
-	executionConfig executor.CoordinatorConfig
-	actions         ActionRecorder
-	identity        *ActionIdentity
-	effects         EffectClassifier
-	perModelCall    time.Duration
-	fallback        string
-	systemPrompt    string
+	exec              *executor.Executor
+	executionConfig   executor.CoordinatorConfig
+	actions           ActionRecorder
+	identity          *ActionIdentity
+	principalResolver *identity.Resolver
+	effects           EffectClassifier
+	perModelCall      time.Duration
+	fallback          string
+	systemPrompt      string
 	// personaPrefix is the composed persona fragment (ComposePersona) prepended
 	// BEFORE the protocol block in the seed system message (builder-canvas spec
 	// FR-PERSONA-2, NC-4). Empty = today's prompt byte-for-byte.
@@ -424,6 +428,7 @@ func NewAgentBrain(m model.Model, tools tool.Registry, opts ...AgentOption) *Age
 		BrainName:              a.name,
 		Recorder:               a.actions,
 		Identity:               identity,
+		PrincipalResolver:      a.principalResolver,
 		EffectClassifier:       executor.EffectClassifier(a.effects),
 		BoundOperation:         boundedArgs,
 		CloseClock:             a.now,
@@ -446,6 +451,16 @@ func NewAgentBrain(m model.Model, tools tool.Registry, opts ...AgentOption) *Age
 // or a cancelled ctx degrade to the fallback reply (logged), NOT a propagated
 // error — the user never sees silence. Nothing to ask → clean (nil, nil).
 func (a *AgentBrain) Handle(ctx context.Context, env *envelope.Envelope) ([]*envelope.Envelope, error) {
+	return a.handle(ctx, env)
+}
+
+// HandleAuthenticated receives ingress from the router's queued work item and
+// keeps it bound to this Handle call through every model-tool iteration.
+func (a *AgentBrain) HandleAuthenticated(ctx context.Context, env *envelope.Envelope, ingress identity.AuthenticatedIngress) ([]*envelope.Envelope, error) {
+	return a.handle(context.WithValue(ctx, authenticatedIngressContextKey{}, ingress), env)
+}
+
+func (a *AgentBrain) handle(ctx context.Context, env *envelope.Envelope) ([]*envelope.Envelope, error) {
 	key, history := a.loadHistory(ctx, env)
 
 	// The gatekeeper decides once per Handle which tools this message may
@@ -697,7 +712,12 @@ func (a *AgentBrain) runTool(ctx context.Context, env *envelope.Envelope, decisi
 		plan = selected
 	}
 	request, err := coordinator.Prepare(executor.Submission{
-		Inbound: env, Lane: lane, Name: name, Arguments: args, Plan: plan,
+		Inbound: env,
+		Ingress: func() identity.AuthenticatedIngress {
+			ingress, _ := ctx.Value(authenticatedIngressContextKey{}).(identity.AuthenticatedIngress)
+			return ingress
+		}(),
+		Lane: lane, Name: name, Arguments: args, Plan: plan,
 	})
 	if err != nil {
 		a.logger.Error("agent: canonical tool request rejected",

@@ -64,6 +64,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
@@ -469,6 +470,10 @@ func (c *cli) receiptRotateKey(args []string) int {
 	store.SetReceiptSealer(func(r action.Receipt) action.Receipt {
 		return action.SignReceipt(oldPriv, r)
 	})
+	if err := wireOperatorIdentity(store, oldPriv, time.Now().UTC()); err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
+		return 1
+	}
 	oldKeyID := action.SigningKeyID(oldPriv.Public().(ed25519.PublicKey))
 	var newKeyID string
 	params := contractParams(map[string]any{"old_key_id": oldKeyID})

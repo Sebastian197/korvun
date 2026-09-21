@@ -24,6 +24,7 @@ import (
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/config"
+	"github.com/Sebastian197/korvun/internal/identity"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
 
@@ -64,6 +65,19 @@ func (r approvalRecorder) RequestApproval(ctx context.Context, env action.Envelo
 		return "", err
 	}
 	if err := r.store.CreateApprovalRequest(ctx, b); err != nil {
+		return "", err
+	}
+	return b.Approval().ApprovalID, nil
+}
+
+// RequestApprovalAuthenticated parks Phase 1 evidence with the approval's
+// born-whole transaction.
+func (r approvalRecorder) RequestApprovalAuthenticated(ctx context.Context, env action.Envelope, rule string, rawParams string, evidence identity.Evidence) (string, error) {
+	b, err := action.NewBoundApprovalRequest(env, rawParams, r.resolveApprovalContext(ctx, env, rule))
+	if err != nil {
+		return "", err
+	}
+	if err := r.store.CreateApprovalRequestAuthenticated(ctx, b, evidence); err != nil {
 		return "", err
 	}
 	return b.Approval().ApprovalID, nil

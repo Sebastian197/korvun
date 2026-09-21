@@ -15,6 +15,7 @@ import (
 	"context"
 
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 // Brain handles a single inbound Envelope and returns zero or more
@@ -25,4 +26,11 @@ import (
 // brain guarantees serial calls, but Phase 3.2 may change that.
 type Brain interface {
 	Handle(ctx context.Context, env *envelope.Envelope) ([]*envelope.Envelope, error)
+}
+
+// AuthenticatedBrain receives the ingress capability carried by the router's
+// queued work item. A router uses this extension whenever the envelope came
+// through an authenticated adapter door.
+type AuthenticatedBrain interface {
+	HandleAuthenticated(ctx context.Context, env *envelope.Envelope, ingress identity.AuthenticatedIngress) ([]*envelope.Envelope, error)
 }

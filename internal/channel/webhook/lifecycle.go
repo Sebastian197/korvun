@@ -11,6 +11,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/Sebastian197/korvun/internal/identity"
 )
 
 // Default listen address and inbound path for a webhook channel, mirrored here so
@@ -44,6 +46,8 @@ type Options struct {
 	OutboundURL   string
 	OutboundToken string
 	Mapping       FieldMapping
+	// IngressIssuer mints opaque evidence after authGate accepts the request.
+	IngressIssuer *identity.Issuer
 }
 
 // NewWithOptions builds a wired webhook Adapter: the Stage-2 core (same inbound
@@ -58,6 +62,7 @@ func NewWithOptions(name string, opts Options) *Adapter {
 	a.path = opts.Path
 	a.secret = opts.Secret
 	a.outboundToken = opts.OutboundToken
+	a.ingressIssuer = opts.IngressIssuer
 	return a
 }
 

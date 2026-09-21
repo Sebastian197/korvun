@@ -12,6 +12,7 @@ package cli
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 	"github.com/Sebastian197/korvun/internal/app"
 	"github.com/Sebastian197/korvun/internal/config"
+	identityv2 "github.com/Sebastian197/korvun/internal/identity"
 )
 
 // operatorRule labels the operator's own CLI acts in the audit grammar.
@@ -126,7 +128,55 @@ func openOperatorStoreSealed(configPath string) (*actionsqlite.Store, error) {
 	}, func(event action.IntentEventV1) action.SignedIntentEventV1 {
 		return action.SignIntentEventV1(priv, event)
 	})
+	if err := wireOperatorIdentity(store, priv, time.Now().UTC()); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
 	return store, nil
+}
+
+const (
+	localCLIRequester   = "principal_local_profile"
+	localCLIResponsible = "principal_local_operator_role"
+)
+
+func localCLIRegistry() identityv2.Registry {
+	return identityv2.Registry{
+		Principals: []identityv2.Principal{
+			{ID: localCLIRequester, Kind: identityv2.PrincipalExternalSystem,
+				DisplayName: "Local profile credential"},
+			{ID: action.OperatorPrincipal().PrincipalID, Kind: identityv2.PrincipalWorkload,
+				DisplayName: "Local CLI operator workload"},
+			{ID: localCLIResponsible, Kind: identityv2.PrincipalExternalSystem,
+				DisplayName: "Local operator role"},
+		},
+		Bindings: []identityv2.Binding{{
+			ID: "binding_cli", Provider: "cli", Channel: "cli",
+			CredentialRef: "local_profile", SubjectNamespace: "local_profile",
+			VerifiedSubject: "shared_local_profile",
+			PrincipalID:     localCLIRequester, Generation: 1,
+			Status: identityv2.BindingActive,
+		}},
+		Workloads: []identityv2.Workload{{
+			Brain: "cli", PrincipalID: action.OperatorPrincipal().PrincipalID,
+			ResponsiblePrincipalID: localCLIResponsible,
+		}},
+	}
+}
+
+func wireOperatorIdentity(store *actionsqlite.Store, privateKey ed25519.PrivateKey, at time.Time) error {
+	store.SetIdentitySigners(
+		func(e identityv2.Evidence) identityv2.SignedEvidence {
+			return identityv2.SignEvidence(privateKey, e)
+		},
+		func(e identityv2.PrincipalEvent) identityv2.SignedPrincipalEvent {
+			return identityv2.SignPrincipalEvent(privateKey, e)
+		},
+	)
+	if err := store.RegisterIdentity(context.Background(), localCLIRegistry(), at); err != nil {
+		return fmt.Errorf("register local CLI identity: %w", err)
+	}
+	return nil
 }
 
 func parseIntentVersion(raw string) (int, error) {
@@ -360,13 +410,13 @@ func (c *cli) intentImportLegacy(args []string, rootOnly bool) int {
 // the mutation, and the terminal state tells the truth about how it went.
 // A pre-validated denial records DENIED instead and never runs.
 func recordOperatorAct(ctx context.Context, store *actionsqlite.Store, namespace, name, params string, mutate func() error) error {
-	env, identity, err := operatorEnvelope(namespace, name, params)
+	env, evidence, err := operatorAuthenticatedEnvelope(store, namespace, name, params)
 	if err != nil {
 		return err
 	}
-	if err := store.RecordAttemptIdentified(ctx, env,
+	if err := store.RecordAttemptAuthenticated(ctx, env,
 		actionsqlite.Decision{Outcome: "allow", Rule: operatorRule},
-		action.StateAuthorized, identity); err != nil {
+		action.StateAuthorized, evidence); err != nil {
 		return fmt.Errorf("record the act: %w", err)
 	}
 	mutErr := mutate()
@@ -378,6 +428,55 @@ func recordOperatorAct(ctx context.Context, store *actionsqlite.Store, namespace
 		return fmt.Errorf("close the receipt: %w", err)
 	}
 	return mutErr
+}
+
+// operatorAuthenticatedEnvelope mints the local operator's ingress. Its
+// authentication cut is the OPEN SEALED STORE the caller hands it (FR-ID-04):
+// holding it means the operator already crossed the local profile's own door —
+// the profile directory, its permissions and the keystore the store opened. The
+// store is a PARAMETER, not a comment, so no caller can mint a capability
+// without it; a nil store is refused as missing ingress (the twentieth pass,
+// P1-2). The resolver and issuer are per-act by design: a local act needs no
+// long-lived adapter instance, and a seal born and consumed in one act cannot be
+// transplanted into another.
+func operatorAuthenticatedEnvelope(store *actionsqlite.Store, namespace, name, params string) (action.Envelope, identityv2.Evidence, error) {
+	if store == nil {
+		return action.Envelope{}, identityv2.Evidence{}, identityv2.ErrIdentityEvidenceMissing
+	}
+	now := time.Now().UTC()
+	resolver, err := identityv2.NewResolver(localCLIRegistry(), func() time.Time { return now })
+	if err != nil {
+		return action.Envelope{}, identityv2.Evidence{}, err
+	}
+	issuer, err := resolver.NewIssuer(identityv2.IssuerConfig{
+		BindingID: "binding_cli", Method: "local_profile",
+		CredentialClass: "local_profile", TTL: time.Minute,
+	})
+	if err != nil {
+		return action.Envelope{}, identityv2.Evidence{}, err
+	}
+	env := action.NewEnvelope(action.NewID(), "cli",
+		action.Source{Kind: "operator", Protocol: "cli", Channel: "cli"},
+		action.Operation{Namespace: namespace, Name: name, Version: 1},
+		params, now)
+	ingress, err := issuer.Issue(env.CorrelationID, "local_operator")
+	if err != nil {
+		return action.Envelope{}, identityv2.Evidence{}, err
+	}
+	evidence, err := resolver.Resolve(ingress, identityv2.ResolveRequest{
+		ActionID: env.ActionID, RequestID: env.CorrelationID,
+		Channel: "cli", Brain: "cli",
+	})
+	if err != nil {
+		return action.Envelope{}, identityv2.Evidence{}, err
+	}
+	env.Principal = action.PrincipalRef{
+		PrincipalID:        evidence.ActorPrincipalID,
+		ResponsibleHumanID: evidence.ResponsiblePrincipalID,
+		EvidenceID:         evidence.EvidenceID,
+	}
+	env.IntentID = action.RootIntentID
+	return env, evidence, nil
 }
 
 // operatorEnvelope builds the identified envelope of one operator act:

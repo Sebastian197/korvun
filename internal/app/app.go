@@ -43,6 +43,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/conversation/sqlite"
 	"github.com/Sebastian197/korvun/internal/httpserver"
+	"github.com/Sebastian197/korvun/internal/identity"
 	"github.com/Sebastian197/korvun/internal/liveview"
 	"github.com/Sebastian197/korvun/internal/metrics"
 	"github.com/Sebastian197/korvun/internal/metrics/prom"
@@ -187,6 +188,11 @@ type builder struct {
 	// interface): nil when observability is off, in which case agent brains
 	// audit through metrics only.
 	toolBus *bus.InMemoryBus
+	// Phase 1 identity is derived from config for both durable and stateless
+	// profiles. Issuers are adapter-instance capabilities, never secrets.
+	identityRegistry  identity.Registry
+	principalResolver *identity.Resolver
+	ingressIssuers    map[string]*identity.Issuer
 }
 
 // Option configures Build.
@@ -214,7 +220,15 @@ func WithReloader(r controlapi.Reloader) Option {
 // without a real Telegram round-trip, mirroring the telegram adapter's own
 // test-injection discipline.
 func withChannelFactory(f func(b *builder, cc config.ChannelConfig) (Channel, error)) Option {
-	return func(b *builder) { b.newChannel = f }
+	return func(b *builder) {
+		b.newChannel = func(inner *builder, cc config.ChannelConfig) (Channel, error) {
+			ch, err := f(inner, cc)
+			if err != nil || ch == nil {
+				return ch, err
+			}
+			return authenticateFixtureChannel(ch, inner.ingressIssuers[cc.Type]), nil
+		}
+	}
 }
 
 // WithChannelFactory replaces the default channel construction (telegram /
@@ -235,7 +249,10 @@ func WithChannelFactory(f func(cc config.ChannelConfig) (Channel, error)) Option
 					// reach) — operator-console spec FR-CONS wiring.
 					return defaultChannelFactory(inner, cc)
 				}
-				return ch, err
+				if err != nil || ch == nil {
+					return ch, err
+				}
+				return authenticateFixtureChannel(ch, inner.ingressIssuers[cc.Type]), nil
 			}
 		}
 	}
@@ -255,6 +272,13 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		o(b)
 	}
 	b.cfg = cfg
+	registry, resolver, issuers, err := phase1IdentityRuntime(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("app: derive identity runtime: %w", err)
+	}
+	b.identityRegistry = registry
+	b.principalResolver = resolver
+	b.ingressIssuers = issuers
 
 	// Derive the router's per-Handle ceiling from the brains' per-model timeouts
 	// and dispatch shapes, or honor an explicit override that clears it (ADR-0031
@@ -350,6 +374,12 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 			_ = actions.Close()
 			_ = store.Close()
 			return nil, err
+		}
+		wireIdentitySigners(actions, signingKey)
+		if err := actions.RegisterIdentity(context.Background(), b.identityRegistry, time.Now().UTC()); err != nil {
+			_ = actions.Close()
+			_ = store.Close()
+			return nil, fmt.Errorf("app: register identity: %w", err)
 		}
 		// The live ink (FR-LED): every terminal outcome is born signed
 		// with the profile's active key, inside the outcome's own
@@ -551,7 +581,8 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 				// only where the mutation surface exists AND a sessionful store
 				// is open. The router is the operator seam (SP2).
 				if ss, ok := b.store.(conversation.SessionStore); ok && b.store != nil {
-					controlapi.RegisterConsole(adminServer, token, ss, app.router)
+					controlapi.RegisterConsole(adminServer, token, ss, app.router,
+						b.ingressIssuers[console.ChannelName])
 				}
 				// The approvals surface, on the SAME bearer: its answers carry
 				// the parked parameters a model wrote, so it exists exactly
@@ -1067,6 +1098,9 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 		// option's brainName only mounts with a bus).
 		brain.WithAgentName(bc.Name),
 	}
+	if b.principalResolver != nil {
+		opts = append(opts, brain.WithPrincipalResolver(b.principalResolver))
+	}
 	if cage.Memory != nil {
 		if ns, ok := b.store.(conversation.NoteStore); ok {
 			mem := *cage.Memory
@@ -1487,6 +1521,7 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 			telegram.WithToken(token),
 			telegram.WithMode(telegram.ModePolling),
 			telegram.WithLogger(b.logger),
+			telegram.WithIngressIssuer(b.ingressIssuers[telegram.ChannelName]),
 		)
 		if err != nil {
 			return nil, err
@@ -1504,6 +1539,7 @@ func defaultChannelFactory(b *builder, cc config.ChannelConfig) (Channel, error)
 			discord.WithTokenEnv(cc.TokenEnv),
 			discord.WithMode(discord.ModeGateway),
 			discord.WithLogger(b.logger),
+			discord.WithIngressIssuer(b.ingressIssuers[discord.ChannelName]),
 		)
 		if err != nil {
 			return nil, err
@@ -1575,6 +1611,7 @@ func buildWebhookChannel(b *builder, cc config.ChannelConfig) (Channel, error) {
 			MediaType:      em.MediaType,
 			ConversationID: em.ConversationID,
 		},
+		IngressIssuer: b.ingressIssuers[webhook.ChannelName],
 	}), nil
 }
 

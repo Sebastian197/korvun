@@ -4,6 +4,7 @@
 package webhook
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"log/slog"
@@ -11,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 )
+
+type authenticatedRequestKey struct{}
 
 // maxBodyBytes caps an inbound request body at 1 MiB (ADR-0038 §6): a generous floor
 // for JSON control payloads and a cheap DoS guard. Enforced via http.MaxBytesReader,
@@ -63,7 +66,7 @@ func (a *Adapter) authGate(next http.Handler) http.Handler {
 
 		// (e) cap the body before the translator reads it.
 		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), authenticatedRequestKey{}, true)))
 	})
 }
 

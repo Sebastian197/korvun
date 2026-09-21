@@ -17,6 +17,7 @@ import (
 	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
 	"github.com/Sebastian197/korvun/internal/policy"
 	"github.com/Sebastian197/korvun/internal/tool"
 )
@@ -45,6 +46,12 @@ type IdentifiedRecorder interface {
 	RecordAttemptIdentified(context.Context, action.Envelope, string, string, action.State, action.IdentityEvidence) error
 }
 
+// AuthenticatedRecorder atomically records an attempt with Phase 1 identity
+// evidence. A v2 request never falls back to a legacy recorder.
+type AuthenticatedRecorder interface {
+	RecordAttemptAuthenticated(context.Context, action.Envelope, string, string, action.State, identity.Evidence) error
+}
+
 // ResultRecorder closes an action together with the digest of its result.
 type ResultRecorder interface {
 	FinishWithResult(context.Context, string, action.State, time.Time, string) error
@@ -53,6 +60,12 @@ type ResultRecorder interface {
 // ApprovalRequester parks an action and its exact raw parameters for approval.
 type ApprovalRequester interface {
 	RequestApproval(context.Context, action.Envelope, string, string) (string, error)
+}
+
+// AuthenticatedApprovalRequester parks an action and its Phase 1 evidence in
+// one transaction.
+type AuthenticatedApprovalRequester interface {
+	RequestApprovalAuthenticated(context.Context, action.Envelope, string, string, identity.Evidence) (string, error)
 }
 
 // EffectClassifier resolves the declared effect of an operation name.
@@ -77,14 +90,15 @@ type IdentityConfig struct {
 
 // CoordinatorConfig fixes the non-request inputs of one executor.
 type CoordinatorConfig struct {
-	BrainName        string
-	Recorder         Recorder
-	Identity         *IdentityConfig
-	EffectClassifier EffectClassifier
-	Governance       *Governance
-	NewActionID      func() string
-	BoundOperation   func(string) string
-	InvocationProbe  func(action.Envelope)
+	BrainName         string
+	Recorder          Recorder
+	Identity          *IdentityConfig
+	PrincipalResolver *identity.Resolver
+	EffectClassifier  EffectClassifier
+	Governance        *Governance
+	NewActionID       func() string
+	BoundOperation    func(string) string
+	InvocationProbe   func(action.Envelope)
 	// CloseClock supplies terminal timestamps. Immediate execution wires the
 	// brain clock; approved execution keeps its historical wall clock.
 	CloseClock func() time.Time
@@ -219,6 +233,7 @@ func cloneDecisions(src map[string]policy.ToolDecision) map[string]policy.ToolDe
 // policy decisions are deliberately absent.
 type Submission struct {
 	Inbound   *envelope.Envelope
+	Ingress   identity.AuthenticatedIngress
 	Lane      string
 	Name      string
 	Arguments string
@@ -240,6 +255,8 @@ type Request struct {
 	lane           string
 	channel        string
 	senderID       string
+	ingress        identity.AuthenticatedIngress
+	evidence       *identity.Evidence
 	scope          tool.Scope
 	inbound        *envelope.Envelope
 	known          bool
@@ -292,6 +309,7 @@ func (e *Executor) Prepare(submission Submission) (*Request, error) {
 		lane:     submission.Lane,
 		channel:  submission.Inbound.Channel,
 		senderID: submission.Inbound.Sender.ID,
+		ingress:  submission.Ingress,
 		scope:    tool.Scope{Brain: e.config.BrainName, Conversation: conv},
 		// The LIVE inbound envelope, not a copy: the bus event the brain
 		// publishes carries this pointer, and before this phase every branch
@@ -361,6 +379,22 @@ func (e *Executor) Submit(ctx context.Context, request *Request) (Result, error)
 		Arguments:  request.args,
 		Ungoverned: !request.plan.governed,
 	}
+	if e.config.PrincipalResolver != nil {
+		evidence, err := e.config.PrincipalResolver.Resolve(request.ingress, identity.ResolveRequest{
+			ActionID: request.action.ActionID, RequestID: request.inbound.ID,
+			Channel: request.channel, Brain: e.config.BrainName,
+		})
+		if err != nil {
+			return result, err
+		}
+		request.evidence = &evidence
+		request.action.Principal = action.PrincipalRef{
+			PrincipalID:        evidence.ActorPrincipalID,
+			EvidenceID:         evidence.EvidenceID,
+			ResponsibleHumanID: evidence.ResponsiblePrincipalID,
+		}
+		result.Action = request.action
+	}
 	if !request.known {
 		result.Branch = BranchUnknown
 		result.Rule = "unknown_tool"
@@ -405,7 +439,24 @@ func (e *Executor) Submit(ctx context.Context, request *Request) (Result, error)
 		result.Action = request.action
 		if rule := effectGateRule(descriptor.Class, e.config.Identity.EffectCeiling, false); effectForGate && rule != "" {
 			if rule == "approval_unavailable" {
-				if requester, ok := e.config.Recorder.(ApprovalRequester); ok {
+				if request.evidence != nil {
+					if requester, ok := e.config.Recorder.(AuthenticatedApprovalRequester); ok {
+						e.refreshDurableEffect(request)
+						approved := request.action
+						e.bindAuthority(&approved, "require_approval")
+						if approvalID, err := requester.RequestApprovalAuthenticated(ctx, approved, "require_approval", request.args, *request.evidence); err != nil {
+							result.ApprovalError = err
+						} else {
+							result.Action = approved
+							result.Branch = BranchPending
+							result.Rule = "require_approval"
+							result.ApprovalID = approvalID
+							return result, nil
+						}
+					} else {
+						result.ApprovalIdentityError = true
+					}
+				} else if requester, ok := e.config.Recorder.(ApprovalRequester); ok {
 					e.refreshDurableEffect(request)
 					approved := request.action
 					evidence, resolved := e.bindIdentity(request, &approved, "require_approval")
@@ -493,6 +544,18 @@ func (e *Executor) recordAttempt(ctx context.Context, request *Request, result *
 	e.refreshDurableEffect(request)
 	canonical := request.action
 	result.Action = canonical
+	if request.evidence != nil {
+		e.bindAuthority(&canonical, rule)
+		result.Action = canonical
+		authenticated, ok := recorder.(AuthenticatedRecorder)
+		if !ok {
+			result.RecordError = identity.ErrIdentityEvidenceMissing
+			return
+		}
+		result.RecordError = authenticated.RecordAttemptAuthenticated(
+			ctx, canonical, outcome, rule, state, *request.evidence)
+		return
+	}
 	if e.config.Identity != nil {
 		if identified, ok := recorder.(IdentifiedRecorder); ok {
 			evidence, resolved := e.bindIdentity(request, &canonical, rule)
@@ -528,6 +591,22 @@ func (e *Executor) recordAuthorized(ctx context.Context, request *Request, resul
 	e.refreshDurableEffect(request)
 	canonical := request.action
 	result.Action = canonical
+	if request.evidence != nil {
+		e.bindAuthority(&canonical, rule)
+		result.Action = canonical
+		authenticated, ok := recorder.(AuthenticatedRecorder)
+		if !ok {
+			result.AuthorizationIdentityError = true
+			result.RecordError = identity.ErrIdentityEvidenceMissing
+			return false
+		}
+		if err := authenticated.RecordAttemptAuthenticated(
+			ctx, canonical, "allow", rule, action.StateAuthorized, *request.evidence); err != nil {
+			result.RecordError = err
+			return false
+		}
+		return true
+	}
 	if e.config.Identity != nil {
 		if identified, ok := recorder.(IdentifiedRecorder); ok {
 			evidence, resolved := e.bindIdentity(request, &canonical, rule)
@@ -570,6 +649,16 @@ func (e *Executor) bindIdentity(request *Request, canonical *action.Envelope, ru
 		canonical.AuthorityRefs = []string{identity.GrantID}
 	}
 	return evidence, true
+}
+
+func (e *Executor) bindAuthority(canonical *action.Envelope, rule string) {
+	if e.config.Identity == nil {
+		return
+	}
+	canonical.IntentID = e.config.Identity.IntentID
+	if rule == "granted" && e.config.Identity.GrantID != "" {
+		canonical.AuthorityRefs = []string{e.config.Identity.GrantID}
+	}
 }
 
 func effectGateRule(class, ceiling action.EffectClass, requiresPrepare bool) string {

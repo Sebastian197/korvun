@@ -339,7 +339,7 @@ func (a *Adapter) runSession(ctx context.Context, conn *websocket.Conn, st *sess
 		}
 	}()
 
-	connected, readErr := a.readLoop(loopCtx, conn, &writeMu, &ackOK, st)
+	connected, readErr := a.readLoop(loopCtx, conn, &writeMu, &ackOK, st, strategy == connectResume)
 	cancel()
 	wg.Wait()
 
@@ -494,8 +494,8 @@ func (a *Adapter) sendResume(ctx context.Context, conn *websocket.Conn, st *sess
 // RESUMED, maps MESSAGE_CREATE dispatches, records heartbeat ACKs, answers
 // server-initiated heartbeat requests, and turns op7/op9 into typed signals. It
 // returns whether the session reached a connected state and the terminating cause.
-func (a *Adapter) readLoop(ctx context.Context, conn *websocket.Conn, writeMu *sync.Mutex, ackOK *atomic.Bool, st *sessionState) (bool, error) {
-	connected := false
+func (a *Adapter) readLoop(ctx context.Context, conn *websocket.Conn, writeMu *sync.Mutex, ackOK *atomic.Bool, st *sessionState, resumed bool) (bool, error) {
+	connected := resumed
 	for {
 		var f gatewayPayload
 		if err := wsjson.Read(ctx, conn, &f); err != nil {
@@ -526,7 +526,17 @@ func (a *Adapter) readLoop(ctx context.Context, conn *websocket.Conn, writeMu *s
 				a.cfg.logger.InfoContext(ctx, "discord: gateway resumed",
 					"channel", ChannelName, "session_id", st.sessionID)
 			case "MESSAGE_CREATE":
-				a.handleMessage(ctx, f.D, st.selfID)
+				if connected {
+					a.handleAuthenticatedMessage(ctx, f.D, st.selfID)
+					break
+				}
+				// A dispatch before READY/RESUMED is a message this session
+				// cannot authenticate, so it is dropped — and COUNTED, because
+				// a silent drop is a message lost with no trace (the twentieth
+				// pass, P3-3).
+				a.dropped.Add(1)
+				a.cfg.logger.WarnContext(ctx, "discord: dispatch before the session was authenticated",
+					"channel", ChannelName)
 			}
 		case opHeartbeat:
 			if err := sendHeartbeat(ctx, conn, writeMu, st); err != nil {
@@ -547,15 +557,24 @@ func (a *Adapter) readLoop(ctx context.Context, conn *websocket.Conn, writeMu *s
 	}
 }
 
-// handleMessage maps a MESSAGE_CREATE dispatch and enqueues it, or counts and logs the
-// drop with its reason.
-func (a *Adapter) handleMessage(ctx context.Context, data json.RawMessage, selfID string) {
+// handleAuthenticatedMessage maps one MESSAGE_CREATE from an authenticated
+// Gateway session and enqueues it, or counts and logs the drop with its reason.
+func (a *Adapter) handleAuthenticatedMessage(ctx context.Context, data json.RawMessage, selfID string) {
 	env, reason := mapMessageCreate(data, selfID)
 	if reason != keep {
 		a.dropped.Add(1)
 		a.cfg.logger.WarnContext(ctx, "discord: dropped inbound message",
 			"channel", ChannelName, "reason", reason.String())
 		return
+	}
+	if a.cfg.ingressIssuer != nil {
+		ingress, err := a.cfg.ingressIssuer.Issue(env.ID, env.Sender.ID)
+		if err != nil {
+			a.dropped.Add(1)
+			a.cfg.logger.WarnContext(ctx, "discord: identity issuance failed", "channel", ChannelName)
+			return
+		}
+		env.SetAuthenticatedIngress(ingress)
 	}
 	select {
 	case a.inbound <- env:

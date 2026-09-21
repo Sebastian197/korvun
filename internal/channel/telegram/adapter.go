@@ -226,7 +226,11 @@ func (a *Adapter) DroppedCount() uint64 { return a.dropped.Load() }
 // the adapter's dispatchUpdate(ctx, *models.Update) shape. Used as
 // WithDefaultHandler in polling mode.
 func (a *Adapter) handleLibraryUpdate(ctx context.Context, _ *bot.Bot, u *models.Update) {
-	a.dispatchUpdate(ctx, u)
+	a.dispatchAuthenticatedUpdate(ctx, u)
+}
+
+func (a *Adapter) dispatchAuthenticatedUpdate(ctx context.Context, u *models.Update) {
+	a.dispatchUpdateWithAuthentication(ctx, u, true)
 }
 
 // dispatchUpdate runs the per-update conversion and enqueues the
@@ -260,7 +264,19 @@ func (a *Adapter) handleLibraryUpdate(ctx context.Context, _ *bot.Bot, u *models
 // without counting as a saturation drop — a cancelled ctx means the
 // process is shutting down, which is not the same condition the
 // observability layer wants to alert on.
+// dispatchUpdate is the UNAUTHENTICATED dispatch. No production path calls it:
+// polling enters through handleLibraryUpdate and the webhook through
+// webhookHandler, and both go to dispatchAuthenticatedUpdate. It exists for the
+// tests that exercise conversion, ordering and lifecycle without an issuer, and
+// for the identity mould that proves an update arriving with no authentication
+// carries no ingress. TestIdentity_NoProductionPathDispatchesUnauthenticated
+// watches the CALL SITES so this stays true by construction rather than by the
+// name of a function (the twentieth pass, P3-2).
 func (a *Adapter) dispatchUpdate(ctx context.Context, u *models.Update) {
+	a.dispatchUpdateWithAuthentication(ctx, u, false)
+}
+
+func (a *Adapter) dispatchUpdateWithAuthentication(ctx context.Context, u *models.Update, authenticated bool) {
 	// The state check and the dispatchWG.Add(1) sit under a.mu
 	// together so Stop's transition to stateStopped strictly
 	// happens-before any future Add. Once Stop has flipped state,
@@ -287,6 +303,19 @@ func (a *Adapter) dispatchUpdate(ctx context.Context, u *models.Update) {
 			"telegram: failed to convert update",
 			"error", err.Error())
 		return
+	}
+	if authenticated && a.cfg.ingressIssuer != nil {
+		ingress, issueErr := a.cfg.ingressIssuer.Issue(env.ID, env.Sender.ID)
+		if issueErr != nil {
+			// A refused issuance DROPS the update, so it is counted like every
+			// other drop this adapter makes. Returning silently made the loss
+			// invisible to DroppedCount and to the observability layer that
+			// alerts on it (the twentieth pass, P3-3).
+			a.dropped.Add(1)
+			a.cfg.logger.WarnContext(ctx, "telegram: identity issuance failed", "channel", ChannelName)
+			return
+		}
+		env.SetAuthenticatedIngress(ingress)
 	}
 	convID := env.Meta[MetaChatID]
 	if convID != "" {

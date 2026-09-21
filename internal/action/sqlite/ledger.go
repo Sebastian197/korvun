@@ -134,13 +134,17 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 		    authority_digest, decision_digest, action_digest, effect_class, attempt,
 		    outcome, result_digest, started_at, finished_at, partition, chain_seq,
 		    previous_receipt_hash, receipt_hash, signing_key_id, signature,
-		    schema_version, approval_digest)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		    schema_version, approval_digest, requester_principal_id,
+		    actor_principal_id, responsible_principal_id, identity_status,
+		    identity_evidence_digest, identity_snapshot_digest)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.ReceiptID, r.ActionID, r.IntentDigest, r.PrincipalID,
 		r.AuthorityDigest, r.DecisionDigest, r.ActionDigest, string(r.EffectClass), r.Attempt,
 		r.Outcome, r.ResultDigest, timeOrNull(r.StartedAt), timeOrNull(r.FinishedAt),
 		r.Partition, r.ChainSeq, r.PreviousReceiptHash, r.ReceiptHash,
 		r.SigningKeyID, r.Signature, r.SchemaVersion, r.ApprovalDigest,
+		r.RequesterPrincipalID, r.ActorPrincipalID, r.ResponsiblePrincipalID,
+		r.IdentityStatus, r.IdentityEvidenceDigest, r.IdentitySnapshotDigest,
 	); err != nil {
 		return fmt.Errorf("action/sqlite: append receipt for %q: %w", r.ActionID, err)
 	}
@@ -153,8 +157,12 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 // digest resolves only for grants the table knows (operator-issued) —
 // in-memory derived grants keep their reference on the action row, the
 // digest honestly absent (declared in the spec).
-func (s *Store) receiptForRecord(ctx context.Context, tx *sql.Tx, env action.Envelope, d Decision, state action.State) action.Receipt {
-	return action.Receipt{
+func (s *Store) receiptForRecord(ctx context.Context, tx *sql.Tx, env action.Envelope, d Decision, state action.State) (action.Receipt, error) {
+	terms, err := identityReceiptTermsTx(ctx, tx, env.ActionID, false)
+	if err != nil {
+		return action.Receipt{}, err
+	}
+	receipt := action.Receipt{
 		SchemaVersion:  2,
 		ReceiptID:      action.NewReceiptID(),
 		ActionID:       env.ActionID,
@@ -168,6 +176,16 @@ func (s *Store) receiptForRecord(ctx context.Context, tx *sql.Tx, env action.Env
 		StartedAt:      env.RequestedAt.UTC(),
 		FinishedAt:     env.RequestedAt.UTC(),
 	}
+	if terms.present {
+		receipt.SchemaVersion = 3
+		receipt.IdentityStatus = terms.status
+		receipt.RequesterPrincipalID = terms.requester
+		receipt.ActorPrincipalID = terms.actor
+		receipt.ResponsiblePrincipalID = terms.responsible
+		receipt.IdentityEvidenceDigest = terms.evidenceHash
+		receipt.IdentitySnapshotDigest = terms.snapshotHash
+	}
+	return receipt, nil
 }
 
 // The approval marks (v0.15.1 block B, director 2026-09-19). A receipt sealed
@@ -358,7 +376,16 @@ func (s *Store) FinishWithResult(ctx context.Context, actionID string, to action
 	}
 	if s.sealer != nil {
 		// decided: the action this finish closes was APPROVED (v0.15.1 block B).
-		receipt, err := s.receiptForFinish(ctx, tx, actionID, to, finishedAt, resultDigest, action.State(current) == action.StateApproved)
+		// allowCorruptIdentity=true, and the reason is data integrity, not
+		// leniency: this close runs AFTER the physical effect has already
+		// happened. Refusing it over a corrupt birth snapshot stranded the
+		// action in its pre-terminal state behind a close-error class the paper
+		// says this phase does not add, and left the executed effect with no
+		// terminal receipt until the sweep reached it. The corruption is not
+		// hidden — the receipt is born v3 with identity_status "corrupt" and
+		// EMPTY attribution, exactly as the crash sweep writes it. No
+		// attribution is ever invented (the twentieth pass, P2-3).
+		receipt, err := s.receiptForFinish(ctx, tx, actionID, to, finishedAt, resultDigest, action.State(current) == action.StateApproved, true)
 		if err != nil {
 			return err
 		}
@@ -374,7 +401,7 @@ func (s *Store) FinishWithResult(ctx context.Context, actionID string, to action
 
 // receiptForFinish reifies one executed outcome from its stored row,
 // inside the closing transaction.
-func (s *Store) receiptForFinish(ctx context.Context, tx *sql.Tx, actionID string, to action.State, finishedAt time.Time, resultDigest string, decided bool) (action.Receipt, error) {
+func (s *Store) receiptForFinish(ctx context.Context, tx *sql.Tx, actionID string, to action.State, finishedAt time.Time, resultDigest string, decided, allowCorruptIdentity bool) (action.Receipt, error) {
 	var (
 		paramsDigest string
 		effectClass  string
@@ -401,7 +428,7 @@ func (s *Store) receiptForFinish(ctx context.Context, tx *sql.Tx, actionID strin
 	if err != nil {
 		return action.Receipt{}, fmt.Errorf("action/sqlite: parse requested_at of %q: %w", actionID, err)
 	}
-	return action.Receipt{
+	receipt := action.Receipt{
 		SchemaVersion:  2,
 		ApprovalDigest: s.approvalDigestTx(ctx, tx, actionID, decided),
 		ReceiptID:      action.NewReceiptID(),
@@ -419,7 +446,21 @@ func (s *Store) receiptForFinish(ctx context.Context, tx *sql.Tx, actionID strin
 		ResultDigest: resultDigest,
 		StartedAt:    started,
 		FinishedAt:   finishedAt.UTC(),
-	}, nil
+	}
+	terms, err := identityReceiptTermsTx(ctx, tx, actionID, allowCorruptIdentity)
+	if err != nil {
+		return action.Receipt{}, err
+	}
+	if terms.present {
+		receipt.SchemaVersion = 3
+		receipt.IdentityStatus = terms.status
+		receipt.RequesterPrincipalID = terms.requester
+		receipt.ActorPrincipalID = terms.actor
+		receipt.ResponsiblePrincipalID = terms.responsible
+		receipt.IdentityEvidenceDigest = terms.evidenceHash
+		receipt.IdentitySnapshotDigest = terms.snapshotHash
+	}
+	return receipt, nil
 }
 
 // ReceiptsByAction returns the receipts of one action, chain order.
@@ -429,7 +470,9 @@ func (s *Store) ReceiptsByAction(ctx context.Context, actionID string) ([]action
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
 		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
-		        schema_version, approval_digest
+		        schema_version, approval_digest, requester_principal_id,
+		        actor_principal_id, responsible_principal_id, identity_status,
+		        identity_evidence_digest, identity_snapshot_digest
 		   FROM receipts WHERE action_id = ? ORDER BY chain_seq ASC`, actionID)
 }
 
@@ -440,7 +483,9 @@ func (s *Store) ListReceipts(ctx context.Context, partition string) ([]action.Re
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
 		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
-		        schema_version, approval_digest
+		        schema_version, approval_digest, requester_principal_id,
+		        actor_principal_id, responsible_principal_id, identity_status,
+		        identity_evidence_digest, identity_snapshot_digest
 		   FROM receipts WHERE partition = ? ORDER BY chain_seq ASC`, partition)
 }
 
@@ -463,7 +508,9 @@ func (s *Store) queryReceipts(ctx context.Context, query string, args ...any) ([
 			&r.AuthorityDigest, &r.DecisionDigest, &r.ActionDigest, &class, &r.Attempt,
 			&r.Outcome, &r.ResultDigest, &startedAt, &finishedAt, &r.Partition,
 			&r.ChainSeq, &r.PreviousReceiptHash, &r.ReceiptHash,
-			&r.SigningKeyID, &r.Signature, &r.SchemaVersion, &r.ApprovalDigest); err != nil {
+			&r.SigningKeyID, &r.Signature, &r.SchemaVersion, &r.ApprovalDigest,
+			&r.RequesterPrincipalID, &r.ActorPrincipalID, &r.ResponsiblePrincipalID,
+			&r.IdentityStatus, &r.IdentityEvidenceDigest, &r.IdentitySnapshotDigest); err != nil {
 			return nil, fmt.Errorf("action/sqlite: scan receipt: %w", err)
 		}
 		r.EffectClass = action.EffectClass(class)
@@ -489,7 +536,9 @@ func (s *Store) GetReceipt(ctx context.Context, receiptID string) (action.Receip
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
 		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
-		        schema_version, approval_digest
+		        schema_version, approval_digest, requester_principal_id,
+		        actor_principal_id, responsible_principal_id, identity_status,
+		        identity_evidence_digest, identity_snapshot_digest
 		   FROM receipts WHERE receipt_id = ?`, receiptID)
 	if err != nil {
 		return action.Receipt{}, err
@@ -508,7 +557,9 @@ func (s *Store) ReceiptAt(ctx context.Context, partition string, seq int64) (act
 		        decision_digest, action_digest, effect_class, attempt, outcome,
 		        result_digest, started_at, finished_at, partition, chain_seq,
 		        previous_receipt_hash, receipt_hash, signing_key_id, signature,
-		        schema_version, approval_digest
+		        schema_version, approval_digest, requester_principal_id,
+		        actor_principal_id, responsible_principal_id, identity_status,
+		        identity_evidence_digest, identity_snapshot_digest
 		   FROM receipts WHERE partition = ? AND chain_seq = ?`, partition, seq)
 	if err != nil {
 		return action.Receipt{}, err

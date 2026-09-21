@@ -24,6 +24,7 @@ import (
 
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
 	"github.com/Sebastian197/korvun/internal/router"
 )
 
@@ -91,7 +92,11 @@ const maxReplyBodyBytes = 64 << 10 // 64 KiB
 // RegisterConsole mounts the operator-console endpoints on m, every route —
 // reads included — behind the bearer gate (they carry message content). Call
 // it ONLY when a non-empty token is configured, and before the server starts.
-func RegisterConsole(m Mounter, token string, store conversation.SessionStore, op OperatorRouter) {
+func RegisterConsole(m Mounter, token string, store conversation.SessionStore, op OperatorRouter, issuers ...*identity.Issuer) {
+	var issuer *identity.Issuer
+	if len(issuers) > 0 {
+		issuer = issuers[0]
+	}
 	auth := bearerAuth(token)
 	m.Handle("GET /api/conversations", auth(listConversationsHandler(store, op)))
 	m.Handle("GET /api/conversations/{key}", auth(conversationDetailHandler(store)))
@@ -108,13 +113,17 @@ func RegisterConsole(m Mounter, token string, store conversation.SessionStore, o
 	// message it dispatches enters the core as the console channel, whose
 	// provenance is «loopback, in-process». A peer that is not loopback is
 	// refused before the bearer and before any dispatch.
-	m.Handle("POST /api/conversations/{key}/message", loopbackOnlyConsole(auth(userMessageHandler(op))))
+	m.Handle("POST /api/conversations/{key}/message", loopbackOnlyConsole(auth(userMessageHandler(op, issuer))))
 }
 
 // userMessageHandler is the direct-chat send (FR-CONS-3): a USER envelope —
 // never operator — into the full dispatch pipeline. Console-channel keys
 // only: the other channels' users live on their own networks.
-func userMessageHandler(op OperatorRouter) http.Handler {
+func userMessageHandler(op OperatorRouter, issuers ...*identity.Issuer) http.Handler {
+	var issuer *identity.Issuer
+	if len(issuers) > 0 {
+		issuer = issuers[0]
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		channelName, convID, ok := splitKey(r.PathValue("key"))
 		if !ok || channelName != "console" {
@@ -132,6 +141,14 @@ func userMessageHandler(op OperatorRouter) http.Handler {
 		env := envelope.New(channelName, envelope.Inbound,
 			envelope.Participant{ID: "console-user", Name: "You"}).AddText(body.Text)
 		env.Meta[conversation.MetaConversationID] = convID
+		if issuer != nil {
+			ingress, err := issuer.Issue(env.ID, "local_profile")
+			if err != nil {
+				writeError(w, http.StatusServiceUnavailable, "identity unavailable")
+				return
+			}
+			env.SetAuthenticatedIngress(ingress)
+		}
 
 		err := op.DispatchInbound(r.Context(), env)
 		switch {

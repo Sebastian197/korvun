@@ -101,7 +101,11 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 	}
 	// Terminal identified outcomes birth their receipt here too.
 	if state != action.StateAuthorized {
-		if err := s.appendReceiptTx(ctx, tx, s.receiptForRecord(ctx, tx, env, d, state)); err != nil {
+		receipt, err := s.receiptForRecord(ctx, tx, env, d, state)
+		if err != nil {
+			return err
+		}
+		if err := s.appendReceiptTx(ctx, tx, receipt); err != nil {
 			return err
 		}
 	}
@@ -125,16 +129,57 @@ func (s *Store) GetEvidence(ctx context.Context, actionID string) (action.Identi
 	).Scan(&ev.EvidenceID, &ev.Provider, &ev.Subject, &credential,
 		&issuedAt, &ev.TransportBinding, &ev.ClaimsDigest)
 	if errors.Is(err, sql.ErrNoRows) {
-		return action.IdentityEvidence{}, fmt.Errorf("%w: evidence of %q", ErrNotFound, actionID)
+		err = s.db.QueryRowContext(ctx,
+			`SELECT evidence_id,provider,subject_claim,observed_at,issuer,
+			        claims_digest,credential_class
+			   FROM identity_evidence_v2 WHERE action_id=?`, actionID,
+		).Scan(&ev.EvidenceID, &ev.Provider, &ev.Subject, &issuedAt,
+			&ev.TransportBinding, &ev.ClaimsDigest, &credential)
+		if errors.Is(err, sql.ErrNoRows) {
+			return action.IdentityEvidence{}, fmt.Errorf("%w: evidence of %q", ErrNotFound, actionID)
+		}
+		if err != nil {
+			return action.IdentityEvidence{}, fmt.Errorf("action/sqlite: get v2 evidence %q: %w", actionID, err)
+		}
+		ev.Credential = legacyCredential(ev.Provider)
+		if ev.Credential == "" {
+			return action.IdentityEvidence{}, fmt.Errorf(
+				"action/sqlite: v2 evidence of %q names provider %q, which has no credential kind in the v1 view",
+				actionID, ev.Provider)
+		}
 	}
 	if err != nil {
 		return action.IdentityEvidence{}, fmt.Errorf("action/sqlite: get evidence %q: %w", actionID, err)
 	}
-	ev.Credential = action.CredentialType(credential)
+	if ev.Credential == "" {
+		ev.Credential = action.CredentialType(credential)
+	}
 	at, err := time.Parse(time.RFC3339Nano, issuedAt)
 	if err != nil {
 		return action.IdentityEvidence{}, fmt.Errorf("action/sqlite: parse issued_at of %q: %w", actionID, err)
 	}
 	ev.IssuedAt = at
 	return ev, nil
+}
+
+// legacyCredential projects a v2 evidence row's PROVIDER onto the finite v1
+// credential enum, for the legacy GetEvidence view. It returns the empty type
+// for a provider it does not know, and the caller refuses: casting the stored
+// class string straight to action.CredentialType manufactured a member of a
+// FINITE enum out of arbitrary text, which is the opposite of what an enum is
+// for (the twentieth pass, P3-6). Adding a provider means adding a case here,
+// deliberately, not having one invented at read time.
+func legacyCredential(provider string) action.CredentialType {
+	switch provider {
+	case "cli":
+		return action.CredentialLoopbackInProcess
+	case "telegram":
+		return action.CredentialBotTokenSession
+	case "discord":
+		return action.CredentialGatewaySession
+	case "webhook", "console":
+		return action.CredentialInboundBearer
+	default:
+		return ""
+	}
 }

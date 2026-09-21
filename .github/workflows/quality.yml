@@ -159,11 +159,18 @@ jobs:
         shell: bash
         run: python3 scripts/rebase_evidence_test.py
 
+      # -timeout is EXPLICIT, and 30m is a decision rather than an
+      # inheritance. Go's default is 10m per package, and on 2026-09-21 the
+      # windows runner finished internal/action/sqlite in 599.835s against
+      # master 551f9770 — 165 MILLISECONDS inside a limit nobody had chosen.
+      # The next commit to touch that package crossed it. A timeout still
+      # kills a genuinely hung test; what it no longer does is fail a suite
+      # for being large on the slowest runner.
       - name: Test
         shell: bash
         run: |
           GO_PKGS=$(go list -e -f "{{if not .Error}}{{.ImportPath}}{{end}}" $(find . \( -name node_modules -o -name .git \) -prune -o -type f -name "*.go" -print | sed "s|/[^/]*$||" | sort -u) | grep -v "^$")
-          go test -race $GO_PKGS
+          go test -race -timeout 30m $GO_PKGS
 
       - name: Coverage gate
         shell: bash
@@ -187,7 +194,8 @@ jobs:
           # coverage. Adding -coverpkg=./internal/... dilutes each
           # package against the whole tree and breaks the per-package
           # gate.
-          go test -race -coverprofile=coverage.out ./internal/... \
+          # -timeout 30m for the same reason as the Test step above.
+          go test -race -timeout 30m -coverprofile=coverage.out ./internal/... \
             | tee coverage-test.log
 
           # Guard: coverage.out must have the mode header AND >=1 data line.

@@ -30,8 +30,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/brain"
 	"github.com/Sebastian197/korvun/internal/conversation"
 	"github.com/Sebastian197/korvun/internal/envelope"
+	"github.com/Sebastian197/korvun/internal/identity"
+	"github.com/Sebastian197/korvun/internal/router"
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 )
@@ -343,6 +346,108 @@ func TestGateway_HappyFlow(t *testing.T) {
 
 	stop()
 	waitClosed(t, inbound, 2*time.Second)
+}
+
+type discordIdentityResult struct {
+	evidence identity.Evidence
+	err      error
+}
+
+type discordIdentityBrain struct {
+	resolver *identity.Resolver
+	results  chan discordIdentityResult
+}
+
+var _ brain.AuthenticatedBrain = (*discordIdentityBrain)(nil)
+
+func (*discordIdentityBrain) Handle(context.Context, *envelope.Envelope) ([]*envelope.Envelope, error) {
+	return nil, errors.New("legacy Discord brain path used")
+}
+
+func (b *discordIdentityBrain) HandleAuthenticated(_ context.Context, env *envelope.Envelope, ingress identity.AuthenticatedIngress) ([]*envelope.Envelope, error) {
+	evidence, err := b.resolver.Resolve(ingress, identity.ResolveRequest{
+		ActionID: "act-" + env.ID, RequestID: env.ID,
+		Channel: ChannelName, Brain: "alpha",
+	})
+	b.results <- discordIdentityResult{evidence: evidence, err: err}
+	return nil, err
+}
+
+func TestIdentity_AllIngressDoorsCarryEvidence(t *testing.T) {
+	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+	resolver, err := identity.NewResolver(identity.Registry{
+		Principals: []identity.Principal{
+			{ID: "principal_discord", Kind: identity.PrincipalExternalSystem},
+			{ID: "principal_brain_alpha", Kind: identity.PrincipalWorkload},
+		},
+		Bindings: []identity.Binding{{
+			ID: "binding_discord", Provider: ChannelName, Channel: ChannelName,
+			CredentialRef: "DISCORD_TOKEN", SubjectNamespace: "discord_account",
+			VerifiedSubject: "shared_discord_bot_session",
+			PrincipalID:     "principal_discord", Generation: 1,
+			Status: identity.BindingActive,
+		}},
+		Workloads: []identity.Workload{{Brain: "alpha", PrincipalID: "principal_brain_alpha"}},
+	}, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := resolver.NewIssuer(identity.IssuerConfig{
+		BindingID: "binding_discord", Method: "gateway_session",
+		CredentialClass: "bot_token_session", TTL: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const self = "BOT-IDENTITY"
+	url := scriptGateway(t, func(ctx context.Context, c *websocket.Conn, selfURL string) {
+		_ = wsjson.Write(ctx, c, helloFrame(60000))
+		if _, err := serverRead(ctx, c); err != nil {
+			return
+		}
+		_ = wsjson.Write(ctx, c, msgFrame(1, humanMsg))
+		_ = wsjson.Write(ctx, c, readyFrame(2, self, selfURL))
+		_ = wsjson.Write(ctx, c, msgFrame(3, humanMsg))
+		drainClient(ctx, c)
+	})
+	adapter := newGatewayAdapter(t, url, WithIngressIssuer(issuer))
+	r := router.New()
+	observer := &discordIdentityBrain{resolver: resolver, results: make(chan discordIdentityResult, 1)}
+	if err := r.RegisterBrain("alpha", observer); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RegisterChannel(adapter); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Route(ChannelName, "alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = adapter.Stop(ctx)
+		_ = r.Shutdown(ctx)
+	})
+	select {
+	case result := <-observer.results:
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+		if result.evidence.RequesterPrincipalID != "principal_discord" ||
+			result.evidence.Method != "gateway_session" ||
+			result.evidence.BindingID != "binding_discord" ||
+			result.evidence.SubjectClaim != "222" {
+			t.Fatalf("Discord evidence = %+v", result.evidence)
+		}
+		if got := issuer.IssuedCount(); got != 1 {
+			t.Fatalf("issuer calls = %d, want 1; pre-READY dispatch must not issue", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Discord message did not cross the router queue")
+	}
 }
 
 func TestGateway_Heartbeat(t *testing.T) {

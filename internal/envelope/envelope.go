@@ -6,7 +6,11 @@
 // rest of the system speaks only this language.
 package envelope
 
-import "time"
+import (
+	"time"
+
+	"github.com/Sebastian197/korvun/internal/identity"
+)
 
 // Direction indicates whether a message is coming in from a channel or going
 // out to one.
@@ -128,4 +132,23 @@ type Envelope struct {
 	// living inside Parts. See ADR-0006. nil means a normal envelope
 	// (no operation).
 	Operation *Operation `json:"operation,omitempty"`
+	// authenticatedIngress is adapter-minted authority. It is deliberately
+	// unexported and absent from JSON, so payloads and metadata cannot create it.
+	authenticatedIngress identity.AuthenticatedIngress
+}
+
+// SetAuthenticatedIngress attaches an opaque capability minted after
+// transport authentication. The capability remains outside serialized wires.
+func (e *Envelope) SetAuthenticatedIngress(ingress identity.AuthenticatedIngress) {
+	if e != nil {
+		e.authenticatedIngress = ingress
+	}
+}
+
+// AuthenticatedIngress returns the opaque ingress carried by this envelope.
+func (e *Envelope) AuthenticatedIngress() identity.AuthenticatedIngress {
+	if e == nil {
+		return identity.AuthenticatedIngress{}
+	}
+	return e.authenticatedIngress
 }

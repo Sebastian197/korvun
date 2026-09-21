@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
+	"github.com/Sebastian197/korvun/internal/identity"
 
 	_ "modernc.org/sqlite" // the pure-Go driver the house already ships
 )
@@ -123,7 +124,7 @@ CREATE TABLE IF NOT EXISTS action_decisions (
 ) WITHOUT ROWID;`
 
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 13
+const schemaVersionCurrent = 14
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -447,6 +448,70 @@ CREATE TABLE IF NOT EXISTS authorization_snapshots (
     authorization_digest  TEXT    NOT NULL,
     FOREIGN KEY (intent_id, intent_version) REFERENCES intent_versions(intent_id, version)
 ) WITHOUT ROWID;`,
+	// v13->v14 (Piece 3, phase 1): configured principals, authentication
+	// bindings, signed per-action identity evidence, and signed principal
+	// lifecycle events. Historical rows remain era zero with empty snapshots.
+	13: `
+CREATE TABLE IF NOT EXISTS principals (
+    principal_id TEXT NOT NULL PRIMARY KEY,
+    kind         TEXT NOT NULL CHECK(kind IN ('human','agent','workload','external_system')),
+    display_name TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL,
+    disabled_at  TEXT,
+    revision     INTEGER NOT NULL CHECK(revision > 0)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS principal_bindings (
+    binding_id        TEXT NOT NULL PRIMARY KEY,
+    provider          TEXT NOT NULL,
+    channel           TEXT NOT NULL,
+    credential_ref    TEXT NOT NULL,
+    subject_namespace TEXT NOT NULL,
+	verified_subject  TEXT NOT NULL,
+    principal_id      TEXT NOT NULL REFERENCES principals(principal_id),
+    generation        INTEGER NOT NULL CHECK(generation > 0),
+    status            TEXT NOT NULL CHECK(status IN ('active','revoked'))
+) WITHOUT ROWID;
+CREATE UNIQUE INDEX IF NOT EXISTS principal_bindings_equivalent_active
+ON principal_bindings(provider, channel, credential_ref, subject_namespace,
+                      verified_subject, principal_id)
+WHERE status = 'active';
+CREATE TABLE IF NOT EXISTS principal_events (
+    event_id       TEXT NOT NULL PRIMARY KEY,
+    principal_id   TEXT NOT NULL REFERENCES principals(principal_id),
+    revision       INTEGER NOT NULL CHECK(revision > 0),
+    kind           TEXT NOT NULL CHECK(kind IN ('created','disabled')),
+    occurred_at    TEXT NOT NULL,
+    canonical_event BLOB NOT NULL,
+    digest         TEXT NOT NULL,
+    signing_key_id TEXT NOT NULL REFERENCES signing_keys(key_id),
+    signature      TEXT NOT NULL,
+    UNIQUE(principal_id, revision)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS identity_evidence_v2 (
+    evidence_id              TEXT NOT NULL PRIMARY KEY,
+    action_id                TEXT NOT NULL UNIQUE REFERENCES actions(action_id) ON DELETE CASCADE,
+    request_id               TEXT NOT NULL,
+    requester_principal_id   TEXT NOT NULL REFERENCES principals(principal_id),
+    actor_principal_id       TEXT NOT NULL REFERENCES principals(principal_id),
+    responsible_principal_id TEXT REFERENCES principals(principal_id),
+    binding_id               TEXT NOT NULL REFERENCES principal_bindings(binding_id),
+    binding_generation       INTEGER NOT NULL CHECK(binding_generation > 0),
+    adapter_instance_id      TEXT NOT NULL,
+    provider                 TEXT NOT NULL,
+    method                   TEXT NOT NULL,
+    credential_class         TEXT NOT NULL,
+    issuer                   TEXT NOT NULL,
+    subject_namespace        TEXT NOT NULL,
+    verified_subject         TEXT NOT NULL,
+    subject_claim            TEXT NOT NULL,
+    observed_at              TEXT NOT NULL,
+    expires_at               TEXT,
+    claims_digest            TEXT NOT NULL,
+    canonical_evidence       BLOB NOT NULL,
+    evidence_digest          TEXT NOT NULL,
+    signing_key_id           TEXT NOT NULL REFERENCES signing_keys(key_id),
+    signature                TEXT NOT NULL
+) WITHOUT ROWID;`,
 }
 
 // migrationsPost holds the destructive tail of a hybrid step (R8-Z1):
@@ -494,6 +559,73 @@ func migrate(db *sql.DB) error {
 var migrationCopies = map[int]func(*sql.Tx) error{
 	10: copyTombstonesV10toV11,
 	11: revalidateTombstonesV11toV12,
+	13: addIdentityV14Columns,
+}
+
+func addIdentityV14Columns(tx *sql.Tx) error {
+	for _, table := range []struct {
+		name    string
+		columns []string
+	}{
+		{
+			name: "actions",
+			columns: []string{
+				"identity_version INTEGER NOT NULL DEFAULT 0",
+				"identity_evidence_digest TEXT NOT NULL DEFAULT ''",
+				"identity_canonical_evidence BLOB NOT NULL DEFAULT X''",
+				"identity_signing_key_id TEXT NOT NULL DEFAULT ''",
+				"identity_signature TEXT NOT NULL DEFAULT ''",
+			},
+		},
+		{
+			name: "receipts",
+			columns: []string{
+				"requester_principal_id TEXT NOT NULL DEFAULT ''",
+				"actor_principal_id TEXT NOT NULL DEFAULT ''",
+				"responsible_principal_id TEXT NOT NULL DEFAULT ''",
+				"identity_status TEXT NOT NULL DEFAULT ''",
+				"identity_evidence_digest TEXT NOT NULL DEFAULT ''",
+				"identity_snapshot_digest TEXT NOT NULL DEFAULT ''",
+			},
+		},
+	} {
+		existing, err := tableColumns(tx, table.name)
+		if err != nil {
+			return err
+		}
+		for _, declaration := range table.columns {
+			name := strings.Fields(declaration)[0]
+			if existing[name] {
+				continue
+			}
+			if _, err := tx.Exec("ALTER TABLE " + table.name + " ADD COLUMN " + declaration); err != nil {
+				return fmt.Errorf("action/sqlite: add schema v14 column %s.%s: %w", table.name, name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func tableColumns(tx *sql.Tx, table string) (map[string]bool, error) {
+	rows, err := tx.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: inspect table %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return nil, fmt.Errorf("action/sqlite: inspect table %s columns: %w", table, err)
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("action/sqlite: inspect table %s columns: %w", table, err)
+	}
+	return columns, nil
 }
 
 // TombstoneFault names one unreadable or incoherent tombstone row —
@@ -951,9 +1083,12 @@ type Store struct {
 	// sealer, when non-nil, signs and appends one receipt per terminal
 	// outcome INSIDE the recording transaction (Etapa 4, FR-LED). The app
 	// injects it with the active profile key; nil = pre-stage behavior.
-	sealer               func(action.Receipt) action.Receipt
-	intentContractSigner func(action.IntentContractV2) action.SignedIntentContractV2
-	intentEventSigner    func(action.IntentEventV1) action.SignedIntentEventV1
+	sealer                 func(action.Receipt) action.Receipt
+	intentContractSigner   func(action.IntentContractV2) action.SignedIntentContractV2
+	intentEventSigner      func(action.IntentEventV1) action.SignedIntentEventV1
+	identityEvidenceSigner func(identity.Evidence) identity.SignedEvidence
+	principalEventSigner   func(identity.PrincipalEvent) identity.SignedPrincipalEvent
+	identityNow            func() time.Time
 	// writes counts RecordAttempt commits toward the periodic prune;
 	// mutex-guarded because callers are concurrent brain workers (the DB
 	// pool serializes statements, not this counter).
@@ -1092,7 +1227,10 @@ func open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("action/sqlite: ping %q: %w", abs, err)
 	}
-	return &Store{db: db, path: abs, capRows: defaultCapRows, pruneEvery: defaultPruneEvery}, nil
+	return &Store{
+		db: db, path: abs, capRows: defaultCapRows, pruneEvery: defaultPruneEvery,
+		identityNow: time.Now,
+	}, nil
 }
 
 // RecoverPreviousLife closes every non-terminal action left behind by
@@ -1269,7 +1407,7 @@ func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action
 	// the UPDATE turns this DEFERRED transaction into a reader that must
 	// promote, and under a concurrent writer the UPDATE gets SQLITE_BUSY and
 	// the orphan is skipped.
-	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "", predicate == claimedOrphanPredicate)
+	r, err := s.receiptForFinish(ctx, tx, actionID, to, at, "", predicate == claimedOrphanPredicate, true)
 	if err != nil {
 		return false, err
 	}
@@ -1376,7 +1514,11 @@ func (s *Store) RecordAttempt(ctx context.Context, env action.Envelope, d Decisi
 	// Terminal decision outcomes (DENIED, SHADOWED — the sealed NC-1/NC-2
 	// yeses) birth their receipt in this same transaction.
 	if state != action.StateAuthorized {
-		if err := s.appendReceiptTx(ctx, tx, s.receiptForRecord(ctx, tx, env, d, state)); err != nil {
+		receipt, err := s.receiptForRecord(ctx, tx, env, d, state)
+		if err != nil {
+			return err
+		}
+		if err := s.appendReceiptTx(ctx, tx, receipt); err != nil {
 			return err
 		}
 	}
@@ -1576,5 +1718,11 @@ func OpenReadOnly(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("action/sqlite: store %q is at schema v%d, this binary reads v%d — a read-only consult never migrates; run the server boot to lift the schema", abs, version, schemaVersionCurrent)
 	}
-	return &Store{db: db, path: abs, capRows: defaultCapRows, pruneEvery: defaultPruneEvery, readOnly: true}, nil
+	// identityNow is set here for the same reason open() sets it: every
+	// identity-bearing path dereferences it, and a constructor that leaves it
+	// nil turns the first such call into a nil-pointer panic instead of an
+	// error (the twentieth pass, P3-1). A read-only store writes nothing; it
+	// still needs to be able to say what time it is.
+	return &Store{db: db, path: abs, capRows: defaultCapRows, pruneEvery: defaultPruneEvery,
+		readOnly: true, identityNow: time.Now}, nil
 }
