@@ -45,3 +45,9 @@ func WithActionIdentity(id ActionIdentity) AgentOption {
 func WithPrincipalResolver(resolver *identity.Resolver) AgentOption {
 	return func(a *AgentBrain) { a.principalResolver = resolver }
 }
+
+// WithStrictAuthority requires every effectful dispatch, including an
+// approved resume, to pass the durable v2 authority start gate.
+func WithStrictAuthority() AgentOption {
+	return func(a *AgentBrain) { a.strictAuthority = true }
+}

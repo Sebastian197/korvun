@@ -165,6 +165,17 @@ func (a *ApprovalsAdapter) Detail(ctx context.Context, id string) (controlapi.Ap
 		ParametersState: string(d.ParamsState),
 		BrainGone:       lawErr != nil && errors.Is(lawErr, ErrBrainNotInProfile),
 	}
+	if d.Authority != nil {
+		out.Authority = &controlapi.ApprovalAuthority{
+			RequesterPrincipalID: d.Authority.RequesterPrincipalID,
+			IntentID:             d.Authority.IntentID,
+			IntentPurpose:        d.Authority.IntentPurpose,
+			PrincipalChain:       append([]string(nil), d.Authority.PrincipalChain...),
+			Budget: controlapi.ApprovalAuthorityBudget{
+				Kind: string(d.Authority.BudgetKind), Remaining: d.Authority.BudgetRemaining,
+			},
+		}
+	}
 	_ = cage
 	return out, nil
 }
@@ -201,6 +212,8 @@ func (a *ApprovalsAdapter) nameRead(ctx context.Context, id string, err error) e
 	case errors.Is(err, actionsqlite.ErrApprovalInvalidated):
 		return controlapi.LawMoved(a.currentLawDigest(ctx, id))
 	case errors.Is(err, actionsqlite.ErrApprovalEvidenceCorrupt):
+		return controlapi.ErrApprovalEvidenceCorrupt
+	case errors.Is(err, actionsqlite.ErrAuthorizationSnapshotCorrupt):
 		return controlapi.ErrApprovalEvidenceCorrupt
 	case errors.Is(err, actionsqlite.ErrApprovalParamsDigestMismatch):
 		return controlapi.ErrApprovalParamsDigestMismatch
@@ -587,7 +600,7 @@ func (a *ApprovalsAdapter) runApproved(ctx context.Context, id string, cage *Eff
 	// FROM CAGE, never the resolving variant: the executor is rebuilt from the
 	// cage this decision already resolved, so editing the profile halfway
 	// cannot run the tool under a new cage with the old pin.
-	exec, err := BuildApprovalExecutorFromCage(cage, preview)
+	exec, err := BuildApprovalExecutorFromCageMode(cage, preview, a.cfg.StrictAuthority())
 	if err != nil {
 		return controlapi.ApprovalOutcome{}, fmt.Errorf("%w: %w", controlapi.ErrApprovalBrainGone, err)
 	}

@@ -18,8 +18,10 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -276,6 +278,9 @@ type ApprovalDetailRow struct {
 	Params      []byte
 	ParamsState ParamsState
 	ActionState action.State
+	// Authority is present only for strict requests whose signed pending
+	// snapshot verified inside the detail transaction.
+	Authority *action.AuthorizationSnapshotV1
 }
 
 // ApprovalDetail reads one parked request in a SINGLE transaction (§17 F row
@@ -330,6 +335,11 @@ func (s *Store) approvalDetail(ctx context.Context, approvalID string, law *Poli
 		// name the purge instead of the decision.
 		return out, nil
 	}
+	authority, err := s.approvalAuthoritySnapshotTx(ctx, tx, a)
+	if err != nil {
+		return ApprovalDetailRow{}, err
+	}
+	out.Authority = authority
 
 	p, err := action.ParseCanonicalPreview([]byte(rawPreview))
 	if err != nil {
@@ -380,6 +390,88 @@ func (s *Store) approvalDetail(ctx context.Context, approvalID string, law *Poli
 		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: commit approval detail: %w: %w", ErrApprovalUnreadable, err)
 	}
 	return out, nil
+}
+
+func (s *Store) approvalAuthoritySnapshotTx(ctx context.Context, tx *sql.Tx, approval action.Approval) (*action.AuthorizationSnapshotV1, error) {
+	if s.authorityActivationDigest != "" {
+		if err := s.verifyAuthorityActivationTx(ctx, tx, s.authorityProfileID,
+			s.authorityActivationDigest); err != nil {
+			return nil, err
+		}
+	}
+	var required int
+	if err := tx.QueryRowContext(ctx, `SELECT authority_snapshot_required FROM approvals WHERE approval_id=?`, approval.ApprovalID).Scan(&required); err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q authority marker: %w: %w", approval.ApprovalID, ErrApprovalUnreadable, err)
+	}
+	if required == 0 {
+		var count int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM authorization_snapshots WHERE action_id=? OR approval_id=?`, approval.ActionID, approval.ApprovalID).Scan(&count); err != nil {
+			return nil, fmt.Errorf("action/sqlite: approval %q authority absence: %w: %w", approval.ApprovalID, ErrApprovalUnreadable, err)
+		}
+		if count != 0 {
+			return nil, fmt.Errorf("action/sqlite: approval %q unmarked authority row: %w", approval.ApprovalID, ErrAuthorizationSnapshotCorrupt)
+		}
+		return nil, nil
+	}
+	if required != 1 {
+		return nil, fmt.Errorf("action/sqlite: approval %q authority marker %d: %w", approval.ApprovalID, required, ErrAuthorizationSnapshotCorrupt)
+	}
+	var (
+		contextVersion, intentVersion                               int
+		requester, actor, evidenceDigest                            string
+		intentID, intentDigest, storedDigest                        string
+		canonical                                                   []byte
+		kind, approvalID, purpose, chainRaw, budgetKind, recordedAt string
+		remaining                                                   sql.NullInt64
+		keyID, signature                                            string
+	)
+	err := tx.QueryRowContext(ctx, `SELECT context_version,requester_principal_id,actor_principal_id,
+		evidence_digest,intent_id,intent_version,intent_digest,canonical_context,authorization_digest,
+		snapshot_kind,approval_id,intent_purpose,principal_chain,budget_kind,budget_remaining,
+		recorded_at,signing_key_id,signature
+		FROM authorization_snapshots WHERE action_id=?`, approval.ActionID).
+		Scan(&contextVersion, &requester, &actor, &evidenceDigest, &intentID, &intentVersion,
+			&intentDigest, &canonical, &storedDigest, &kind, &approvalID, &purpose, &chainRaw,
+			&budgetKind, &remaining, &recordedAt, &keyID, &signature)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("action/sqlite: approval %q required authority is missing: %w", approval.ApprovalID, ErrAuthorizationSnapshotCorrupt)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q authority read: %w: %w", approval.ApprovalID, ErrApprovalUnreadable, err)
+	}
+	pub, _, err := publicKeyTx(ctx, tx, keyID)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q authority key: %w", approval.ApprovalID, ErrAuthorizationSnapshotCorrupt)
+	}
+	snapshot, err := action.VerifyAuthorizationSnapshotBytesV1(pub, canonical, action.AuthoritySignature{
+		Digest: storedDigest, SigningKeyID: keyID, Signature: signature,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q authority signature: %w", approval.ApprovalID, ErrAuthorizationSnapshotCorrupt)
+	}
+	var chain []string
+	if err := json.Unmarshal([]byte(chainRaw), &chain); err != nil {
+		return nil, fmt.Errorf("action/sqlite: approval %q authority chain: %w", approval.ApprovalID, ErrAuthorizationSnapshotCorrupt)
+	}
+	var snapshotRemaining sql.NullInt64
+	if snapshot.BudgetRemaining != nil {
+		snapshotRemaining = sql.NullInt64{Int64: *snapshot.BudgetRemaining, Valid: true}
+	}
+	if contextVersion != 1 || snapshot.ActionID != approval.ActionID || snapshot.ApprovalID != approval.ApprovalID ||
+		requester != snapshot.RequesterPrincipalID || actor != snapshot.ActorPrincipalID ||
+		evidenceDigest != snapshot.IdentityEvidenceDigest || intentID != snapshot.IntentID ||
+		intentVersion != snapshot.IntentVersion || intentDigest != snapshot.IntentDigest ||
+		kind != string(snapshot.Kind) || approvalID != snapshot.ApprovalID || purpose != snapshot.IntentPurpose ||
+		!bytes.Equal(mustJSON(chain), mustJSON(snapshot.PrincipalChain)) || budgetKind != string(snapshot.BudgetKind) ||
+		remaining != snapshotRemaining || recordedAt != snapshot.RecordedAt.UTC().Format(time.RFC3339Nano) {
+		return nil, fmt.Errorf("action/sqlite: approval %q authority columns disagree with signed bytes: %w", approval.ApprovalID, ErrAuthorizationSnapshotCorrupt)
+	}
+	return &snapshot, nil
+}
+
+func mustJSON(value any) []byte {
+	raw, _ := json.Marshal(value)
+	return raw
 }
 
 func scanApprovalDetail(row scanner) (action.Approval, string, string, error) {

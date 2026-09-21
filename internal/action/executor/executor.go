@@ -52,6 +52,68 @@ type AuthenticatedRecorder interface {
 	RecordAttemptAuthenticated(context.Context, action.Envelope, string, string, action.State, identity.Evidence) error
 }
 
+// AuthorityStartRequest carries final-use facts to the strict durable gate.
+// ResolveEvidence is called only after the store mints the final action id
+// under writer ownership.
+type AuthorityStartRequest struct {
+	ActorPrincipalID string
+	CorrelationID    string
+	SourceProtocol   string
+	Channel          string
+	ConversationID   string
+	Operation        action.Operation
+	Arguments        string
+	EffectClass      action.EffectClass
+	At               time.Time
+	ResolveEvidence  func(string) (identity.Evidence, error)
+}
+
+// AuthorityStartResult is the committed capability the executor may dispatch.
+type AuthorityStartResult struct {
+	ActionID      string
+	IntentID      string
+	AuthorityRefs []string
+	Evidence      *identity.Evidence
+}
+
+// AuthorityStarter is the strict store seam. Its success means the decision,
+// debits, start proof, action, and identity evidence committed together.
+type AuthorityStarter interface {
+	StartAuthorization(context.Context, AuthorityStartRequest) (AuthorityStartResult, error)
+}
+
+// AuthorityApprovalRequest carries the final facts of a strict pending birth.
+// The durable adapter resolves presentation context and the store owns both
+// final ids.
+type AuthorityApprovalRequest struct {
+	Draft            action.Envelope
+	ActorPrincipalID string
+	CorrelationID    string
+	SourceProtocol   string
+	Channel          string
+	ConversationID   string
+	Operation        action.Operation
+	Arguments        string
+	EffectClass      action.EffectClass
+	At               time.Time
+	ResolveEvidence  func(string) (identity.Evidence, error)
+}
+
+// AuthorityApprovalResult is returned only after the strict pending birth and
+// signed non-consuming snapshot commit.
+type AuthorityApprovalResult struct {
+	ActionID      string
+	ApprovalID    string
+	IntentID      string
+	AuthorityRefs []string
+	Evidence      identity.Evidence
+}
+
+// AuthorityApprovalRequester is the strict pending-birth seam.
+type AuthorityApprovalRequester interface {
+	RequestAuthorizationApproval(context.Context, AuthorityApprovalRequest) (AuthorityApprovalResult, error)
+}
+
 // ResultRecorder closes an action together with the digest of its result.
 type ResultRecorder interface {
 	FinishWithResult(context.Context, string, action.State, time.Time, string) error
@@ -94,6 +156,7 @@ type CoordinatorConfig struct {
 	Recorder          Recorder
 	Identity          *IdentityConfig
 	PrincipalResolver *identity.Resolver
+	StrictAuthority   bool
 	EffectClassifier  EffectClassifier
 	Governance        *Governance
 	NewActionID       func() string
@@ -439,7 +502,43 @@ func (e *Executor) Submit(ctx context.Context, request *Request) (Result, error)
 		result.Action = request.action
 		if rule := effectGateRule(descriptor.Class, e.config.Identity.EffectCeiling, false); effectForGate && rule != "" {
 			if rule == "approval_unavailable" {
-				if request.evidence != nil {
+				if e.config.StrictAuthority {
+					requester, ok := e.config.Recorder.(AuthorityApprovalRequester)
+					if !ok || e.config.PrincipalResolver == nil || request.evidence == nil {
+						result.ApprovalIdentityError = true
+					} else {
+						parked, err := requester.RequestAuthorizationApproval(ctx, AuthorityApprovalRequest{
+							Draft: request.action, ActorPrincipalID: request.evidence.ActorPrincipalID,
+							CorrelationID: request.inbound.ID, SourceProtocol: request.lane,
+							Channel: request.channel, ConversationID: request.scope.Conversation,
+							Operation: request.action.Operation, Arguments: request.args,
+							EffectClass: descriptor.Class, At: e.now().UTC(),
+							ResolveEvidence: func(actionID string) (identity.Evidence, error) {
+								return e.config.PrincipalResolver.Resolve(request.ingress, identity.ResolveRequest{
+									ActionID: actionID, RequestID: request.inbound.ID,
+									Channel: request.channel, Brain: e.config.BrainName,
+								})
+							},
+						})
+						if err != nil {
+							result.ApprovalError = err
+						} else {
+							request.action.ActionID = parked.ActionID
+							request.action.IntentID = parked.IntentID
+							request.action.AuthorityRefs = append([]string(nil), parked.AuthorityRefs...)
+							request.action.Principal = action.PrincipalRef{
+								PrincipalID:        parked.Evidence.ActorPrincipalID,
+								EvidenceID:         parked.Evidence.EvidenceID,
+								ResponsibleHumanID: parked.Evidence.ResponsiblePrincipalID,
+							}
+							result.Action = request.action
+							result.Branch = BranchPending
+							result.Rule = "require_approval"
+							result.ApprovalID = parked.ApprovalID
+							return result, nil
+						}
+					}
+				} else if request.evidence != nil {
 					if requester, ok := e.config.Recorder.(AuthenticatedApprovalRequester); ok {
 						e.refreshDurableEffect(request)
 						approved := request.action
@@ -585,6 +684,49 @@ func (e *Executor) refreshDurableEffect(request *Request) {
 
 func (e *Executor) recordAuthorized(ctx context.Context, request *Request, result *Result, rule string) bool {
 	recorder := e.config.Recorder
+	if e.config.StrictAuthority && request.action.Effect.Class != string(action.EffectPure) {
+		if recorder == nil || e.config.PrincipalResolver == nil {
+			result.AuthorizationIdentityError = true
+			result.RecordError = identity.ErrIdentityEvidenceMissing
+			return false
+		}
+		starter, ok := recorder.(AuthorityStarter)
+		if !ok {
+			result.RecordError = action.ErrAuthorityEvidenceCorrupt
+			return false
+		}
+		e.refreshDurableEffect(request)
+		started, err := starter.StartAuthorization(ctx, AuthorityStartRequest{
+			ActorPrincipalID: request.action.Principal.PrincipalID,
+			CorrelationID:    request.inbound.ID, SourceProtocol: request.lane,
+			Channel: request.channel, ConversationID: request.scope.Conversation,
+			Operation: request.action.Operation, Arguments: request.args,
+			EffectClass: action.EffectClass(request.action.Effect.Class), At: e.now().UTC(),
+			ResolveEvidence: func(actionID string) (identity.Evidence, error) {
+				return e.config.PrincipalResolver.Resolve(request.ingress, identity.ResolveRequest{
+					ActionID: actionID, RequestID: request.inbound.ID,
+					Channel: request.channel, Brain: e.config.BrainName,
+				})
+			},
+		})
+		if err != nil {
+			result.RecordError = err
+			return false
+		}
+		request.action.ActionID = started.ActionID
+		request.action.IntentID = started.IntentID
+		request.action.AuthorityRefs = append([]string(nil), started.AuthorityRefs...)
+		if started.Evidence != nil {
+			evidence := *started.Evidence
+			request.evidence = &evidence
+			request.action.Principal = action.PrincipalRef{
+				PrincipalID: evidence.ActorPrincipalID, EvidenceID: evidence.EvidenceID,
+				ResponsibleHumanID: evidence.ResponsiblePrincipalID,
+			}
+		}
+		result.Action = request.action
+		return true
+	}
 	if recorder == nil {
 		return true
 	}
@@ -774,6 +916,12 @@ type ApprovalStore interface {
 	ReadReceipt(context.Context, string) (string, error)
 }
 
+// AuthorityApprovalStore extends the approval adapter with the strict atomic
+// recheck, debit, durable start and parameter claim.
+type AuthorityApprovalStore interface {
+	StartApprovedAuthorization(context.Context, string) ([]byte, action.Operation, string, error)
+}
+
 // ResumeStage names the exact coordinator stage that prevented an approved
 // execution. Presentation adapters retain their existing public errors.
 type ResumeStage string
@@ -851,6 +999,36 @@ func (e *Executor) ResumeApproved(ctx context.Context, store ApprovalStore, appr
 	}
 	if state != action.StateApproved {
 		return ApprovedResult{}, &ResumeError{Stage: ResumeActionClosed, ApprovalID: approvalID, ActionID: approval.ActionID, State: state}
+	}
+	if e == nil {
+		return ApprovedResult{}, ErrExecutionBindingMismatch
+	}
+	if e.config.StrictAuthority {
+		strict, ok := store.(AuthorityApprovalStore)
+		if !ok {
+			return ApprovedResult{}, &ResumeError{Stage: ResumeClaim, ApprovalID: approvalID, ActionID: approval.ActionID, Err: action.ErrAuthorityEvidenceCorrupt}
+		}
+		params, operation, actionID, err := strict.StartApprovedAuthorization(ctx, approvalID)
+		if err != nil {
+			return ApprovedResult{}, &ResumeError{Stage: ResumeClaim, ApprovalID: approvalID, ActionID: approval.ActionID, Err: err}
+		}
+		capability := invocationCapability{
+			action: action.Envelope{ActionID: actionID, Operation: operation,
+				ParametersDigest: action.Digest(operation, string(params))},
+			toolName: operation.Name, args: string(params), scope: tool.Scope{},
+		}
+		execution := e.invokeAndClose(ctx, capability, store.Close, nil)
+		if execution.closeErr != nil {
+			return ApprovedResult{}, &ResumeError{Stage: ResumeClose, ApprovalID: approvalID, ActionID: actionID, Err: execution.closeErr}
+		}
+		receiptID, err := store.ReadReceipt(context.WithoutCancel(ctx), approvalID)
+		if err != nil {
+			return ApprovedResult{}, &ResumeError{Stage: ResumeReadReceipt, ApprovalID: approvalID, ActionID: actionID, Err: err}
+		}
+		return ApprovedResult{
+			Result: execution.output, ResultDigest: execution.digest, ReceiptID: receiptID,
+			Operation: operation, Outcome: execution.outcome, ToolError: execution.toolErr,
+		}, nil
 	}
 	params, operation, err := store.Claim(ctx, approvalID, &approval)
 	if err != nil {

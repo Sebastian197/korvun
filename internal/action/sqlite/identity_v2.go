@@ -383,6 +383,26 @@ func validateActionIdentityTx(ctx context.Context, tx *sql.Tx, actionID string, 
 	}, at)
 }
 
+// validateActionIdentityV2Tx is the mutation/start door. Legacy actions remain
+// readable, but they can never authorize a new authority mutation or effect.
+func validateActionIdentityV2Tx(ctx context.Context, tx *sql.Tx, actionID string, at time.Time) (identity.Evidence, error) {
+	stored, err := actionSnapshotTx(ctx, tx, actionID)
+	if err != nil {
+		return identity.Evidence{}, err
+	}
+	if identity.SnapshotIsLegacy(stored.Snapshot) {
+		return identity.Evidence{}, identity.ErrIdentityEvidenceMissing
+	}
+	if err := validateActionIdentityTx(ctx, tx, actionID, at); err != nil {
+		return identity.Evidence{}, err
+	}
+	evidence, err := readEvidenceTx(ctx, tx, actionID)
+	if err != nil {
+		return identity.Evidence{}, identity.ErrIdentityEvidenceCorrupt
+	}
+	return evidence.Evidence, nil
+}
+
 func readEvidenceTx(ctx context.Context, tx *sql.Tx, actionID string) (identity.SignedEvidence, error) {
 	var (
 		e        identity.Evidence

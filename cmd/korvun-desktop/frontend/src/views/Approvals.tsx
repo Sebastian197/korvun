@@ -16,7 +16,7 @@
 // parameters that re-derive the digest (FR-UI-62). That check runs on the
 // server; this screen shows the confirmation and refuses to render without it.
 import './approvals.css'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { desktop } from '../lib/go'
 import {
@@ -57,6 +57,14 @@ interface Detail extends Row {
   parameters: string
   parameters_state: string
   brain_gone?: boolean
+  authority?: unknown
+}
+interface ApprovalAuthority {
+  requester_principal_id: string
+  intent_id: string
+  intent_purpose: string
+  principal_chain: string[]
+  budget: { kind: 'finite'; remaining: number } | { kind: 'unlimited' }
 }
 interface Gate {
   approvals_enabled: boolean
@@ -116,6 +124,49 @@ function escapeUntrusted(s: string): string {
   return out
 }
 
+type AuthorityRead =
+  { ok: true; value: ApprovalAuthority | undefined } | { ok: false; detail: string }
+
+function readAuthority(value: unknown): AuthorityRead {
+  if (value === undefined) return { ok: true, value: undefined }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { ok: false, detail: 'authority no es un objeto' }
+  }
+  const a = value as Record<string, unknown>
+  for (const field of ['requester_principal_id', 'intent_id', 'intent_purpose'] as const) {
+    if (typeof a[field] !== 'string' || a[field] === '') {
+      return { ok: false, detail: `authority.${field} ilegible` }
+    }
+  }
+  if (
+    !Array.isArray(a.principal_chain) ||
+    a.principal_chain.length === 0 ||
+    a.principal_chain.some((principal) => typeof principal !== 'string' || principal === '')
+  ) {
+    return { ok: false, detail: 'authority.principal_chain ilegible' }
+  }
+  if (typeof a.budget !== 'object' || a.budget === null || Array.isArray(a.budget)) {
+    return { ok: false, detail: 'authority.budget ilegible' }
+  }
+  const budget = a.budget as Record<string, unknown>
+  if (budget.kind === 'finite') {
+    if (
+      typeof budget.remaining !== 'number' ||
+      !Number.isSafeInteger(budget.remaining) ||
+      budget.remaining < 0
+    ) {
+      return { ok: false, detail: 'authority.budget.remaining ilegible' }
+    }
+  } else if (budget.kind === 'unlimited') {
+    if ('remaining' in budget) {
+      return { ok: false, detail: 'authority.budget.remaining no pertenece a unlimited' }
+    }
+  } else {
+    return { ok: false, detail: 'authority.budget.kind ilegible' }
+  }
+  return { ok: true, value: a as unknown as ApprovalAuthority }
+}
+
 /** sha256: + 64 lowercase hex, the shape action.Digest produces. Anything else
  * is "digest ilegible": it is not printed as a digest, not shortened, and not
  * fed to the tail-collision detector. */
@@ -125,11 +176,10 @@ function isDigest(d: string): boolean {
 }
 const tailOf = (d: string): string => d.slice(-6)
 
-/** apr_ + 32 lowercase hex, the shape action.NewApprovalID mints (v0.15.1
- * block B, P2-1). An id is untrusted bytes from the core: a row whose id does
- * not have this shape is listed and never opened, and no URL is ever built
- * from one. */
-const APPROVAL_ID_RE = /^apr_[0-9a-f]{32}$/
+/** Compatibility apr_ and strict apr3_ ids, each followed by 32 lowercase
+ * hex. An id is untrusted bytes from the core: a row outside these two shapes
+ * is listed and never opened, and no URL is ever built from one. */
+const APPROVAL_ID_RE = /^(?:apr|apr3)_[0-9a-f]{32}$/
 function isApprovalID(id: string): boolean {
   return APPROVAL_ID_RE.test(id)
 }
@@ -812,6 +862,7 @@ function RequestDetail({
   }, [])
 
   const detail = answer?.kind === 'ok' ? answer.value : null
+  const authorityRead = readAuthority(detail?.authority)
   // G7: the stored expiry is judged by shape first. An illegible one withdraws
   // Aprobar exactly like a window clock past a legible one.
   const expiry = detail !== null && detail.expires_at !== '' ? parseExpiry(detail.expires_at) : null
@@ -822,6 +873,7 @@ function RequestDetail({
   // `present` with an empty body and an unknown state paint Unreadable (E9).
   const documentPainted =
     detail !== null &&
+    authorityRead.ok &&
     (detail.parameters_state === 'present'
       ? detail.parameters !== ''
       : PARAMS_STATE_TEXT[detail.parameters_state] !== undefined)
@@ -937,6 +989,15 @@ function RequestDetail({
     )
   }
 
+  if (!authorityRead.ok) {
+    return (
+      <>
+        <BackBar onBack={onBack} />
+        <Unreadable detail={authorityRead.detail} onRetry={load} />
+      </>
+    )
+  }
+
   // Decision states replace the document once a decision has been sent.
   if (decision !== null && decision.kind !== 'sending') {
     return (
@@ -954,6 +1015,7 @@ function RequestDetail({
     )
   }
   const d = answer.value
+  const authority = authorityRead.value
   const paramsText = PARAMS_STATE_TEXT[d.parameters_state]
   const paramsPresent = d.parameters_state === 'present'
   // `present` with an empty body is an unreadable answer, never an offer: a row
@@ -1056,6 +1118,32 @@ function RequestDetail({
             <p data-testid="approval-origin">{escapeUntrusted(d.purpose)}</p>
             <p>{escapeUntrusted(d.principal_id)}</p>
           </section>
+
+          {authority !== undefined && (
+            <section data-testid="approval-authority">
+              <h2>AUTORIDAD</h2>
+              <h3>QUIÉN PIDIÓ</h3>
+              <p>{escapeUntrusted(authority.requester_principal_id)}</p>
+              <h3>BAJO QUÉ CONTRATO</h3>
+              <p>{escapeUntrusted(authority.intent_id)}</p>
+              <p>{escapeUntrusted(authority.intent_purpose)}</p>
+              <h3>CADENA</h3>
+              <p>
+                {authority.principal_chain.map((principal, index) => (
+                  <Fragment key={`${principal}-${String(index)}`}>
+                    {index > 0 && ' → '}
+                    {escapeUntrusted(principal)}
+                  </Fragment>
+                ))}
+              </p>
+              <h3>PRESUPUESTO ANTES DE ESTE INTENTO</h3>
+              <p>
+                {authority.budget.kind === 'finite'
+                  ? `máximo ${String(authority.budget.remaining)} inicios`
+                  : 'máximo sin límite declarado'}
+              </p>
+            </section>
+          )}
 
           <section>
             <h2>LA LEY QUE LO EXIGIÓ</h2>

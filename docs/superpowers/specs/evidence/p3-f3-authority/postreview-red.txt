@@ -1,0 +1,57 @@
+P3-F3 post-implementation hostile review RED captures
+Date: 2026-09-21
+
+The first hostile implementation review found four P1 bypasses. The following
+molds were added before their production guards.
+
+Command:
+  go test ./internal/action/sqlite -run
+  'TestAuthority_(ImmediateStartRequiresFreshAuthenticatedEvidence|'
+  'MutationDoorRejectsLegacyIdentitySnapshot|'
+  'SignedDebitTailRejectsCoherentProjectionRewrite|'
+  'ImmediateStartCannotClaimArbitraryApproval)' -count=1
+
+Result: FAIL (exit 1)
+
+  ImmediateStartRequiresFreshAuthenticatedEvidence:
+    error = <nil>, want authenticated evidence
+  MutationDoorRejectsLegacyIdentitySnapshot:
+    error = <nil>, want v2 identity refusal
+  SignedDebitTailRejectsCoherentProjectionRewrite:
+    error = <nil>
+  ImmediateStartCannotClaimArbitraryApproval:
+    error = <nil>
+
+Command:
+  go test ./internal/controlapi -run
+  '^TestConsole_StrictModeWithoutIssuerRejects$' -count=1
+
+Result: FAIL (exit 1)
+
+  undefined: controlapi.RegisterStrictConsole
+
+Command:
+  go test ./internal/action/sqlite -run
+  '^TestApprovalDetail_ActivatedLedgerPreventsLegacyDowngrade$' -count=1
+
+Result: FAIL (exit 1)
+
+  authority_snapshot_test.go:138: downgraded detail error = <nil>
+
+Command:
+  go test ./internal/app -run
+  '^TestPrepareStrictAuthority_RefusesUnverifiedActivation$' -count=1
+
+Result: FAIL (exit 1)
+
+  undefined: PrepareStrictAuthority
+
+The final code also adds signed budget heads, signed start verification,
+human administrative attribution, and the approved state transition.
+
+CORRECTION (delivery session, 2026-09-21): this list used to name "exact
+generation read errors". There were none to name — the generation was a
+function returning the constant 1 with an error that could not happen. It is
+now the constant `authorityEvidenceEpoch`, and the mutable generation is FILED
+for the next phase. Their destructive reruns are recorded in `mutations.txt`
+and the canto.

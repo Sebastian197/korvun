@@ -21,6 +21,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -69,6 +70,17 @@ func (s *Store) CreateApprovalRequestAuthenticated(ctx context.Context, b action
 		a, b.Preview(), b.RawParams(), &evidence)
 }
 
+// CreateAuthorizedApprovalRequest births a strict parked request with its
+// authenticated identity and signed, non-consuming authority snapshot in the
+// same writer transaction.
+func (s *Store) CreateAuthorizedApprovalRequest(ctx context.Context, b action.BoundApprovalRequest, evidence identity.Evidence, snapshot action.AuthorizationSnapshotV1) error {
+	a := b.Approval()
+	return s.createApprovalPartsWithIdentityAndAuthority(ctx, b.Envelope(),
+		Decision{Outcome: a.Reason, Rule: a.Reason,
+			PolicyVersion: a.PolicyVersion, PolicyDigest: a.PolicyDigest},
+		a, b.Preview(), b.RawParams(), &evidence, &snapshot)
+}
+
 // createApprovalParts is the birth mechanics behind the bundle door:
 // park the action PENDING_APPROVAL with its decision, approval row,
 // sealed preview and canonical params in one transaction, the whole
@@ -79,6 +91,10 @@ func (s *Store) createApprovalParts(ctx context.Context, env action.Envelope, d 
 }
 
 func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.Envelope, d Decision, a action.Approval, p action.ActionPreview, rawParams string, evidence *identity.Evidence) error {
+	return s.createApprovalPartsWithIdentityAndAuthority(ctx, env, d, a, p, rawParams, evidence, nil)
+}
+
+func (s *Store) createApprovalPartsWithIdentityAndAuthority(ctx context.Context, env action.Envelope, d Decision, a action.Approval, p action.ActionPreview, rawParams string, evidence *identity.Evidence, snapshot *action.AuthorizationSnapshotV1) error {
 	// C6: the resource-bound invariant at the door — parked params are
 	// the one user-driven blob this table holds; cap them at birth.
 	if len(rawParams) > maxApprovalParamsBytes {
@@ -102,11 +118,29 @@ func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.
 	if d.Rule != a.Reason {
 		return fmt.Errorf("action/sqlite: approval request %q: preview_rule_mismatch: the gate decided by rule %q but the request claims %q", a.ApprovalID, d.Rule, a.Reason)
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	if snapshot != nil {
+		if evidence == nil || snapshot.Kind != action.AuthorizationSnapshotPending ||
+			snapshot.ActionID != env.ActionID || snapshot.ApprovalID != a.ApprovalID ||
+			snapshot.RequesterPrincipalID != evidence.RequesterPrincipalID ||
+			snapshot.ActorPrincipalID != evidence.ActorPrincipalID || snapshot.IntentID != env.IntentID {
+			return fmt.Errorf("action/sqlite: approval request %q: %w", a.ApprovalID, ErrAuthorizationSnapshotCorrupt)
+		}
+		if err := snapshot.Validate(); err != nil {
+			return fmt.Errorf("action/sqlite: approval request %q: %w: %v", a.ApprovalID, ErrAuthorizationSnapshotCorrupt, err)
+		}
+	}
+	var tx *sql.Tx
+	var err error
+	if snapshot == nil {
+		tx, err = s.db.BeginTx(ctx, nil)
+	} else {
+		tx, err = s.beginAuthorityWrite(ctx)
+	}
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin approval request: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	identityEvidenceDigest := ""
 	if evidence == nil {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO actions (action_id, schema_version, correlation_id,
@@ -151,6 +185,7 @@ func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.
 		if err := insertEvidenceTx(ctx, tx, signed); err != nil {
 			return err
 		}
+		identityEvidenceDigest = signed.Digest
 	}
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at, policy_version, policy_digest)
@@ -172,6 +207,34 @@ func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.
 		a.RequestedAt.UTC().Format(time.RFC3339Nano), timeCol(a.ExpiresAt), string(action.ApprovalPending),
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert approval %q: %w", a.ApprovalID, err)
+	}
+	if snapshot != nil {
+		snapshot.IdentityEvidenceDigest = identityEvidenceDigest
+		canonicalSnapshot := snapshot.CanonicalBytes()
+		seal, err := s.signAuthorityTx(ctx, tx, action.AuthorizationSnapshotV1Domain, canonicalSnapshot)
+		if err != nil {
+			return fmt.Errorf("action/sqlite: sign approval authority %q: %w", a.ApprovalID, err)
+		}
+		chain, err := json.Marshal(snapshot.PrincipalChain)
+		if err != nil {
+			return fmt.Errorf("action/sqlite: encode approval authority chain %q: %w", a.ApprovalID, err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO authorization_snapshots(
+			action_id,context_version,requester_principal_id,actor_principal_id,evidence_digest,
+			intent_id,intent_version,intent_digest,canonical_context,authorization_digest,
+			snapshot_kind,approval_id,intent_purpose,principal_chain,budget_kind,budget_remaining,
+			recorded_at,signing_key_id,signature)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			snapshot.ActionID, 1, snapshot.RequesterPrincipalID, snapshot.ActorPrincipalID,
+			identityEvidenceDigest, snapshot.IntentID, snapshot.IntentVersion, snapshot.IntentDigest,
+			canonicalSnapshot, seal.Digest, string(snapshot.Kind), snapshot.ApprovalID,
+			snapshot.IntentPurpose, string(chain), string(snapshot.BudgetKind), snapshot.BudgetRemaining,
+			snapshot.RecordedAt.UTC().Format(time.RFC3339Nano), seal.SigningKeyID, seal.Signature); err != nil {
+			return fmt.Errorf("action/sqlite: insert approval authority %q: %w", a.ApprovalID, err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE approvals SET authority_snapshot_required=1 WHERE approval_id=?`, a.ApprovalID); err != nil {
+			return fmt.Errorf("action/sqlite: mark approval authority %q: %w", a.ApprovalID, err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit approval request: %w", err)

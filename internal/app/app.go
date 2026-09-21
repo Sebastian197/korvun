@@ -381,6 +381,13 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 			_ = store.Close()
 			return nil, fmt.Errorf("app: register identity: %w", err)
 		}
+		if cfg.StrictAuthority() {
+			if err := PrepareStrictAuthority(context.Background(), cfg, actions); err != nil {
+				_ = actions.Close()
+				_ = store.Close()
+				return nil, err
+			}
+		}
 		// The live ink (FR-LED): every terminal outcome is born signed
 		// with the profile's active key, inside the outcome's own
 		// transaction — since R3 the recovery closes included, so the
@@ -581,8 +588,12 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 				// only where the mutation surface exists AND a sessionful store
 				// is open. The router is the operator seam (SP2).
 				if ss, ok := b.store.(conversation.SessionStore); ok && b.store != nil {
-					controlapi.RegisterConsole(adminServer, token, ss, app.router,
-						b.ingressIssuers[console.ChannelName])
+					issuer := b.ingressIssuers[console.ChannelName]
+					if cfg.StrictAuthority() {
+						controlapi.RegisterStrictConsole(adminServer, token, ss, app.router, issuer)
+					} else {
+						controlapi.RegisterConsole(adminServer, token, ss, app.router, issuer)
+					}
 				}
 				// The approvals surface, on the SAME bearer: its answers carry
 				// the parked parameters a model wrote, so it exists exactly
@@ -1100,6 +1111,9 @@ func (b *builder) buildAgentBrain(bc config.BrainConfig, selected []model.Model,
 	}
 	if b.principalResolver != nil {
 		opts = append(opts, brain.WithPrincipalResolver(b.principalResolver))
+	}
+	if b.cfg != nil && b.cfg.StrictAuthority() {
+		opts = append(opts, brain.WithStrictAuthority())
 	}
 	if cage.Memory != nil {
 		if ns, ok := b.store.(conversation.NoteStore); ok {

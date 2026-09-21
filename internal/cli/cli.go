@@ -108,6 +108,8 @@ func (c *cli) run(args []string) int {
 		return c.intentCmd(args[1:])
 	case "grant":
 		return c.grantCmd(args[1:])
+	case "authority":
+		return c.authorityCmd(args[1:])
 	case "receipt":
 		return c.receiptCmd(args[1:])
 	case "ledger":
@@ -218,6 +220,7 @@ Commands:
   status        Show the live wiring of a running korvun via its admin API.
   intent        Operator intents, including signed v2 create, lifecycle, bind, adopt and verify.
   grant         Authority grants under an intent: issue, delegate, revoke.
+  authority     Activate and manage signed authority v2.
   approvals     Parked requests: list, show, approve, reject, execute.
   ledger        The book of receipts: check.
   receipt       One receipt: verify, rotate-key.
@@ -234,6 +237,7 @@ Examples:
   korvun intent bind --config korvun.json --actor principal_brain_a --channel console int_... 1
   korvun intent adopt-root --config korvun.json --profile profile_local
   korvun grant issue --config korvun.json --intent int_... --subject principal_brain_a --operations calc
+  korvun authority --help
   korvun approvals list --config korvun.json
   korvun ledger check --config korvun.json
 

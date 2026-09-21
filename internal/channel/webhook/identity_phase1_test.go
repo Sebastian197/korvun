@@ -108,7 +108,7 @@ func TestIngress_ForgedSenderCannotBecomeOperator(t *testing.T) {
 		promptCanary   = "CANARY-PROMPT-4d09"
 		payloadCanary  = "CANARY-PAYLOAD-8ca3"
 	)
-	now := time.Date(2026, 9, 21, 14, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
 	registry := identity.Registry{
 		Principals: []identity.Principal{
 			{ID: "principal_webhook", Kind: identity.PrincipalExternalSystem},

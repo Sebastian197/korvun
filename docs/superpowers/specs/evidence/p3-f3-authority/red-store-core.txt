@@ -1,0 +1,46 @@
+P3-F3 authority RED capture — persistence and config core
+Date: 2026-09-21
+Base: f5762b8
+Production authority-v2 implementation present: no
+
+Each command below exited 1 before any production edit. The shared compile
+frontier was absent AuthorityGrantV2, AuthoritySignature,
+Store.SetAuthoritySigner, AuthorityStartRequest, and Store.StartAuthorization.
+The listed row also reached its own absent behavior surface.
+
+auth_red_03  go test -tags auth_red_03 ./internal/action/sqlite -run '^TestAuthority_DelegateUsesRemainingBudget$' -count=1
+  absent: Store.DelegateAuthority, ErrBudgetExhausted
+
+auth_red_05  go test -tags auth_red_05 ./internal/action/sqlite -run '^TestAuthority_DelegateAndRevokeSerialize$' -count=1
+  absent: CanonicalAuthorityRevoke, Store.RevokeAuthority, Store.DelegateAuthority, ErrAuthorityRevoked
+
+auth_red_06  go test -tags auth_red_06 ./internal/action/sqlite -run '^TestAuthority_AncestorRevocationStopsLeaf$' -count=1
+  absent: Store.RevokeAuthority, Store.StartAuthorization, ErrAuthorityRevoked
+
+auth_red_07  go test -tags auth_red_07 ./internal/action/sqlite -run '^TestAuthority_ConcurrentStartsShareAncestorBudget$' -count=1
+  absent: Store.StartAuthorization, ErrBudgetExhausted
+
+auth_red_08  go test -tags auth_red_08 ./internal/action/sqlite -run '^TestAuthority_BusyIsNotBudgetExhaustion$' -count=1
+  absent: Store.StartAuthorization, ErrAuthorityStoreBusy, ErrBudgetExhausted
+
+auth_red_09  go test -tags auth_red_09 ./internal/action/sqlite -run '^TestAuthority_StartDebitAndApprovalClaimAreAtomic$' -count=1
+  absent: AuthorityStartProbe, AuthorityProbeAfterDebitBeforeCommit, Store.StartAuthorization
+
+auth_red_10  go test -tags auth_red_10 ./internal/action/sqlite -run '^TestAuthority_RepeatedActionIDCannotSpendOrStartTwice$' -count=1
+  absent: deterministic authority id seam, Store.StartAuthorization, ErrActionAlreadyStarted
+
+auth_red_11  go test -tags auth_red_11 ./internal/action/sqlite -run '^TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome$' -count=1
+  absent: before/after commit probes, Store.StartAuthorization, Store.Recover
+
+auth_red_12  go test -tags auth_red_12 ./internal/app -run '^TestAuthority_ConfigMigrationPreservesToolChannelRelation$' -count=1
+  absent: deriveConfigAuthorityClauses
+
+auth_red_13  go test -tags auth_red_13 ./internal/action/sqlite -run '^TestAuthority_IssuerComesFromAuthenticatedActor$' -count=1
+  absent: Store.DelegateAuthority, ErrIssuerMismatch
+
+auth_red_15  go test -tags auth_red_15 ./internal/action/sqlite -run '^TestAuthority_CounterTamperingDoesNotRestoreBudget$' -count=1
+  absent: Store.StartAuthorization, ErrBudgetEvidenceCorrupt
+
+These are compile REDs for interfaces that did not exist at f5762b8. Their
+post-cure mutations must be behavioral REDs; compile failure alone is not
+accepted as mutation evidence.

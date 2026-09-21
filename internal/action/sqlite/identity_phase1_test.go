@@ -650,8 +650,8 @@ func TestIdentity_MigrationDoesNotUpgradeHistoricalClaims(t *testing.T) {
 		t.Fatalf("Open migrated store: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	if got, err := store.SchemaVersion(context.Background()); err != nil || got != 14 {
-		t.Fatalf("SchemaVersion = %d, %v; want 14", got, err)
+	if got, err := store.SchemaVersion(context.Background()); err != nil || got != 15 {
+		t.Fatalf("SchemaVersion = %d, %v; want 15", got, err)
 	}
 	check, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(path)))
 	if err != nil {
