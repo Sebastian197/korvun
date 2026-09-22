@@ -1752,7 +1752,12 @@ func (s *Store) startApprovedAuthorization(ctx context.Context, approvalID strin
 	if pending == nil || pending.Kind != action.AuthorizationSnapshotPending {
 		return AuthorityApprovedStartResult{}, ErrAuthorizationSnapshotCorrupt
 	}
-	if _, err := validateActionIdentityV2Tx(ctx, tx, a.ActionID, at); err != nil {
+	// WHO ASKED was answered when the request was parked, and `pending` — the
+	// snapshot this transaction has just verified against its signature — is
+	// where that instant is recorded, so the ingress capability's expiry is
+	// judged there. What may have CHANGED while the human decided is judged
+	// here and now: a disabled principal, a revoked or advanced binding.
+	if _, err := validateActionIdentityV2AtTx(ctx, tx, a.ActionID, pending.RecordedAt, at); err != nil {
 		return AuthorityApprovedStartResult{}, err
 	}
 	operation, state, err := ternaOf(ctx, tx, a.ActionID)

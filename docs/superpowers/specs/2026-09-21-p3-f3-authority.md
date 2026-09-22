@@ -192,20 +192,29 @@ The 2026-09-19 paper assumed an earlier tree. This implementation starts at
   capability. Approved `StartAuthorization` is deliberately different: it
   reuses the exact parked action id and verifies the stored signed identity and
   pending snapshot; it neither mints an id nor needs the vanished ingress
-  capability. What it DOES need is that the stored identity evidence is still
-  valid AT THE RESUME INSTANT, expiry included: the resume re-judges it then,
-  the way phase 1's claim does and for the threat phase 1 named («evidence
-  expires … while approval waits → old authentication starts a new effect»). An
-  expired one is refused as `ErrIdentityEvidenceExpired` and consumes nothing.
-  The production numbers make this a PRODUCT consequence and not a detail: the
-  ingress evidence lives five minutes (`internal/app/identity.go`), the approval
-  window is one hour by default (`defaultApprovalTTL`), so a strict approval
-  can be resumed only within five minutes of its birth. The phase-1 claim judges
-  the same way — `ClaimApprovalParamsUnderDigest` calls
-  `validateActionIdentityTx` at the claim instant — and this phase does not
-  touch it. FILED by name, for the
-  director's adjudication: "the ingress TTL against the approval window". The
-  durable `authorization_starts` row survives action pruning,
+  capability. It re-verifies the stored identity evidence at TWO instants, and
+  they are two because the questions are two (the director's adjudication of
+  2026-09-22, after the adversary's F6). **Who asked** was answered when the
+  request was PARKED, so the ingress capability's own expiry is judged at the
+  instant the SIGNED pending snapshot records — `AuthorizationSnapshotV1`'s
+  `RecordedAt`, whose signature this transaction has already verified, so a
+  database writer cannot move it. **Who may act now** is judged at the RESUME:
+  a principal disabled while the human decided, a binding revoked or advanced.
+  Each refuses by its own name and consumes nothing.
+  Collapsing both into the resume instant made a strict approval unstartable
+  once its ingress evidence died — five minutes in production
+  (`internal/app/identity.go`) against a one-hour approval window
+  (`defaultApprovalTTL`) — which is what the threat row phase 1 accepted
+  («evidence expires … while approval waits → old authentication starts a new
+  effect») was read to demand. What bounds a parked request is the approval's
+  own window for the human decision, not the capability that proved who asked.
+  The expiry guarantee did not disappear, it moved to the door that owns it: a
+  request whose capability is ALREADY dead is not parked at all.
+  The phase-1 legacy claim keeps judging expiry at the claim instant —
+  `ClaimApprovalParamsUnderDigest` calls `validateActionIdentityTx` — and this
+  phase does not touch it: it has no signed pending snapshot to read a park
+  instant from, so it cannot make the same distinction safely. The asymmetry is
+  deliberate and declared. The durable `authorization_starts` row survives action pruning,
   so a confirmed id remains exact replay evidence and is rejected as
   `ErrActionAlreadyStarted`.
 - **FR-AUTH-10** Shared ancestor accounts make sibling ceilings maxima, not
@@ -509,6 +518,7 @@ corruption, which fails closed.
 | **AS-AUTH-08** `TestAuthority_BusyIsNotBudgetExhaustion` | A held external writer past the retry window yields `ErrAuthorityStoreBusy`, no debit, and no dispatch. | Map busy to budget exhaustion. |
 | **AS-AUTH-09** `TestAuthority_StartDebitAndApprovalClaimAreAtomic` | A probe failure after debit but before commit preserves balance and approval parameters and creates no start. | Commit debit or purge separately. |
 | **AS-AUTH-10** `TestAuthority_RepeatedActionIDCannotSpendOrStartTwice` | Two callers reusing a committed action id get one start/debit/dispatch and one `ErrActionAlreadyStarted`. | Remove start uniqueness or accept the conflict. |
+| **AS-AUTH-09b** `TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart` | The approved resume starts an approval decided long after its ingress capability died, and refuses — consuming nothing — when a principal was disabled between the park and the start. A database writer that moves the snapshot's `recorded_at` gets `ErrAuthorizationSnapshotCorrupt`. | Judge freshness at the resume again; judge the disabled principal at the park instead. |
 | **AS-AUTH-11** `TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome` | A child process — this test binary re-executed — ends ITSELF with `os.Exit` at the named probes `before_commit` and `after_commit_before_return`; it is not a signal from the parent. Recovery is the strict boot's own, through `RequireAuthorityActivation` and `RecoverPreviousLife`. Before leaves no start; after retains debit, recovers `OUTCOME_UNKNOWN`, and never retries dispatch. | Delete each named probe separately; refund on recovery; enqueue the tool again. |
 | **AS-AUTH-12** `TestAuthority_ConfigMigrationPreservesToolChannelRelation` | Clause derivation equals `SelectTools` for distinct-channel and unrestricted tools and creates no cartesian grants. | Reintroduce the global channel union. |
 | **AS-AUTH-13** `TestAuthority_IssuerComesFromAuthenticatedActor` | A forged issuer fails ordinary delegation with `ErrIssuerMismatch`; the admin door records the operator as actor. | Copy parent subject into issuer. |

@@ -541,5 +541,52 @@ W-hostabs-door-skips-use-check   [RE-EXECUTED after the moulds' inputs changed; 
         authority_door_integration_test.go:105: budget debits after the refusal = 6, want 0
         authority_door_integration_test.go:115: durable starts = 2, want the one inside the scope
 
+
+THE DIRECTOR'S ADJUDICATION OF 2026-09-22 reopened F6, which the pass had left
+DECLARED and uncured: the ingress capability's expiry is judged at the PARK
+instant recorded in the signed pending snapshot, and the disabled principal
+stays judged at the START. The captures of that cure follow the ones above.
+
 ========================================================================
-TOTAL: 38 mutation captures, 6 pre-cure captures, 1 verbatim reproduction in separate OS processes.
+F6-red-before-cure   [PRE-CURE, not a mutation]
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart (0.16s)
+    --- FAIL: TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart/the_human_decided_long_after_the_capability_died:_it_still_starts (0.05s)
+        authority_resume_freshness_test.go:52: resume 50m0s after the park: identity: authenticated ingress expired
+    --- FAIL: TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart/a_principal_disabled_while_the_human_decided:_nothing_starts (0.05s)
+        authority_resume_freshness_test.go:75: error = identity: authenticated ingress expired, want identity: principal disabled
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	0.880s
+FAIL
+
+========================================================================
+F6-freshness-judged-at-the-resume-again
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart (0.16s)
+    --- FAIL: TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart/the_human_decided_long_after_the_capability_died:_it_still_starts (0.05s)
+        authority_resume_freshness_test.go:52: resume 50m0s after the park: identity: authenticated ingress expired
+    --- FAIL: TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart/a_principal_disabled_while_the_human_decided:_nothing_starts (0.05s)
+        authority_resume_freshness_test.go:75: error = identity: authenticated ingress expired, want identity: principal disabled
+
+========================================================================
+F6-disabled-principal-judged-at-the-park
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart (0.17s)
+    --- FAIL: TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart/a_principal_disabled_while_the_human_decided:_nothing_starts (0.06s)
+        authority_resume_freshness_test.go:75: error = <nil>, want identity: principal disabled
+        authority_resume_freshness_test.go:82: budget debits = 4, want 0
+        authority_resume_freshness_test.go:82: durable starts = 1, want 0
+        authority_resume_freshness_test.go:86: parked parameters = "", action/sqlite: approval "apr3_5502f6d44e36743f5de652f73d1dbb8e" params purged: action/sqlite: approval parameters column empty: a
+
+========================================================================
+F6-park-judges-expiry-at-the-observation
+------------------------------------------------------------------------
+--- FAIL: TestAuthority_ApprovedResumeRejectsMovedEvidence (0.34s)
+    --- FAIL: TestAuthority_ApprovedResumeRejectsMovedEvidence/a_capability_already_dead_is_not_parked (0.05s)
+        authority_integrity_failures_test.go:107: error = <nil>, want identity: authenticated ingress expired
+        authority_integrity_failures_test.go:115: parked actions = 1, want 0: a refused park left something born
+        authority_integrity_failures_test.go:115: approvals = 1, want 0: a refused park left something born
+        authority_integrity_failures_test.go:115: signed snapshots = 1, want 0: a refused park left something born
+
+========================================================================
+TOTAL: 41 mutation captures, 7 pre-cure captures, 1 verbatim reproduction in separate OS processes.

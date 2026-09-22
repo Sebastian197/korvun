@@ -68,31 +68,52 @@ func TestAuthority_ApprovedResumeRejectsMovedEvidence(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
-	// The strict resume re-judges the parked action's identity evidence AT THE
-	// RESUME INSTANT, expiry included — the threat row phase 1 accepted: «evidence
-	// expires … while approval waits → old authentication starts a new effect».
-	// So an approval outlives its ingress evidence only as a refusal, by name,
-	// that consumes nothing. With production's five-minute ingress TTL against a
-	// one-hour approval window this is a PRODUCT consequence the director owns
-	// (the adversary's pass over this phase, F6, its probe P-J); what this row
-	// pins is that the refusal is this one, and that it costs nothing.
-	// Probing mutation executed: the resume judges expiry at the evidence's own
-	// observation instant — red with «error = <nil>» and «budget debits = 4».
-	t.Run("identity expired", func(t *testing.T) {
-		f, approval := approvedAuthorityResumeFixture(t)
-		_, err := f.store.StartApprovedAuthorization(context.Background(), approval.ApprovalID,
-			PolicyPin{Version: 1, Digest: "sha256:authority-law"}, approval.ActionDigest, f.now.Add(2*time.Minute))
+	// The ingress capability's expiry belongs to the PARK, and this row is that
+	// guarantee at the door that owns it: a request whose capability is already
+	// dead is not parked at all, by name, and nothing of it is born. What the
+	// strict RESUME does with the two instants — freshness at the park,
+	// liveness at the start — is
+	// TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart.
+	// Until the director's adjudication of 2026-09-22 this row lived on the
+	// resume and demanded the opposite; the sentence it used to make is in the
+	// canto.
+	// Probing mutation executed: the park judges expiry at the evidence's own
+	// observation instant — red with «error = <nil>» and «parked actions = 1,
+	// want 0».
+	t.Run("a capability already dead is not parked", func(t *testing.T) {
+		f := newAuthoritySQLiteFixture(t, 2)
+		const requestID = "request-strict-pending-dead-capability"
+		ingress, err := f.issuer.Issue(requestID, "verified-subject")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The fixture's capability lives one minute; this park is two later.
+		_, err = f.store.ParkAuthorization(context.Background(), AuthorityPendingRequest{
+			ActorPrincipalID: f.root.SubjectPrincipalID, CorrelationID: requestID,
+			SourceProtocol: "native", Channel: "webhook",
+			Operation: action.Operation{Namespace: "tool", Name: "probe", Version: 1}, Arguments: `{}`,
+			EffectClass: action.EffectWriteReversible, At: f.now.Add(2 * time.Minute),
+			ApprovalContext: action.ApprovalContext{
+				ToolCage: "probe", Descriptor: action.EffectDescriptor{Class: action.EffectWriteReversible},
+				HasDescriptor: true, LawVersion: 1, LawDigest: "sha256:authority-law", TTL: time.Minute,
+			},
+			ResolveEvidence: func(actionID string) (identity.Evidence, error) {
+				return f.resolver.Resolve(ingress, identity.ResolveRequest{
+					ActionID: actionID, RequestID: requestID, Channel: "webhook", Brain: "alpha",
+				})
+			},
+		})
 		if !errors.Is(err, identity.ErrIdentityEvidenceExpired) {
 			t.Errorf("error = %v, want %v", err, identity.ErrIdentityEvidenceExpired)
 		}
-		if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM budget_debits`); n != 0 {
-			t.Errorf("budget debits = %d, want 0", n)
-		}
-		if n := authorityScalar(t, f.store, `SELECT COUNT(*) FROM authorization_starts`); n != 0 {
-			t.Errorf("durable starts = %d, want 0", n)
-		}
-		if params, err := f.store.ApprovalParams(context.Background(), approval.ApprovalID); err != nil || string(params) != `{}` {
-			t.Errorf("parked parameters = %q, %v; want them retained", params, err)
+		for what, query := range map[string]string{
+			"parked actions":   `SELECT COUNT(*) FROM actions WHERE action_id LIKE 'act3_%'`,
+			"approvals":        `SELECT COUNT(*) FROM approvals`,
+			"signed snapshots": `SELECT COUNT(*) FROM authorization_snapshots`,
+		} {
+			if n := authorityScalar(t, f.store, query); n != 0 {
+				t.Errorf("%s = %d, want 0: a refused park left something born", what, n)
+			}
 		}
 	})
 	t.Run("action state moved", func(t *testing.T) {
