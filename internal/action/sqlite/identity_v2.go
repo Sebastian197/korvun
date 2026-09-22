@@ -216,7 +216,8 @@ func (s *Store) RecordAttemptAuthenticated(ctx context.Context, env action.Envel
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit authenticated record %q: %w", env.ActionID, err)
 	}
-	return s.noteWrite(ctx)
+	s.noteWrite(ctx)
+	return nil
 }
 
 // GetIdentityEvidence returns and verifies the signed v2 evidence of one action.

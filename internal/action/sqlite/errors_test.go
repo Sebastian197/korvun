@@ -197,15 +197,43 @@ func TestPrune_deleteFailurePropagates(t *testing.T) {
 	}
 }
 
-func TestRecordAttempt_periodicPruneFailurePropagates(t *testing.T) {
+// TestRecordAttempt_periodicPruneFailureNeverSpeaksForACommittedWrite is the
+// INVERSION of a test that used to demand the opposite, and the inversion was
+// authorised by the director on 2026-09-22 rather than taken.
+//
+// It read: «the periodic prune's failure must reach the caller», and it was
+// true of the code. That was the P1 of ficha the ficha «Un aparcamiento confirmado puede devolver error». Every writer
+// returned `noteWrite`'s error after its OWN transaction had committed, so a
+// durable write reported itself as a refusal — and for the park, the executor
+// read that refusal and recorded a DENIED attempt while the approval row sat in
+// the tray waiting for a human nobody would ever tell.
+//
+// The guarantee is now the other one, and it has two halves, because dropping
+// the failure would trade a lie for a blindness: the committed write reports
+// SUCCESS, and the failure reaches the observer instead of vanishing.
+func TestRecordAttempt_periodicPruneFailureNeverSpeaksForACommittedWrite(t *testing.T) {
 	t.Parallel()
 	store, _ := openTemp(t)
 	store.capRows = 0
 	store.pruneEvery = 1
+	var heard []error
+	store.SetRetentionFailureObserver(func(err error) { heard = append(heard, err) })
 	blockWrites(t, store, "DELETE")
-	err := store.RecordAttempt(context.Background(), testEnvelope("act_pp"), Decision{Outcome: "deny", Rule: "r"}, action.StateDenied)
-	if err == nil {
-		t.Fatal("the periodic prune's failure must reach the caller")
+
+	if err := store.RecordAttempt(context.Background(), testEnvelope("act_pp"),
+		Decision{Outcome: "deny", Rule: "r"}, action.StateDenied); err != nil {
+		t.Fatalf("a committed attempt reported the housekeeping's failure as its own: %v", err)
+	}
+	// The write is durable, which is the whole reason it may not report a fault.
+	if _, err := store.Get(context.Background(), "act_pp"); err != nil {
+		t.Fatalf("the attempt the caller was told succeeded is not in the store: %v", err)
+	}
+	if len(heard) != 1 {
+		t.Fatalf("the observer heard %d failures, want exactly 1 — swallowing it in "+
+			"silence is the other half of this guarantee", len(heard))
+	}
+	if !strings.Contains(heard[0].Error(), "periodic prune") {
+		t.Fatalf("the observer heard %q, which does not name the prune", heard[0])
 	}
 }
 

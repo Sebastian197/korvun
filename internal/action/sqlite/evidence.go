@@ -112,7 +112,8 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit identified record %q: %w", env.ActionID, err)
 	}
-	return s.noteWrite(ctx)
+	s.noteWrite(ctx)
+	return nil
 }
 
 // GetEvidence returns the identity evidence recorded with one action.

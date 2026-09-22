@@ -12,6 +12,7 @@ package action
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"regexp"
 	"strings"
 )
 
@@ -62,6 +63,26 @@ func NewIntentEventID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return IntentEventIDPrefix + hex.EncodeToString(b)
+}
+
+// receiptIDShape is the shape the approvals screen REQUIRES before it will
+// paint an execution: `Approvals.tsx` refuses anything else and answers «esta
+// pantalla no sabe leer su respuesta» over a real, sealed execution.
+//
+// Until now that rule lived only in TypeScript. `NewReceiptID` had no test at
+// all, and the only Go check anywhere was a prefix in `internal/cli/receipt.go`
+// — weaker than the screen's, so the two were already inconsistent with each
+// other. Shortening the minted id to 40 hex left six Go packages green and
+// broke the screen (the ficha «La forma del recibo vive solo en TypeScript»). This constant is the Go half of
+// that seam, and `receipt_shape_test.go` holds the two halves byte-identical.
+const receiptIDShape = `^rcpt_[0-9a-f]{32}$`
+
+var receiptIDRe = regexp.MustCompile(receiptIDShape)
+
+// ValidReceiptID reports whether an id has the minted receipt shape. It is the
+// same question the screen asks, asked on this side of the wire.
+func ValidReceiptID(id string) bool {
+	return receiptIDRe.MatchString(id)
 }
 
 func NewReceiptID() string {
