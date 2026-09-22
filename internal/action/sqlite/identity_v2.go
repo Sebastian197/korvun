@@ -287,14 +287,32 @@ func (s *Store) insertPrincipalEventTx(ctx context.Context, tx *sql.Tx, event id
 	return nil
 }
 
+// validateResolvedEvidenceTx judges everything at ONE instant: the caller's
+// own. Every door but the strict approved resume asks its question now.
 func validateResolvedEvidenceTx(ctx context.Context, tx *sql.Tx, evidence identity.Evidence, env action.Envelope, at time.Time) error {
+	return validateResolvedEvidenceAtTx(ctx, tx, evidence, env, at, at)
+}
+
+// validateResolvedEvidenceAtTx separates the two questions an identity check
+// asks, because they are answered at different moments.
+//
+// `asked` is when the ingress capability had to be alive: it proves WHO ASKED,
+// and that question was answered when the request was made. `now` is when the
+// registry must still permit the act: a principal disabled since, a binding
+// revoked or advanced since. Collapsing both into `now` made a strict approval
+// unstartable once its five-minute ingress evidence died, against a one-hour
+// approval window (the adversary's pass over piece 3 phase 3, F6; the
+// director's adjudication of 2026-09-22). Only the strict approved resume
+// passes two different instants, and the earlier one comes from the SIGNED
+// pending snapshot, never from a mutable column.
+func validateResolvedEvidenceAtTx(ctx context.Context, tx *sql.Tx, evidence identity.Evidence, env action.Envelope, asked, now time.Time) error {
 	if evidence.ActionID != env.ActionID || evidence.RequestID != env.CorrelationID ||
 		evidence.ActorPrincipalID != env.Principal.PrincipalID ||
 		evidence.ResponsiblePrincipalID != env.Principal.ResponsibleHumanID ||
 		evidence.Provider != env.Source.Channel {
 		return identity.ErrIdentityBindingMismatch
 	}
-	if !evidence.ExpiresAt.IsZero() && !at.UTC().Before(evidence.ExpiresAt) {
+	if !evidence.ExpiresAt.IsZero() && !asked.UTC().Before(evidence.ExpiresAt) {
 		return identity.ErrIdentityEvidenceExpired
 	}
 	for _, id := range []string{evidence.RequesterPrincipalID, evidence.ActorPrincipalID, evidence.ResponsiblePrincipalID} {
@@ -308,7 +326,7 @@ func validateResolvedEvidenceTx(ctx context.Context, tx *sql.Tx, evidence identi
 		if err := verifyPrincipalProjectionTx(ctx, tx, principal); err != nil {
 			return err
 		}
-		if !principal.DisabledAt.IsZero() && !principal.DisabledAt.After(at.UTC()) {
+		if !principal.DisabledAt.IsZero() && !principal.DisabledAt.After(now.UTC()) {
 			return identity.ErrPrincipalDisabled
 		}
 	}
@@ -331,6 +349,13 @@ func validateResolvedEvidenceTx(ctx context.Context, tx *sql.Tx, evidence identi
 }
 
 func validateActionIdentityTx(ctx context.Context, tx *sql.Tx, actionID string, at time.Time) error {
+	return validateActionIdentityAtTx(ctx, tx, actionID, at, at)
+}
+
+// validateActionIdentityAtTx is validateActionIdentityTx with the two instants
+// of validateResolvedEvidenceAtTx: `asked` for the capability's own lifetime,
+// `now` for what the registry permits.
+func validateActionIdentityAtTx(ctx context.Context, tx *sql.Tx, actionID string, asked, now time.Time) error {
 	stored, err := actionSnapshotTx(ctx, tx, actionID)
 	if err != nil {
 		return err
@@ -365,7 +390,7 @@ func validateActionIdentityTx(ctx context.Context, tx *sql.Tx, actionID string, 
 		!bytes.Equal(full.Canonical, signed.Canonical) {
 		return identity.ErrIdentityEvidenceCorrupt
 	}
-	if !evidence.ExpiresAt.IsZero() && !at.UTC().Before(evidence.ExpiresAt) {
+	if !evidence.ExpiresAt.IsZero() && !asked.UTC().Before(evidence.ExpiresAt) {
 		return identity.ErrIdentityEvidenceExpired
 	}
 	// The envelope handed to the shared check is built from the STORED row:
@@ -375,17 +400,24 @@ func validateActionIdentityTx(ctx context.Context, tx *sql.Tx, actionID string, 
 	// — it is pinned by the signature over the canonical evidence and by the
 	// `full.Evidence != evidence` comparison above, and that is all this line
 	// claims about it.
-	return validateResolvedEvidenceTx(ctx, tx, evidence, action.Envelope{
+	return validateResolvedEvidenceAtTx(ctx, tx, evidence, action.Envelope{
 		ActionID: actionID, CorrelationID: stored.CorrelationID,
 		Source: action.Source{Channel: stored.SourceChannel},
 		Principal: action.PrincipalRef{PrincipalID: stored.PrincipalID,
 			ResponsibleHumanID: evidence.ResponsiblePrincipalID},
-	}, at)
+	}, asked, now)
 }
 
 // validateActionIdentityV2Tx is the mutation/start door. Legacy actions remain
 // readable, but they can never authorize a new authority mutation or effect.
 func validateActionIdentityV2Tx(ctx context.Context, tx *sql.Tx, actionID string, at time.Time) (identity.Evidence, error) {
+	return validateActionIdentityV2AtTx(ctx, tx, actionID, at, at)
+}
+
+// validateActionIdentityV2AtTx is the strict approved resume's form of the
+// mutation/start door: `asked` is the instant the signed pending snapshot
+// records, `now` is the resume.
+func validateActionIdentityV2AtTx(ctx context.Context, tx *sql.Tx, actionID string, asked, now time.Time) (identity.Evidence, error) {
 	stored, err := actionSnapshotTx(ctx, tx, actionID)
 	if err != nil {
 		return identity.Evidence{}, err
@@ -393,7 +425,7 @@ func validateActionIdentityV2Tx(ctx context.Context, tx *sql.Tx, actionID string
 	if identity.SnapshotIsLegacy(stored.Snapshot) {
 		return identity.Evidence{}, identity.ErrIdentityEvidenceMissing
 	}
-	if err := validateActionIdentityTx(ctx, tx, actionID, at); err != nil {
+	if err := validateActionIdentityAtTx(ctx, tx, actionID, asked, now); err != nil {
 		return identity.Evidence{}, err
 	}
 	evidence, err := readEvidenceTx(ctx, tx, actionID)

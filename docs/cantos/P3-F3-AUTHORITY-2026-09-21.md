@@ -172,7 +172,7 @@ director's rule: what was found is cured in this tree and declared here, and the
 cures are judged by the external review at the tag gate. **The adversary has NOT
 read these cures.** Every finding was first reproduced in this session's own
 hands (the PRE-CURE captures); every cure has its mould and its executed
-mutation, 38 mutation captures and 6 pre-cure reproductions in
+mutation, 41 mutation captures and 7 pre-cure reproductions in
 `docs/superpowers/specs/evidence/p3-f3-authority/adversary-pass-mutations.txt`.
 
 | Finding | What was wrong | Cure | Mould → executed mutation | Evidence level |
@@ -182,7 +182,7 @@ mutation, 38 mutation captures and 6 pre-cure reproductions in
 | **F3 · P2 · [TEST]** | «Approved starts atomically … purge» had no mould that could go red: AS-AUTH-09 interrupts BEFORE the purge. The adversary's M1 survived five packages. | — (the product was right) | `TestAuthority_ApprovedStartPurgeIsInsideTheStart` → **M1 verbatim**: red, «budget debits = 4, want 0»; commit before the before-commit probe: red | in-process; an abort TRIGGER as the oracle by impossibility, and an in-transaction probe |
 | **F4 · P2 · [TEST]** | The detail moulds and the Chromium scenario were born through `Store.CreateAuthorizedApprovalRequest`, a door production never called, fed a snapshot the TEST wrote; one call to it bricked an activated profile; and the spec's own UI-04 mutation («current live data») survived everything, Chromium included. | The door is GONE (`approvals.go` is back to its base). The harness parks through `ParkAuthorization` over an authority built with exported doors, and spends one start AFTER the park. | `TestApprovalDetail_ShowsTheParkedSnapshotNotTheLiveBudget` → **M4 verbatim**: red, «remaining = 3, want the parked 5». AS-AUTH-UI-04 → **M4 in real Chromium**: red, the browser painted «máximo 1 inicios» where the parked 2 was wanted. The two other detail moulds → signature unverified; absent snapshot read as none | in-process over a real store; REAL CHROMIUM over the Go harness compiled from the mutated tree |
 | **F5 · P2 · [PRODUCT]** | The evidence verifiers answered CORRUPT for an intact store that did not answer — a context that was over — and swallowed the cause. The same deadline was «store busy» at a door's edge and «corrupt» one statement later. | `authorityReadFailure`: a failed READ has one class — busy with its cause kept, or the corruption sentinel. Applied to the three verifiers, the grant origin, the config head, the activation reader and the detail's key read. | `TestAuthority_AStoreThatDidNotAnswerIsNotCorruptEvidence` (the report's probe P-G, five readers) → classifier always corrupt: red on all five | in-process; the package's own verifiers inside one live transaction |
-| **F6 · P2 · [PRODUCT]** | The strict resume refuses once the INGRESS evidence has expired: five minutes in production, against a one-hour approval window. | **NOT changed, and DECLARED — the director's decision.** Phase 1's accepted spec names this very threat («evidence expires … while approval waits → old authentication starts a new effect») and demands the refusal; overturning an accepted guarantee is not an executor's call. The spec now says what the resume does, with the two production numbers, and the name is FILED. | The row «identity expired» names `ErrIdentityEvidenceExpired` and proves it consumes nothing → expiry judged at the park instant: red | in-process, one real store |
+| **F6 · P2 · [PRODUCT]** | The strict resume refused once the INGRESS evidence had expired: five minutes in production, against a one-hour approval window. A strict approval was unstartable five minutes after its birth. | **CURED on 2026-09-22, by the director's adjudication.** The two questions are answered at two instants: WHO ASKED at the PARK, read from the signed pending snapshot's `RecordedAt` — already verified against its signature in that same transaction, so no database writer can move it; WHO MAY ACT NOW at the RESUME, which is where a disabled principal or a moved binding is judged. The expiry guarantee did not disappear, it moved to the door that owns it: a capability already dead is not parked at all. The phase-1 legacy claim is untouched and keeps judging at the claim — it has no signed park instant to read — and that asymmetry is declared. | `TestAuthority_ApprovedResumeJudgesFreshnessAtTheParkAndLivenessAtTheStart`, three rows → freshness judged at the resume again: red; the disabled principal judged at the park: red. And the re-aimed row of `TestAuthority_ApprovedResumeRejectsMovedEvidence` → the park judges expiry at the evidence's own observation: red | in-process, one real store; the disable through the store's signed `DisablePrincipal` door |
 | **F7 · P3 · [DOC]** | Eight sentences false or wider than their wire. | All eight corrected IN PLACE in the spec, each saying what it used to say. F7c was also a product defect: a repeated approved start answered «parameters column empty … action not found»; the repeat check is now the first judgement. | F7c: the repeated start names `ErrActionAlreadyStarted` → check neutralized: red | in-process |
 | **F8 · P3 · [TEST]** | Twenty «some error» asserts; AS-AUTH-08 blind to the driver's own busy; AS-AUTH-11 recovering through `Store.Recover`, a door production never called. | Every site names its error. Three doors that answered a bare `sql.ErrNoRows` (revoke, delegate, legacy import) answer `ErrAuthorityMissing`; the signer refusal and a trailing JSON value have a class. `Store.Recover` is GONE: the crash mould recovers through the strict boot's own doors. | `TestAuthority_TheDriversOwnBusyIsClassifiedBusy` (the driver's REAL error) → **M2 verbatim**: red. Absent-row doors; unverified seal; unnamed signer; unclassed trailing JSON ×2; activation check skipped; grant history and grant signature unverified; AS-AUTH-11 refund re-executed through the boot doors — all red | multiple real connections for the busy mould; the rest in-process |
 | **F9 · P3 · [PRODUCT]** | `ParseAuthorizationSnapshotV1` returned the ZERO snapshot under a NIL error; the legacy claim handed a strict-born approval its parameters with no debit; `BuildApprovalExecutor` took the config and ignored its strict mode. | The parser refuses by name; the legacy claim reads the ROW's strict marker and refuses (`ErrApprovalRequiresAuthority`) — the four-door enforcement no longer rests on an executor flag alone; the builder honours the config. | one mould each → refusal neutralized / fence neutralized / config ignored: red | unit; in-process over a real store; in-process over the real coordinator |
@@ -279,12 +279,9 @@ package alone read 84.8, 84.9, 85.0 and 85.1 across them.
   child OS processes and the restart between processes the commission promised
 - a non-strict approval born after activation has no birth event, so the
   profile then reads as corrupt — fail-closed, declared, and worth a door
-- FOR THE DIRECTOR'S ADJUDICATION: "the ingress TTL against the approval
-  window" — a strict approval can be resumed only while its five-minute ingress
-  evidence lives, against a one-hour approval window; phase 1's accepted spec
-  demands that refusal (F6)
-- FOR A UX DECISION: "the screen's answer to a strict id with no authority
-  object" (F7f)
+- FOR THE v0.16.1 TRAIN, with a mockup before any red: "the screen's answer to
+  a strict id with no authority object" (F7f) — filed in `docs/HANDOFF.md` by
+  the director on 2026-09-22
 - "authority scope across http_fetch redirects"; symbolic links stay the jail's
 - "typed driver-error classification"
 - "the config clause carried by an opaque executor plan" and "the cage digest
@@ -301,12 +298,29 @@ package alone read 84.8, 84.9, 85.0 and 85.1 across them.
   windows runner has run that package between 2.5 and 4 times slower, against
   a 30-minute ceiling
 
+## The director's adjudication of 2026-09-22
+
+The pass was closed with five decisions, and this canto carries all five:
+
+1. **No second internal pass.** The verdict stands as written and the cures are
+   declared, not re-read. Nothing here claims the adversary approved them.
+2. **F6 is CURED**, in the shape the director named: freshness at the park,
+   liveness at the start, two separate checks — NOT the one-line mutation the
+   adversary's report suggested, which would have moved the disabled principal
+   with it. Both directions have their mould and their red.
+3. **The closed world of strict mode is accepted** and goes to the v0.16.0
+   notes as a BEHAVIOUR CHANGE, filed in `docs/HANDOFF.md`.
+4. **The screen's answer to a strict id with no authority object** is filed to
+   v0.16.1, with a mockup before any red (the sixth law).
+5. **The approval sentinels 12 → 13** is authorised.
+
 ## Existing approved tests changed
 
 | Test contract | Before | After |
 |---|---|---|
 | Current schema version | 14 | 15 |
 | Webhook phase-1 evidence clock | Fixed at 2026-09-21 14:00 UTC | Current test instant, truncated to one second |
+| The strict approved resume and the ingress capability's expiry (this train's own row, written the day before and pinned by name in the cures commit) | The resume refused an approval whose capability had died | The resume starts it; the park refuses a capability already dead. The row moved to the park door and says what it used to say |
 | `approvalSentinels`, the closed set of `approvals_sentinels_test.go` | 12 sentinels | 13: `ErrApprovalRequiresAuthority` enrolled. The closed-set mould refused the tree until it was, which is what it is for; the earlier 11 → 12 carried the director's authorisation, and this one is DECLARED here for the same eye |
 
 The webhook assertion and production behaviour are unchanged; the fixed clock
@@ -348,7 +362,7 @@ had made a one-minute credential expire during the run.
    time, and each red is in `delivery-mutations.txt` (the count was 96 in the
    first canto; the adversary recounted it by script and it is 97: 69 blocks,
    100 entries, three of which are not a red under mutation and say so in their
-   names). The adversary's pass added 38 more, in
+   names). The adversary's pass added 41 more, in
    `adversary-pass-mutations.txt`. What has NO mutation is listed by name under
    «What this pass did NOT cure». Two of them SURVIVED on the first attempt (rows
    1 and 4 of the refusal taxonomy); those rows were re-aimed and then went red.
@@ -391,7 +405,7 @@ the rows «after the cures» ran over the tree this canto ships with.
 | `make desktop-frontend-check` (typecheck, lint, format, jsdom coverage), after the cures | exit 0 — 44 files, 503 tests |
 | AS-AUTH-UI-04 in REAL CHROMIUM over the Go harness, parked through the production door | 1 passed; and RED under the report's M4 over the harness compiled from the mutated tree: the browser painted «máximo 1 inicios» |
 | F1, the report's reproduction verbatim | two compiled CLI binaries in separate OS processes, `f5762b8` and the cured tree: the cured CLI opens the profile the base's CLI touched; both principals stored, each as it was signed |
-| Probing mutations | first delivery: 97 reds under mutation in 100 entries (counted by script); the adversary's pass: 38 more, plus 6 pre-cure reproductions and the two-binary reproduction of F1; the copies identical to the tree afterwards |
+| Probing mutations | first delivery: 97 reds under mutation in 100 entries (counted by script); the adversary's pass and the adjudication that followed it: 41 more, plus 7 pre-cure reproductions and the two-binary reproduction of F1; the copies identical to the tree afterwards |
 
 **The first CI run of the cures went RED on `windows-latest`** (macOS and
 ubuntu green), and the red was this session's own: four moulds fed POSIX-literal

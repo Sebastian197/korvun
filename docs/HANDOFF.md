@@ -1,5 +1,39 @@
 # HANDOFF — Korvun
 
+## Para las notas de la v0.16.0 — CAMBIO DE COMPORTAMIENTO del modo estricto (director, 2026-09-22)
+
+La pieza 3 fase 3 cura un defecto que el adversario encontró (F2): los
+analizadores de uso de operación parseaban un objeto JSON que NINGUNA
+herramienta enviada acepta. Corregidos para hablar la gramática real de sus
+herramientas, `read_file`, `http_fetch` y `webhook_call` pasan a ser de MUNDO
+CERRADO bajo un perfil estricto: solo arrancan bajo un intent —y bajo cada
+grant de su cadena— que LISTE los recursos, las etiquetas de datos y los
+destinos que pueden tocar. En la primera entrega de la fase arrancaban sin nada
+ligado, porque nada de lo que recibían sus analizadores llegaba a parsearse.
+
+Consecuencia adicional de la misma regla: una ruta de `read_file` relativa a la
+jaula se rechaza como no resuelta bajo autoridad estricta, porque la capa de
+autoridad no conoce la raíz de la jaula a la que la herramienta la uniría.
+
+Los perfiles NO estrictos no corren ningún analizador y no cambian.
+
+**Va a las notas de la v0.16.0 como cambio de comportamiento**, no como
+corrección silenciosa: quien active el modo estricto con intents escritos
+contra la fase anterior verá rechazos donde antes había inicios.
+
+## Fichado para la v0.16.1 — la pantalla ante un id estricto sin bloque de autoridad (director, 2026-09-22)
+
+El adversario lo encontró en la pieza 3 fase 3 (F7f) y se fichó en vez de
+curarse: la pantalla de aprobaciones pinta un documento con id estricto
+(`apr3_…`) y SIN objeto `authority` como cualquier otro documento aprobable. El
+servidor sí lo refuta —sobre una instancia armada con el dígito de activación—
+pero la pantalla no exige nada.
+
+No se toca hasta tener **maqueta aprobada antes de abrir rojo**, por la sexta
+ley (UX-DESIGN-FIRST). La decisión de producto que hay que tomar primero: qué
+debe ver el operador ante un documento estricto cuya autoridad no está —¿el
+estado ilegible que ya existe, con `Volver a intentar`, o uno propio?
+
 ## Dos moldes escuchaban en todas las interfaces y ningún gate lo vio (2026-09-20)
 
 El cortafuegos de un Mac fue el primer verificador que lo dijo: durante la
