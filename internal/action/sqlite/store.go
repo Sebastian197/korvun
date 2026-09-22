@@ -1301,6 +1301,18 @@ type Store struct {
 	// pool serializes statements, not this counter).
 	writesMu sync.Mutex
 	writes   int
+	// retentionFailure receives a housekeeping failure that happened AFTER a
+	// caller's own transaction had committed. It exists because that failure
+	// used to be RETURNED to the caller, which made a durable write report
+	// itself as a refusal — the park that committed an approval row and told
+	// the executor it had been denied (the ficha «Un aparcamiento confirmado puede devolver error», P1).
+	//
+	// nil means nobody is listening, and then the failure is DROPPED. That is
+	// a deliberate default with a cost, and the cost is why the app wires it:
+	// a store whose retention is failing must be able to say so somewhere, and
+	// the one place it must never say it is in the result of a write that
+	// succeeded.
+	retentionFailure func(error)
 }
 
 // The sealed retention defaults (decision 2): generous, automatic, no
@@ -1732,28 +1744,59 @@ func (s *Store) RecordAttempt(ctx context.Context, env action.Envelope, d Decisi
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit record %q: %w", env.ActionID, err)
 	}
-	return s.noteWrite(ctx)
+	s.noteWrite(ctx)
+	return nil
 }
 
 // noteWrite is the periodic half of the retention invariant: every
 // pruneEvery-th committed attempt pays the (cheap, bounded) prune, so the
 // file stays capped without any scheduler or config.
-func (s *Store) noteWrite(ctx context.Context) error {
+// noteWrite pays the retention cadence AFTER its caller's transaction has
+// committed, and returns NOTHING. That signature is the cure of a P1: while it
+// returned an error, every caller returned it too, so a park whose approval row
+// was already durable answered its caller with a refusal — and the executor,
+// reading a refusal, recorded a DENIED attempt for an action that was in fact
+// sitting in the tray waiting for a human nobody would ever tell.
+//
+// A failure here goes to retentionFailure — and with no observer set, which is
+// the default, it is DROPPED. That cost is stated on the field itself and it is
+// why the app wires one. What this function may never do is make it the
+// CALLER's failure, because the caller's write succeeded.
+func (s *Store) noteWrite(ctx context.Context) {
 	s.writesMu.Lock()
 	s.writes++
 	due := s.writes%s.pruneEvery == 0
 	s.writesMu.Unlock()
-	if due {
-		if _, err := s.Prune(ctx); err != nil {
-			return err
-		}
-		// R4: the prune cadence also pays the expiry sweep, so a parked
-		// request nobody touches cannot outlive its window forever.
-		if _, _, err := s.SweepExpiredApprovals(ctx, time.Now().UTC()); err != nil {
-			return err
-		}
+	if !due {
+		return
 	}
-	return nil
+	if _, err := s.Prune(ctx); err != nil {
+		s.noteRetentionFailure(fmt.Errorf("action/sqlite: periodic prune: %w", err))
+		return
+	}
+	// R4: the prune cadence also pays the expiry sweep, so a parked
+	// request nobody touches cannot outlive its window forever.
+	if _, _, err := s.SweepExpiredApprovals(ctx, time.Now().UTC()); err != nil {
+		s.noteRetentionFailure(fmt.Errorf("action/sqlite: periodic expiry sweep: %w", err))
+	}
+}
+
+// noteRetentionFailure hands one post-commit housekeeping failure to whoever is
+// listening. It never panics on a nil observer and never returns anything: a
+// caller that has already committed must not learn about this through its own
+// result.
+func (s *Store) noteRetentionFailure(err error) {
+	if s.retentionFailure != nil {
+		s.retentionFailure(err)
+	}
+}
+
+// SetRetentionFailureObserver names who hears a housekeeping failure that
+// happens after a committed write. The app wires it to its logger; a store
+// with no observer drops those failures, which is why leaving it unset is a
+// decision rather than a default.
+func (s *Store) SetRetentionFailureObserver(observe func(error)) {
+	s.retentionFailure = observe
 }
 
 // Finish moved to ledger.go (Etapa 4): FinishWithResult births the

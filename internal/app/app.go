@@ -357,6 +357,14 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 			return nil, fmt.Errorf("app: open action store: %w", err)
 		}
 		b.actions = actions
+		// The retention cadence runs AFTER a caller's write has committed, so
+		// its failures are not that caller's (ficha the ficha «Un aparcamiento confirmado puede devolver error», the
+		// P1 cured on 2026-09-22). They still have to be heard by somebody, or
+		// the cure trades a lie for a blindness — this is that somebody.
+		actions.SetRetentionFailureObserver(func(err error) {
+			b.logger.Error("action store retention pass failed after a committed write",
+				"error", err)
+		})
 		// The root intent auto-materializes here (Etapa 2, sealed
 		// decision 1): deterministic, idempotent across boots, and
 		// boot-fatal — a boot that cannot state the operator's standing

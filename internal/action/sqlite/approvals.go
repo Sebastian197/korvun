@@ -178,7 +178,8 @@ func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.
 	}
 	// F3: the park itself pays the retention cadence — a server whose
 	// only traffic is parking requests still sweeps its expired ones.
-	return s.noteWrite(ctx)
+	s.noteWrite(ctx)
+	return nil
 }
 
 // DecideApproval consumes the approval ONE-SHOT and, in the SAME

@@ -119,7 +119,7 @@ func (c *cli) receiptVerify(args []string) int {
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
 	var receipts []action.Receipt
-	if strings.HasPrefix(id, "rcpt_") {
+	if action.ValidReceiptID(id) {
 		r, err := store.GetReceipt(ctx, id)
 		if err != nil {
 			_, _ = fmt.Fprintf(c.stderr, "korvun receipt verify: %s: %v\n", id, err)

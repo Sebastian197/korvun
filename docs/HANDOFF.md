@@ -276,7 +276,13 @@ permanente. Sitio: la rama de error del `ExecContext` de la purga en
 `RAISE` de trigger, una restricción NOT NULL) y el sitio del código; no trae
 molde ni captura.
 
-### Un aparcamiento confirmado puede devolver error
+### ~~Un aparcamiento confirmado puede devolver error~~ — CURADO 2026-09-22 (v0.16.1 C)
+
+> **Curado como P1 por orden del director (2026-09-22).** `noteWrite` ya no
+> devuelve nada y el fallo de la cadencia va a un observador; los CUATRO
+> escritores de la clase devuelven el resultado de su propia transacción. El
+> test aprobado `TestRecordAttempt_periodicPruneFailurePropagates` se invirtió
+> con autorización expresa. Canto: `docs/cantos/V0161-C-2026-09-22.md`.
 
 Defecto preexistente, fuera del alcance del bloque B; fichado por lectura del
 código, no ejecutado. `CreateApprovalRequest`
@@ -373,7 +379,12 @@ entrada saltada lleva `ApprovalID = ""` con el texto del error del `Scan` como
 razón. La otra puerta, `ListApprovals`, sí clasifica la misma fila: falla como
 evidencia corrupta y no como ilegible.
 
-### La forma del recibo vive solo en TypeScript
+### ~~La forma del recibo vive solo en TypeScript~~ — CURADO 2026-09-22 (v0.16.1 C)
+
+> **Curado.** `action.ValidReceiptID` y `receiptIDShape` son la mitad Go del
+> costurón, y `receipt_shape_test.go` lee el literal de `Approvals.tsx` y exige
+> que sean el mismo carácter a carácter. La mutación de la ficha —el acuñador a
+> 40 hex— enrojece ahora en vez de dejar seis paquetes en verde.
 
 Hallado y ejecutado por el adversario del bloque D (2026-09-20, sobre copias
 del árbol; sin captura en el árbol); fichado para la v0.15.2. La pantalla exige
@@ -411,7 +422,32 @@ este binario (`storedEffectClassInDomain`) y se leería como evidencia corrupta:
 falla cerrado y no ejecuta nada. No es un defecto de seguridad; es una nota de
 compatibilidad hacia delante para quien añada una clase.
 
-### `ledger check` falla el recibo de la vida ANTERIOR de un id reutilizado
+### `ledger check` falla el recibo de la vida ANTERIOR de un id reutilizado — INTENTADO Y REVERTIDO 2026-09-22
+
+> **La cura se escribió, el adversario la tumbó y se revirtió entera el mismo
+> día.** Queda ABIERTA, y ahora con más que decir que antes.
+>
+> Lo que se intentó: un recibo no puede empezar antes de que su propia acción se
+> pidiera, así que una fila pedida después es de otra vida.
+>
+> **Por qué no vale (P1 del adversario, capturado como regresión contra
+> `32701e0`):** compara un valor SELLADO por la cadena, `receipt.started_at`,
+> contra uno ESCRIBIBLE que la cadena no cubre, `actions.requested_at`. Un solo
+> `UPDATE ... SET requested_at = '2099-01-01T00:00:00Z'` hacía que el verificador
+> se saltara TODAS las comparaciones de custodia y contestara `exit 0` sobre una
+> fila cuyo `parameters_digest` ya no casaba con el sello. Antes del diff esa
+> misma fila daba `exit 1 custody_mismatch`. Es «firma válida sobre datos
+> circundantes inválidos» del catálogo, y la regla 2(b) del revés.
+>
+> **Lo que sí se aprendió, y que la ficha no decía:** la clase tiene DOS brazos,
+> no uno. Callado el `approval_mismatch` que la ficha nombra, aparece al instante
+> `custody_mismatch` comparando el desenlace del recibo viejo contra el estado de
+> la vida nueva. Cualquier cura futura gobierna los dos.
+>
+> **La forma que debe tener la próxima:** el discriminador se apoya en algo que
+> la cadena cubra, o solo RE-ETIQUETA un fallo y nunca lo suprime. Y el otro
+> medio del defecto —que el recorrido se detiene en el primer eslabón roto y no
+> llega al recibo de la vida nueva— es independiente y puede curarse solo.
 
 Defecto señalado como preexistente en la base `61ae582` por el papel del
 bloque B (fila P2-6, ya en master), fichado y no curado en ese tren. Captura
