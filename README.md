@@ -199,6 +199,52 @@ one pixel. One machine-enforced path to execution, ~1ms measured toll
 (ceiling 5ms), parsers fuzzed from birth, zero new configuration. See the
 [v0.11.0 release notes](docs/releases/v0.11.0.md).
 
+## Piece 3 — a verified name, a signed purpose, a signed authority — v0.16.0
+
+Stages 1 to 5 of the Execution Trust Layer are behind us and this is the piece
+that binds them: **with strict authority turned on**, every tool call a model
+asks for carries, in one transaction with the action itself:
+
+- **a verified name.** Every ingress door mints an opaque authenticated
+  capability at the exact point its own authentication succeeds, and only
+  there; the coordinator resolves it into signed identity evidence. A channel
+  label is not an identity and a sender field is not a principal.
+- **a signed purpose.** An intent is a signed, versioned contract with its own
+  lifecycle: what may be done, under which purpose, within which window and
+  budget. An execution binding ties an actor and a channel to one exact intent
+  version.
+- **a signed authority.** Grants are signed and can only attenuate, with shared
+  budget accounts across a chain. Under a strict profile, `StartAuthorization`
+  is the durable commit boundary: it verifies the current evidence and scope,
+  debits the intent and every grant, records the signed start proof and — for an
+  approved request — claims its parameters, all at once. Only a committed start
+  hands the coordinator an invocation capability.
+
+**Opt-in, and that word is load-bearing.** A profile without the `authority`
+block behaves exactly as before: the signed intent is not consulted, no grant
+chain is verified, and identity falls back to the unauthenticated record when a
+door cannot resolve it. The three bullets above describe a profile running under
+`authority.mode: "strict"`, not the default build. The layer itself is not
+finished either — six more stages are designed and unshipped, transactions and
+idempotency among them.
+
+And the human sees it. The approval document carries an `AUTORIDAD` block with
+who asked, under which contract, through which chain of principals, and the
+budget that remained **when the request was parked** — a signed snapshot, not a
+live meter:
+
+![The AUTORIDAD block of an approval document, dark theme](docs/assets/captures/v0.16.0/authority-block-dark.png)
+
+**What it proves and what it does not.** Under `authority.mode: "strict"` an
+effectful start depends on a verified principal, an active signed intent and an
+active signed authority chain, and nothing starts outside the intent's own
+scope. Turning it on is a behaviour change — `read_file`,
+`http_fetch` and `webhook_call` become closed world and start only under terms
+that list what they may touch — and no public door yet ties a signed grant to an
+execution binding, so delegation is implemented and tested but not reachable
+from the CLI. Both are written out in the
+[v0.16.0 release notes](docs/releases/v0.16.0.md), with the Known issues.
+
 ## Identity, intent and authority — v0.12.0
 
 Stage 2 of the Execution Trust Layer. Every recorded action now knows WHO

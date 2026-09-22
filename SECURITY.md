@@ -199,6 +199,65 @@ his own. We deliberately avoid the words
 public materials; reports of public copy overstating these properties
 are welcome exactly like any other invariant violation.
 
+## Strict authority (v0.16.0) — what it proves and what it does not
+
+An OPT-IN gate, off unless the profile carries `authority.mode: "strict"` with
+the `activation_digest` the operator pinned. Under it, an effectful start
+depends on three things verified INSIDE the transaction that commits it: a
+verified authenticated principal, one active signed intent, and a complete
+active signed authority chain. `StartAuthorization` is that transaction: it
+verifies the current evidence and scope, debits the intent and every applicable
+grant, records the signed start proof and the allow decision and — for an
+approved request — claims its parameters. Only a committed start hands the
+coordinator an invocation capability, so an interrupted one leaves no capability
+and no debit.
+
+**What it proves.**
+
+- No effect starts outside the terms of its intent and of every grant in the
+  chain: operations, channels, resources, data tags, destinations, effect class
+  and ceiling, validity window and budget, each judged against the ACTUAL
+  argument string the tool will receive, derived by a registered analyzer and
+  never supplied by the caller.
+- A grant can only attenuate its parent, and the attenuation wall names the
+  dimension it refuses.
+- Ambiguity fails closed. An analyzer that cannot resolve the arguments it was
+  given refuses the start whatever the terms say; a URL whose path is not
+  already clean, or whose encoding is not canonical, is refused rather than
+  normalized, because the tool sends what was written and a matcher cannot know
+  which form the server will honour.
+- A failed READ of authority evidence gets ONE class, never two: a store that
+  did not answer is «action/sqlite: authority store busy» and keeps its cause;
+  only an absent or unconvertible row is corruption. A driver failure that is
+  neither still reads as corruption, which fails closed.
+- The approval document shows the authority the store SIGNED when the request
+  was parked, verified against that signature on every read; a writer with the
+  database and without the profile key cannot move it without the document
+  refusing itself.
+
+**What it does not prove, in this release.**
+
+- It does not bound the verification. Under an activated profile every strict
+  start re-verifies the whole approval-birth ledger and every approvals row,
+  linear in the profile's lifetime approvals, unmeasured at scale.
+- It does not reach delegation from the operator's hands: no public door ties a
+  signed grant to an execution binding, so a strict profile resolves its
+  authority through the config clause derived from the brain's tool list. The
+  attenuated chain is implemented and tested; it is not reachable from the CLI.
+- It does not follow a tool past its request. The redirects `http_fetch` follows
+  are re-checked against the cage's host allow-list, not against the authority
+  scope, and `read_file` resolves symbolic links under its jail while path
+  inclusion here is lexical.
+- It is not a boot guarantee: `app.Build` under a strict config is exercised by
+  no test, and no real model has driven the strict doors inside the suite.
+- No adversarial reading has covered the tree this tag names. The external
+  Codex gate has not run — no credits — and the five internal adversary verdicts
+  in the markers all returned VETO MANTENIDO over the code BEFORE its cures;
+  none of them re-read the result, and one of the five (phase 1) is an admitted
+  reconstruction whose original verdict was never written to disk. What exists
+  beyond them is the copilot's review of the critical diff. None of this is an
+  external pass and none of it claims to be.
+
 ## Known limits of the receipt v2 era (until sealed provenance)
 
 Two verification limits are inherent to the v2 receipt era and are

@@ -1,0 +1,118 @@
+v0.16.0 — the manual pass over a STRICT profile with a REAL model
+Date: 2026-09-22
+Tree: master be97cb1395a025655e8bce60e7b54f97ae855afc, binary built from it
+Model: Ollama llama3.2:latest, local, http://127.0.0.1:11434
+
+The profile was built with the CLI verbs the release notes publish. Paths and a
+local receiver on 127.0.0.1:9099 are scratch; the digests are this run's.
+
+========================================================================
+1 · the operator builds the authority
+------------------------------------------------------------------------
+$ korvun intent create-v2 --config korvun.json --file intent.json
+intent int_pedidos version 1 created (DRAFT, signed event)
+
+$ korvun intent activate-v2 --config korvun.json int_pedidos 1
+intent int_pedidos ACTIVE
+
+$ sqlite3 korvun.db "select digest from intent_versions where intent_id='int_pedidos' and version=1;"
+sha256:4acab5f75cef3b0c2991b4c2fea867acc17d7d0fc027141c0d10f975a8ecb78f
+  (this step is NOT in any published recipe and the grant file needs it —
+   filed; see the Known issues of the notes)
+
+$ korvun authority admin-issue --config korvun.json --file grant.json \
+      --reason "the operator grants the ops brain the pedidos webhook"
+authority grant grant_pedidos_root issued
+
+$ korvun intent bind --config korvun.json --actor principal_brain_operaciones \
+      --channel console int_pedidos 1
+binding bind_act_b91d3b26786a5e1d01d87112decd90ff -> int_pedidos version 1 ACTIVE
+
+$ korvun authority activate --config korvun.json --profile profile_ops \
+      --reason "turn on strict authority for the ops profile"
+activation_digest: sha256:6361483bf004e409ebe5ef69eadd504fae7aa8be8877c8a94c6a81f5ab68b73d
+
+========================================================================
+2 · the strict profile boots, and the brain can park
+------------------------------------------------------------------------
+$ korvun config check korvun.json
+OK  config valid: korvun.json
+
+$ curl -s -H 'Authorization: Bearer …' http://127.0.0.1:2112/api/approvals
+{"gate":{"approvals_enabled":true,"brains_total":1,"brains_can_park":1,"rows_skipped":0},"rows":[]}
+
+========================================================================
+3 · the REAL model asks for the tool, and the start is parked
+------------------------------------------------------------------------
+message: «Avisa al webhook de pedidos en http://127.0.0.1:9099/pedidos con el
+          cuerpo {"pedido":"A-114","estado":"listo"}»
+
+serve.log:
+{"level":"INFO","msg":"agent: action parked for approval","channel":"console",
+ "tool":"webhook_call","approval_id":"apr3_46d2c97f24043715cd014c3f69e862e4"}
+
+GET /api/approvals/apr3_46d2c97f24043715cd014c3f69e862e4 :
+{
+  "id": "apr3_46d2c97f24043715cd014c3f69e862e4",
+  "action_id": "act3_1_8126a22cd38ee2c845d2dff9da57ef48",
+  "operation": "tool/webhook_call",
+  "effect_class": "write_irreversible",
+  "parameters": "http://127.0.0.1:9099/pedidos {\"pedido\":\"A-114\",\"estado\":\"listo\"}",
+  "authority": {
+    "requester_principal_id": "principal_console",
+    "intent_id": "int_pedidos",
+    "intent_purpose": "Avisar al webhook de pedidos cuando el equipo lo pida",
+    "principal_chain": ["principal_local_operator", "principal_brain_operaciones"],
+    "budget": {"kind": "finite", "remaining": 3}
+  }
+}
+  (the parameters are the REAL webhook_call grammar — URL, one space, the JSON
+   body — which is what the phase-3 F2 cure aligned the analyzers to)
+
+========================================================================
+4 · the human approves; the debits and the effect
+------------------------------------------------------------------------
+before: budget_debits=0  authorization_starts=0
+
+POST /api/approvals/apr3_46d2…/approve
+{"outcome":"executed","digest":"sha256:8867568040c94f0dfb39645a1b576344fbb6a7d2408abde803db35fae64a0879",
+ "result":"{\"ok\":true}","receipt_id":"rcpt_5adfaf087161b7d041cee6bedd9887b9"}
+
+$ sqlite3 -header korvun.db "select account_id, operation_key, sequence, cumulative_spent from budget_debits …"
+account_id|operation_key|sequence|cumulative_spent
+sha256:734a0e1a…|*|1|1
+sha256:734a0e1a…|tool/webhook_call@1|1|1
+sha256:e7680d16…|*|1|1
+
+$ sqlite3 korvun.db "select count(*) from authorization_starts;"
+1
+
+receiver.log:
+{"path": "/pedidos", "body": "{\"pedido\":\"A-114\",\"estado\":\"listo\"}"}
+
+========================================================================
+5 · WHICH authority actually ran — the Known issue, observed
+------------------------------------------------------------------------
+$ sqlite3 korvun.db "select authority_refs from actions where action_id like 'act3_%';"
+["cfg_25fc243de2962621747110e035ad0e48e30492deee739244ad609f85c60a55d7"]
+
+$ sqlite3 korvun.db "select grant_id, status from grant_heads;"
+grant_pedidos_root|ACTIVE
+
+  The start ran under the CONFIG CLAUSE, not under the signed grant, which is
+  ACTIVE and unused: `intent bind` writes no grant into the binding and no CLI
+  verb does. This is the first Known issue of the release notes.
+
+========================================================================
+6 · a request OUT OF SCOPE, refused by its name
+------------------------------------------------------------------------
+message: «Ahora avisa al webhook de incidencias en
+          http://127.0.0.1:9099/incidencias con el cuerpo {"incidencia":"B-2"}»
+
+serve.log:
+{"level":"WARN","msg":"agent: approval request failed — falling closed",
+ "tool":"webhook_call","err":"action: resource out of authority scope"}
+{"level":"WARN","msg":"agent: tool denied","tool":"webhook_call",
+ "rule":"approval_unavailable"}
+
+  Nothing was parked for it and nothing was spent.
