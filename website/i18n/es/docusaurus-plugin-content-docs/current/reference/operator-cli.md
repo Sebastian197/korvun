@@ -242,6 +242,77 @@ cierran la acción aparcada con recibo y no queda ningún camino de
 ejecución. Las solicitudes caducan por su TTL (por defecto 1h,
 `approvals.ttl`), juzgado al toque de la decisión.
 
+## Autoridad estricta (v0.16.0)
+
+Apagada salvo que el perfil la pida. Con ella encendida, un inicio con efecto
+necesita un principal autenticado y verificado, una intención firmada activa y
+una cadena de autoridad firmada y activa completa, todo juzgado dentro de la
+transacción que confirma el inicio. Encenderla son cinco actos del operador, en
+este orden, y cada uno deja su recibo firmado:
+
+```bash
+korvun intent create-v2   --config korvun.json --file intent.json
+korvun intent activate-v2 --config korvun.json int_pedidos 1
+korvun authority admin-issue --config korvun.json --file grant.json \
+                             --reason "why this authority exists"
+korvun intent bind        --config korvun.json --actor principal_brain_ops \
+                          --channel console int_pedidos 1
+korvun authority activate --config korvun.json --profile profile_ops \
+                          --reason "why this profile goes strict"
+```
+
+El último comando imprime un `activation_digest`. Va a la configuración, y el
+perfil es estricto desde el siguiente arranque:
+
+```json
+"authority": { "mode": "strict", "activation_digest": "sha256:…" }
+```
+
+`authority` tiene además `issue`, `delegate`, `revoke` e `import-v1`, cada uno
+con su forma `admin-` (`admin-issue`, `admin-delegate`, `admin-revoke`). LAS DOS
+formas de `revoke` exigen `--reason`, y también todas las administrativas; lo
+que añaden las administrativas es el operador humano registrado aparte del
+emisor del grant. El `issue` ordinario exige que el actor sea el dueño de la
+propia intención, y desde el CLI el actor es siempre `principal_local_operator`
+— así que sobre una intención de otro dueño, el `issue` ordinario rechaza con
+«action/sqlite: authority issuer mismatch» y la puerta es `admin-issue`.
+
+**Lo que la receta de arriba no dice, y hace falta.** En un perfil que viene de
+una release anterior, el primer comando se rechaza hasta que el servidor haya
+arrancado una vez, para levantar el esquema del almacén. `grant.json` debe
+llevar el `intent_digest` de la versión exacta de la intención, y ningún verbo
+del CLI lo imprime: hoy se lee del almacén a mano. Y la forma de `intent.json` y
+`grant.json` todavía no está documentada, mientras los dos analizadores rechazan
+campos desconocidos o repetidos. Las tres cosas quedan fichadas.
+
+**Qué debe decir una intención en modo estricto.** `read_file`, `http_fetch` y
+`webhook_call` son allí de MUNDO CERRADO: solo arrancan bajo términos que
+enumeren los recursos, las etiquetas de datos y los destinos que pueden tocar.
+Una intención sin `allowed_resources` no concede ninguno, y el inicio se rechaza
+por su nombre: «action: resource out of authority scope», o «action: authority
+use unresolved» cuando los argumentos no se pueden resolver — ese texto literal,
+no un código corto. Una ruta de `read_file` que no sea absoluta queda sin
+resolver, porque esta capa no conoce la raíz de la jaula a la que la herramienta
+la uniría. Y el alcance es de la INTENCIÓN, no de la operación: en cuanto una
+intención enumera cualquier recurso, toda operación SIN analizador registrado se
+rechaza también — `memory_note` incluido —, así que una intención con alcance
+para `read_file` cierra en silencio las demás.
+
+**Qué ve la persona.** Una petición aparcada bajo un perfil estricto lleva el
+bloque `AUTORIDAD` en el documento de aprobación: quién pidió, bajo qué
+contrato, por qué cadena de principales, y el presupuesto que quedaba CUANDO SE
+APARCÓ — leído de una instantánea firmada y verificado contra esa firma en cada
+lectura, no un contador en vivo.
+
+**Un límite que conviene saber antes de planear con esto.** Ningún verbo del CLI
+ata un grant firmado a un enlace de ejecución: `intent bind` escribe el enlace
+sin él. Así que hoy un perfil estricto resuelve su autoridad por la cláusula de
+configuración derivada de la lista de herramientas del cerebro, y el grant
+firmado que emitiste queda ACTIVO y sin usar. Nada arranca fuera del alcance de
+la intención en ninguno de los dos caminos — la cláusula verifica los mismos
+términos —, pero la delegación, los grants hijos atenuados y los presupuestos
+compartidos con el ancestro no son alcanzables desde el CLI en esta release.
+
 ## Leer el rastro
 
 Los recibos viven en el registro de acciones junto a todas las demás

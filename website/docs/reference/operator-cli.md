@@ -229,6 +229,74 @@ Rejection, cancellation or expiry close the parked action with a
 receipt and no execution path remains. Requests expire on their TTL
 (default 1h, `approvals.ttl`), judged at the decision touch.
 
+## Strict authority (v0.16.0)
+
+Off unless the profile asks for it. With it on, an effectful start needs a
+verified authenticated principal, one active signed intent and a complete active
+signed authority chain, all judged inside the transaction that commits the
+start. Turning it on is five operator acts, in this order, each leaving its own
+signed receipt:
+
+```bash
+korvun intent create-v2   --config korvun.json --file intent.json
+korvun intent activate-v2 --config korvun.json int_pedidos 1
+korvun authority admin-issue --config korvun.json --file grant.json \
+                             --reason "why this authority exists"
+korvun intent bind        --config korvun.json --actor principal_brain_ops \
+                          --channel console int_pedidos 1
+korvun authority activate --config korvun.json --profile profile_ops \
+                          --reason "why this profile goes strict"
+```
+
+The last command prints an `activation_digest`. It goes in the config, and the
+profile is strict from the next boot:
+
+```json
+"authority": { "mode": "strict", "activation_digest": "sha256:…" }
+```
+
+`authority` also has `issue`, `delegate`, `revoke` and `import-v1`, each with an
+`admin-` form (`admin-issue`, `admin-delegate`, `admin-revoke`). BOTH forms of
+`revoke` require `--reason`, and so does every administrative form; what the
+administrative ones add is the human operator recorded separately from the
+grant's issuer. The ordinary `issue` requires the actor to be the intent's own
+owner, and from the CLI the actor is always `principal_local_operator` — so on
+an intent owned by anything else, ordinary `issue` refuses with
+«action/sqlite: authority issuer mismatch» and `admin-issue` is the door.
+
+**What the recipe above does not say, and needs.** On a profile upgraded from an
+earlier release the first command refuses until the server has booted once, to
+lift the store's schema. `grant.json` must carry the `intent_digest` of the
+exact intent version, and no CLI verb prints it: today it is read from the store
+by hand. And the shape of `intent.json` and `grant.json` is not documented yet,
+while both parsers refuse unknown or duplicated fields. All three are filed.
+
+**What an intent must say under strict mode.** `read_file`, `http_fetch` and
+`webhook_call` are CLOSED WORLD there: they start only under terms that list the
+resources, the data tags and the destinations they may touch. An intent with no
+`allowed_resources` grants none, and the start refuses by name —
+«action: resource out of authority scope», or «action: authority use
+unresolved» when the arguments cannot be resolved at all — that literal text,
+not a short code. A `read_file` path that is not absolute is unresolved, because
+this layer does not know the jail root the tool would join it to. And the scope
+belongs to the INTENT, not to the operation: once an intent lists any resource,
+every operation WITHOUT a registered analyzer refuses too — `memory_note`
+included — so an intent scoped for `read_file` silently closes the others.
+
+**What the human sees.** A request parked under a strict profile carries the
+`AUTORIDAD` block in the approval document: who asked, under which contract,
+through which chain of principals, and the budget that remained WHEN IT WAS
+PARKED — read from a signed snapshot and verified against that signature on
+every read, not a live meter.
+
+**A limit to know before you plan with it.** No CLI verb ties a signed grant to
+an execution binding: `intent bind` writes the binding without one. So a strict
+profile today resolves its authority through the config clause derived from the
+brain's tool list, and the signed grant you issued stays ACTIVE and unused.
+Nothing starts outside the intent's scope either way — the clause path verifies
+the same terms — but delegation, attenuated child grants and shared ancestor
+budgets are not reachable from the CLI in this release.
+
 ## Reading the trail
 
 Receipts live in the action ledger next to every other recorded action.
