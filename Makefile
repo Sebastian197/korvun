@@ -81,7 +81,7 @@ ARTIFACT_VERSION := $(patsubst v%,%,$(VERSION))
 # Windows (7b): -nsis emits the installer, -webview2 download is the ADR-0035 R4
 # bootstrap strategy; GNU make there is the Chocolatey install driven from Git
 # Bash, so pin SHELL to bash to keep the trap/function recipe identical.
-# Linux (7b): ubuntu-24.04 ships only webkit2gtk-4.1 — wails v2.15.0 gates its
+# Linux (7b): ubuntu-24.04 ships only webkit2gtk-4.1 — wails v2.16.0 gates its
 # pkg-config lines on the `webkit2_41` build tag (source-verified:
 # internal/frontend/desktop/linux/*.go `#cgo webkit2_41 pkg-config:
 # webkit2gtk-4.1`), so the tag rides DESKTOP_TAGS on Linux only.
@@ -234,7 +234,20 @@ integration-probe:
 	python3 scripts/integration_gate_test.py
 	python3 scripts/rebase_evidence_test.py
 
-quality: guard-gopkgs lint test cover fuzz-smoke hook-probe integration-probe
+# ADR-0036's rule — the Wails library and the build-time CLI name one version —
+# had nothing enforcing it, and was broken silently by two dependency bumps in a
+# row (#34, then #56): each moved go.mod and left `release-desktop.yml`
+# installing the previous CLI. What actually reddens a pull request is the
+# `Wails pin guard` step of quality.yml, which runs the same two commands; this
+# target is the local and pre-commit form of it. Neither lives in
+# release-desktop.yml on purpose: that lane runs only on a v* tag or a manual
+# dispatch, so a guard there would catch the drift after the tag was cut.
+.PHONY: wails-pin-probe
+wails-pin-probe:
+	python3 scripts/wails_pin_test.py
+	@python3 scripts/wails_pin.py .
+
+quality: guard-gopkgs lint test cover fuzz-smoke hook-probe integration-probe wails-pin-probe
 	@echo "Quality gate passed."
 
 # --- Web track SP1: the site check harness (spec AS-1 + AS-9, ADR-0040) ----------

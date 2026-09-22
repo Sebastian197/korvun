@@ -74,7 +74,7 @@ jobs:
           node-version: "22"
 
       # wails' own apt requirements, read at the source
-      # (wails/v2@v2.15.0/internal/system/packagemanager/apt.go): libgtk-3-dev,
+      # (wails/v2@v2.16.0/internal/system/packagemanager/apt.go): libgtk-3-dev,
       # libwebkit2gtk (4.1 on ubuntu-24.04 — 4.0 no longer exists there, hence
       # the webkit2_41 build tag the Makefile adds on Linux), build-essential,
       # pkg-config. xvfb is for the §1g GUI smoke (the only honest hosted one).
@@ -151,9 +151,9 @@ jobs:
 
       # Build-time CLI only — NEVER a go.mod dependency (GoReleaser precedent;
       # ADR-0036 pins the library, this pins the matching CLI).
-      - name: Install wails CLI v2.15.0
+      - name: Install wails CLI v2.16.0
         shell: bash
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
 
       # Tag push: VERSION is the tag itself (vX.Y.Z), so the desktop stamp
       # matches the headless `korvun vX.Y.Z`. Dry-run: git describe, clearly a

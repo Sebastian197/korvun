@@ -62,6 +62,61 @@ pre-release with no announced stable date.
 > `v2.13.x` pin in the risk axis, its 105-module count) are left as they
 > were verified then.
 
+> **AMENDED 2026-09-22 (the pin guard train).** The pin is no longer
+> `v2.15.0`. Dependabot's go-dependencies group (#56, merged as `cf05372`)
+> moved the library to **`v2.16.0`**, and this train moves the build-time CLI
+> to the same `v2.16.0`. Re-verified at source for `v2.16.0`: the annotated
+> tag `84940621c87fc4c95dda612cf87ed572df0fcf32` resolves to commit
+> `457bf210d5eb976ff3726c8629f7725575163307`, tagged 2026-09-14; its `go.mod`
+> still declares `go 1.25.0` (the repo is on Go 1.26.6). What moved under
+> `v2/` was established from the two trees rather than from the release's file
+> list, which the compare API truncates: both hold 1036 blobs, neither listing
+> truncated, and **exactly three differ** — `cmd/wails/internal/version.txt`
+> and the `calloc.go` of the darwin and linux desktop frontends. Those two are
+> one fix. `Calloc` carried **value receivers**, so `String()` appended the new
+> pointer to a copy's pool, the caller's pool stayed empty and `Free()`
+> released nothing: every C string allocated **through `Calloc.String`** leaked.
+> The scope is that method and no wider — the frontends allocate plenty of C
+> strings that never touch `Calloc` and free them explicitly (`Run`, `ExecJS`
+> and `SetTitle` in `darwin/window.go` each `C.CString` and `C.free`), and
+> `v2.16.0` does not touch those. It changes both `Calloc` methods to pointer
+> receivers. That closes an
+> unbounded-growth path in the code the published macOS and Linux desktop
+> artifacts link against; Windows is untouched. The MVS caveat needs no
+> measurement this time: `v2/go.mod` is byte-identical between the two tags, so
+> no shared minimum can have moved. `internal/system/packagemanager/apt.go` is
+> likewise unchanged, and the packages `release-desktop.yml` names were read
+> again at `v2.16.0` — `libgtk-3-dev`, `libwebkit2gtk`, `build-essential`,
+> `pkg-config` — as was the `webkit2_41` cgo gating that `Makefile`'s Linux
+> comment cites, still present in eight files of
+> `internal/frontend/desktop/linux` (`clipboard.go`, `frontend.go`, `gtk.go`,
+> `keys.go`, `menu.go`, `screen.go`, `webkit2.go`, `window.go` — the same eight
+> at `v2.15.0`). Only the version in each citation moved.
+>
+> **And the rule this ADR states now has something enforcing it.** Twice in a
+> row — #34, then #56 — a dependency bump moved the library and left the CLI
+> behind, and both times nothing failed; the second was caught by a human
+> reading a diff. `scripts/wails_pin.py` now enforces it, and what reddens a
+> pull request is the `Wails pin guard` step of `quality.yml`, which runs it —
+> not `make quality`, which that workflow never invokes. The Makefile target of
+> the same name is the local and pre-commit form. Every `cmd/wails@v…` install
+> pin must equal `go.mod`'s library version, hunted across `Makefile`,
+> `.github/workflows/`, `.github/actions/`, `scripts/` and any `Dockerfile*`;
+> and every Wails version named in the first three of those must equal it too.
+> It fails closed on an unreadable or ambiguous `go.mod`, on a `replace` for
+> Wails, on an absent `Makefile`, on any unreadable file it scans, and on a tree
+> carrying no install pin at all.
+>
+> **Where the prose exemption reaches, precisely.** Inside a build file a
+> version string is an instruction, not prose, so a Wails version other than the
+> pinned one fails there even when it is meant as history or contrast. The
+> exemption is for DOCUMENTATION: this ADR must keep naming `v2.13.0` and
+> `v2.15.0`, and a guard that rewrote history to match the present would be
+> worse than the drift it catches. What the guard does not see at all, declared
+> rather than implied: a pin assembled at run time — split across a shell line
+> continuation or composed from an `env:` value — and a version named in a
+> makefile reached through `include`.
+
 **Verified facts the decision rests on:**
 
 - **v2.13.0 is the current stable release** (July 2026, active maintenance);

@@ -27,6 +27,31 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # ADR-0036's rule — the Wails library and the build-time CLI name one
+      # version — was broken silently by two dependency bumps in a row (#34,
+      # then #56), because nothing enforced it. This step is what enforces it.
+      #
+      # It is NOT in release-desktop.yml: that lane runs only on a v* tag or a
+      # manual dispatch, so a guard there would catch the drift after the tag
+      # was cut. On this job it reddens the bump's own pull request.
+      #
+      # And it runs FIRST, before Install tools, Build, Lint and the sqlite3
+      # package install. A job stops at its first failing step, so a guard
+      # placed after those would go unreported on any runner where one of them
+      # is red — and a red toolchain is exactly when a stale pin is easiest to
+      # miss. It needs neither Go nor sqlite3: it is pure Python over text.
+      #
+      # `set -euo pipefail` is written out rather than relied upon. GitHub's
+      # default for `shell: bash` supplies it, but the repository's own sqlite3
+      # step writes it explicitly too, and without it a red attack suite would
+      # be swallowed by the exit code of the command after it.
+      - name: Wails pin guard (attack tests, then the real tree)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/wails_pin_test.py
+          python3 scripts/wails_pin.py .
+
       - name: Install tools
         shell: bash
         run: |
