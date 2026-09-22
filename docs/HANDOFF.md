@@ -1,5 +1,28 @@
 # HANDOFF — Korvun
 
+## MODO DE TRABAJO PERMANENTE (director, 2026-09-22) — CRÍTICO
+
+Tercera norma del mismo día, y la que gobierna a las otras dos: cómo se trabaja,
+no solo qué se escribe.
+
+1. **ESFUERZO.** `xhigh` para implementación y auditoría; `high` para
+   documentación, marcadores y pull requests.
+2. **ALCANCE CERRADO.** Cada encargo llega con sus ficheros, sus moldes y su
+   criterio de «hecho». Se hace ESO. Lo que aparezca fuera del alcance se ficha
+   CON NOMBRE y NO se cura en el mismo tren, salvo que bloquee.
+3. **ANTES DE CÓDIGO.** El plan de fallos y el entorno —graphify y los vecinos—
+   van primero. Los tres moldes en rojo antes de la cura: fallo, control,
+   reparación.
+4. **UNA PASADA del adversario por tren.** Lo `[PRODUCT]` se cura y se declara.
+   Sin repasadas salvo orden expresa.
+5. **CERO PREGUNTAS AL DIRECTOR.** Cualquier decisión de diseño o de proceso va
+   al informe para el copiloto, y mientras tanto se sigue con la opción
+   conservadora. Una pregunta con opciones solo cuando de verdad bloquea, y con
+   la recomendada ya aplicada por defecto.
+6. **INFORMES CORTOS.** El estado cabe en diez líneas: SHA, qué falta, cuánto
+   queda. El detalle va al canto, no al chat.
+7. **NADA ESPONTÁNEO.** No se abren trenes, sondas ni limpiezas que nadie pidió.
+
 ## NORMA PERMANENTE — todo diseño lleva su PLAN DE FALLOS (director, 2026-09-22) — CRÍTICA
 
 Hermana de la norma de abajo y del mismo día. Aquélla mira el entorno ANTES de
