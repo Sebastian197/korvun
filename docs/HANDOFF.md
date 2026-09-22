@@ -23,6 +23,36 @@ no solo qué se escribe.
    queda. El detalle va al canto, no al chat.
 7. **NADA ESPONTÁNEO.** No se abren trenes, sondas ni limpiezas que nadie pidió.
 
+## NORMA PERMANENTE — menos máquina por vuelta (director, 2026-09-22) — CRÍTICA
+
+El listón NO baja: los mismos moldes, las mismas mutaciones, el mismo gate
+final. Lo único que cambia es cuántas veces se corre la máquina.
+
+1. **Mientras iteras una cura, corre SOLO los tests del paquete tocado**
+   (`go test ./internal/x/ -run 'Test...'`, el vitest del fichero). El gate
+   completo (`make quality`) se corre **una vez por rama**, al final, antes del
+   commit. Nunca entre vueltas.
+2. **`-race` solo en el gate final y en los moldes de carrera**, no en cada
+   iteración.
+3. **`govulncheck` y el ensayo en seco: una vez por rama, al final.** No por
+   commit.
+4. **Las mutaciones van en comandos cortos, pero encadenadas por paquete**:
+   aplicar → test del paquete → restaurar, sin gate completo entre ellas.
+5. **No re-verifiques lo que ya capturaste.** Una mutación roja capturada no se
+   repite salvo que cambie el molde.
+6. **El adversario recibe el diff ACOTADO del encargo**, no el árbol entero, y
+   devuelve el veredicto en disco sin narrarlo en el chat.
+7. **Informes: diez líneas. Cantos: tablas, no prosa.**
+
+**Lo que esta norma no puede apagar, dicho para que nadie lo confunda con
+desobediencia:** `.githooks/pre-commit` corre el gate sobre el árbol de CADA
+commit, y solo lo salta cuando el árbol preparado es idéntico al del padre
+(«No code, no gate», 2026-09-12). Una rama de tres commits paga tres gates
+aunque el ejecutor no corra ninguno por su cuenta. La palanca que sí queda en
+nuestras manos es el NÚMERO DE COMMITS: se agrupa lo que pertenece junto y se
+separa solo lo que debe poder revertirse solo — el marcador, que por su propia
+ley es el commit de la punta y toca un único fichero.
+
 ## NORMA PERMANENTE — todo diseño lleva su PLAN DE FALLOS (director, 2026-09-22) — CRÍTICA
 
 Hermana de la norma de abajo y del mismo día. Aquélla mira el entorno ANTES de
@@ -116,6 +146,37 @@ No se toca hasta tener **maqueta aprobada antes de abrir rojo**, por la sexta
 ley (UX-DESIGN-FIRST). La decisión de producto que hay que tomar primero: qué
 debe ver el operador ante un documento estricto cuya autoridad no está —¿el
 estado ilegible que ya existe, con `Volver a intentar`, o uno propio?
+
+## Fichado para después de la v0.16.1 — webpackbar 7 (Docusaurus 3.10) (2026-09-22)
+
+Nace del lote de Dependabot: la **#55** (grupo `website-npm`, 12
+actualizaciones) se cerró en rojo y el rojo es **nuestro**, no de la
+dependencia. `website (full harness via make website-check)` falló con
+`Error: Unsupported webpackbar version: 7.0.0`, lanzado por
+`npm error command sh -c node scripts/apply-webpackbar-compat`.
+
+`website/scripts/apply-webpackbar-compat.mjs` compara la versión resuelta
+contra el literal `'6.0.1'` y lanza ante cualquier otra. Esa negativa es
+deliberada: `patchWebpackBarSource` reescribe fuente minificada y un «mejor
+esfuerzo» sobre una forma que no ha leído sería peor que negarse. Docusaurus
+3.10.2 arrastra webpackbar 7.0.0, así que el fusible dispara.
+
+El trabajo **no es subir el lockfile**. Hay que leer el `dist/index.cjs` y
+`dist/index.mjs` de webpackbar 7 y establecer si sigue existiendo la colisión
+`this.options` / `ProgressPlugin` que el parche cura:
+
+- si **desapareció**: se borran `apply-webpackbar-compat.mjs`,
+  `webpackbar-compat.mjs`, `webpackbar-compat.test.mjs` y el paso del arnés que
+  los corre, con un molde que pruebe que el build sin parchear no pisa las
+  opciones de `ProgressPlugin`;
+- si **sobrevive con otra forma**: se rederiva el parche y se reescribe
+  `webpackbar-compat.test.mjs` contra la fuente nueva, manteniendo el fusible de
+  versión — ampliado a las versiones exactas leídas, nunca a un rango.
+
+En cualquiera de los dos casos lleva su plan de fallos y su mutación
+probatoria, y el molde del propio fusible debe enrojecer cuando se le quita.
+Estimación 2–3 h, rama propia. Dependabot reabrirá el grupo mientras tanto; el
+tren entra antes y el grupo se fusiona después.
 
 ## Dos moldes escuchaban en todas las interfaces y ningún gate lo vio (2026-09-20)
 
