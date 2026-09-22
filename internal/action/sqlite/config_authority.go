@@ -33,6 +33,53 @@ type configAuthorityHead struct {
 // activation root. An empty result means this store instance is not armed.
 func (s *Store) ActivatedAuthorityProfile() string { return s.authorityProfileID }
 
+// ActivatedAuthority names one activation root a store carries: the profile it
+// belongs to and the digest the operator must pin to boot it strict.
+type ActivatedAuthority struct {
+	ProfileID        string
+	ActivationDigest string
+}
+
+// ActivatedAuthorityRoots reads which activations this STORE carries — not
+// which one this instance armed, which is what ActivatedAuthorityProfile
+// answers. An empty result means no profile was ever activated here.
+//
+// The boot needs this question and the armed accessor cannot answer it: an
+// unarmed instance has nothing pinned, so a non-strict boot over an ACTIVATED
+// store would look the same as a boot over a fresh one. That difference is not
+// cosmetic. An unarmed store does not append the approval-birth ledger, so an
+// approval parked under it is born with no birth event, and the next strict
+// boot reads the ledger as corrupt — boot-fatal, with no second activation and
+// no repair door (the v0.16.0 adversary pass, reproduced with two store lives
+// over one file).
+//
+// It returns the DIGEST beside each profile because the caller's remedy is to
+// pin it: a refusal that demanded a digest it had just read and did not print
+// left an operator who lost that line with a profile that booted neither way
+// (the same pass, second round). Several roots are a state the CLI can create —
+// `authority activate` takes any profile id and only refuses repeating the same
+// one — so this reader reports them all and judges none of them corrupt.
+func (s *Store) ActivatedAuthorityRoots(ctx context.Context) ([]ActivatedAuthority, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT profile_id,activation_digest FROM approval_birth_heads ORDER BY profile_id`)
+	if err != nil {
+		return nil, mapAuthorityStoreError(err)
+	}
+	defer func() { _ = rows.Close() }()
+	var roots []ActivatedAuthority
+	for rows.Next() {
+		var root ActivatedAuthority
+		if err := rows.Scan(&root.ProfileID, &root.ActivationDigest); err != nil {
+			return nil, mapAuthorityStoreError(err)
+		}
+		roots = append(roots, root)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapAuthorityStoreError(err)
+	}
+	return roots, nil
+}
+
 // SyncConfigAuthorityClauses signs one immutable generation and atomically
 // advances the brain's current head. Replaying identical terms is a verified
 // no-op; an empty set is a real generation that withdraws every config clause.
