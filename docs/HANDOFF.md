@@ -1,5 +1,65 @@
 # HANDOFF — Korvun
 
+## NORMA PERMANENTE — todo diseño lleva su PLAN DE FALLOS (director, 2026-09-22) — CRÍTICA
+
+Hermana de la norma de abajo y del mismo día. Aquélla mira el entorno ANTES de
+curar; ésta obliga a que el diseño diga, antes del primer rojo, cómo se rompe
+lo que propone. **Sin la tabla no se abre RED.** La plantilla
+`docs/superpowers/specs/TEMPLATE.md` ya la lleva, así que una spec que no la
+traiga es una spec incompleta, no una excepción.
+
+Forma fija, cuatro partes, en una sección «Plan de fallos» de CADA spec:
+
+1. **Consumidores del resultado**: quién lo lee —pantalla, CLI, API, otro
+   módulo— y qué hace cada uno con un rechazo.
+2. **Tabla de fallos por categoría**, y ninguna categoría se cae en silencio:
+   entrada inválida, estado imposible, carrera, caída ANTES del efecto, caída
+   DESPUÉS del efecto, corrupción, dependencia sin respuesta, **operador sin
+   salida**. Por fila: comportamiento, error CON NOMBRE, qué ve la persona,
+   molde en rojo con su mutación, y camino de reparación. Una fila cuyo camino
+   de reparación es «ninguno» deja a alguien atrapado: se dice ahí, en el
+   diseño, no cuando lo encuentre el adversario.
+3. **Vecinos y hermanos de clase**: qué más hace lo mismo por otra puerta, qué
+   estados pueden llegar, quién más tendría que cambiar. Si el fallo tiene
+   hermanos, se curan juntos o se nombran aquí.
+4. **Lo declarado sin cubrir**, por nombre y con su razón. Un hueco nombrado en
+   el diseño es una decisión; el mismo hueco encontrado después es un defecto.
+
+**También para cada CURA**, en versión corta: modo de fallo de la propia cura,
+control y reparación, con sus tres moldes en rojo antes. Si uno de los tres no
+puede existir, se dice cuál y por qué ANTES de entregar.
+
+## NORMA PERMANENTE — ninguna cura se escribe mirando solo el fallo (director, 2026-09-22) — CRÍTICA
+
+Nace de un caso concreto de esta misma sesión: la cura que cerraba el arranque
+no estricto sobre un perfil activado INTRODUJO la clase que cerraba. Rehusaba el
+arranque pidiendo un `activation_digest` que el propio lector acababa de leer de
+la base y no imprimía; con la activación siendo de un solo sentido, un operador
+que hubiera perdido esa línea se quedaba con un perfil que no arrancaba de
+ninguna de las dos maneras. Antes de esa cura, al menos arrancaba. Lo encontró
+el adversario con el binario compilado, no la sesión que la escribió.
+
+Para TODA cura, antes de tocar código y POR ESCRITO EN EL CANTO:
+
+1. **ENTORNO.** Qué llama a lo que voy a cambiar y qué llama esto —
+   graphify primero, luego el código. La lista de vecinos: funciones hermanas
+   que hacen lo mismo por otra puerta, estados que pueden llegar aquí, y quién
+   lee el resultado.
+2. **MODO DE FALLO DE LA CURA.** Cómo podría mi propia cura romper algo: qué
+   camino bueno deja de funcionar, qué operador se queda sin salida, qué dato
+   necesita alguien y no le doy. Se escribe ANTES de curar, no después.
+3. **TRES MOLDES MÍNIMOS por cura, en rojo antes de la cura:**
+   - el FALLO — rehúsa o corrige, por su nombre;
+   - el CONTROL — el caso bueno sigue funcionando exactamente igual;
+   - la REPARACIÓN — quien tropieza puede salir por un camino nombrado.
+4. **CLASE, NO INSTANCIA.** Si el fallo tiene hermanos —la misma clase por otra
+   puerta— se curan todos, o se listan POR NOMBRE como fichados. Nunca uno solo
+   en silencio.
+5. Solo entonces, la cura. Y al entregar, las cinco preguntas más la sexta.
+
+Si una cura no puede cumplir los tres moldes, se dice CUÁL falta y POR QUÉ antes
+de entregar, no después de que lo encuentre el adversario.
+
 ## Para las notas de la v0.16.0 — CAMBIO DE COMPORTAMIENTO del modo estricto (director, 2026-09-22)
 
 La pieza 3 fase 3 cura un defecto que el adversario encontró (F2): los
