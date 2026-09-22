@@ -201,8 +201,8 @@ one pixel. One machine-enforced path to execution, ~1ms measured toll
 
 ## Piece 3 — a verified name, a signed purpose, a signed authority — v0.16.0
 
-Stages 1 to 5 of the Execution Trust Layer are behind us and this is the piece
-that binds them: **with strict authority turned on**, every tool call a model
+Stage 5 of 11 of the Execution Trust Layer is behind us and this is the piece
+that binds what it built: **with strict authority turned on**, every tool call a model
 asks for carries, in one transaction with the action itself:
 
 - **a verified name.** Every ingress door mints an opaque authenticated

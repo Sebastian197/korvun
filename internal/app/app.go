@@ -387,6 +387,10 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 				_ = store.Close()
 				return nil, err
 			}
+		} else if err := refuseNonStrictBootOverActivation(context.Background(), actions); err != nil {
+			_ = actions.Close()
+			_ = store.Close()
+			return nil, err
 		}
 		// The live ink (FR-LED): every terminal outcome is born signed
 		// with the profile's active key, inside the outcome's own

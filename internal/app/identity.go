@@ -421,6 +421,54 @@ func PrepareStrictAuthority(ctx context.Context, cfg *config.Config,
 	return nil
 }
 
+// ErrAuthorityActivatedProfileNeedsStrict refuses a boot whose config is not
+// strict over a store that already carries an activation root.
+var ErrAuthorityActivatedProfileNeedsStrict = errors.New(
+	"app: this profile has strict authority activated; it boots strict or it does not boot")
+
+// refuseNonStrictBootOverActivation is the door that keeps an activated profile
+// from being poisoned by its own operator.
+//
+// Only a strict boot arms the store with the activation digest, and only an
+// armed store appends the approval-birth ledger. So a NON-strict boot over an
+// activated profile parks approvals with no birth event, and the next strict
+// boot reads the ledger as corrupt: `app.Build` fails, a second activation is
+// refused, and no door repairs it. The window is not exotic — the documented
+// way to turn strict mode on ends with an activation and a restart, and
+// anything parked in between falls into it.
+//
+// The rule is therefore the profile's own law, not the config's: a store that
+// has been activated boots strict or does not boot.
+//
+// THE REFUSAL CARRIES ITS OWN REMEDY, and that is not decoration. Activation is
+// one-way — no door deactivates, and a second activation of the same profile is
+// refused — so an operator who no longer has the digest `authority activate`
+// printed once would have a profile that boots neither way. The digest sits in
+// the row this reader already reads, so the message prints it: copy it into the
+// config and the same profile boots. With several activation roots the message
+// prints them all and the operator picks the profile they mean.
+func refuseNonStrictBootOverActivation(ctx context.Context, actions *actionsqlite.Store) error {
+	if actions == nil {
+		// Fail CLOSED, like PrepareStrictAuthority for the same input: a door
+		// that cannot ask the question must not answer "nothing is activated".
+		return errors.New("app: checking strict authority activation requires an action store")
+	}
+	roots, err := actions.ActivatedAuthorityRoots(ctx)
+	if err != nil {
+		return fmt.Errorf("app: read the profile's authority activation: %w", err)
+	}
+	if len(roots) == 0 {
+		return nil
+	}
+	lines := make([]string, 0, len(roots))
+	for _, root := range roots {
+		lines = append(lines, fmt.Sprintf("%q -> %s", root.ProfileID, root.ActivationDigest))
+	}
+	return fmt.Errorf(`%w: activated here, with the digest each one needs: %s. `+
+		`Add "authority": {"mode": "strict", "activation_digest": "<the digest of the profile you mean>"} to the config`,
+		ErrAuthorityActivatedProfileNeedsStrict, strings.Join(lines, ", "))
+}
+
 // StoragePath exposes the shared storage-path resolution to the CLI
 // (Etapa 2, lote 5): ONE resolution for the conversation store, the
 // kernel store and the operator's CLI, so "the same file" stays true by
