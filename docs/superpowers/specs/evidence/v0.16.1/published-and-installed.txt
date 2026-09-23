@@ -1,0 +1,167 @@
+# v0.16.1 — what was published, and the install from it
+
+Date: 2026-09-23, after the tag. Both run by the EXECUTOR under the director's
+delegation: box 6 for the packaged pass, and box 8 for this one, recorded by his
+ruling of the same day. What the executor gives is evidence; the director's own
+hands remain the higher evidence whenever he uses them.
+
+## 1 · The chain, closed
+
+```
+tag v0.16.1 -> 3e781353ba0860f6bc7ab7572b51bc0cfbac1b02   (lightweight, on the marker commit)
+
+scripts/rebase_evidence.py over master's tip:
+  {"base": "7bd84c34ab90ea19fdf2a7ac5b18cc5f88dbb240", "commits": 2,
+   "integrated_head": "3e781353ba0860f6bc7ab7572b51bc0cfbac1b02",
+   "mode": "github-rebase",
+   "reviewed_code": "2a72c04fce6f2fd843ea910757eb4479c2384e70",
+   "source_head": "9ea82c909a8d598077a294be0308c00722b093d3"}
+  exit=0
+
+    The PR was merged by REBASE, so the SHAs were rewritten. The verifier binds
+    the integrated marker to the code that was reviewed through the API, not by
+    SHA identity — which is the whole reason that machinery exists.
+
+master CI on 3e78135:  Quality Gate success · CodeQL success · OpenSSF Scorecard success
+release lanes on the tag:  Release success · Release Desktop success
+```
+
+## 2 · What the release carries: 23 assets
+
+```
+6 headless archives  (darwin amd64/arm64, linux amd64/arm64, windows amd64/arm64)
+6 SBOMs, one per archive
+3 desktop artifacts  (darwin universal .dmg, linux tar.gz, windows installer .exe)
+2 checksum lists     (checksums.txt, checksums-desktop.txt)
+2 cosign certificates + 2 cosign signatures, one pair per list
+2 SLSA provenance bundles, one per list
+```
+
+## 3 · Verification, and what it does NOT cover
+
+```
+$ shasum -a 256 korvun-desktop_0.16.1_darwin_universal.dmg
+88e87647bac4fd861a6c3fc8d4594ee4bf0d0f3a24e6b828ab6a5ddc216b14a6
+$ grep darwin_universal.dmg checksums-desktop.txt
+88e87647bac4fd861a6c3fc8d4594ee4bf0d0f3a24e6b828ab6a5ddc216b14a6  korvun-desktop_0.16.1_darwin_universal.dmg
+
+$ shasum -a 256 korvun_0.16.1_darwin_amd64.tar.gz
+c529a102e4c9e35eb56b307eca2c285e3745173d0e666c95279f5f5212248c4d
+$ grep darwin_amd64.tar.gz checksums.txt
+c529a102e4c9e35eb56b307eca2c285e3745173d0e666c95279f5f5212248c4d  korvun_0.16.1_darwin_amd64.tar.gz
+
+$ gh attestation verify checksums.txt --repo Sebastian197/korvun            exit=0
+$ gh attestation verify checksums-desktop.txt --repo Sebastian197/korvun    exit=0
+
+  predicateType: https://slsa.dev/provenance/v1
+  subject:       ['checksums.txt']
+  workflow:      .../.github/workflows/release.yml@refs/tags/v0.16.1
+  sourceRepo:    https://github.com/Sebastian197/korvun
+  sha:           3e781353ba0860f6bc7ab7572b51bc0cfbac1b02
+  ref:           refs/tags/v0.16.1
+  issuer:        https://token.actions.githubusercontent.com
+```
+
+    The attestation names the SAME commit this tag points at, so the chain is
+    closed end to end: tag -> commit -> workflow -> checksum list -> the bytes on
+    this disk.
+
+**NOT RUN, and it is not sold as run:** `cosign verify-blob` over the two `.sig`
+/ `.pem` pairs. `cosign` is not installed on this machine and this pass did not
+install one. What the signatures are, this record cannot say; what the SLSA
+provenance says, it verified. Anyone repeating this with cosign available should
+run the recipe the v0.15.0 notes publish.
+
+## 4 · The install, by the documented mold
+
+`docs/packaging/INSTALL.md` says: open the `.dmg` and drag Korvun to
+Applications. That is what happened, from the PUBLISHED image, never a local
+build.
+
+```
+what was installed BEFORE:  CFBundleShortVersionString 0.14.1   (dated 2026-09-08)
+
+    Worth recording rather than smoothing over: this machine had been running a
+    build FOUR published releases behind — v0.15.0, v0.15.1, v0.16.0 and v0.16.1
+    shipped between them. Two MINOR lines, four releases; the first draft of this
+    line said «two» and meant the lines.
+
+$ hdiutil attach korvun-desktop_0.16.1_darwin_universal.dmg -nobrowse -readonly
+/Volumes/Korvun
+
+/Volumes/Korvun/Korvun.app:
+  CFBundleShortVersionString  0.16.1
+  CFBundleIdentifier          com.korvun.desktop
+  Mach-O universal binary with 2 architectures: [x86_64] [arm64]
+  codesign: Signature=adhoc, TeamIdentifier=not set
+
+    ADHOC, not Developer ID and not notarized — which is why INSTALL.md carries
+    its Gatekeeper step. This copy reached /Applications from a disk image
+    mounted in a terminal, so it never got `com.apple.quarantine` and Gatekeeper
+    never asked. A visitor downloading the .dmg in a browser WILL see the dialog
+    INSTALL.md documents, and this pass did NOT exercise that path.
+
+after the install:
+  /Applications/Korvun.app  CFBundleShortVersionString 0.16.1  CFBundleVersion 0.16.1
+  sha256 of the installed binary   51a619801012de766adfe2dec75789c2ff515d3733a78a33c862f7cb35374b5a
+  sha256 of the binary in the dmg  51a619801012de766adfe2dec75789c2ff515d3733a78a33c862f7cb35374b5a
+  identical.
+```
+
+## 5 · The confirmation: it runs, and it says which version it is
+
+Launched from `/Applications`, on a DISPOSABLE profile under `/tmp`, never the
+director's own.
+
+```
+$ HOME=/tmp/v0161-install/home /Applications/Korvun.app/Contents/MacOS/Korvun
+
+its own log, ALL FIVE LINES, verbatim:
+time=2026-09-23T17:31:58.750+01:00 level=INFO msg="korvun-desktop: log sink open" path="/tmp/v0161-install/home/Library/Application Support/korvun/korvun-desktop.log" version=v0.16.1
+time=2026-09-23T17:32:20.693+01:00 level=INFO msg="model wired" brain=default provider=ollama model_id=llama3.2:1b locality=local
+time=2026-09-23T17:32:20.693+01:00 level=INFO msg="admin server listening" addr=127.0.0.1:50454
+time=2026-09-23T17:32:20.694+01:00 level=WARN msg="no channels configured — add one via the builder"
+time=2026-09-23T17:32:20.694+01:00 level=INFO msg="korvun is serving; send your bot a message"
+
+window: "Korvun", 1 window open
+```
+
+    `version=v0.16.1` is the TAG itself, with no `-N-g<sha>` suffix: the binary
+    was built from the tag, not from a commit past it.
+
+**A FIRST DRAFT OF THIS SECTION QUOTED ONE OF THOSE FIVE LINES AS «verbatim» AND
+THEN WROTE «no gateway was started».** That was false, and the four omitted lines
+are exactly the ones that falsify it. The adversary's sweep caught it before this
+text went anywhere. What follows is what the log actually shows.
+
+## 5-bis · What this install DID, and what nobody can account for
+
+The gateway **started**. `(*App).Start` ran through: a brain named `default` was
+wired to ollama `llama3.2:1b`, the admin server listened on `127.0.0.1:50454` —
+loopback, as the invariant requires — no channel was configured, and the process
+printed `korvun is serving`. The profile ends with `korvun.json`, `korvun.db` and
+a receipt-signing key on disk.
+
+So the onboarding was not merely opened, it was **completed**, 22 seconds after
+launch. The capture
+`docs/assets/captures/v0.16.1/installed-from-the-published-dmg.png` was taken
+BEFORE that, and shows the first step — «Bienvenido a Korvun», the model question
+— which is what a new user meets.
+
+**And this record cannot say who completed it.** Between the capture and the
+quit, nothing in this pass clicked anything: the only commands issued were a
+frontmost-set, a `screencapture` and the `pkill`. Whether the app auto-advanced
+because a local ollama answered, or something else drove it, is NOT established
+here, and the honest state of that question is *unknown*, not *benign*. It is
+filed rather than explained away.
+
+**What is still NOT claimed.** No channel was configured and no approval was
+decided from this install. And «no model was reached» is NOT asserted either way:
+`model wired` is wiring, not a call, but `Start` also fires a best-effort warmup
+against the local model, and this pass did not probe whether it landed.
+
+What the install DOES establish: the published artifact installs by its
+documented mold, is the bytes the signed list names, runs, reports its own
+version, and reaches a serving state on a fresh profile. Everything else about
+this release's behaviour rests on `manual-pass.txt` and `packaged-pass.txt`, at
+the levels each of them declares.

@@ -136,7 +136,7 @@ pasting does not arm it — while the no is always one click away. The operator
 CLI takes the same decision against the same store, which is still the only way
 in on a headless server.
 
-**Download v0.16.0** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
+**Download v0.16.1** · [macOS — universal `.dmg`](https://github.com/Sebastian197/korvun/releases/latest) · [Windows x64 — installer](https://github.com/Sebastian197/korvun/releases/latest) · [Linux x64 — `tar.gz`](https://github.com/Sebastian197/korvun/releases/latest)
 
 <sub>Builds are unsigned: the first launch needs right-click → Open on macOS and "More info → Run anyway" on Windows — see [Install & run](docs/packaging/INSTALL.md#korvun-desktop-the-native-app). Built with Wails on the system WebView, so there is no bundled browser. Prefer the terminal? The headless binary ships in the same release.</sub>
 
@@ -402,7 +402,7 @@ cosign verify-blob checksums.txt \
 
 ## Status
 
-**`v0.16.0` — Beta — is the current release.** Every beta criterion is met and the
+**`v0.16.1` — Beta — is the current release.** Every beta criterion is met and the
 platform keeps growing: channels, multi-brain routing, the policy engine,
 resilience, the no-code builder, the operator console, governed tools & skills,
 governed memory, the universal model gateway, the honest desktop, the Action
@@ -426,7 +426,7 @@ effect, with the `AUTORIDAD` block on the approval document — opt-in behind
 `authority.mode: "strict"`, and with a behaviour change and its Known issues
 written out in its notes, including that no external pass ran against that tag.
 Each ships with the known issues its own notes list. See
-[the release notes](docs/releases/v0.16.0.md),
+[the release notes](docs/releases/v0.16.1.md),
 [ROADMAP-V1.md](docs/ROADMAP-V1.md) and [ROAD-TO-BETA.md](docs/ROAD-TO-BETA.md)
 for what is closed and what comes next.
 

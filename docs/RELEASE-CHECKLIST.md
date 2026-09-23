@@ -39,26 +39,31 @@ v0.10.0.
    WORD, not a tree record — no packaged pass before v0.16.1 left a file, so
    nothing here can confirm or deny it, and it is written as what it is.
 
-   **Against the Sixth Law, stated plainly and UNRESOLVED.** `CLAUDE.md` still
+   **Against the Sixth Law — SETTLED by the director on 2026-09-23.** `CLAUDE.md`
    reads «ninguna release se etiqueta sin la pasada manual de Chano sobre la
-   build empaquetada», and marks it CRITICAL. This box does not amend that law
-   and cannot: the law is the director's, and only he moves its text.
+   build empaquetada», marks it CRITICAL, and **keeps that wording**. His ruling:
+   the law does not change; what happens is a **DELEGATION DECLARED RELEASE BY
+   RELEASE**.
 
-   So the gap is written, not closed. The law names two things — a manual pass
-   BY THE DIRECTOR, over the PACKAGED build. The bash of box 1, which is the act
-   the law names, is delegated here. What the curtain of this box gives him is
-   «local build in HIS browser, artifacts to open», and **this checklist does not
-   define what those artifacts are**: nowhere in the tree does anything say
-   whether they are the packaged ones. So whether the
-   curtain already puts a packaged artifact in his hands before the tag is
-   **undecided here**, and this box does not decide it in its own favour. What is
-   certain is box 8, where «his own hands confirm» an installed build — and that
-   happens AFTER the tag, while the law speaks of tagging.
+   Said exactly, because the two halves are easy to blur: a declared delegation
+   does not make the executor into the director, and **this box does not claim
+   the law's letter is satisfied**. What the declaration does is put on the
+   record, in each release, that the act the law assigns to him was carried out
+   under his instruction and that he saw its evidence before saying yes. Whether
+   that is compliance or a standing exception to a CRITICAL law is his to say,
+   and he has said the wording stays — so the record is the whole of what this
+   box offers, and it offers it release by release, never once and for all.
 
-   **Nothing in this box claims the Sixth Law is satisfied.** Whether the law's
-   wording changes, whether the practice moves back to it, and what «artifacts to
-   open» means, are open decisions of the director; until he settles them this
-   stays an open gap on every release that passes through here.
+   So the rule from here: the law stands as written; the executor runs the pass
+   under a delegation the release's own notes record by name; and the director's
+   **yes** is still the act that publishes. A release whose notes do NOT declare
+   the delegation has not been delegated — silence is not consent, and this box
+   grants no standing exemption.
+
+   **What is still undefined, filed and not blocking:** the curtain gives the
+   director «local build in HIS browser, artifacts to open», and nothing in this
+   tree says what those artifacts are. Filed in `docs/HANDOFF.md` to be defined
+   in this kit; it blocks no release meanwhile.
 
    What the delegation does NOT move: the **yes** is still the director's, and
    the executor's pass is evidence for that yes, never a substitute. The pass
@@ -78,5 +83,18 @@ v0.10.0.
 8. **Tag draft-until-complete + install.** The tag's release stays draft
    until every signed asset is present and API-verified (the v0.9.2 mold:
    21 assets, cosign manifests, SBOMs, the app with the current icon), the
-   body is the release notes verbatim; then publish, install on the
-   director's machine by the install mold, and his own hands confirm.
+   body is the release notes verbatim; then publish and install by the install
+   mold.
+
+   **When something is learned AFTER the tag** — an install that found
+   something, a ruling the director made that day — it goes in a DATED addendum
+   at the end of the notes, never by rewriting what was published, and the
+   release body is re-pushed so the two stay identical. «Verbatim» binds the body
+   to the notes file, not to the notes file as it stood at tagging time.
+
+   **The install-and-confirm is run by the EXECUTOR under the director's
+   delegation**, by his ruling of 2026-09-23, on the same terms as box 6: from
+   the PUBLISHED artifact, never a local build, with its output recorded in that
+   release's evidence directory and DECLARED in its notes. What the executor
+   gives is evidence; the director's own hands remain the higher evidence
+   whenever he uses them.
