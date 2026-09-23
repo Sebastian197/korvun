@@ -264,7 +264,15 @@ Los godocs que prometían más quedaron acotados en el tren:
 `ExecuteApprovedAction` (`internal/app/approvals.go`) y `approvalsExecute`
 (`internal/cli/approvals.go`).
 
-### El error determinista dentro de la purga se publica «unreadable»
+### ~~El error determinista dentro de la purga se publica «unreadable»~~ — CURADO 2026-09-23 (v0.16.1 B)
+
+> **Curado.** `purgeWriteFailure` sigue la forma de `authorityReadFailure`, la
+> del propio paquete, invertida para una escritura: *busy* y contexto muerto
+> conservan la clase transitoria porque ahí reintentar es la respuesta correcta;
+> todo lo demás es corrupción, que **falla cerrado**. Molde con un trigger real
+> que aborta la purga desde una segunda conexión — oráculo por imposibilidad, no
+> un doble que devuelve error. La reproducción que la ficha declaraba pendiente
+> ya está ejecutada.
 
 Hueco preexistente, declarado y no curado (canto §4). Un error DETERMINISTA
 dentro de la propia purga (un trigger con `RAISE`, una restricción NOT NULL)
@@ -332,7 +340,12 @@ moulding P3-b») y su captura,
 cuya propia cabecera dice `CAPTURE stdout=""`: no cubre stdout, y por eso la
 mitad de stdout tiene captura propia.
 
-### `GetApprovalByAction` devuelve su error de lectura sin clase
+### ~~`GetApprovalByAction` devuelve su error de lectura sin clase~~ — CURADO 2026-09-23 (v0.16.1 B)
+
+> **Curado.** La puerta responde por `classifyApprovalRead` como sus hermanas.
+> La fila ausente conserva su propio nombre, porque el clasificador redacta
+> alrededor de un id de APROBACIÓN y esta puerta solo tiene el de ACCIÓN cuando
+> la búsqueda no encuentra nada.
 
 Hallado por el adversario de la re-pasada del bloque C (2026-09-20), ejecutado
 sobre una copia del árbol; fichado para la v0.15.2. Con el contexto cancelado,
@@ -342,7 +355,12 @@ devuelve el error crudo, sin «corrupto» ni «ilegible». Es código de producc
 lo llama el verificador de recibos (`internal/cli/receipt.go`). La clase única
 por lectura fallida del bloque B no cubre esta puerta.
 
-### `korvun approvals list` oculta una fila con un estado fuera de los cinco conocidos
+### ~~`korvun approvals list` oculta una fila con un estado fuera de los cinco conocidos~~ — CURADO 2026-09-23 (v0.16.1 B)
+
+> **Curado.** `CountApprovals` pregunta a la tabla y la orden compara el total
+> contra lo que devolvieron los cinco estados conocidos. La diferencia no se
+> lista —esta puerta no puede leer esas filas— pero se **nombra** y cambia el
+> código de salida. Ya no se puede contestar ausencia por corrupción.
 
 Preexistente, hallado por el adversario del delta del bloque B; fichado para la
 v0.15.2. El bucle de `internal/cli/approvals.go` (`approvalsList`) consulta uno
@@ -359,7 +377,13 @@ status = <valor>`, con valores como `'REJ'`+U+202E+`'ECTED'`, `'pending'`, un
 BLOB `'PENDING'` o `'PENDING'`+NUL+U+202E; después `korvun approvals list`
 imprime «no approval requests recorded» y sale con exit 0.
 
-### La lista de pendientes nombra con id vacío la fila que salta
+### ~~La lista de pendientes nombra con id vacío la fila que salta~~ — CURADO 2026-09-23 (v0.16.1 B)
+
+> **Curado.** El brazo del `Scan` cumple ahora la promesa que su propio godoc
+> ya hacía. `database/sql` asigna los destinos de izquierda a derecha y para en
+> el primer fallo, así que el id —el primer destino— ya está puesto cuando falla
+> una columna posterior. Un id todavía vacío significa que falló la columna del
+> id, y entonces vacío es la verdad y no una pérdida.
 
 Preexistente, hallado por el adversario en la pasada acotada a la cura de
 code scanning del bloque B (PR #46); fichado para la v0.15.2. El godoc de
@@ -401,7 +425,17 @@ sellada. Hoy no hay defecto vivo (16 bytes en hex dan 32 minúsculas), pero la
 costura no la sostiene ninguna prueba. La cura natural es un test en Go que fije
 la forma que la pantalla espera.
 
-### Un rechazo con `receipt_id` vacío imprime «Recibo » a secas
+### ~~Un rechazo con `receipt_id` vacío imprime «Recibo » a secas~~ — CURADO 2026-09-23 (v0.16.1 B)
+
+> **Curado, con el molde aprobado RE-APUNTADO y no borrado**, por adjudicación
+> del director del 2026-09-23. El reject exige la forma acuñada igual que el
+> approve, así que un recibo no acuñado —vacío u hostil— cae al estado «no
+> reconocido» en vez de pintarse bajo un título que anuncia un recibo sellado.
+>
+> No es rebaja del escape: la superficie **desaparece** en vez de escaparse, que
+> es más fuerte, y el escape conserva sus sujetos en los demás campos de origen
+> no controlado. El molde re-apuntado lleva además el caso del vacío, que la
+> ficha nombraba y que nunca tuvo molde, y un control con recibo acuñado.
 
 Heredado de master, confirmado por el adversario del bloque D con captura del
 DOM renderizado; fichado para la v0.15.2. Un 200 de reject con `receipt_id: ""`
@@ -415,6 +449,34 @@ sujeto un molde aprobado: el que prueba que la pantalla ESCAPA un recibo hostil
 al imprimirlo.
 
 ### Una clase de efecto futura se leería corrupta
+
+> **ADJUDICADO POR EL DIRECTOR, 2026-09-23: NO se cura relajando el dominio.**
+> Se conserva el comportamiento actual — una clase fuera del dominio es
+> corrupción y se NOMBRA — y la ficha pasa a la **pieza 4** en la forma de
+> «sellar la celda `effect_class`».
+>
+> **La razón, con lo que el análisis de la v0.16.1 B verificó en el árbol.** La
+> cura barata (aceptar una clase bien formada desconocida) no baja la seguridad
+> de la ejecución: el rango de lo desconocido es 6, por encima de crítico
+> (`internal/action/effect.go`), y `approvals_adapter.go` rehúsa ejecutar
+> cuando la clase supera el techo. Pero el caso de la fila en conflicto tiene la
+> previa **de acuerdo** con la celda, y ése no lo caza `preview_effect_mismatch`
+> ni antes ni después. Hoy lo caza la puerta de dominio del store; con la cura
+> barata lo cazaría solo el techo, que **impide ejecutar pero no lo reporta**.
+> Es decir: la cura barata convierte un hallazgo con nombre en una **denegación
+> silenciosa**. El criterio del director es que ninguna reescritura de evidencia
+> deje de nombrarse, así que eso es una rebaja y no entra.
+>
+> **La forma correcta, para la pieza 4:** sellar la celda, de modo que la
+> corrupción se detecte por la FIRMA y no por pertenencia a una lista. Entonces
+> una clase futura pasa el sello y se trata como desconocida-por-encima-de-
+> crítico, y una reescritura falla el sello y se nombra — las dos a la vez, sin
+> elegir. Coste: toca el juego de digests de la historia de la aprobación,
+> probablemente una migración, y lleva su propio plan de fallos. No es del lote
+> barato y no cabía en B.
+>
+> El molde `claim_single_consumption_v0151_test.go`, fila «effect_class out of
+> domain, preview agrees», **no se toca**: sigue siendo el contrato vigente.
 
 Declarado, predicho, no ejecutado (canto §5). Una clase de efecto escrita por un
 binario más nuevo sin subir el esquema quedaría fuera del dominio almacenado de

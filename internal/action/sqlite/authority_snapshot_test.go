@@ -146,16 +146,23 @@ func TestApprovalDetail_ActivatedLedgerPreventsLegacyDowngrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	parked := parkStrictAuthorityFixture(t, f)
-	if _, err := f.store.db.Exec(`UPDATE approvals SET authority_snapshot_required=0
-		WHERE approval_id=?`, parked.ApprovalID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.store.db.Exec(`DELETE FROM authorization_snapshots WHERE action_id=?`,
-		parked.ActionID); err != nil {
+
+	// RE-APUNTADO 2026-09-23. This mould used to downgrade the row by setting
+	// `authority_snapshot_required` to 0 and deleting the snapshot — which is
+	// now ALSO refused by the id/marker pair check in `strictMarkerTx`, with the
+	// SAME sentinel. The adversary captured the consequence: with that fixture
+	// the activation-ledger guard could be deleted outright and this mould still
+	// passed, so it no longer tested what its name says.
+	//
+	// The row is left COHERENT — `apr3_` id, marker 1, snapshot present — and
+	// the attack moves to the birth ledger the activation guard replays. Only
+	// that guard can refuse this state, so only its removal can redden here.
+	if _, err := f.store.db.Exec(`DELETE FROM approval_birth_events WHERE approval_id=?`,
+		parked.ApprovalID); err != nil {
 		t.Fatal(err)
 	}
 	_, err = f.store.ApprovalDetail(context.Background(), parked.ApprovalID)
 	if !errors.Is(err, ErrAuthorizationSnapshotCorrupt) {
-		t.Fatalf("downgraded detail error = %v", err)
+		t.Fatalf("a ledger missing this approval's birth event was served: %v", err)
 	}
 }

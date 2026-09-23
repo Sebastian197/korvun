@@ -195,10 +195,11 @@ function isReceiptID(id: string): boolean {
  * `failed` require a minted receipt shape, a `result` that is a non-empty
  * string, and a `digest` that is not merely well shaped but IDENTICAL to the
  * one this screen sent with the request, so an answer about another action is
- * never painted as this one's. `rejected` keeps the contract it had: its
- * receipt is taken as the string it is — the screen escapes it where it prints
- * it — and a `digest` or `result` of the wrong TYPE still refuses the whole
- * answer. Nothing else paints anything, for either verb. */
+ * never painted as this one's. `rejected` now demands the same minted receipt:
+ * the title it prints — «se cierra con su recibo sellado» — asserts a real
+ * receipt, and it used to appear over an empty string and over a hostile
+ * non-minted one alike. A `digest` or `result` of the wrong TYPE still refuses
+ * the whole answer. Nothing else paints anything, for either verb. */
 function judgeDecision(
   verb: 'approve' | 'reject',
   status: number,
@@ -210,11 +211,15 @@ function judgeDecision(
   if (typeof b.outcome !== 'string' || typeof b.receipt_id !== 'string') return null
   const receipt = b.receipt_id
   const optional = (v: unknown): v is string | undefined => v === undefined || typeof v === 'string'
+  // The minted shape is demanded for BOTH verbs. Reject was the only path that
+  // took its receipt as the string it was, so an empty one printed «Recibo »
+  // under a title asserting a sealed receipt, and a hostile one printed the
+  // escape of bytes that were never a receipt at all.
+  if (!isReceiptID(receipt)) return null
   if (verb === 'reject') {
     if (!optional(b.digest) || !optional(b.result)) return null
     return b.outcome === 'rejected' ? { kind: 'rejected', receipt } : null
   }
-  if (!isReceiptID(receipt)) return null
   if (typeof b.digest !== 'string' || !isDigest(b.digest)) return null
   if (b.digest !== sentDigest) return null
   if (typeof b.result !== 'string' || b.result === '') return null

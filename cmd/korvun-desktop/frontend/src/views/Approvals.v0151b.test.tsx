@@ -23,6 +23,7 @@
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Approvals } from './Approvals'
+import { UNRECOGNISED_SUCCESS } from './approvalsText'
 
 const HEX = 'a3f91c7d0b2e4f6a8c1d3e5f7a9b0c2d4e6f8a0b1c3d5e7f9a1b3c5d7e9f1b60'
 const DIGEST = `sha256:${HEX}`
@@ -384,15 +385,53 @@ describe('P2-1 · el identificador de la aprobación', () => {
     expect(line.textContent).not.toContain('\u202e')
   })
 
-  it('P2-1 · hermana: el recibo tras una decisión se imprime por el alfabeto de escape', async () => {
+  // RE-APUNTADO 2026-09-23, ficha «Un rechazo con `receipt_id` vacío imprime
+  // "Recibo " a secas», adjudicada por el director.
+  //
+  // Este molde exigía que un recibo HOSTIL y no acuñado (`rcp_<U+202E>x`) se
+  // imprimiera pasándolo por el alfabeto de escape. Esa garantía tenía sentido
+  // mientras el reject tomaba su recibo «as the string it is». Ya no: el reject
+  // exige la forma acuñada igual que el approve, así que ese campo no llega
+  // nunca a pintarse con bytes hostiles.
+  //
+  // No es una rebaja: la superficie DESAPARECE en vez de escaparse, que es más
+  // fuerte. Lo que el molde exige ahora es lo que la cura garantiza — y el
+  // escape conserva sus sujetos en los demás campos de origen no controlado.
+  it('P2-1 · hermana: un recibo no acuñado en un rechazo no se pinta como recibo sellado', async () => {
     await openDetail(
       router([ROW], DETAIL, {
         reject: () => json(200, { outcome: 'rejected', receipt_id: 'rcp_\u202ex' }),
       }),
     )
     fireEvent.click(rejectBtn())
+    await screen.findByText(UNRECOGNISED_SUCCESS)
+    expect(screen.queryByText(/^Recibo /)).toBeNull()
+  })
+
+  // El caso que la ficha nombra, y que nunca tuvo molde: el vacío tratado como
+  // presente bajo un título que anuncia lo contrario.
+  it('P2-1 · hermana: un `receipt_id` vacío en un rechazo tampoco', async () => {
+    await openDetail(
+      router([ROW], DETAIL, {
+        reject: () => json(200, { outcome: 'rejected', receipt_id: '' }),
+      }),
+    )
+    fireEvent.click(rejectBtn())
+    await screen.findByText(UNRECOGNISED_SUCCESS)
+    expect(screen.queryByText(/^Recibo $/)).toBeNull()
+  })
+
+  // CONTROL: un rechazo con recibo acuñado sigue pintando su recibo, y el
+  // escape sigue vivo para los campos que sí se muestran.
+  it('P2-1 · control: un rechazo con recibo acuñado sí pinta su recibo', async () => {
+    const minted = 'rcpt_' + 'a1b2c3d4'.repeat(4)
+    await openDetail(
+      router([ROW], DETAIL, {
+        reject: () => json(200, { outcome: 'rejected', receipt_id: minted }),
+      }),
+    )
+    fireEvent.click(rejectBtn())
     const receipt = await screen.findByText(/^Recibo /)
-    expect(receipt.textContent).toContain('<U+202E>')
-    expect(receipt.textContent).not.toContain('\u202e')
+    expect(receipt.textContent).toContain(minted)
   })
 })
