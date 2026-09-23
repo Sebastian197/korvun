@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
@@ -253,7 +254,18 @@ func scanApprovalAndPreview(row scanner) (action.Approval, string, string, error
 		&a.PolicyVersion, &a.PolicyDigest, &requestedAt, &expiresAt, &status,
 		&a.DecisionPrincipalID, &a.Decision, &decisionAt, &a.Comment,
 		&a.DecisionReceiptID, &rawPreview); err != nil {
-		return action.Approval{}, "", "", err
+		// Ficha in `docs/HANDOFF.md`. The godoc above promises the id «even
+		// when a later column fails to parse, because a row that cannot be
+		// served still has to be NAMED», and the three time arms below keep
+		// it. This arm did not: a wrongly-typed cell in any later column threw
+		// the id away and the listing filed a nameless skip.
+		//
+		// database/sql assigns destinations left to right and stops at the
+		// first failure, so the id — the FIRST destination — is already set
+		// whenever a later column is the one that failed. An id that is still
+		// empty here means the id column itself failed, and then empty is the
+		// truth rather than a loss.
+		return a, "", a.ApprovalID, err
 	}
 	a.Status = action.ApprovalStatus(status)
 	var err error
@@ -400,6 +412,87 @@ func (s *Store) approvalDetail(ctx context.Context, approvalID string, law *Poli
 	return out, nil
 }
 
+// purgeWriteFailure classifies a failure of the claim's own purge, which is a
+// WRITE and not a read.
+//
+// The ficha it cures — «el error determinista dentro de la purga se publica
+// unreadable» — asks for ONE thing: that a DETERMINISTIC failure stop being
+// published as the package's transient class, because retrying a trigger's
+// RAISE(ABORT) or a NOT NULL violation loops forever. It asks for nothing about
+// the rest, and the rest must not move.
+//
+// So this names corruption only where it can IDENTIFY determinism, and leaves
+// everything else exactly as it was. The first shape of this function did the
+// opposite — transient for busy and a dead context, corrupt for the residue —
+// and the adversary showed what that costs: a full disk and a read-only remount
+// were published to the operator as «la evidencia guardada ya no verifica ·
+// esto es permanente», over failures a `rm` or a remount repairs. Worse, the
+// corrupt class short-circuits `nameClaim` in the adapter, so the cure also
+// DELETED the re-read that tells `params_held` from `params_gone`.
+//
+// The identifiable deterministic classes are SQLITE_CONSTRAINT and the abort a
+// trigger raises: both are properties of the statement and the schema, not of
+// the machine, and both will fail identically forever. Everything else —
+// SQLITE_BUSY, SQLITE_LOCKED, SQLITE_FULL, SQLITE_READONLY, SQLITE_IOERR,
+// SQLITE_PROTOCOL, `interrupted`, a closed pool, a dead context — keeps the
+// transient class it had, because for every one of those the store really did
+// fail to answer and a retry is the right advice.
+//
+// Declared limit: this reads the driver's text, as `isBusyClass` in this
+// package already does. A deterministic failure whose text matches none of the
+// forms below is still published transient — the pre-existing behaviour, which
+// is the safe direction for a wrongly-classified write.
+func purgeWriteFailure(err error) error {
+	if err == nil {
+		return nil
+	}
+	text := strings.ToUpper(err.Error())
+	for _, deterministic := range []string{"SQLITE_CONSTRAINT", "CONSTRAINT FAILED", "SQLITE_MISMATCH"} {
+		if strings.Contains(text, deterministic) {
+			return ErrApprovalEvidenceCorrupt
+		}
+	}
+	// A trigger's RAISE(ABORT) surfaces as SQLITE_CONSTRAINT_TRIGGER with the
+	// raised message, which the loop above already catches; this arm is for the
+	// spelling that carries only the abort word.
+	if strings.Contains(text, "SQLITE_ABORT") {
+		return ErrApprovalEvidenceCorrupt
+	}
+	return ErrApprovalUnreadable
+}
+
+// strictMarkerTx reads an approval's `authority_snapshot_required` marker and
+// refuses to hand it back when it disagrees with the approval's own id.
+//
+// The id and the marker are two statements of the same fact: a request born
+// strict mints an `apr3_` id AND sets this marker, in one transaction, and the
+// only two writers of `approvals` rows each write the id they minted. They
+// cannot disagree in a row this store wrote, so a row where they do is corrupt
+// evidence and is named as such — in BOTH directions, because the pair is
+// symmetric and only one half had ever been thought about.
+//
+// It is ONE function because the marker has THREE consumers and the first cure
+// only taught one of them to look: the detail reader named the pair while
+// `approve` and the plain claim went on consuming it, so a request born strict
+// could still have its parameters purged and handed back with no authority
+// verification at all. The adversary walked those doors and captured it.
+func strictMarkerTx(ctx context.Context, tx *sql.Tx, approvalID string) (int, error) {
+	var required int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT authority_snapshot_required FROM approvals WHERE approval_id=?`,
+		approvalID).Scan(&required); err != nil {
+		return 0, fmt.Errorf("action/sqlite: approval %q authority marker: %w: %w",
+			approvalID, ErrApprovalUnreadable, err)
+	}
+	if strict := action.IsStrictApprovalID(approvalID); strict != (required == 1) {
+		return 0, fmt.Errorf(
+			"action/sqlite: approval %q carries a %s id against authority marker %d: %w",
+			approvalID, map[bool]string{true: "strict", false: "non-strict"}[strict],
+			required, ErrAuthorizationSnapshotCorrupt)
+	}
+	return required, nil
+}
+
 func (s *Store) approvalAuthoritySnapshotTx(ctx context.Context, tx *sql.Tx, approval action.Approval) (*action.AuthorizationSnapshotV1, error) {
 	if s.authorityActivationDigest != "" {
 		if err := s.verifyAuthorityActivationTx(ctx, tx, s.authorityProfileID,
@@ -407,9 +500,9 @@ func (s *Store) approvalAuthoritySnapshotTx(ctx context.Context, tx *sql.Tx, app
 			return nil, err
 		}
 	}
-	var required int
-	if err := tx.QueryRowContext(ctx, `SELECT authority_snapshot_required FROM approvals WHERE approval_id=?`, approval.ApprovalID).Scan(&required); err != nil {
-		return nil, fmt.Errorf("action/sqlite: approval %q authority marker: %w: %w", approval.ApprovalID, ErrApprovalUnreadable, err)
+	required, err := strictMarkerTx(ctx, tx, approval.ApprovalID)
+	if err != nil {
+		return nil, err
 	}
 	if required == 0 {
 		var count int
@@ -433,7 +526,7 @@ func (s *Store) approvalAuthoritySnapshotTx(ctx context.Context, tx *sql.Tx, app
 		remaining                                                   sql.NullInt64
 		keyID, signature                                            string
 	)
-	err := tx.QueryRowContext(ctx, `SELECT context_version,requester_principal_id,actor_principal_id,
+	err = tx.QueryRowContext(ctx, `SELECT context_version,requester_principal_id,actor_principal_id,
 		evidence_digest,intent_id,intent_version,intent_digest,canonical_context,authorization_digest,
 		snapshot_kind,approval_id,intent_purpose,principal_chain,budget_kind,budget_remaining,
 		recorded_at,signing_key_id,signature
@@ -734,10 +827,9 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 	// The strict marker, read from the row inside this transaction. Anything
 	// but an explicit 0 is refused: 1 is a strict birth, and a value that is
 	// neither is not this door's to interpret.
-	var strictBorn int
-	if err := tx.QueryRowContext(ctx, `SELECT authority_snapshot_required FROM approvals WHERE approval_id=?`,
-		approvalID).Scan(&strictBorn); err != nil {
-		return nil, action.Operation{}, fmt.Errorf("action/sqlite: claim marker %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+	strictBorn, err := strictMarkerTx(ctx, tx, approvalID)
+	if err != nil {
+		return nil, action.Operation{}, err
 	}
 	if strictBorn != 0 {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: approval %q: %w", approvalID, ErrApprovalRequiresAuthority)
@@ -810,7 +902,8 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 		    AND EXISTS (SELECT 1 FROM actions WHERE action_id = ? AND state = ?)`,
 		approvalID, string(action.ApprovalApproved), a.ActionID, string(action.StateApproved))
 	if err != nil {
-		return nil, action.Operation{}, fmt.Errorf("action/sqlite: purge claim %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
+		return nil, action.Operation{}, fmt.Errorf("action/sqlite: purge claim %q: %w: %w",
+			approvalID, purgeWriteFailure(err), err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {

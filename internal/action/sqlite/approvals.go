@@ -259,6 +259,16 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	if err != nil {
 		return "", err
 	}
+	// The THIRD door of the pair. A row whose id and `authority_snapshot_required`
+	// marker disagree is corrupt evidence, and a decision is the act that lets
+	// everything downstream happen: the first cure taught only the detail reader
+	// to look, so `approve` went on deciding a request born strict whose marker
+	// had been rewritten to 0, and the plain claim then purged its parameters
+	// and handed them back with no authority verification at all. One question,
+	// asked at every door that consumes the marker.
+	if _, err := strictMarkerTx(ctx, tx, approvalID); err != nil {
+		return "", err
+	}
 	// C2+R1: the DECISION touch re-verifies the sealed preview and its
 	// WHOLE cross binding inside the same transaction — no decision is
 	// recorded over a preview that lies about the digest, the law, the
@@ -1018,6 +1028,71 @@ func nullable(v string) any {
 //
 // GetApprovalByAction returns the approval bound to one action (the
 // verifier's approval-coherence lookup).
+
+// ApprovalsOutsideKnownStatuses returns the ids of approval rows whose status
+// is none of the ones given.
+//
+// It replaces a COUNT. The operator CLI walks the five statuses it knows, one
+// query each, so a row rewritten outside them answered none of them and used to
+// vanish — «no approval requests recorded», exit 0, corruption dressed as
+// absence. The first cure compared the five answers against a total, and the
+// adversary captured what that costs: the command holds ONE connection with no
+// transaction, so a row parked by anyone else between the first status query
+// and the count made the totals disagree and the command accused a HEALTHY
+// store, with a non-zero exit. One false alarm in 44 runs.
+//
+// This asks the question directly instead of deriving it: ONE statement, whose
+// answer is about ROWS and cannot be moved by a concurrent writer inserting a
+// perfectly valid one. It also NAMES what it found, which a difference of
+// counts never could.
+func (s *Store) ApprovalsOutsideKnownStatuses(ctx context.Context, known []action.ApprovalStatus) ([]string, error) {
+	if len(known) == 0 {
+		return nil, fmt.Errorf("action/sqlite: approvals outside no statuses at all: %w", ErrApprovalUnreadable)
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(known)), ",")
+	args := make([]any, 0, len(known))
+	for _, status := range known {
+		args = append(args, string(status))
+	}
+	// #nosec G202 -- `placeholders` is `?,` repeated len(known) times and
+	// nothing else; every status travels as a bound argument. The concatenation
+	// is of the placeholder COUNT, which SQL has no parameter form for.
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT approval_id FROM approvals WHERE status NOT IN (`+placeholders+`) ORDER BY approval_id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("action/sqlite: approvals outside the known statuses: %w: %w", ErrApprovalUnreadable, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("action/sqlite: approvals outside the known statuses: %w: %w", ErrApprovalUnreadable, err)
+		}
+		out = append(out, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("action/sqlite: approvals outside the known statuses: %w: %w", ErrApprovalUnreadable, err)
+	}
+	return out, nil
+}
+
+// approvalReadClass returns the named class of a failed approval read, without
+// the message classifyApprovalRead builds around an approval id. A door that
+// only holds an ACTION id needs the class and its own words.
+func approvalReadClass(err error) error {
+	switch {
+	case errors.Is(err, errApprovalRowInvalid):
+		return ErrApprovalEvidenceCorrupt
+	default:
+		return ErrApprovalUnreadable
+	}
+}
+
+// GetApprovalByAction returns the approval bound to one action — the receipt
+// verifier's approval-coherence lookup, and its only production caller. An
+// absent row is ErrApprovalNotFound; every other failure carries one of the
+// package's three named read classes, like every sibling door.
 func (s *Store) GetApprovalByAction(ctx context.Context, actionID string) (action.Approval, action.ActionPreview, error) {
 	var approvalID string
 	err := s.db.QueryRowContext(ctx,
@@ -1026,7 +1101,21 @@ func (s *Store) GetApprovalByAction(ctx context.Context, actionID string) (actio
 		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval for action %q: %w", actionID, ErrApprovalNotFound)
 	}
 	if err != nil {
-		return action.Approval{}, action.ActionPreview{}, fmt.Errorf("action/sqlite: approval for action %q: %w", actionID, err)
+		// Ficha in `docs/HANDOFF.md`. Every other approval read door answers
+		// one of the three named classes; this one returned the driver's raw
+		// error, so a caller branching on «retry or not» — and the receipt
+		// verifier at internal/cli/receipt.go is one — got nothing to branch
+		// on. The absent row keeps its own name above, because
+		// classifyApprovalRead would reword it around the APPROVAL id, which
+		// this door does not have when the lookup by action id finds nothing.
+		// The CLASS comes from the shared classifier; the MESSAGE stays this
+		// door's, because the classifier words itself around an approval id and
+		// all this door has is the action's. Wrapping one inside the other
+		// printed «approval for action "act_x": approval "act_x": …», which
+		// calls an action id an approval id twice.
+		return action.Approval{}, action.ActionPreview{},
+			fmt.Errorf("action/sqlite: approval for action %q: %w: %w",
+				actionID, approvalReadClass(err), err)
 	}
 	return s.GetApproval(ctx, approvalID)
 }

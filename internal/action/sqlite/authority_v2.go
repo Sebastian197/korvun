@@ -526,7 +526,7 @@ func (s *Store) verifyAuthorityActivationTx(ctx context.Context, tx *sql.Tx, pro
 			return ErrAuthorizationSnapshotCorrupt
 		}
 		if strict == 1 {
-			if !strings.HasPrefix(id, "apr3_") {
+			if !action.IsStrictApprovalID(id) {
 				return ErrAuthorizationSnapshotCorrupt
 			}
 			var snapshotDigest string

@@ -82,10 +82,11 @@ func (c *cli) approvalsList(args []string) int {
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
 	total := 0
-	for _, status := range []action.ApprovalStatus{
+	knownStatuses := []action.ApprovalStatus{
 		action.ApprovalPending, action.ApprovalApproved,
 		action.ApprovalRejected, action.ApprovalExpired, action.ApprovalCancelled,
-	} {
+	}
+	for _, status := range knownStatuses {
 		approvals, err := store.ListApprovals(ctx, status)
 		if err != nil {
 			_, _ = fmt.Fprintf(c.stderr, "korvun approvals list: %v\n", err)
@@ -106,6 +107,33 @@ func (c *cli) approvalsList(args []string) int {
 				escapeUntrusted(a.ApprovalID), a.EffectiveStatusAt(time.Now().UTC()), escapeUntrusted(a.RiskSummary), expiry)
 			total++
 		}
+	}
+	// The ficha «`korvun approvals list` oculta una fila con un estado fuera de
+	// los cinco conocidos». The loop above asks for the five it knows, one by
+	// one, so a row whose `status` cell was rewritten outside them — `'pending'`,
+	// a BLOB, a value carrying an invisible — answered no query and used to
+	// vanish, taking «no approval requests recorded» and exit 0 with it. That is
+	// corruption dressed as absence.
+	//
+	// The question is asked DIRECTLY, of the rows. An earlier shape compared the
+	// five answers against a total count, and that was wrong: this command holds
+	// one connection with no transaction, so a row parked by anyone else between
+	// the first query and the count made the totals disagree and the command
+	// accused a healthy store. One statement about rows cannot be moved that way.
+	//
+	// What is found is not listed — this door cannot read those rows — but it is
+	// NAMED, by id, and it changes the exit code, because a store holding rows
+	// this command cannot account for is not a store that has nothing to say.
+	outside, err := store.ApprovalsOutsideKnownStatuses(ctx, knownStatuses)
+	if err != nil {
+		_, _ = fmt.Fprintf(c.stderr, "korvun approvals list: %v\n", err)
+		return 1
+	}
+	if len(outside) > 0 {
+		_, _ = fmt.Fprintf(c.stderr,
+			"korvun approvals list: %d approval row(s) carry a status outside the five this command knows and are NOT listed above: %s\n",
+			len(outside), strings.Join(outside, ", "))
+		return 1
 	}
 	if total == 0 {
 		_, _ = fmt.Fprintln(c.stdout, "no approval requests recorded")

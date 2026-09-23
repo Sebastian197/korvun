@@ -608,3 +608,129 @@ func TestApprovalsApprove_aDeliveredPostIsNeverPrintedAsFailure(t *testing.T) {
 		t.Fatalf("the ledger closed %v over a POST the server accepted", rec.State)
 	}
 }
+
+// Ficha in `docs/HANDOFF.md` — `approvals list` hid a row whose status fell
+// outside the five it knows, and answered «no approval requests recorded».
+//
+// Evidence level, honest: the compiled CLI inside the test process, over a real
+// store, with the status rewritten through a SECOND real connection — the shape
+// the adversary's reproduction used.
+func TestApprovalsList_aRowOutsideTheFiveStatusesIsNamedNotHidden(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, approvalID := parkedRequestWithID(t, "act_hidden_status")
+
+	// The CONTROL: the row lists normally before its status is rewritten.
+	if code, out, errOut := runIntentCLI(t, "approvals", "list", "--config", cfgPath); code != 0 ||
+		!strings.Contains(out, approvalID) {
+		t.Fatalf("control: exit %d %q %q, want the row listed", code, out, errOut)
+	}
+
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath))
+	if err != nil {
+		t.Fatalf("second connection: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE approvals SET status = 'pending' WHERE approval_id = ?`, approvalID); err != nil {
+		t.Fatalf("rewrite the status: %v", err)
+	}
+	_ = db.Close()
+
+	code, out, errOut := runIntentCLI(t, "approvals", "list", "--config", cfgPath)
+	joined := out + errOut
+	t.Logf("approvals list over a rewritten status: exit %d %q", code, joined)
+
+	if strings.Contains(out, "no approval requests recorded") {
+		t.Fatalf("corruption was answered as absence: %q", joined)
+	}
+	if code == 0 {
+		t.Fatalf("a store holding a row this command cannot account for exited 0: %q", joined)
+	}
+	if !strings.Contains(joined, "outside the five") {
+		t.Fatalf("the unaccounted row was not named: %q", joined)
+	}
+}
+
+// TestApprovalsList_theJudgementIsAboutRowsAndNotAboutCounts forces the
+// property the cure establishes, instead of waiting for the race that revealed
+// the defect.
+//
+// THE FAULT IT GUARDS. The first shape compared what the five status queries
+// returned against a COUNT of the table. `approvalsList` holds one connection
+// (`SetMaxOpenConns(1)`) and opens no transaction, so its six reads see six
+// instants: a row parked by anyone else after the first query landed in the
+// count and in none of the lists, and the command accused a HEALTHY store with
+// a non-zero exit. The auditor captured one false alarm in 44 runs.
+//
+// A mould that reruns the command hoping to catch that is not a mould — it
+// ALLOWS an outcome instead of forcing one, and under the count-based shape it
+// passed. So this forces the property directly: while a second real connection
+// inserts VALID rows without pause, the door's answer must name exactly the
+// rows that are genuinely outside the five, and nothing else. A count cannot
+// have that property; a question about rows has it by construction.
+//
+// Evidence level, honest: in-process, a real store, a SECOND real connection
+// writing throughout the read.
+func TestApprovalsList_theJudgementIsAboutRowsAndNotAboutCounts(t *testing.T) {
+	t.Parallel()
+	cfgPath, dbPath, _ := parkedRequestWithID(t, "act_rows_seed")
+
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath))
+	if err != nil {
+		t.Fatalf("second connection: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// ONE genuinely out-of-domain row, and it is the only thing the door may
+	// ever name.
+	if _, err := db.Exec(`INSERT INTO approvals SELECT 'apr_outside', schema_version, 'act_outside', action_digest, preview_digest, canonical_preview, canonical_params, requested_from, reason, risk_summary, policy_version, policy_digest, requested_at, expires_at, 'pending', decision_principal_id, decision, decision_at, comment, decision_receipt_id, authority_snapshot_required
+		FROM approvals LIMIT 1`); err != nil {
+		t.Fatalf("seed the out-of-domain row: %v", err)
+	}
+
+	store, err := openOperatorStoreSealed(cfgPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			// A VALID pending row. Nothing about it is corrupt, so no honest
+			// reading of the store may ever mention it.
+			_, _ = db.Exec(`INSERT INTO approvals SELECT 'apr_valid' || ?, schema_version, 'act_valid' || ?, action_digest, preview_digest, canonical_preview, canonical_params, requested_from, reason, risk_summary, policy_version, policy_digest, requested_at, expires_at, 'PENDING', decision_principal_id, decision, decision_at, comment, decision_receipt_id, authority_snapshot_required
+				FROM approvals WHERE approval_id = 'apr_outside'`, i, i)
+			// The store this test drives holds ONE connection; a writer with no
+			// pause starves its open and turns the mould into a busy-loop test.
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	var named []string
+	for i := 0; i < 50; i++ {
+		got, err := store.ApprovalsOutsideKnownStatuses(context.Background(),
+			[]action.ApprovalStatus{action.ApprovalPending, action.ApprovalApproved,
+				action.ApprovalRejected, action.ApprovalExpired, action.ApprovalCancelled})
+		if err != nil {
+			t.Fatalf("the door refused while a writer was working: %v", err)
+		}
+		named = append(named, got...)
+	}
+	close(stop)
+	<-done
+
+	for _, id := range named {
+		if id != "apr_outside" {
+			t.Fatalf("the door named %q, which is a perfectly valid row — the "+
+				"judgement is being derived from something a concurrent writer moves", id)
+		}
+	}
+	if len(named) == 0 {
+		t.Fatal("the door never named the row that IS outside the five; the control is broken")
+	}
+}

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -147,11 +148,28 @@ func NewApprovalID() string {
 	return "apr_" + hex.EncodeToString(b)
 }
 
+// strictApprovalPrefix is the one place a CALLER asking «was this born strict»
+// reaches, through IsStrictApprovalID. It is not the only spelling of those
+// five characters in the repository — `approvalIDShape` in this same file
+// matches both prefixes for SHAPE, and `APPROVAL_ID_RE` in the approvals screen
+// does the same in TypeScript — and claiming otherwise would be a letrero wider
+// than its wire. What it is, is the only spelling any decision about strictness
+// consults.
+const strictApprovalPrefix = "apr3_"
+
 // NewStrictApprovalID generates the store-only strict approval identity.
 func NewStrictApprovalID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
-	return "apr3_" + hex.EncodeToString(b)
+	return strictApprovalPrefix + hex.EncodeToString(b)
+}
+
+// IsStrictApprovalID reports whether an approval id was minted strict. It reads
+// the PREFIX only: shape is `approvalIDShape`'s business and a caller asking
+// "was this born strict" must get the same answer for a malformed id as the
+// store's own belts do, rather than a silent no.
+func IsStrictApprovalID(id string) bool {
+	return strings.HasPrefix(id, strictApprovalPrefix)
 }
 
 // Digest returns the deterministic digest of the CONSUMED DECISION
