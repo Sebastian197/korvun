@@ -147,6 +147,34 @@ ley (UX-DESIGN-FIRST). La decisión de producto que hay que tomar primero: qué
 debe ver el operador ante un documento estricto cuya autoridad no está —¿el
 estado ilegible que ya existe, con `Volver a intentar`, o uno propio?
 
+## Fichado — la pantalla de aprobaciones no reacciona a su propio botón de arranque (2026-09-23)
+
+Hallado en la pasada sobre la build EMPAQUETADA de la v0.16.1, no por un test.
+Con el núcleo parado, la pantalla de aprobaciones ofrece **Arrancar el núcleo**.
+Al pulsarlo el núcleo arranca de verdad —la barra lateral pasa a «En marcha» con
+su puerto y el log escribe `admin server listening`— pero el panel sigue diciendo
+«El núcleo está parado». La única salida es el botón hermano «Ir a Inicio», o
+cualquier otra navegación que desmonte el panel.
+
+Confirmado en la fuente, no deducido de la pantalla:
+`cmd/korvun-desktop/frontend/src/views/Approvals.tsx`, componente `CoreStopped`
+— `Status()` se pregunta dentro de un `useEffect` con lista de dependencias
+VACÍA, y el manejador del botón llama a `Start()` y, en el camino de éxito, no
+fija nada. Nada vuelve a preguntar.
+
+No se curó en el tren del tag por control de alcance. El relato está en
+`docs/superpowers/specs/evidence/v0.16.1/packaged-pass.txt`, §9, y la captura del
+síntoma —el panel diciendo «El núcleo está parado» con la barra lateral en «En
+marcha :61801»— en
+`docs/assets/captures/v0.16.1/approvals-pane-says-stopped-while-core-runs.png`.
+
+Cuando se cure: **si la sexta ley exige maqueta aquí lo adjudica el director**,
+no este fichero. La cura cambia lo que el operador ve, y la ficha hermana de esta
+misma pantalla —la del id estricto sin bloque de autoridad— se paró por esa ley
+sin haber pantalla nueva tampoco. Lo que sí es nuestro: un molde que enrojezca
+sobre el árbol de hoy, y un plan de fallos que incluya el `Start()` que FALLA
+(hoy sí se pinta, por `startError`) y el que tarda.
+
 ## Fichado — lo que la puerta `intent bind --grant` dejó abierto (2026-09-23)
 
 Nace del tren A de la v0.16.1. Lo que la pieza cerró está en su canto; esto es
