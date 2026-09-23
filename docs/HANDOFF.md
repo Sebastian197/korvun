@@ -147,6 +147,114 @@ ley (UX-DESIGN-FIRST). La decisión de producto que hay que tomar primero: qué
 debe ver el operador ante un documento estricto cuya autoridad no está —¿el
 estado ilegible que ya existe, con `Volver a intentar`, o uno propio?
 
+## Fichado — lo que la puerta `intent bind --grant` dejó abierto (2026-09-23)
+
+Nace del tren A de la v0.16.1. Lo que la pieza cerró está en su canto; esto es
+lo que NO cerró, con la razón por la que no se curó de paso.
+
+**1 · El rechazo de un grant revocado no nombra su reparación.** El plan de
+fallos de A lo pedía: quien vea `ErrAuthorityRevoked` tiene una salida —volver a
+atar con otro `--grant`, o sin la bandera para caer en la cláusula— y el mensaje
+no la dice. **No se curó porque el centinela está COMPARTIDO por tres emisores**
+(`internal/action/sqlite/authority_v2.go`, en `revokeAuthority`, en
+`startApprovedAuthorization` y en `authorityChainTx`) y en uno de ellos la
+reparación es otra. Ensanchar el texto pegaría una reparación falsa a dos de los
+tres. Cura correcta: un error propio del sitio del enlace, envolviendo el
+centinela, con su molde. La reparación quedó escrita, mientras tanto, en la
+referencia del operador de los dos idiomas.
+
+**2 · `ErrAuthorityRevoked` esconde dos hechos en `startApprovedAuthorization`.**
+Ahí se devuelve cuando la autoridad resuelta DIFIERE de la instantánea que se
+firmó al aparcar: puede ser una revocación, y puede ser un enlace MOVIDO —que es
+justo lo que `intent bind --grant` ahora hace fácil—. Es un either/or de la
+taxonomía (regla 2 de la doctrina, punto (i) de la lista de clases conocidas).
+Cura: separar «la autoridad ya no vale» de «la autoridad es otra», cada una con
+su nombre y su molde. **Anterior a este tren**, pero esta pieza hace la segunda
+rama mucho más alcanzable, y por eso se ficha ahora.
+
+**3 · `ResolveExecutionBinding` sigue sin llamante de producción.** Ya estaba
+fichado como vecino cuando se adjudicaron las tres preguntas abiertas de A; se
+repite aquí porque A lo dejó donde estaba a propósito: el camino de inicio lee el
+enlace por `bindingAuthorityTx`, no por él.
+
+**4 · Atar SIN `--grant` no reemplaza: choca con el índice y escupe el error
+crudo de SQLite.** `intent bind` sin la bandera entra por `PutExecutionBinding`,
+una inserción llana contra `execution_bindings_active_selector`, así que sobre un
+selector ya atado devuelve `constraint failed: UNIQUE constraint failed: index
+'execution_bindings_active_selector' (2067)`. Capturado por el adversario
+ejecutando la receta que la referencia del operador publicaba —y que esta pieza
+corrige en los dos idiomas—. **Cura**: dar al camino sin grant el mismo
+revocar-e-insertar que tiene el camino con grant, con su molde; y, mientras
+tanto, traducir ese error a uno con nombre. Es lo único que devolvería la
+posibilidad de volver a la cláusula de configuración desde la línea de comandos.
+
+**5 · El store del operador NUNCA se arma, así que dos comprobaciones del inicio
+no pueden correr desde la CLI.** `openOperatorStoreSealed`
+(`internal/cli/intent.go`) llama `OpenOperator` y no llama
+`RequireAuthorityActivation`, de modo que `authorityActivationDigest` queda
+vacío. `BindExecutionWithGrant` mira el perfil armado y verifica la activación
+**solo si el store lo está**, y lo dice en su godoc. Consecuencia: un enlace
+escrito desde la CLI contra una intención de otro perfil que el que el servidor
+armó sale como CORRUPTO en cada inicio, y la puerta no puede avisar. **Cura**:
+armar el store del operador leyendo el `activation_digest` de la configuración,
+con su molde de CLI.
+
+**6 · `recordAuthorityAct` tiene una esquina que traga y otra que miente.**
+`internal/cli/authority.go`: si la mutación falla Y `Finish` falla, el error de
+`Finish` se descarta y el acto queda `AUTHORIZED` para siempre; si la mutación
+tiene ÉXITO y `Finish` falla, el CLI sale 1 con la escritura ya confirmada. Es la
+misma clase que `85013fd` curó en otra puerta («a committed write never reports
+the cadence's failure»). **ANTERIOR** a este tren —el fichero no se toca en el
+diff— pero `intent bind --grant` entra por ahí. Derivación de lectura del
+adversario, no ejecutada: la cura empieza por forzar un fallo de `Finish`.
+
+**7 · Un canal que parece una bandera se ata igual.** `intent bind … --channel
+--grant int_… 1` hace que el parser lea `--grant` como VALOR de `--channel`, y el
+comando ata sobre un canal literalmente llamado `--grant` por el camino sin
+grant. Es la semántica normal de `flag` y es anterior a esta puerta; el molde de
+la CLI lo deja capturado y declara que no lo cura. **Cura**: rechazar un
+`--channel` que empiece por `-`, con su molde.
+
+**8 · No hay forma de rotar el grant de TODOS los enlaces de un actor y un
+canal, ni de listarlos.** El selector incluye `conversation_id`, y
+`bindingAuthorityTx` da precedencia a la fila con conversación NOMBRADA sobre la
+de cualquier-conversación (`… ORDER BY conversation_id IS NOT NULL DESC LIMIT 1`).
+Así que atar sin `--conversation` reemplaza solo la fila NULL, y cada
+conversación con enlace propio sigue autorizándose con el grant viejo — en
+silencio, con `code=0` y sin línea `revoked binding`, porque no revocó nada.
+Capturado por el adversario oficial ejecutando la receta que la referencia
+publicaba: dos filas ACTIVAS, y el inicio de `conv_A` resolviendo por la
+anterior. **La documentación ya no lo promete**, en los dos idiomas. **Cura**:
+un verbo que liste los enlaces de un `(actor, canal)` —hoy no existe ninguno— y
+una forma de rotar el grant de todos ellos, con su molde.
+
+**9 · La puerta hermana, `intent bind` SIN `--grant`, sigue reportando una
+escritura CONFIRMADA como rechazo.** Entra por `recordOperatorAct`
+(`internal/cli/intent.go`), que conserva la forma que `85013fd` curó en otro
+sitio: `if err := store.Finish(...); err != nil && mutErr == nil { return … }`.
+Capturado con un trigger real: `ACTIVE bindings written = 1 ; exit code = 1 ;
+stdout = ""`. El operador ve un fallo sobre un enlace escrito, y si reintenta
+choca con el `2067` que la referencia publica. **P3 y no P2** porque esa mutación
+es un INSERT llano que no destruye evidencia —el camino con `--grant` sí revoca,
+y por eso se curó primero— y porque ninguna frase publicada es falsa por él.
+**Cura**: la misma que se aplicó a `recordAuthorityAct` —el cierre es
+housekeeping, su fallo va a un aviso— con su molde y su mutación.
+
+**10 · `--conversation ""` explícito se pliega con la bandera ausente.**
+`internal/cli/intent.go` pasa el valor por `nullString`, así que una cadena vacía
+escrita a propósito y una bandera no escrita acaban en la misma fila — justo la
+asimetría que `--grant ""` rechaza como error de uso dos líneas más abajo del
+mismo comando. Nadie promete lo contrario en ninguna superficie, así que es ficha
+y no cura. **Cura**: preguntarle al parser por `Visit`, igual que `wasSet`.
+
+**11 · La tripleta se inserta CRUDA donde la otra puerta usa `nullString`.**
+`BindExecutionWithGrant` pasa `b.GrantID`/`b.GrantVersion`/`b.GrantDigest`
+directos; `PutExecutionBinding` pasa `nullString(...)`/`nullableInt(...)`. Hoy
+inalcanzable —un grant válido no tiene id vacío y el vacío se rechaza antes—
+pero la misma tabla recibe NULL por una puerta y `''` por la otra, y
+`bindingAuthorityTx` lee `''` como AUSENTE, no como corrupto. **Cura**:
+normalizar las dos puertas a la misma representación.
+
 ## Fichado para después de la v0.16.1 — webpackbar 7 (Docusaurus 3.10) (2026-09-22)
 
 Nace del lote de Dependabot: la **#55** (grupo `website-npm`, 12

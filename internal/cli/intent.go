@@ -324,6 +324,29 @@ func (c *cli) intentVerifyV2(args []string) int {
 	return 0
 }
 
+// wasSet reports whether a flag was SET on the command line, which is not the
+// same question as whether it holds a value. `--grant ""` is a typo in a flag
+// the operator meant to use; no `--grant` at all is a bind with no grant.
+// Folding the two together would silently give the operator the config-clause
+// path they were trying to leave.
+//
+// It asks the PARSER, through `Visit`, which enumerates exactly the flags that
+// were set. An earlier shape scanned the raw argument slice for the text
+// "--grant", and an adversarial pass showed what a guard by text costs: in
+// `--channel --grant int_... 1` the parser assigns `channel="--grant"` and the
+// flag is never set, yet the scan found the string and the operator was told
+// «--grant needs a grant id» about a flag they never wrote. The outcome was
+// right; the diagnosis was false.
+func wasSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
+}
+
 func (c *cli) intentBind(args []string) int {
 	fs := flag.NewFlagSet("intent bind", flag.ContinueOnError)
 	fs.SetOutput(c.stderr)
@@ -331,10 +354,22 @@ func (c *cli) intentBind(args []string) int {
 	actor := fs.String("actor", "", "actor principal")
 	channel := fs.String("channel", "", "channel")
 	conversation := fs.String("conversation", "", "exact conversation id")
+	// Delegation was implemented, tested and UNREACHABLE: `intent bind` wrote a
+	// binding with no grant, no other verb filled one, and so every strict start
+	// resolved through the config clause while a signed grant sat ACTIVE and
+	// unused beside it. This flag is the missing door, and nothing more.
+	grant := fs.String("grant", "", "bind this exact signed grant (optional)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
 	if *configPath == "" || *actor == "" || *channel == "" || fs.NArg() != 2 {
+		return 2
+	}
+	// An EMPTY --grant is not «no grant»: it is a typo in a flag the operator
+	// meant to use. Absence and emptiness are different facts and the door does
+	// not fold them together.
+	if wasSet(fs, "grant") && *grant == "" {
+		_, _ = fmt.Fprintln(c.stderr, "korvun intent bind: --grant needs a grant id")
 		return 2
 	}
 	v, err := parseIntentVersion(fs.Arg(1))
@@ -353,13 +388,39 @@ func (c *cli) intentBind(args []string) int {
 		return 1
 	}
 	b := action.ExecutionBinding{BindingID: "bind_" + action.NewID(), ActorPrincipalID: *actor, Channel: *channel, ConversationID: *conversation, IntentID: fs.Arg(0), IntentVersion: v, IntentDigest: signed.Digest, Revision: 1, Status: action.BindingActive}
-	if err = recordOperatorAct(context.Background(), store, "intent", "bind", b.IntentID, func() error {
-		return store.PutExecutionBinding(context.Background(), b)
-	}); err != nil {
+
+	if *grant == "" {
+		if err = recordOperatorAct(context.Background(), store, "intent", "bind", b.IntentID, func() error {
+			return store.PutExecutionBinding(context.Background(), b)
+		}); err != nil {
+			_, _ = fmt.Fprintf(c.stderr, "korvun intent bind: %v\n", err)
+			return 1
+		}
+		_, _ = fmt.Fprintf(c.stdout, "binding %s -> %s version %d ACTIVE\n", b.BindingID, b.IntentID, b.IntentVersion)
+		return 0
+	}
+
+	// With a grant the act is an AUTHORITY act, not a plain operator one, and
+	// `recordAuthorityAct` fixes the namespace itself — the ledger records
+	// `authority/bind` whatever noun the operator typed. The verb stays under
+	// `intent` because an operator binds with one command and the flag says
+	// whether it carries a grant; and because `korvun grant` is the LEGACY v1
+	// noun, writing a table the start path never reads.
+	var revoked string
+	if err = c.recordAuthorityAct(context.Background(), store, "bind",
+		[]byte(`{"binding":"`+b.BindingID+`","grant":"`+*grant+`"}`), func(string) error {
+			var bindErr error
+			revoked, bindErr = store.BindExecutionWithGrant(context.Background(), b, *grant, time.Now().UTC())
+			return bindErr
+		}); err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun intent bind: %v\n", err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(c.stdout, "binding %s -> %s version %d ACTIVE\n", b.BindingID, b.IntentID, b.IntentVersion)
+	if revoked != "" {
+		_, _ = fmt.Fprintf(c.stdout, "revoked binding %s\n", revoked)
+	}
+	_, _ = fmt.Fprintf(c.stdout, "binding %s -> %s version %d ACTIVE under grant %s\n",
+		b.BindingID, b.IntentID, b.IntentVersion, *grant)
 	return 0
 }
 

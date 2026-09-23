@@ -107,7 +107,12 @@ func TestAuthority_StoreOwnsApplicableLeaf(t *testing.T) {
 // ownership. A door added, renamed or that stops calling beginAuthorityWrite
 // moves this list, and the mould below notices.
 var authorityProtectedDoors = []string{
-	"ActivateAuthority", "ImportLegacyAuthority", "ParkAuthorization",
+	// BindExecutionWithGrant joined the inventory in v0.16.1. It belongs here
+	// for the reason the list exists: it reads the grant head, walks the chain
+	// and reads the selector's current holder, and it writes from what it read,
+	// so every one of those reads must happen behind the same ownership its
+	// INSERT commits under.
+	"ActivateAuthority", "BindExecutionWithGrant", "ImportLegacyAuthority", "ParkAuthorization",
 	"StartAuthorization", "SyncConfigAuthorityClauses",
 	"delegateAuthority", "issueAuthority", "revokeAuthority", "startApprovedAuthorization",
 }
@@ -292,6 +297,14 @@ func TestAuthority_ProtectedReadersUseTransactionReceiver(t *testing.T) {
 			approval := approveStrictAuthorityFixture(t, f, parked)
 			_, err := f.store.StartApprovedAuthorization(ctx, approval.ApprovalID,
 				PolicyPin{Version: 1, Digest: "sha256:authority-law"}, approval.ActionDigest, f.now.Add(2*time.Second))
+			return err
+		}},
+		{"bind with a grant", func(t *testing.T, ctx context.Context, f authoritySQLiteFixture) error {
+			_, err := f.store.BindExecutionWithGrant(ctx, action.ExecutionBinding{
+				BindingID: "bind_receiver", ActorPrincipalID: f.root.SubjectPrincipalID,
+				Channel: "webhook", IntentID: f.intent.IntentID, IntentVersion: f.intent.Version,
+				IntentDigest: f.intent.Digest(), Revision: 1, Status: action.BindingActive,
+			}, f.root.GrantID, f.now.Add(time.Second))
 			return err
 		}},
 	}

@@ -256,7 +256,7 @@ korvun intent activate-v2 --config korvun.json int_pedidos 1
 korvun authority admin-issue --config korvun.json --file grant.json \
                              --reason "why this authority exists"
 korvun intent bind        --config korvun.json --actor principal_brain_ops \
-                          --channel console int_pedidos 1
+                          --channel console --grant grant_pedidos_root int_pedidos 1
 korvun authority activate --config korvun.json --profile profile_ops \
                           --reason "why this profile goes strict"
 ```
@@ -304,14 +304,85 @@ contrato, por qué cadena de principales, y el presupuesto que quedaba CUANDO SE
 APARCÓ — leído de una instantánea firmada y verificado contra esa firma en cada
 lectura, no un contador en vivo.
 
-**Un límite que conviene saber antes de planear con esto.** Ningún verbo del CLI
-ata un grant firmado a un enlace de ejecución: `intent bind` escribe el enlace
-sin él. Así que hoy un perfil estricto resuelve su autoridad por la cláusula de
-configuración derivada de la lista de herramientas del cerebro, y el grant
-firmado que emitiste queda ACTIVO y sin usar. Nada arranca fuera del alcance de
-la intención en ninguno de los dos caminos — la cláusula verifica los mismos
-términos —, pero la delegación, los grants hijos atenuados y los presupuestos
-compartidos con el ancestro no son alcanzables desde el CLI en esta release.
+**`--grant`, y qué pasa sin él.** El `--grant` de arriba es lo que ata el grant
+firmado al enlace, y es la bandera que decide por qué autoridad resuelve el
+perfil. Su valor es el `grant_id` que hay dentro del fichero que emitiste. El
+enlace se rechaza, antes de escribir nada, salvo que se cumpla todo esto:
+
+- el grant está ACTIVO, y también todos los que tiene por encima en su cadena;
+- su sujeto es el `--actor` que nombras;
+- **todos los grants de esa cadena llevan el `--channel` que nombras**;
+- la intención está activa y coincide con el digest contra el que se emitió el grant.
+
+El canal está en esa lista porque el inicio también lo comprueba: un enlace
+escrito sobre un canal que el grant no lleva se rechazaría en cada arranque, y
+no hay motivo para dejarte escribirlo.
+
+Ata sin `--grant` y el enlace no lleva grant, así que un perfil estricto
+resuelve su autoridad por la cláusula de configuración derivada de la lista de
+herramientas del cerebro mientras el grant que emitiste queda ACTIVO y sin usar.
+Nada arranca fuera del alcance de la intención en ninguno de los dos caminos —la
+cláusula verifica los mismos términos—, pero la delegación, los grants hijos
+atenuados y los presupuestos compartidos con el ancestro solo entran en el
+camino de una ejecución por `--grant`.
+
+**Atar otra vez CON `--grant` reemplaza el enlace DEL MISMO SELECTOR en vez de
+fallar:** el anterior se conserva como REVOCADO —es el registro de qué autorizó
+la acción de ayer— y el nuevo se escribe en la revisión siguiente.
+
+El selector es `--actor` + `--channel` + `--conversation`, y esa tercera parte
+importa más de lo que parece. `--conversation` es opcional; omitida, escribe el
+enlace de CUALQUIER-CONVERSACIÓN, y un inicio cae en ese solo cuando la
+conversación en la que corre no tiene enlace propio — una conversación nombrada
+gana siempre.
+
+Así que las dos direcciones son más estrechas de lo que parecen, y ninguna
+reemplaza a la otra:
+
+- Atar CON `--conversation` reemplaza solo el enlace de esa conversación. Las
+  demás, y el de cualquier-conversación, quedan intactos.
+- Atar SIN ella reemplaza solo el enlace de cualquier-conversación. **Cada
+  conversación con enlace propio sigue resolviendo por el suyo**, lo que
+  significa que el grant viejo las sigue autorizando.
+
+**No hay un solo comando que reemplace todos los enlaces de un actor y un
+canal.** Si estás rotando un grant porque se comprometió o hay que atenuarlo,
+vuelve a atar cada conversación que tenga enlace propio, y también el de
+cualquier-conversación. Listarlos no es posible desde el CLI hoy; los dos huecos
+están fichados.
+
+La línea `revoked binding` te dice que el selector que nombraste tenía titular, y
+su ausencia te dice que ese selector estaba libre — NO te dice si otros
+selectores siguen con el grant viejo.
+
+El comando nombra el reemplazo, y nombra también el enlace anterior cuando lo
+había:
+
+```
+revoked binding bind_act_5f1ce33dab70ba5918800de9ad4bf067
+binding bind_act_3fd7470b7d2e62d0857d8c36daa46b79 -> int_pedidos version 1 ACTIVE under grant grant_pedidos_root
+```
+
+Un primer enlace sobre un selector libre imprime solo la segunda línea.
+
+**Atar otra vez SIN `--grant` NO lo reemplaza.** Ese camino es una inserción
+llana y el selector ya tiene una fila ACTIVA, así que se detiene en la regla de
+unicidad de la base de datos y la imprime en crudo:
+
+```
+korvun intent bind: constraint failed: UNIQUE constraint failed: index 'execution_bindings_active_selector' (2067)
+```
+
+No se escribe ningún enlace y no se pierde nada —el acto rechazado queda en el
+registro como FALLIDO, que es para lo que ese registro existe—, pero hoy no hay
+camino de vuelta a la cláusula de configuración desde la línea de comandos. Dar
+al camino sin grant el mismo reemplazo en sitio queda fichado.
+
+Un `--grant` con valor vacío es un error de uso, no un enlace sin grant.
+
+**Si el grant atado se revoca después**, todo inicio bajo ese enlace se rechaza
+hasta que vuelvas a atar **con otro `--grant`**. El enlace no se repara solo, y
+nada más lo repara.
 
 ## Leer el rastro
 

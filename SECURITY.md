@@ -240,10 +240,14 @@ and no debit.
 - It does not bound the verification. Under an activated profile every strict
   start re-verifies the whole approval-birth ledger and every approvals row,
   linear in the profile's lifetime approvals, unmeasured at scale.
-- It does not reach delegation from the operator's hands: no public door ties a
-  signed grant to an execution binding, so a strict profile resolves its
-  authority through the config clause derived from the brain's tool list. The
-  attenuated chain is implemented and tested; it is not reachable from the CLI.
+- It does not prove delegation in the field. A public door now ties a signed
+  grant to an execution binding — `korvun intent bind --grant`, on `master` and
+  shipping with the next tag — and a strict profile bound that way resolves
+  through the signed chain instead of the config clause derived from the brain's
+  tool list; the evidence is the sealed start record, which then carries no
+  clause generation. What remains unproven is the chain BEYOND one grant:
+  attenuated children, shared ancestor budgets and depth limits are implemented
+  and tested in-process, and no real model has driven one end to end.
 - It does not follow a tool past its request. The redirects `http_fetch` follows
   are re-checked against the cage's host allow-list, not against the authority
   scope, and `read_file` resolves symbolic links under its jail while path
