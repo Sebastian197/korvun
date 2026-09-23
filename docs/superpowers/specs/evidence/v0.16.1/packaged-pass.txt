@@ -1,0 +1,184 @@
+# v0.16.1 — the pass over the PACKAGED build
+
+Date: 2026-09-23. Run by the EXECUTOR under the director's delegation, as
+`docs/RELEASE-CHECKLIST.md` box 6 now records. The delegation moves who drives
+the app; it does NOT move the **yes**, which stays the director's, and this file
+is evidence for that yes, never its substitute.
+
+**WHAT THIS IS.** The `.app` that `make desktop` produced from this tree, launched
+against a DISPOSABLE profile under `/tmp` — never the director's own. It exercises
+the approvals screen with what this release changed: a rejection and the MINTED
+receipt, which is the ficha "the receipt's shape lived only in TypeScript". The
+rows the screen wrote are then read back through a SEPARATE read-only SQLite
+connection.
+
+**WHAT THIS IS NOT.** No approval was granted: the arming row was never filled,
+so `Aprobar y ejecutar` was never pressed and no irreversible effect ran. No model
+runs here. No channel is configured. The webhook host `hooks.acme.io` appears in
+the disposable profile's allow-list and in the parked action's own parameters,
+which the screen printed. No network trace was captured,
+so nothing here OBSERVES that it was never dialled; what the record has is the
+path not taken — the approve button was never pressed, so no execution ran that
+could have dialled it. Anyone quoting "the webhook host `hooks.acme.io` appears
+in the disposable profile's allow-list" should quote that limit with it.
+
+**EVIDENCE LEVEL: compiled bundle in its own OS process, driven through the
+macOS accessibility tree, read back by a separate read-only connection.** The
+button names this record quotes are the names macOS reported for the live
+elements, not names read off a screenshot.
+
+It is the highest level reached for the APPROVALS SCREEN, and it says nothing
+about any other surface.
+
+**What this pass reached and what it did not, over the release's OWN inventory.**
+Box 6 asks for the list by hand, not a blanket disclaimer, so the rows of the
+table "What this pass reached and what it did not" are the release's own
+inventory and nothing else — which is what makes the list
+complete: it is not a list I chose. Its three sources, spelled out so the count
+can be re-derived: the EIGHT rows of the ficha table in `docs/releases/v0.16.1.md`
+(the one headed "Las seis fichas restantes, un hallazgo y una guarda"), plus the
+grave cure, which has its own section there, plus the new door. Ten.
+
+| What the release cured | Reached by THIS pass? |
+|---|---|
+| The grave cure: a confirmed park that reported an error | **No.** Parking through the app needs a brain with a model and a channel; this profile has neither, so the request was seeded into the store and only the DECISION half ran here |
+| `korvun intent bind --grant` | **No.** A CLI door; the packaged app does not expose it. Its evidence is `manual-pass.txt`, development binary |
+| The strict id judged in the store — three doors | **No.** The parked request carries `authority_snapshot_required = 0`, so the strict branch never ran. The screen was exercised on a NON-strict document |
+| The deterministic error inside the purge | **No.** A SERVER path, not a CLI one: `ClaimApprovalParamsUnderDigest` is called from `internal/app/approvals.go`, and nothing in this sequence provoked a purge failure |
+| `GetApprovalByAction`'s named class | **No.** A third CLI door: its only production caller is `internal/cli/receipt.go` |
+| `korvun approvals list` hiding rows outside the five statuses | **No.** Another CLI door: `ApprovalsOutsideKnownStatuses` has exactly ONE production caller, `internal/cli/approvals.go`, and neither the desktop nor the control API touches it |
+| The pending list naming with an empty id | **Yes, its happy half.** The screen listed the parked request through `ListPending`, so the read ran; the branch that used to drop the id was not forced |
+| A rejection with an empty `receipt_id` | **Yes, its happy half.** The reject minted a valid receipt; the guard's refusing branch was not forced |
+| The receipt's shape living only in TypeScript | **Its SCREEN half, yes.** Its CLI half is not: `internal/cli/receipt.go` changed in this range too, from a `rcpt_` prefix test to `action.ValidReceiptID`, and no CLI ran here |
+| The Wails CLI pin guard | **Not applicable.** It is a CI guard, not a runtime surface |
+
+Everything marked No has its own in-process moulds; none of it has packaged
+evidence, and this record does not let anyone infer otherwise. Neither pass
+inherits the other's level.
+
+```
+=== 1 · the bundle under test
+Korvun.app/Contents/MacOS/Korvun
+Mach-O universal binary with 2 architectures: [x86_64] [arm64]
+44353440 bytes
+sha256 bfb6f8d7ad53a7b78dea8b8d17d040b3f425bf9f2f388a58766628251e6a065b
+CFBundleShortVersionString 0.16.0
+CFBundleVersion            0.16.0
+CFBundleIdentifier         com.korvun.desktop
+sidebar version string, as the window showed it: v0.16.0-13-g7bd84c3
+
+    The bundle version is 0.16.0 and the git description is the 13 commits past
+    it that this tag closes. It is the tree, not the tag: the tag does not exist
+    while this pass runs.
+
+=== 2 · the disposable profile
+HOME=/tmp/v0161-pkg/home
+store /tmp/v0161-pkg/home/Library/Application Support/korvun/korvun.db
+approvals.enabled true, one brain "ops", one tool webhook_call, no routes
+
+    No routes: a route naming a channel that the profile does not configure is
+    refused at load, and this pass needs no channel.
+
+=== 3 · the app's own log, verbatim
+time=2026-09-23T14:26:45.831+01:00 level=INFO msg="korvun-desktop: log sink open" path="/tmp/v0161-pkg/home/Library/Application Support/korvun/korvun-desktop.log" version=v0.16.0-13-g7bd84c3
+time=2026-09-23T14:33:33.151+01:00 level=INFO msg="model wired" brain=ops provider=ollama model_id=llama3.2 locality=local
+time=2026-09-23T14:33:33.152+01:00 level=INFO msg="agent brain wired" brain=ops tools=[webhook_call] max_iterations=2
+time=2026-09-23T14:33:33.153+01:00 level=INFO msg="admin server listening" addr=127.0.0.1:61801
+time=2026-09-23T14:33:33.153+01:00 level=WARN msg="no channels configured — add one via the builder"
+time=2026-09-23T14:33:33.153+01:00 level=INFO msg="korvun is serving; send your bot a message"
+
+    "model wired" is the wiring line, not a call: no model was reached.
+    The admin server bound 127.0.0.1 — the loopback invariant, observed.
+
+=== 4 · what the screen listed, as macOS named the element
+AXButton [tool/webhook_call IRREVERSIBLE telegram apr_4bb9d1c36a30cc7ac48def379b07d857 5560f5c0…74b896 caduca · 14:26:34Z]
+
+=== 5 · what the open request showed
+header   /healthz · OK · hace 0 s
+bar      5560f5c0…74b896 · fijado mientras decides · caduca en 50m 13s · 14:26:34Z
+         (the left half is a live countdown; a later capture of the same bar
+          reads 49m 06s. The instant, 14:26:34Z, is the fixed half.)
+digest   5560f5c0 b43e0e34 5fb42b68 08f7888a c70cc358 c47d25ca 96a19918 6874b896
+         ✓ el almacén devolvió parámetros que re-derivan este digest
+operación tool/webhook_call · telegram
+efecto   IRREVERSIBLE · escribe sin deshacer y sin compensación conocida
+         write_irreversible — irreversible, no documented undo
+params   https://hooks.acme.io/pedidos {"pedido":1}
+origen   avisar al webhook de pedidos · principal_brain_ops
+ley      sha256:24a790bde387f0a73242df7313ad25cfd7428c7b34f47dcb8cae638aefd10b78
+         require_approval · webhook_call
+caducidad 2026-09-23T14:26:34.255045Z
+arming   …96a19918 68 [-][-][-][-][-][-] faltan 6
+
+    The arming row stayed at "faltan 6" for the whole pass. Nothing was typed
+    into it, and `Aprobar y ejecutar` was never pressed.
+
+=== 6 · the decision
+reason typed into "Motivo del rechazo (opcional)":
+    pasada manual v0.16.1 sobre la build empaquetada
+AXButton [Rechazar] pressed.
+
+what the screen then showed:
+    Rechazada. La acción aparcada se cierra con su recibo sellado.
+    Recibo rcpt_32d2de03906bf688ac3a56462ec3e0d9
+
+    rcpt_ + 32 hex. That is the shape the ficha is about: the minted id's length
+    lived only in the TypeScript that paints it, so shortening it left six Go
+    packages green and broke this line.
+
+    capture: docs/assets/captures/v0.16.1/approvals-rejected-receipt-packaged.png
+
+=== 7 · back to the list
+    No hay nada aparcado.
+    Las aprobaciones están encendidas y 1 de 1 cerebros pueden aparcar acciones
+    irreversibles: si uno de ellos lo intenta, aparecerá aquí.
+
+=== 8 · the rows the screen wrote, read by a SEPARATE read-only connection
+approval_id                           status    decision  decision_principal_id  decision_receipt_id
+------------------------------------  --------  --------  ---------------------  -------------------------------------
+apr_4bb9d1c36a30cc7ac48def379b07d857  REJECTED  rejected  principal_operator     rcpt_32d2de03906bf688ac3a56462ec3e0d9
+
+comment
+------------------------------------------------
+pasada manual v0.16.1 sobre la build empaquetada
+
+action_id                             op                 effect_class        state      principal_id
+------------------------------------  -----------------  ------------------  ---------  -------------------
+act_pkg_1790169994255031000           tool/webhook_call  write_irreversible  REJECTED   principal_brain_ops
+act_481dc7554f7711c7563199d8f6fc4f4b  approval/decide    unclassified        SUCCEEDED  principal_operator
+
+receipt_id                             action_id                             principal_id         outcome    chain_seq  partition  signing_key_id
+-------------------------------------  ------------------------------------  -------------------  ---------  ---------  ---------  ------------------------
+rcpt_32d2de03906bf688ac3a56462ec3e0d9  act_481dc7554f7711c7563199d8f6fc4f4b  principal_operator   SUCCEEDED  0          main       ed25519:b820e87cd85e0363
+rcpt_7a4406b05bd31635e1ec9785f99543b1  act_pkg_1790169994255031000           principal_brain_ops  REJECTED   1          main       ed25519:b820e87cd85e0363
+
+approval_id                           decision  decision_principal_id  action_digest
+------------------------------------  --------  ---------------------  -----------------------------------------------------------------------
+apr_4bb9d1c36a30cc7ac48def379b07d857  rejected  principal_operator     sha256:5560f5c0b43e0e345fb42b6808f7888ac70cc358c47d25ca96a199186874b896
+
+    ONE tombstone, carrying the same action digest the screen showed.
+    TWO receipts on ONE chain, seq 0 and 1, under one signing key: the operator's
+    decision act, and the parked action closed as REJECTED. The receipt id the
+    screen printed is the one the store holds.
+    The parked action holds ONE row, its own, and it is REJECTED — not DENIED.
+    The other `actions` row is the operator's own act, `approval/decide`. The
+    ghost row in `StateDenied` is what the grave cure of this release prevents,
+    and there is none here.
+
+=== 9 · the defect this pass FOUND, and did not cure
+Pressing "Arrancar el núcleo" FROM the approvals pane starts the core — the
+sidebar flips to "En marcha :61801" and the log writes "admin server listening" —
+but the pane keeps saying "El núcleo está parado". Confirmed at the source, not
+guessed: in `cmd/korvun-desktop/frontend/src/views/Approvals.tsx`, `CoreStopped`
+reads `Status()` inside a `useEffect` with an EMPTY dependency list, and the
+button's own handler calls `Start()` and, on success, sets nothing. Nothing
+re-asks. The operator's way out is the sibling button "Ir a Inicio" and back, or
+any other navigation, which is what this pass did.
+
+Out of scope for a tag train, so it is FILED, not cured. Nothing in the release
+notes claims this screen reacts to its own start button.
+
+    capture: docs/assets/captures/v0.16.1/approvals-pane-says-stopped-while-core-runs.png
+    (the pane on "El núcleo está parado" while the sidebar reads "En marcha
+    :61801" — the two halves of the defect in one frame)
+```
