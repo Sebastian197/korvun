@@ -235,6 +235,7 @@ Examples:
   korvun intent create-v2 --config korvun.json --file intent-v2.json
   korvun intent activate-v2 --config korvun.json int_... 1
   korvun intent bind --config korvun.json --actor principal_brain_a --channel console int_... 1
+  korvun intent bind --config korvun.json --actor principal_brain_a --channel console --grant grant_... int_... 1
   korvun intent adopt-root --config korvun.json --profile profile_local
   korvun grant issue --config korvun.json --intent int_... --subject principal_brain_a --operations calc
   korvun authority --help

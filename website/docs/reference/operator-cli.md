@@ -243,7 +243,7 @@ korvun intent activate-v2 --config korvun.json int_pedidos 1
 korvun authority admin-issue --config korvun.json --file grant.json \
                              --reason "why this authority exists"
 korvun intent bind        --config korvun.json --actor principal_brain_ops \
-                          --channel console int_pedidos 1
+                          --channel console --grant grant_pedidos_root int_pedidos 1
 korvun authority activate --config korvun.json --profile profile_ops \
                           --reason "why this profile goes strict"
 ```
@@ -289,13 +289,83 @@ through which chain of principals, and the budget that remained WHEN IT WAS
 PARKED — read from a signed snapshot and verified against that signature on
 every read, not a live meter.
 
-**A limit to know before you plan with it.** No CLI verb ties a signed grant to
-an execution binding: `intent bind` writes the binding without one. So a strict
-profile today resolves its authority through the config clause derived from the
-brain's tool list, and the signed grant you issued stays ACTIVE and unused.
-Nothing starts outside the intent's scope either way — the clause path verifies
-the same terms — but delegation, attenuated child grants and shared ancestor
-budgets are not reachable from the CLI in this release.
+**`--grant`, and what happens without it.** The `--grant` above is what ties the
+signed grant to the binding, and it is the flag that decides which authority the
+profile resolves through. Its value is the `grant_id` inside the file you issued.
+The bind is refused, before it writes anything, unless all of these hold:
+
+- the grant is ACTIVE, and so is every grant above it in its chain;
+- its subject is the `--actor` you name;
+- **every grant in that chain carries the `--channel` you name**;
+- the intent is active and matches the digest the grant was issued against.
+
+The channel is on that list because a start checks it too: a binding written on
+a channel the grant does not carry would be refused at every start, and there is
+no reason to let you write one.
+
+Bind WITHOUT `--grant` and the binding carries no grant, so a strict profile
+resolves its authority through the config clause derived from the brain's tool
+list while the grant you issued sits ACTIVE and unused. Nothing starts outside
+the intent's scope either way — the clause path verifies the same terms — but
+delegation, attenuated child grants and shared ancestor budgets only enter the
+path of an execution through `--grant`.
+
+**Binding again WITH `--grant` replaces the binding OF THE SAME SELECTOR rather
+than failing:** the previous one is kept as REVOKED — it is the record of what
+authorised yesterday's action — and the new one is written at the next revision.
+
+The selector is `--actor` + `--channel` + `--conversation`, and that third part
+matters more than it looks. `--conversation` is optional; omitted, it writes the
+ANY-CONVERSATION binding, and a start falls back to that one only when the
+conversation it is running has no binding of its own — a named conversation
+always wins.
+
+So the two directions are both narrower than they look, and neither replaces the
+other:
+
+- Binding WITH `--conversation` replaces only that conversation's binding. Every
+  other conversation, and the any-conversation binding, are untouched.
+- Binding WITHOUT it replaces only the any-conversation binding. **Every
+  conversation that has a binding of its own keeps resolving through it**, which
+  means the old grant keeps authorising them.
+
+**There is no single command that replaces every binding of one actor and
+channel.** If you are rotating a grant because it was compromised or attenuated,
+re-bind each conversation that has its own binding, and the any-conversation one
+too. Listing them is not possible from the CLI today; both gaps are filed.
+
+The `revoked binding` line tells you the selector you named had a holder, and its
+absence tells you that selector was free — it does NOT tell you whether other
+selectors still hold the old grant.
+
+The command names the replacement, and names the previous binding too when there
+was one:
+
+```
+revoked binding bind_act_5f1ce33dab70ba5918800de9ad4bf067
+binding bind_act_3fd7470b7d2e62d0857d8c36daa46b79 -> int_pedidos version 1 ACTIVE under grant grant_pedidos_root
+```
+
+A first bind on a free selector prints only the second line.
+
+**Binding again WITHOUT `--grant` does NOT replace it.** That path is a plain
+insert and the selector already has an ACTIVE row, so it stops on the database's
+own uniqueness rule and prints it raw:
+
+```
+korvun intent bind: constraint failed: UNIQUE constraint failed: index 'execution_bindings_active_selector' (2067)
+```
+
+No binding is written and nothing is lost — the refused act is recorded in the
+ledger as FAILED, which is what that record is for — but there is no way back to
+the config clause from the command line today. Giving the grant-less path the
+same replace-in-place behaviour is filed.
+
+`--grant` with an empty value is a usage error, not a bind without a grant.
+
+**If a bound grant is later revoked**, every start under that binding is refused
+until you bind again **with another `--grant`**. The binding is not repaired for
+you, and nothing else repairs it.
 
 ## Reading the trail
 

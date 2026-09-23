@@ -50,6 +50,14 @@ var (
 	// ErrAuthorityApprovalRequired reports an immediate start whose verified
 	// intent or grant chain requires a prior human approval.
 	ErrAuthorityApprovalRequired = errors.New("action/sqlite: authority approval required")
+	// ErrGrantIDRequired reports a bind asked to name a grant and given none.
+	// It is NOT `ErrAuthorityMissing`: no grant was looked for, so none can be
+	// absent, and an assert that accepted either would hide which branch ran.
+	ErrGrantIDRequired = errors.New("action/sqlite: no grant id")
+	// ErrBindingNotActive reports a bind handed a row that is not ACTIVE. A
+	// binding door writes the selector's current holder; writing a REVOKED row
+	// as if it were current would leave the selector with no holder at all.
+	ErrBindingNotActive = errors.New("action/sqlite: a bind writes an ACTIVE row")
 	// ErrIssuerMismatch reports that authenticated actor and claimed issuer differ.
 	ErrIssuerMismatch = errors.New("action/sqlite: authority issuer mismatch")
 	// ErrActionAlreadyStarted reports durable replay.
@@ -187,11 +195,18 @@ type authorityStartRecord struct {
 	GrantChain             string `json:"grant_chain"`
 	DebitSetDigest         string `json:"debit_set_digest"`
 	IdentityEvidenceDigest string `json:"identity_evidence_digest"`
-	ConfigGeneration       int64  `json:"config_generation"`
-	DecisionDigest         string `json:"decision_digest"`
-	PolicyVersion          int64  `json:"policy_version"`
-	PolicyDigest           string `json:"policy_digest"`
-	AuthorizationTime      string `json:"authorization_time"`
+	// ConfigGeneration is the generation of the config clause this start
+	// consulted, and ZERO means it consulted NO clause because the binding
+	// named a signed grant instead. Zero is unambiguous rather than a
+	// stand-in for absence: `SyncConfigAuthorityClauses` numbers the first
+	// generation 1 and only ever increments, so no real clause carries it.
+	// Until `intent bind --grant` existed, every strict start resolved
+	// through the clause and no sealed start in the wild carried zero here.
+	ConfigGeneration  int64  `json:"config_generation"`
+	DecisionDigest    string `json:"decision_digest"`
+	PolicyVersion     int64  `json:"policy_version"`
+	PolicyDigest      string `json:"policy_digest"`
+	AuthorizationTime string `json:"authorization_time"`
 }
 
 func canonicalAuthorityDebit(actionID, accountID, operation string, sequence,

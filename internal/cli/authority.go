@@ -39,7 +39,7 @@ func (c *cli) authorityCmd(args []string) int {
 	}
 }
 
-func recordAuthorityAct(ctx context.Context, store *actionsqlite.Store, verb string,
+func (c *cli) recordAuthorityAct(ctx context.Context, store *actionsqlite.Store, verb string,
 	params []byte, mutate func(string) error) error {
 	env, evidence, err := operatorAuthenticatedEnvelope(store, "authority", verb, string(params))
 	if err != nil {
@@ -55,10 +55,37 @@ func recordAuthorityAct(ctx context.Context, store *actionsqlite.Store, verb str
 	if mutationErr != nil {
 		state = action.StateFailed
 	}
-	if err := store.Finish(ctx, env.ActionID, state, time.Now().UTC()); err != nil && mutationErr == nil {
-		return fmt.Errorf("close authority act: %w", err)
+	// THE CLOSE IS HOUSEKEEPING, and its failure never becomes the caller's.
+	//
+	// `mutate` has already committed — for `intent bind --grant` it has revoked
+	// a binding and written its replacement, which is irreversible. Returning
+	// the close's error here made the command exit 1 and print a refusal over a
+	// durable write, so the operator's belief and the ledger disagreed for good.
+	// That is exactly the class `85013fd` cured for four store writers on
+	// 2026-09-22 («a committed write never reports the cadence's failure»); this
+	// was the fifth caller and the first whose mutation destroys a previous row.
+	//
+	// The failure is NOT swallowed: it goes to `c.note`, which the command
+	// prints beside its success, so the act left open is visible.
+	//
+	// It is a METHOD and not a parameter on purpose. The first shape took a
+	// `note func(error)` and its godoc claimed "nothing in the tree passes nil"
+	// — an adversarial pass replaced it with nil in four of the five callers and
+	// the whole package stayed green, because only one caller had a mould. A
+	// structural promise with no guard is a promise about today. As a method
+	// there is no nil to pass: every caller is a `*cli` and every `*cli` has a
+	// `note`.
+	if err := store.Finish(ctx, env.ActionID, state, time.Now().UTC()); err != nil {
+		c.note(fmt.Errorf("close authority act: %w", err))
 	}
 	return mutationErr
+}
+
+// note reports a housekeeping failure that happened AFTER a caller's write
+// committed. It is printed beside the command's own result, never in place of
+// it: the write stands, and the operator is told what did not close.
+func (c *cli) note(err error) {
+	_, _ = fmt.Fprintf(c.stderr, "korvun: %v\n", err)
 }
 
 func (c *cli) authorityActivate(args []string) int {
@@ -88,7 +115,7 @@ func (c *cli) authorityActivate(args []string) int {
 	}
 	params := actionsqlite.CanonicalAuthorityActivation(*profileID, manifest, *reason)
 	var digest string
-	err = recordAuthorityAct(ctx, store, "activate", params, func(actionID string) error {
+	err = c.recordAuthorityAct(ctx, store, "activate", params, func(actionID string) error {
 		var activateErr error
 		digest, activateErr = store.ActivateAuthority(ctx, *profileID, actionID, *reason, time.Now().UTC())
 		return activateErr
@@ -143,7 +170,7 @@ func (c *cli) authorityGrantFile(args []string, verb string, administrative bool
 		params = actionsqlite.CanonicalAdminAuthorityGrant(grant, *reason)
 	}
 	ctx := context.Background()
-	err = recordAuthorityAct(ctx, store, verb, params, func(actionID string) error {
+	err = c.recordAuthorityAct(ctx, store, verb, params, func(actionID string) error {
 		now := time.Now().UTC()
 		switch {
 		case verb == "issue" && administrative:
@@ -189,7 +216,7 @@ func (c *cli) authorityRevoke(args []string, administrative bool) int {
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
 	params := actionsqlite.CanonicalAuthorityRevoke(grantID, *reason)
-	err = recordAuthorityAct(ctx, store, "revoke", params, func(actionID string) error {
+	err = c.recordAuthorityAct(ctx, store, "revoke", params, func(actionID string) error {
 		if administrative {
 			return store.AdminRevokeAuthority(ctx, grantID, actionID, *reason, time.Now().UTC())
 		}
@@ -230,7 +257,7 @@ func (c *cli) authorityImportV1(args []string) int {
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
 	params := actionsqlite.CanonicalLegacyAuthorityImport(*legacyID, grant, *reason)
-	err = recordAuthorityAct(ctx, store, "import", params, func(actionID string) error {
+	err = c.recordAuthorityAct(ctx, store, "import", params, func(actionID string) error {
 		return store.ImportLegacyAuthority(ctx, *legacyID, grant, actionID, *reason, time.Now().UTC())
 	})
 	if err != nil {

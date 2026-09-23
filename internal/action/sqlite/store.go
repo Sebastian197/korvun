@@ -1296,6 +1296,14 @@ type Store struct {
 	// at which a fact learned earlier can go stale, so it is where a mould
 	// parks a door while a second real connection commits. nil in production.
 	authorityBeforeWriter func()
+	// authorityAfterSelectorRead, when non-nil, runs inside
+	// BindExecutionWithGrant's transaction, AFTER it has read the selector's
+	// current holder and BEFORE it inserts the replacement. That window is the
+	// only one in which a lost race could exist, so it is the only place a
+	// mould can prove one cannot: `authorityBeforeWriter` parks a door BEFORE
+	// write ownership is taken, which is a different instant and proves a
+	// different thing. nil in production.
+	authorityAfterSelectorRead func()
 	// writes counts RecordAttempt commits toward the periodic prune;
 	// mutex-guarded because callers are concurrent brain workers (the DB
 	// pool serializes statements, not this counter).

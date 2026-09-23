@@ -542,3 +542,216 @@ func (s *Store) headAndHistory(ctx context.Context, id string) (IntentHead, erro
 	}
 	return head, nil
 }
+
+// BindExecutionWithGrant writes an execution binding that names an exact signed
+// grant, revoking whatever ACTIVE binding held the same selector.
+//
+// WHY IT IS NOT `PutExecutionBinding` WITH THREE MORE ARGUMENTS. That door is a
+// plain INSERT, and `execution_bindings` carries a partial unique index over
+// (actor, channel, conversation) WHERE status='ACTIVE'. So a second bind for one
+// selector fails on the constraint — and there is no `intent unbind`, no
+// `intent rebind`, and nothing outside tests ever wrote `BindingRevoked`. An
+// operator who bound without a grant had no way forward at all. This door
+// revokes the old row and inserts the new one at revision+1, in ONE
+// transaction, so the row that authorised yesterday's action survives instead
+// of being overwritten.
+//
+// WHAT IT REFUSES, and why it refuses before writing rather than after: the
+// start path verifies the grant chain on every start, so a binding written to a
+// grant that path would reject is a binding that can only ever fail, discovered
+// by whoever is unlucky enough to trigger it. This door runs the start's checks
+// that are DECIDABLE FROM A BINDING — the chain walk (revoked, inactive and
+// expired each answer by name), the leaf's subject against the acting
+// principal, the channel against every grant in the chain, and, where the store
+// is armed, the strict activation. It cannot run the rest: the operation, its
+// arguments and its effect class are facts of a REQUEST, not of a binding, so
+// attenuation against them stays where it has always been judged.
+//
+// The channel and the activation were both absent from this door's first shape,
+// and an adversarial pass wrote a binding through the operator's command, exit
+// 0, whose every start then refused. The godoc said "the same verification runs
+// here" while it did not, which is why this paragraph now enumerates instead of
+// promising.
+//
+// TWO REFUSALS WERE REMOVED BECAUSE NOBODY CAN REACH THEM, and that is recorded
+// rather than left to be rediscovered. A check that the leaf's intent matches
+// the bound one cannot fire: `validateStoredAuthorityChain` runs first and
+// `normalizeRootAuthority` already refuses a grant whose intent differs from
+// the one `activeIntentTx` returned for `b.IntentID`. A check for an EMPTY
+// chain cannot fire either: `authorityChainTx` never returns `(nil, nil)` — an
+// empty id is corrupt evidence and every other path returns an error or at
+// least one link. Both were neutralised one at a time and the whole package
+// stayed green, which is the finding, not the alibi.
+//
+// It writes the triple WHOLE or not at all, which is the contract
+// `bindingAuthorityTx` has policed since schema 15 with no writer to police.
+func (s *Store) BindExecutionWithGrant(ctx context.Context, b action.ExecutionBinding, grantID string, at time.Time) (revoked string, err error) {
+	if b.Status != action.BindingActive {
+		return "", fmt.Errorf("action/sqlite: bind handed status %q: %w", b.Status, ErrBindingNotActive)
+	}
+	if grantID == "" {
+		return "", ErrGrantIDRequired
+	}
+	tx, err := s.beginAuthorityWrite(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	intent, err := s.activeIntentTx(ctx, tx, b.IntentID, b.IntentVersion, b.IntentDigest, at)
+	if err != nil {
+		return "", err
+	}
+
+	// The head's ACTIVE version, read first: `readGrantTx` matches an exact
+	// version and joins on `h.active_version=v.version`, so a caller who does
+	// not know the version finds nothing. An operator names a GRANT, not a
+	// version, and this door is the operator's.
+	var activeVersion int
+	switch err := tx.QueryRowContext(ctx,
+		`SELECT active_version FROM grant_heads WHERE grant_id=?`, grantID).Scan(&activeVersion); {
+	case errors.Is(err, sql.ErrNoRows):
+		return "", fmt.Errorf("action/sqlite: no grant %q: %w", grantID, ErrAuthorityMissing)
+	case err != nil:
+		return "", fmt.Errorf("action/sqlite: read grant %q: %w", grantID, err)
+	}
+
+	// The chain is walked under THIS transaction's write ownership, so a
+	// revocation committed by anyone else either lands before this read — and
+	// is seen — or waits behind it. There is no window where a grant revoked
+	// elsewhere is bound here.
+	chain, err := s.authorityChainTx(ctx, tx, grantID, activeVersion, at)
+	if err != nil {
+		// NOT "missing". The head was read one statement ago, so the grant
+		// exists; a version it names that `grant_versions` does not hold is
+		// broken EVIDENCE, and calling it absent sends an operator to issue
+		// authority they already have. `authorityChainTx` draws the same
+		// distinction for an absent ancestor, and for the same reason.
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("action/sqlite: grant %q names active version %d, which does not exist: %w",
+				grantID, activeVersion, action.ErrAuthorityEvidenceCorrupt)
+		}
+		return "", err
+	}
+	if err := validateStoredAuthorityChain(chain, intent); err != nil {
+		return "", err
+	}
+	leaf := chain[len(chain)-1].signed.Grant
+	if leaf.SubjectPrincipalID != b.ActorPrincipalID {
+		return "", fmt.Errorf("action/sqlite: grant %q is held by %q, not by %q: %w",
+			grantID, leaf.SubjectPrincipalID, b.ActorPrincipalID, ErrIssuerMismatch)
+	}
+
+	// THE CHANNEL, which the first shape of this door did not judge and the
+	// start path always has. `resolveAuthorityTx` requires the channel to be in
+	// EVERY grant of the chain, so a binding written on a channel a grant does
+	// not carry is a binding whose every start dies with the same refusal — the
+	// exact failure this door's godoc says it prevents. An adversarial pass
+	// wrote one through the operator's own command, exit 0, and watched every
+	// start refuse. The channel is known here: it is a column of the row.
+	//
+	// The WILDCARD is refused first, and that is the same class caught a second
+	// time. `containsAuthorityString` treats `"*"` in a GRANT as "any channel",
+	// which is right — but `bindingAuthorityTx` looks the binding up with
+	// `channel=?`, a literal comparison with no wildcard. So a binding whose own
+	// channel is `"*"` passes this loop against a grant that carries `"*"` and is
+	// then invisible to every start: exit 0, an ACTIVE row, and
+	// `ErrAuthorityMissing` for ever after. A binding names ONE channel.
+	if b.Channel == "*" {
+		return "", fmt.Errorf(
+			"action/sqlite: %q is a grant's wildcard, not a channel a binding can name: %w",
+			b.Channel, action.ErrAttenuationViolated)
+	}
+	for _, stored := range chain {
+		grant := stored.signed.Grant
+		if !containsAuthorityString(grant.Channels, b.Channel) {
+			return "", fmt.Errorf("action/sqlite: grant %q carries channels %v, not %q: %w",
+				grant.GrantID, grant.Channels, b.Channel, action.ErrAttenuationViolated)
+		}
+	}
+
+	// THE STRICT ACTIVATION, mirrored from the start for the same reason.
+	//
+	// Its scope is declared rather than implied: this runs only where the store
+	// is ARMED, which is the server. The operator CLI opens its store through
+	// `openOperatorStoreSealed`, which never calls `RequireAuthorityActivation`,
+	// so from the CLI these two checks cannot run at all — no code here can make
+	// them. A binding written from the CLI against an intent of a profile other
+	// than the one the server armed is refused at every start as CORRUPT, and
+	// arming the operator's store is filed in docs/HANDOFF.md.
+	if s.authorityActivationDigest != "" {
+		if intent.ProfileID != s.authorityProfileID {
+			return "", fmt.Errorf("action/sqlite: intent %q belongs to profile %q, not to the armed %q: %w",
+				b.IntentID, intent.ProfileID, s.authorityProfileID, ErrAuthorizationSnapshotCorrupt)
+		}
+		if err := s.verifyAuthorityActivationTx(ctx, tx, s.authorityProfileID, s.authorityActivationDigest); err != nil {
+			return "", err
+		}
+	}
+
+	b.GrantID = leaf.GrantID
+	b.GrantVersion = leaf.Version
+	b.GrantDigest = leaf.Digest()
+
+	// The selector's current holder, if any. Its revision is what the new row
+	// counts from, so the history reads in order rather than restarting at 1.
+	var priorID string
+	var priorRevision int
+	switch err := tx.QueryRowContext(ctx,
+		`SELECT binding_id,revision FROM execution_bindings
+		  WHERE actor_principal_id=? AND channel=? AND ifnull(conversation_id,'')=ifnull(?,'')
+		    AND status='ACTIVE'`,
+		b.ActorPrincipalID, b.Channel, nullString(b.ConversationID)).Scan(&priorID, &priorRevision); {
+	case errors.Is(err, sql.ErrNoRows):
+		b.Revision = 1
+	case err != nil:
+		return "", fmt.Errorf("action/sqlite: read the selector's current binding: %w", err)
+	default:
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE execution_bindings SET status='REVOKED' WHERE binding_id=? AND status='ACTIVE'`,
+			priorID); err != nil {
+			return "", fmt.Errorf("action/sqlite: revoke binding %q: %w", priorID, err)
+		}
+		b.Revision = priorRevision + 1
+		revoked = priorID
+	}
+
+	if s.authorityAfterSelectorRead != nil {
+		s.authorityAfterSelectorRead()
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO execution_bindings(binding_id,actor_principal_id,channel,conversation_id,
+		  intent_id,intent_version,intent_digest,grant_id,grant_version,grant_digest,revision,status)
+		  VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		b.BindingID, b.ActorPrincipalID, b.Channel, nullString(b.ConversationID),
+		b.IntentID, b.IntentVersion, b.IntentDigest,
+		b.GrantID, b.GrantVersion, b.GrantDigest, b.Revision, string(b.Status)); err != nil {
+		// No named class for a collision here, and that is a finding rather
+		// than an omission — with the reason corrected, because the first one
+		// written here was the wrong one.
+		//
+		// What serialises the window between the selector read above and this
+		// insert is SQLITE'S SINGLE WRITER: this transaction is already a
+		// write transaction, so a rival on another connection gets SQLITE_BUSY
+		// on its own write and waits for this commit. It is NOT that
+		// `beginAuthorityWrite` takes ownership first — that orders this door
+		// against other AUTHORITY doors, and `PutExecutionBinding` writes this
+		// same table through a plain `BeginTx` without ever calling it, so
+		// ownership cannot be what protects the row.
+		//
+		// The distinction matters because the first mould written for this
+		// parked its rival at `authorityBeforeWriter`, which runs BEFORE
+		// ownership is taken and therefore cannot reach this window at all: it
+		// proved the rival always landed first, which was the mould's own
+		// shape, not an observation. `authorityAfterSelectorRead` exists to
+		// stand exactly here, and its mould drives a second real connection
+		// through it.
+		return "", fmt.Errorf("action/sqlite: insert binding %q: %w", b.BindingID, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", mapAuthorityStoreError(err)
+	}
+	return revoked, nil
+}

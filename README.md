@@ -240,10 +240,11 @@ effectful start depends on a verified principal, an active signed intent and an
 active signed authority chain, and nothing starts outside the intent's own
 scope. Turning it on is a behaviour change — `read_file`,
 `http_fetch` and `webhook_call` become closed world and start only under terms
-that list what they may touch — and no public door yet ties a signed grant to an
-execution binding, so delegation is implemented and tested but not reachable
-from the CLI. Both are written out in the
-[v0.16.0 release notes](docs/releases/v0.16.0.md), with the Known issues.
+that list what they may touch. It is written out in the
+[v0.16.0 release notes](docs/releases/v0.16.0.md), with the Known issues. The
+first of them — no public door tying a signed grant to an execution binding —
+has its cure on `master`, `korvun intent bind --grant`, and ships with the next
+tag.
 
 ## Identity, intent and authority — v0.12.0
 
