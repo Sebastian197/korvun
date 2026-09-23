@@ -147,6 +147,24 @@ ley (UX-DESIGN-FIRST). La decisión de producto que hay que tomar primero: qué
 debe ver el operador ante un documento estricto cuya autoridad no está —¿el
 estado ilegible que ya existe, con `Volver a intentar`, o uno propio?
 
+## Fichado — definir «artifacts to open» en el kit (director, 2026-09-23)
+
+La casilla 6 del kit dice que el director ve «the REAL thing (local build in HIS
+browser, **artifacts to open**) and says yes». **Nada en el árbol define qué
+artefactos son** —el recuento de apariciones no se publica: este mismo tren ya
+retiró una vez una frase que decía «aparece una sola vez» y volvió a escribirla,
+así que la conclusión se sostiene sin contar—: si son los
+empaquetados, la cortina ya le pone uno en las manos antes del tag; si son otra
+cosa, no. La casilla 3 habla de «the packaged artifacts» pero enumera icono,
+masthead, avatar y social preview —activos de identidad—, así que no la define.
+
+El director lo fichó en vez de decidirlo en caliente, y dijo que **no bloquea
+nada**. Se define en el kit cuando se toque, con una lista cerrada de qué abre y
+en qué formato, y con el efecto que eso tiene sobre lo que la sexta ley exige
+antes de etiquetar.
+
+Nace del tercer barrido del tren del tag de la v0.16.1.
+
 ## Fichado — la pantalla de aprobaciones no reacciona a su propio botón de arranque (2026-09-23)
 
 Hallado en la pasada sobre la build EMPAQUETADA de la v0.16.1, no por un test.
