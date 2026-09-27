@@ -1,62 +1,46 @@
-VETO LEVANTADO 1239c0112d2005fa3cd9fd54d4fba11d0838270e
-Round: v0.16.2 train E, reduced (2026-09-26/27), at the pre-PR gate. The release
-ships train E alone (director's decision D-1); trains G, F and H move to v0.16.3
-as declared limits.
+VETO LEVANTADO d38c9fd70d859e8fb63103dedf96265bb60ed9d9
+Round: v0.16.2, PR #69, the cures after the first CI run (2026-09-27). The
+first run over ac114930 went red on Ubuntu, Windows and the chrome e2e;
+macOS was green, and AS07 was not among the failures. The director
+adjudicated seven classes (A to G) and, after the adversary's first pass,
+the chrome e2e harness fix.
 
-WHAT TRAIN E IS. A ledger that cannot be used is named the same way on every
-surface. Only ledger_unreadable is a verdict on the book: its shape (a table of
-the schema missing or virtual, one of its three UNIQUE indexes not whole, a
-version that cannot be read), its identity row missing while a marked receipt
-exists, or a read that fails with a structural SQLite code. ledger_environment,
-ledger_busy and unavailable say nothing against it. The recorder, the CLI and
-«¿Qué pasa hoy?» carry the class; the approvals doors answer 503
-ledger_unreadable only on the verdict; a fresh file is seeded in ONE immediate
-transaction, judged again inside the lock; each migration step rereads the
-version inside its own transaction; the Go test timeout is 60 minutes.
+WHAT THE CURES ARE.
+- A, scoped and not cured (train G): createdHere, CreateLedger and the
+  created field say what os.SameFile compares on each platform; the
+  replaced-file mould skips on Linux and Windows and runs everywhere else;
+  the release notes list the limit and its damage.
+- B: dsnPathFor, pure and taking the GOOS, gives back the Windows drive path
+  a DSN was built from, so the hook's seams arm there.
+- C: TE47 and TE56 sandbox AppData too and assert the resolved ledger path
+  before anything is written.
+- D: TE49 finds the ledger's directory as the JSON body spells it.
+- E: the CLI binary test builds korvun.exe on Windows, fails by name when a
+  command cannot run, and pins ledger check's exit status to 1.
+- F: the profile identity test keeps its profile under the working
+  directory.
+- G: four chrome e2e specs expect the redesigned /healthz badge; the
+  activity chip is found by its test id and still required visible.
+- The harness (director's decision): isolationEnv and isolate point AppData
+  and LocalAppData into its temp dir; a test of the built binary, run as a
+  separate process with its core started, proves it never touches a marker
+  profile standing for the user's real one.
 
-FOUND AT THE GATE AND CURED. (1) The packaged pass (TE50) caught the screen
-keeping the applying answer's «aplicando; tu perfil en disco todavía no ha
-cambiado» after a change that had been applied and saved: at a terminal state
-the row now says that outcome's sentence alone, pinned by a jsdom mould that
-stands up the real doors' bodies and a Go mould that ties those bodies to the
-handlers. (2) With approvals on, D2 and D3 for the environment were drawn next
-to the green row «Una acción irreversible se aparca y te espera», false while
-no act can be recorded: with those two states the row is no longer drawn and
-the cages are drawn disabled; with unavailable nothing changes. Each cure
-entered RED, frozen, GREEN, and its probing mutations captured red and reverted
-by hash.
+THE ADVERSARY. Six passes over the delta: VETO MANTENIDO (one P2, nine P3),
+VETO LEVANTADO (four P3), VETO MANTENIDO (one P2, three P3), VETO LEVANTADO
+(three P3), VETO LEVANTADO (no findings), and a sixth after the gate forced
+a prettier reformat of two specs: VETO LEVANTADO, with one P3 left to the
+director (the verbatim record keeps the adversary's own relative locators).
+Every other finding was cured in the delta. The six passes, verbatim:
+v0162-pr69-cures-verdict.md in this directory.
 
-THE ADVERSARY, over the complete train E diff with cure (1):
-VETO LEVANTADO, no P1 and no P2 (.claude/adversary/v0162-tren-E-diff-verdict.md).
-Of its eleven P3, the four known-false sentences (the definition of ledger_busy,
-«se funda como siempre», an exhaustive-looking list of boots that die, and a
-godoc naming a producer that does not exist) and the three train comments that
-located by position were cured before this commit; the other six are filed in
-the closing list with their reproductions, and the two-snapshot judgement (H1)
-is declared as a known limit in the notes and in the restore procedure.
-
-THE PACKAGED PASS (TE50), on this exact tree: the desktop app built by the
-release-desktop dry-run recipe from a throwaway commit of the tree (parent
-518ba15; manifest in the PR), over a copy of a profile the published v0.16.0
-binary created, with acts and a decided approval. Healthy: the ledger migrates
-and stays legacy_unfounded, a new act chains after the v0.16.0 receipts,
-`ledger check` exits 0, and the applying sentence is gone. Unreadable (the
-actions table dropped with the core stopped): D2 exactly as the plan writes
-it, with the path lsof shows, the controls disabled, no green row, `ledger
-check` naming ledger_unreadable, nothing written or recreated, and the restore
-procedure giving the chain back. Unavailable (a write lock on the -shm bytes
-123 to 127): SQLite's code 15 at the catalog read after about ten seconds; D3
-of the moment beside the approvals row that could not read, with no buttons;
-in a labelled variant that releases the lock at the first failed read, D3
-beside the green row with «Añadir host» active; after the release, the buttons
-come back.
-
-THE GATE. The explicit make quality went red once, on AS07, a v0.16.1 test
-that runs at the edge of the 5 s busy timeout (the same 4.8 to 5.1 s on master
-518ba15); by the director's decision the code commit's pre-commit gate is the
-run that counts.
-
-WHAT IS NOT CLAIMED. The environment state on the packaged app has in-process
-evidence only (decision D-2). SQLite's environment, LOCKED, MISMATCH and
-FORMAT codes were never seen natively. The external Codex review has not run
-over this train; the director launches it.
+EVIDENCE. Every cure red where its defect exists on this host, green, and
+its probing mutations red and restored by sha256; each of the 14 changed e2e
+assertions seen red under its mutant; go vet for windows, linux and darwin
+and cross-built test binaries; the chrome e2e 50 passed, 1 skipped; make
+quality through the cures commit's pre-commit gate: exit 0, 20:34:23 to 20:46:47, on the cures commit d38c9fd7 (a first
+attempt, 19:26:38 to 20:23:40, passed every step up to its last,
+desktop-frontend-check, which failed on prettier; the second reused go
+test's cache for the unchanged Go code). The Windows
+half (the hook's moulds armed there for the first time, the harness binary
+test, C, D, E and F) is this PR's CI.
