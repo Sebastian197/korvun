@@ -1,9 +1,62 @@
-VETO LEVANTADO d8d6172f610d63a87a287f911a2c08d437e542b7
-KORVUN-REBASE-EVIDENCE v1
-{
-  "schema": 1,
-  "repository": "Sebastian197/korvun",
-  "pr": 67,
-  "base": "3e781353ba0860f6bc7ab7572b51bc0cfbac1b02",
-  "review": "Round: v0.16.1 bump train (2026-09-23) — the release is PUBLISHED; this is the\ntrain that moves the current-release claims to it, records what was verified and\ninstalled, and writes the director's three rulings of that day into the kit. NO\nPRODUCTION CODE MOVES.\n\nWHAT WAS VERIFIED, not assumed: 23 assets; the sha256 of the .dmg and of a\nheadless archive match the signed lists; `gh attestation verify` exits 0 over both\nlists; and the SLSA provenance names release.yml@refs/tags/v0.16.1 over commit\n3e78135 — the commit the tag points at — so the chain closes tag, commit,\nworkflow, signed list, bytes on disk. NOT RUN and not sold as run: cosign\nverify-blob, because no cosign exists on that machine.\n\nTHE INSTALL, box 8, run under the director's delegation of the same day. From the\npublished image, by the documented mould. The installed binary is byte-identical\nto the one in the image, reports 0.16.1, and its log's first line says\nversion=v0.16.1 with no commit suffix: built from the tag.\n\nAND THE FIRST DRAFT OF THAT EVIDENCE WAS FALSE, which is the finding of this\ntrain. It quoted ONE of the log's five lines as «verbatim» and then wrote «no\ngateway was started». The gateway started: a brain wired to a local model, the\nadmin server on loopback, `korvun is serving` printed. The four omitted lines were\nexactly the ones that falsify the claim. The sweep caught it before the text left\nthe branch; both files now carry all five lines, and what the pass cannot account\nfor — who completed the onboarding between the capture and the quit — is filed as\nUNKNOWN rather than explained away.\n\nFOUR MORE FINDINGS OF THE SAME SWEEP, all mine: a self-falsifying count that this\nsame train had already retired once and that came back in two files; a releases\nrow that listed among six closed fichas one the notes declare a FINDING whose\ndirector ficha STAYS OPEN, while omitting a ficha that did close — an adjudication\nturned into a fact; that same row left untranslated in the Spanish table, against\nthe parity box; and «two releases behind» for a machine that was four.\n\nTHE THREE RULINGS, written into the kit: the Sixth Law keeps its wording and what\nhappens is a delegation DECLARED release by release — and box 6 now says what that\ndoes NOT mean, in those words, because an earlier draft of it claimed the law's\nletter was satisfied by a curtain the same box defines as a local build in a\nbrowser. Box 8 joins the same terms and gains the case it did not contemplate: a\ndated addendum after the tag, with the body re-pushed. «artifacts to open» is\nfiled, not decided.\n\nEVIDENCE LEVEL, honest: the install is a COMPILED BUNDLE IN ITS OWN OS PROCESS,\ninstalled from the published image and read back through its own log and plist. It\nestablishes that the artifact installs, is the bytes the signed list names, runs\nand reports its version. It establishes nothing about the release's behaviour;\nthat rests on manual-pass.txt and packaged-pass.txt at the levels they declare.\n\nScope of this marker: it records what the delivery session did and captured. It\nauthenticates no reviewer's work and it is no one's acceptance."
-}
+VETO LEVANTADO 1239c0112d2005fa3cd9fd54d4fba11d0838270e
+Round: v0.16.2 train E, reduced (2026-09-26/27), at the pre-PR gate. The release
+ships train E alone (director's decision D-1); trains G, F and H move to v0.16.3
+as declared limits.
+
+WHAT TRAIN E IS. A ledger that cannot be used is named the same way on every
+surface. Only ledger_unreadable is a verdict on the book: its shape (a table of
+the schema missing or virtual, one of its three UNIQUE indexes not whole, a
+version that cannot be read), its identity row missing while a marked receipt
+exists, or a read that fails with a structural SQLite code. ledger_environment,
+ledger_busy and unavailable say nothing against it. The recorder, the CLI and
+«¿Qué pasa hoy?» carry the class; the approvals doors answer 503
+ledger_unreadable only on the verdict; a fresh file is seeded in ONE immediate
+transaction, judged again inside the lock; each migration step rereads the
+version inside its own transaction; the Go test timeout is 60 minutes.
+
+FOUND AT THE GATE AND CURED. (1) The packaged pass (TE50) caught the screen
+keeping the applying answer's «aplicando; tu perfil en disco todavía no ha
+cambiado» after a change that had been applied and saved: at a terminal state
+the row now says that outcome's sentence alone, pinned by a jsdom mould that
+stands up the real doors' bodies and a Go mould that ties those bodies to the
+handlers. (2) With approvals on, D2 and D3 for the environment were drawn next
+to the green row «Una acción irreversible se aparca y te espera», false while
+no act can be recorded: with those two states the row is no longer drawn and
+the cages are drawn disabled; with unavailable nothing changes. Each cure
+entered RED, frozen, GREEN, and its probing mutations captured red and reverted
+by hash.
+
+THE ADVERSARY, over the complete train E diff with cure (1):
+VETO LEVANTADO, no P1 and no P2 (.claude/adversary/v0162-tren-E-diff-verdict.md).
+Of its eleven P3, the four known-false sentences (the definition of ledger_busy,
+«se funda como siempre», an exhaustive-looking list of boots that die, and a
+godoc naming a producer that does not exist) and the three train comments that
+located by position were cured before this commit; the other six are filed in
+the closing list with their reproductions, and the two-snapshot judgement (H1)
+is declared as a known limit in the notes and in the restore procedure.
+
+THE PACKAGED PASS (TE50), on this exact tree: the desktop app built by the
+release-desktop dry-run recipe from a throwaway commit of the tree (parent
+518ba15; manifest in the PR), over a copy of a profile the published v0.16.0
+binary created, with acts and a decided approval. Healthy: the ledger migrates
+and stays legacy_unfounded, a new act chains after the v0.16.0 receipts,
+`ledger check` exits 0, and the applying sentence is gone. Unreadable (the
+actions table dropped with the core stopped): D2 exactly as the plan writes
+it, with the path lsof shows, the controls disabled, no green row, `ledger
+check` naming ledger_unreadable, nothing written or recreated, and the restore
+procedure giving the chain back. Unavailable (a write lock on the -shm bytes
+123 to 127): SQLite's code 15 at the catalog read after about ten seconds; D3
+of the moment beside the approvals row that could not read, with no buttons;
+in a labelled variant that releases the lock at the first failed read, D3
+beside the green row with «Añadir host» active; after the release, the buttons
+come back.
+
+THE GATE. The explicit make quality went red once, on AS07, a v0.16.1 test
+that runs at the edge of the 5 s busy timeout (the same 4.8 to 5.1 s on master
+518ba15); by the director's decision the code commit's pre-commit gate is the
+run that counts.
+
+WHAT IS NOT CLAIMED. The environment state on the packaged app has in-process
+evidence only (decision D-2). SQLite's environment, LOCKED, MISMATCH and
+FORMAT codes were never seen natively. The external Codex review has not run
+over this train; the director launches it.
