@@ -23,7 +23,7 @@ import (
 func TestBuild_observabilityOnByDefault(t *testing.T) {
 	app, err := Build(cfgWith(ollamaBrain()),
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestBuild_observabilityDisabled(t *testing.T) {
 
 	app, err := Build(cfg,
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

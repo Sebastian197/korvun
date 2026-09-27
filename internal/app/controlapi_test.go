@@ -54,7 +54,7 @@ func TestControlAPI_brainSummary_resolvedPostSelector(t *testing.T) {
 
 	app, err := Build(cfgWith(localCloudPrivateBrain()),
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestControlAPI_channelSummaries_liveDropCount(t *testing.T) {
 	fake := &fakeDroppingChannel{fakeChannel: newFakeChannel("telegram")}
 	app, err := Build(cfgWith(ollamaBrain()),
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(fake)))
+		withChannelFactory(okFactory(fake)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestControlAPI_channelSummaries_liveDropCount(t *testing.T) {
 func TestControlAPI_channelSummaries_noCounterOmitsDropped(t *testing.T) {
 	app, err := Build(cfgWith(ollamaBrain()),
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestControlAPI_endToEnd_coexistsAndLeaksNoSecrets(t *testing.T) {
 
 	app, err := Build(cfgWith(localCloudPrivateBrain()),
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestControlAPI_notServedWhenObservabilityDisabled(t *testing.T) {
 
 	app, err := Build(cfg,
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

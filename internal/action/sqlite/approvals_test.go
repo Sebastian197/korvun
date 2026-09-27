@@ -144,7 +144,7 @@ func TestMigrationV7_freshAndCrash(t *testing.T) {
 	t.Parallel()
 	// Fresh file lands on current with the approvals table.
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestMigrationV7_freshAndCrash(t *testing.T) {
 		t.Fatalf("install crash trigger: %v", err)
 	}
 	_ = db.Close()
-	if _, err := Open(crashPath); err == nil {
+	if _, err := openFull(crashPath); err == nil {
 		t.Fatal("an aborted v7 migration must be boot-fatal")
 	}
 	if v := inspect(t, crashPath, `SELECT version FROM action_schema`); v != 6 {
@@ -183,7 +183,7 @@ func TestMigrationV7_freshAndCrash(t *testing.T) {
 		t.Fatalf("drop trigger: %v", err)
 	}
 	_ = db2.Close()
-	recovered, err := Open(crashPath)
+	recovered, err := openFull(crashPath)
 	if err != nil {
 		t.Fatalf("the next boot must complete: %v", err)
 	}
@@ -705,7 +705,7 @@ func TestApproval_scanCorruptionBranches(t *testing.T) {
 func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 	t.Parallel()
 	path := t.TempDir() + "/korvun.db"
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -730,7 +730,7 @@ func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 	}
 	_ = store.Close()
 	// The next life: the boot mold — open, then the explicit pass (R3).
-	reopened, err := Open(path)
+	reopened, err := openFull(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -758,7 +758,7 @@ func TestRecovery_parkedActionsSurviveReopen(t *testing.T) {
 func TestRecovery_rejectedIsTerminalAndSurvives(t *testing.T) {
 	t.Parallel()
 	path := t.TempDir() + "/korvun.db"
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -770,7 +770,7 @@ func TestRecovery_rejectedIsTerminalAndSurvives(t *testing.T) {
 		t.Fatalf("reject: %v", err)
 	}
 	_ = store.Close()
-	reopened, err := Open(path)
+	reopened, err := openFull(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -815,7 +815,7 @@ func TestMigrationV8_receiptsGainTheApprovalSeal(t *testing.T) {
 	t.Parallel()
 	// Fresh file lands on current with the new receipt columns.
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -842,7 +842,7 @@ func TestMigrationV8_receiptsGainTheApprovalSeal(t *testing.T) {
 		t.Fatalf("install crash trigger: %v", err)
 	}
 	_ = db.Close()
-	if _, err := Open(crashPath); err == nil {
+	if _, err := openFull(crashPath); err == nil {
 		t.Fatal("an aborted v8 migration must be boot-fatal")
 	}
 	if v := inspect(t, crashPath, `SELECT version FROM action_schema`); v != 7 {
@@ -853,7 +853,7 @@ func TestMigrationV8_receiptsGainTheApprovalSeal(t *testing.T) {
 		t.Fatalf("drop trigger: %v", err)
 	}
 	_ = db2.Close()
-	recovered, err := Open(crashPath)
+	recovered, err := openFull(crashPath)
 	if err != nil {
 		t.Fatalf("next boot completes: %v", err)
 	}

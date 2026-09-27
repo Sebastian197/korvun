@@ -34,7 +34,7 @@ type SigningKey struct {
 // by RotateSigningKey's transaction, and defeated by direct SQL —
 // R14).
 func (s *Store) PutSigningKey(ctx context.Context, keyID, publicKey string, at time.Time) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin put signing key: %w", err)
 	}
@@ -47,7 +47,7 @@ func (s *Store) PutSigningKey(ctx context.Context, keyID, publicKey string, at t
 	if active > 0 {
 		return fmt.Errorf("action/sqlite: an active signing key exists; rotate instead of putting %q", keyID)
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO signing_keys (key_id, public_key, created_at, retired_at) VALUES (?, ?, ?, NULL)`,
 		keyID, publicKey, at.UTC().Format(time.RFC3339Nano),
 	); err != nil {
@@ -64,13 +64,13 @@ func (s *Store) PutSigningKey(ctx context.Context, keyID, publicKey string, at t
 // instant the new one opens — historical receipts keep verifying
 // against the retired public key forever.
 func (s *Store) RotateSigningKey(ctx context.Context, keyID, publicKey string, at time.Time) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin rotate: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	stamp := at.UTC().Format(time.RFC3339Nano)
-	res, err := tx.ExecContext(ctx,
+	res, err := s.txExec(ctx, tx,
 		`UPDATE signing_keys SET retired_at = ? WHERE retired_at IS NULL`, stamp)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: retire active key: %w", err)
@@ -82,7 +82,7 @@ func (s *Store) RotateSigningKey(ctx context.Context, keyID, publicKey string, a
 	if retired == 0 {
 		return errors.New("action/sqlite: no active signing key to rotate")
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO signing_keys (key_id, public_key, created_at, retired_at) VALUES (?, ?, ?, NULL)`,
 		keyID, publicKey, stamp,
 	); err != nil {

@@ -78,9 +78,17 @@ func bootServe(configPath string) int {
 	// config-mutation endpoint pointing back at the supervisor (ADR-0027 §seam).
 	var sup *supervisor.Supervisor
 
+	// The operator acts' registry lives for the PROCESS: the supervisor shuts
+	// down the app that asked for a cutover before the cutover ends, so the
+	// act's memory and its close must outlive it (v0.16.2).
+	acts := app.NewConfigActRegistry(func(err error) {
+		logger.Warn("config act", "error", err.Error())
+	})
+
 	// The build seam the supervisor uses for the initial boot and every reload.
 	build := func(c *config.Config) (supervisor.App, error) {
-		return app.Build(c, app.WithLogger(logger), app.WithReloader(sup))
+		return app.Build(c, app.WithLogger(logger), app.WithReloader(sup), app.WithConfigActRegistry(acts),
+			app.WithProfilePath(configPath))
 	}
 
 	// The effect-free pre-cutover validation seam (ADR-0027 §5). Shares the single
@@ -108,6 +116,7 @@ func bootServe(configPath string) int {
 		supervisor.WithPersist(persist),
 		supervisor.WithLogger(logger),
 		supervisor.WithSignalChan(sigCh),
+		supervisor.WithStateObserver(acts.ObserveReload),
 	)
 	if err := sup.Run(context.Background()); err != nil {
 		return serveFatal(logger, "run", err) // bad secret / invalid token / cutover failure

@@ -47,7 +47,7 @@ import (
 // want the same 4», and the second pass then finds the start proof corrupt.
 func TestAuthority_CrashAfterStartKeepsDebitAndUnknownOutcome(t *testing.T) {
 	if mode, path := os.Getenv("KORVUN_AUTH_CRASH_CHILD"), os.Getenv("KORVUN_AUTH_CRASH_DB"); mode != "" {
-		store, err := Open(path)
+		store, err := openFull(path)
 		if err != nil {
 			os.Exit(96)
 		}

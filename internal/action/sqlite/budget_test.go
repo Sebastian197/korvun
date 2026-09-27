@@ -66,7 +66,7 @@ func TestConsumeBudget_survivesRestart(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
 	limits := action.Budgets{MaxActions: 5}
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestConsumeBudget_survivesRestart(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 	// The next life REMEMBERS: 3 of 5 already spent.
-	again, err := Open(path)
+	again, err := openFull(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}

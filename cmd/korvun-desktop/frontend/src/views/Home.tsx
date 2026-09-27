@@ -17,6 +17,7 @@ import {
   type Incident,
 } from '../incident/store'
 import { useSnapshot, type BrainSummary, type ChannelSummary } from '../snapshot/store'
+import { WhatsHappening } from './WhatsHappening'
 import { useCoreState, useLastOkAt } from '../status/store'
 
 function useLifecycleAction(): {
@@ -311,6 +312,16 @@ export function Home(): React.JSX.Element {
   return (
     <div className="home" data-testid={running ? 'home-marcha' : 'home-parado'}>
       <Hero />
+      {/* «¿Qué pasa hoy?» is the first thing the app shows (director's ruling,
+          2026-09-23). It rides here rather than in its own nav entry because
+          Inicio IS the start view, and a capability the operator has to go
+          looking for is the state the seventh law was written against.
+          It needs a running core to read either door, so with the gateway
+          stopped it stays out of the way — its own «no hay puerta» sentence is
+          about a profile without an admin token, not about a core that is
+          simply off, and showing it here would answer a question nobody asked
+          with a reason that is not the real one. */}
+      {running ? <WhatsHappening /> : null}
       {running ? (
         <>
           <Cards />

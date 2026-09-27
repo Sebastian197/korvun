@@ -118,6 +118,9 @@ func (c *cli) receiptVerify(args []string) int {
 	}
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
+	// The ledger's standing for this profile (the durable mark): named once,
+	// never part of a receipt's verdict.
+	printLedgerStanding(ctx, c.stdout, store)
 	var receipts []action.Receipt
 	if action.ValidReceiptID(id) {
 		r, err := store.GetReceipt(ctx, id)
@@ -453,7 +456,11 @@ func (c *cli) receiptRotateKey(args []string) int {
 	defer func() { _ = lock.Release() }()
 	// R2: the operator door — a key rotation beside a live server must
 	// never run the boot's recovery/prune/migration under it.
-	store, err := actionsqlite.OpenOperator(storage)
+	// The handle is born for the profile named by --config: a ledger another
+	// profile founded refuses the rotation by name (ledger_foreign_profile)
+	// before any key moves. (The official pass of the first design found this
+	// door opening the store by hand; the redesign left no such opener.)
+	store, err := actionsqlite.OpenOperatorFor(storage, app.ProfileIdentity(*configPath))
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun receipt rotate-key: %v\n", err)
 		return 1

@@ -834,7 +834,7 @@ func (tc testControl) park(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "resolve the parking brain's law: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	store, err := actionsqlite.OpenOperator(app.StoragePath(cfg))
+	store, err := actionsqlite.OpenOperatorFor(app.StoragePath(cfg), app.ProfileIdentity(tc.cfgPath))
 	if err != nil {
 		http.Error(w, "open the store: "+err.Error(), http.StatusServiceUnavailable)
 		return

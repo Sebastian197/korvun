@@ -124,7 +124,7 @@ func TestEffectCeilingConfig_unknownClassDiesNamingTheLadder(t *testing.T) {
 	srv := httptest.NewServer(script.handler())
 	defer srv.Close()
 	cfg, _ := ceilingChatCfg(t, srv.URL, "mega_dangerous")
-	_, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	_, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err == nil {
 		t.Fatal("an unknown effect class must be boot-fatal")
 	}
@@ -149,7 +149,7 @@ func TestEffectCeiling_theChatPathParksForReal(t *testing.T) {
 		t.Fatalf("the model must receive the pending observation; contents: %v", script.contents)
 	}
 	// And the request was born whole through the production path.
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestEffectCeiling_absentMeansTodayByteForByte(t *testing.T) {
 	if script.sawContent("PENDING APPROVAL") {
 		t.Fatal("without a ceiling nothing parks — today byte-for-byte")
 	}
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

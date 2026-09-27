@@ -36,7 +36,7 @@ func (r benchIdentifiedRecorder) RecordAttemptIdentified(ctx context.Context, en
 }
 
 func BenchmarkRunToolHotPathIdentified(b *testing.B) {
-	store, err := actionsqlite.Open(filepath.Join(b.TempDir(), "korvun.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(b.TempDir(), "korvun.db"), testProfileIdentity)
 	if err != nil {
 		b.Fatalf("open action store: %v", err)
 	}
@@ -67,7 +67,7 @@ func BenchmarkRunToolHotPathIdentified(b *testing.B) {
 // effect engine wired on top of the identified path: classification is a
 // registry lookup by name — the ceiling must not notice it.
 func BenchmarkRunToolHotPathClassified(b *testing.B) {
-	store, err := actionsqlite.Open(filepath.Join(b.TempDir(), "korvun.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(b.TempDir(), "korvun.db"), testProfileIdentity)
 	if err != nil {
 		b.Fatalf("open action store: %v", err)
 	}

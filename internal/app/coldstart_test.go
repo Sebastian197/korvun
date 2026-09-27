@@ -53,7 +53,7 @@ func coldStartCfg(baseURL, requestTimeout string, maxRetries int) *config.Config
 func runColdStart(t *testing.T, cfg *config.Config) *envelope.Envelope {
 	t.Helper()
 	ch := newCapturingChannel("telegram")
-	a, err := Build(cfg, withChannelFactory(okFactory(ch)))
+	a, err := Build(cfg, withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

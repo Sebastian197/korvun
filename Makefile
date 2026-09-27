@@ -46,8 +46,12 @@ desktop-frontend:
 # Local mirror of the CI chrome lane (frontend.yml "chrome (lint · typecheck ·
 # test · build)"), minus the build step so the committed dist stub is never
 # touched. Born from the 2026-08-23 ensayo red: a prettier drift in chrome
-# sources passes `quality` (Go-only, ADR-0029 §6 — Node never gates it) and
-# dies in CI. Run this BEFORE the ensayo push whenever chrome sources changed.
+# sources passed a Go-only `quality` and died in CI. Since train E's batch 4
+# (director's order, 2026-09-27) `quality` depends on this target, so the
+# TypeScript typecheck and lint, the format check and the vitest suite gate
+# every local run; it needs the frontend's node_modules (npm ci) in the
+# checkout being graded. CI's Go jobs do not change: quality.yml runs its own
+# steps, not this target (ADR-0029 §6).
 desktop-frontend-check:
 	cd cmd/korvun-desktop/frontend && npm run typecheck && npm run lint && npm run format:check && npm run coverage
 
@@ -142,8 +146,13 @@ dmg: desktop
 # -timeout is EXPLICIT here too, and matches the CI gate: Go's default of
 # 10m per package was an inheritance, not a choice, and master 551f9770
 # already ran internal/action/sqlite to 599.835s on the windows runner.
+# 60m since train E (2026-09-26): with its moulds, that package ran 1605s
+# with -race on a 4-core development Mac, 1511s once its moulds without a
+# shared seam ran in parallel, and 1734s in make quality's coverage pass,
+# 66s inside the old 30m. Its judge-fault moulds share one seam slot and run
+# one at a time.
 test:
-	go test -race -timeout 30m $(GO_PKGS)
+	go test -race -timeout 60m $(GO_PKGS)
 
 vet:
 	go vet $(GO_PKGS)
@@ -166,7 +175,7 @@ lint: fmt vet
 # target, and the threshold check has no fallback to hide behind.
 # scripts/verify-cover-fails.sh re-demonstrates the guarantee on demand.
 cover:
-	@go test -race -timeout 30m -coverprofile=coverage.out ./internal/...
+	@go test -race -timeout 60m -coverprofile=coverage.out ./internal/...
 	@total=$$(go tool cover -func=coverage.out | grep total | awk '{print $$3}' | tr -d '%'); \
 	echo "Coverage: $${total}%"; \
 	if [ "$$(echo "$${total} < $(COVERAGE_THRESHOLD)" | bc)" -eq 1 ]; then \
@@ -247,7 +256,14 @@ wails-pin-probe:
 	python3 scripts/wails_pin_test.py
 	@python3 scripts/wails_pin.py .
 
-quality: guard-gopkgs lint test cover fuzz-smoke hook-probe integration-probe wails-pin-probe
+# The probing-mutation tally is DERIVED from the evidence log by a written
+# rule (scripts/mutation_tally.py): the papers quote its output, never a
+# number counted by hand. Its attack tests run here and in quality.yml.
+.PHONY: mutation-tally-probe
+mutation-tally-probe:
+	python3 scripts/mutation_tally_test.py
+
+quality: guard-gopkgs lint test cover fuzz-smoke hook-probe integration-probe wails-pin-probe mutation-tally-probe desktop-frontend-check
 	@echo "Quality gate passed."
 
 # --- Web track SP1: the site check harness (spec AS-1 + AS-9, ADR-0040) ----------

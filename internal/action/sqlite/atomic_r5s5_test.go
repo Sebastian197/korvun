@@ -29,12 +29,12 @@ import (
 func twoSealedStores(t *testing.T) (*Store, *Store, ed25519.PublicKey) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	s1, err := Open(path)
+	s1, err := openFull(path)
 	if err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 	t.Cleanup(func() { _ = s1.Close() })
-	s2, err := OpenOperator(path)
+	s2, err := openOperator(path)
 	if err != nil {
 		t.Fatalf("open 2: %v", err)
 	}

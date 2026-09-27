@@ -270,14 +270,14 @@ func TestIdentity_RegistrationToleratesReferenceDrift(t *testing.T) {
 // the call panics and the mould reddens.
 func TestIdentity_ReadOnlyStoreAnswersWhatTimeItIs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "readonly.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	readOnly, err := OpenReadOnly(path)
+	readOnly, err := openReadOnly(path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,7 +40,7 @@ func TestIntentV2CLI_CreateActivateVerifyBind(t *testing.T) {
 			t.Fatalf("%s: code=%d stderr=%q", strings.Join(args[:2], " "), code, stderr)
 		}
 	}
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestIntentV2CLI_CreateActivateVerifyBind(t *testing.T) {
 
 func TestIntentV2CLI_ExplicitRootAdoption(t *testing.T) {
 	cfg, dbPath := intentTestConfig(t)
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestIntentV2CLI_ExplicitRootAdoption(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("adopt-root code=%d stderr=%q", code, stderr)
 	}
-	reader, err := actionsqlite.OpenReadOnly(dbPath)
+	reader, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}

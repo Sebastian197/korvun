@@ -39,7 +39,7 @@ func TestApprovalsListAndShow_expiryReachesTheConsult(t *testing.T) {
 	}
 	// The read-only door stayed read-only: the ROW is still PENDING
 	// (the closing touch belongs to a mutating act, the E2 mold).
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

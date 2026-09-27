@@ -41,7 +41,7 @@ type requester interface {
 
 func TestApprovalsKnob_absentMeansOffAndNoExtension(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
-	app, err := Build(approvalsConfig(t, dbPath, false), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(approvalsConfig(t, dbPath, false), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestApprovalsKnob_absentMeansOffAndNoExtension(t *testing.T) {
 
 func TestApprovalsKnob_enabledWiresTheExtensionAndBirthsWholeRequests(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
-	app, err := Build(approvalsConfig(t, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(approvalsConfig(t, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

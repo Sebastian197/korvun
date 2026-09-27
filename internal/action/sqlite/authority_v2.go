@@ -333,7 +333,7 @@ func (s *Store) ActivateAuthority(ctx context.Context, profileID, actorActionID,
 		return "", err
 	}
 	activationID := "activation:" + profileID
-	if _, err := tx.ExecContext(ctx, `INSERT INTO approval_birth_events(profile_id,sequence,approval_id,action_id,action_digest,strict_required,snapshot_digest,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,0,?,?,?,?,?,?,?,?,?,?)`,
+	if _, err := s.txExec(ctx, tx, `INSERT INTO approval_birth_events(profile_id,sequence,approval_id,action_id,action_digest,strict_required,snapshot_digest,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,0,?,?,?,?,?,?,?,?,?,?)`,
 		profileID, activationID, actorActionID, manifestDigest, 0, "activation",
 		"", rootCanonical, rootSeal.Digest, rootSeal.SigningKeyID, rootSeal.Signature); err != nil {
 		return "", err
@@ -351,7 +351,7 @@ func (s *Store) ActivateAuthority(ctx context.Context, profileID, actorActionID,
 		if err != nil {
 			return "", err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO approval_birth_events(profile_id,sequence,approval_id,action_id,action_digest,strict_required,snapshot_digest,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		if _, err := s.txExec(ctx, tx, `INSERT INTO approval_birth_events(profile_id,sequence,approval_id,action_id,action_digest,strict_required,snapshot_digest,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
 			profileID, sequence, event.ApprovalID, event.ActionID, event.ActionDigest,
 			0, "", last, canonical, seal.Digest, seal.SigningKeyID, seal.Signature); err != nil {
 			return "", err
@@ -364,7 +364,7 @@ func (s *Store) ActivateAuthority(ctx context.Context, profileID, actorActionID,
 	if err != nil {
 		return "", err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO approval_birth_heads(profile_id,activation_digest,sequence,last_event_digest,actor_action_id,canonical_head,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?)`,
+	if _, err := s.txExec(ctx, tx, `INSERT INTO approval_birth_heads(profile_id,activation_digest,sequence,last_event_digest,actor_action_id,canonical_head,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?)`,
 		profileID, rootSeal.Digest, sequence, last, actorActionID, headCanonical,
 		headSeal.Digest, headSeal.SigningKeyID, headSeal.Signature); err != nil {
 		return "", err
@@ -590,7 +590,7 @@ func (s *Store) appendApprovalBirthTx(ctx context.Context, tx *sql.Tx, approval 
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO approval_birth_events(profile_id,sequence,approval_id,action_id,action_digest,strict_required,snapshot_digest,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+	if _, err := s.txExec(ctx, tx, `INSERT INTO approval_birth_events(profile_id,sequence,approval_id,action_id,action_digest,strict_required,snapshot_digest,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
 		s.authorityProfileID, sequence, approval.ApprovalID, approval.ActionID,
 		approval.ActionDigest, 1, snapshotDigest, previous, canonical, seal.Digest,
 		seal.SigningKeyID, seal.Signature); err != nil {
@@ -602,7 +602,7 @@ func (s *Store) appendApprovalBirthTx(ctx context.Context, tx *sql.Tx, approval 
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE approval_birth_heads SET sequence=?,last_event_digest=?,canonical_head=?,digest=?,signing_key_id=?,signature=? WHERE profile_id=?`,
+	_, err = s.txExec(ctx, tx, `UPDATE approval_birth_heads SET sequence=?,last_event_digest=?,canonical_head=?,digest=?,signing_key_id=?,signature=? WHERE profile_id=?`,
 		sequence, seal.Digest, headCanonical, headSeal.Digest, headSeal.SigningKeyID,
 		headSeal.Signature, s.authorityProfileID)
 	return err
@@ -656,7 +656,7 @@ func (s *Store) beginAuthorityWrite(ctx context.Context) (*sql.Tx, error) {
 	}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		tx, err := s.db.BeginTx(ctx, nil)
+		tx, err := s.beginWrite(ctx)
 		if err != nil {
 			return nil, mapAuthorityStoreError(err)
 		}
@@ -901,10 +901,10 @@ func (s *Store) revokeAuthority(ctx context.Context, grantID, actorActionID, rea
 	if administrative {
 		admin = 1
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO grant_events(event_id,grant_id,grant_version,revision,from_status,to_status,actor_action_id,actor_principal_id,administrative,reason,occurred_at,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, newAuthorityEvidenceID("gev_"), grantID, stored.signed.Grant.Version, stored.revision+1, string(stored.status), string(action.LifecycleRevoked), actorActionID, actor, admin, reason, at.UTC().Format(time.RFC3339Nano), stored.lastEventDigest, eventCanonical, seal.Digest, seal.SigningKeyID, seal.Signature); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO grant_events(event_id,grant_id,grant_version,revision,from_status,to_status,actor_action_id,actor_principal_id,administrative,reason,occurred_at,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, newAuthorityEvidenceID("gev_"), grantID, stored.signed.Grant.Version, stored.revision+1, string(stored.status), string(action.LifecycleRevoked), actorActionID, actor, admin, reason, at.UTC().Format(time.RFC3339Nano), stored.lastEventDigest, eventCanonical, seal.Digest, seal.SigningKeyID, seal.Signature); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE grant_heads SET revision=?,last_event_digest=?,status=? WHERE grant_id=?`, stored.revision+1, seal.Digest, string(action.LifecycleRevoked), grantID); err != nil {
+	if _, err = s.txExec(ctx, tx, `UPDATE grant_heads SET revision=?,last_event_digest=?,status=? WHERE grant_id=?`, stored.revision+1, seal.Digest, string(action.LifecycleRevoked), grantID); err != nil {
 		return err
 	}
 	return mapAuthorityStoreError(tx.Commit())
@@ -1009,7 +1009,7 @@ func (s *Store) ImportLegacyAuthority(ctx context.Context, legacyGrantID string,
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO legacy_authority_imports(grant_id,imported_version,actor_action_id,baseline_spent,imported_at) VALUES(?,?,?,?,?)`,
+	if _, err := s.txExec(ctx, tx, `INSERT INTO legacy_authority_imports(grant_id,imported_version,actor_action_id,baseline_spent,imported_at) VALUES(?,?,?,?,?)`,
 		legacyGrantID, grant.Version, actorActionID, total, at.UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
@@ -1132,7 +1132,7 @@ func (s *Store) insertLegacyBaselineTx(ctx context.Context, tx *sql.Tx, actorAct
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO budget_debits(action_id,account_id,operation_key,sequence,previous_digest,cumulative_spent,canonical_debit,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+	if _, err := s.txExec(ctx, tx, `INSERT INTO budget_debits(action_id,account_id,operation_key,sequence,previous_digest,cumulative_spent,canonical_debit,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?)`,
 		actorActionID, account, operation, 1, "", spent, canonical, seal.Digest,
 		seal.SigningKeyID, seal.Signature); err != nil {
 		return err
@@ -1322,7 +1322,7 @@ func (s *Store) insertGrantTx(ctx context.Context, tx *sql.Tx, grant action.Auth
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO grant_versions(grant_id,version,schema_version,profile_id,intent_id,intent_version,intent_digest,parent_grant_id,parent_version,issuer_principal_id,subject_principal_id,canonical_terms,digest,signing_key_id,signature,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, grant.GrantID, grant.Version, 2, grant.ProfileID, grant.IntentID, grant.IntentVersion, grant.IntentDigest, grant.ParentGrantID, grant.ParentGrantVersion, grant.IssuerPrincipalID, grant.SubjectPrincipalID, grant.CanonicalBytes(), seal.Digest, seal.SigningKeyID, seal.Signature, at.UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO grant_versions(grant_id,version,schema_version,profile_id,intent_id,intent_version,intent_digest,parent_grant_id,parent_version,issuer_principal_id,subject_principal_id,canonical_terms,digest,signing_key_id,signature,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, grant.GrantID, grant.Version, 2, grant.ProfileID, grant.IntentID, grant.IntentVersion, grant.IntentDigest, grant.ParentGrantID, grant.ParentGrantVersion, grant.IssuerPrincipalID, grant.SubjectPrincipalID, grant.CanonicalBytes(), seal.Digest, seal.SigningKeyID, seal.Signature, at.UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	eventCanonical := canonicalGrantEvent(grant.GrantID, grant.Version, 1, "", action.LifecycleActive, actorActionID, actor, administrative, reason, at, "")
@@ -1334,10 +1334,10 @@ func (s *Store) insertGrantTx(ctx context.Context, tx *sql.Tx, grant action.Auth
 	if administrative {
 		admin = 1
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO grant_events(event_id,grant_id,grant_version,revision,from_status,to_status,actor_action_id,actor_principal_id,administrative,reason,occurred_at,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, newAuthorityEvidenceID("gev_"), grant.GrantID, grant.Version, 1, "", string(action.LifecycleActive), actorActionID, actor, admin, reason, at.UTC().Format(time.RFC3339Nano), "", eventCanonical, eventSeal.Digest, eventSeal.SigningKeyID, eventSeal.Signature); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO grant_events(event_id,grant_id,grant_version,revision,from_status,to_status,actor_action_id,actor_principal_id,administrative,reason,occurred_at,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, newAuthorityEvidenceID("gev_"), grant.GrantID, grant.Version, 1, "", string(action.LifecycleActive), actorActionID, actor, admin, reason, at.UTC().Format(time.RFC3339Nano), "", eventCanonical, eventSeal.Digest, eventSeal.SigningKeyID, eventSeal.Signature); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO grant_heads(grant_id,active_version,revision,last_event_digest,status) VALUES(?,?,?,?,?)`, grant.GrantID, grant.Version, 1, eventSeal.Digest, string(action.LifecycleActive))
+	_, err = s.txExec(ctx, tx, `INSERT INTO grant_heads(grant_id,active_version,revision,last_event_digest,status) VALUES(?,?,?,?,?)`, grant.GrantID, grant.Version, 1, eventSeal.Digest, string(action.LifecycleActive))
 	return err
 }
 
@@ -1512,7 +1512,7 @@ func (s *Store) ensureBudgetAccountTx(ctx context.Context, tx *sql.Tx, profile, 
 		total = *budget.Total
 	}
 	accountID := budgetAccountID(profile, kind, scope)
-	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO budget_accounts(account_id,profile_id,scope_kind,stable_scope_id,max_total,per_operation,created_at) VALUES(?,?,?,?,?,?,?)`, accountID, profile, kind, scope, total, perOperationJSON(budget.PerOperation), at.UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err := s.txExec(ctx, tx, `INSERT OR IGNORE INTO budget_accounts(account_id,profile_id,scope_kind,stable_scope_id,max_total,per_operation,created_at) VALUES(?,?,?,?,?,?,?)`, accountID, profile, kind, scope, total, perOperationJSON(budget.PerOperation), at.UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	var storedProfile, storedKind, storedScope, storedPerOperation string
@@ -1643,7 +1643,7 @@ func (s *Store) ParkAuthorization(ctx context.Context, request AuthorityPendingR
 	if err != nil {
 		return AuthorityPendingResult{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO actions(action_id,schema_version,correlation_id,
+	if _, err = s.txExec(ctx, tx, `INSERT INTO actions(action_id,schema_version,correlation_id,
 		source_kind,source_protocol,source_channel,op_namespace,op_name,op_version,
 		parameters_digest,effect_class,state,requested_at,principal_id,intent_id,authority_refs,
 		identity_version,identity_evidence_digest,identity_canonical_evidence,identity_signing_key_id,identity_signature)
@@ -1658,7 +1658,7 @@ func (s *Store) ParkAuthorization(ctx context.Context, request AuthorityPendingR
 	if err := insertEvidenceTx(ctx, tx, signed); err != nil {
 		return AuthorityPendingResult{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO action_decisions(action_id,outcome,rule,decided_at,policy_version,policy_digest) VALUES(?,?,?,?,?,?)`,
+	if _, err = s.txExec(ctx, tx, `INSERT INTO action_decisions(action_id,outcome,rule,decided_at,policy_version,policy_digest) VALUES(?,?,?,?,?,?)`,
 		env.ActionID, "require_approval", "require_approval", request.At.UTC().Format(time.RFC3339Nano),
 		a.PolicyVersion, a.PolicyDigest); err != nil {
 		return AuthorityPendingResult{}, err
@@ -1686,7 +1686,7 @@ func (s *Store) ParkAuthorization(ctx context.Context, request AuthorityPendingR
 	if err := s.appendApprovalBirthTx(ctx, tx, a, snapshotDigest); err != nil {
 		return AuthorityPendingResult{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO approvals(approval_id,schema_version,action_id,action_digest,
+	if _, err = s.txExec(ctx, tx, `INSERT INTO approvals(approval_id,schema_version,action_id,action_digest,
 		preview_digest,canonical_preview,canonical_params,requested_from,reason,risk_summary,
 		policy_version,policy_digest,requested_at,expires_at,status,authority_snapshot_required)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`, a.ApprovalID, a.SchemaVersion, a.ActionID,
@@ -1820,7 +1820,7 @@ func (s *Store) startApprovedAuthorization(ctx context.Context, approvalID strin
 		evidenceDigest, law.Version, law.Digest, at); err != nil {
 		return AuthorityApprovedStartResult{}, err
 	}
-	result, err := tx.ExecContext(ctx, `UPDATE approvals SET canonical_params='' WHERE approval_id=? AND status=? AND canonical_params!='' AND EXISTS(SELECT 1 FROM actions WHERE action_id=? AND state=?)`,
+	result, err := s.txExec(ctx, tx, `UPDATE approvals SET canonical_params='' WHERE approval_id=? AND status=? AND canonical_params!='' AND EXISTS(SELECT 1 FROM actions WHERE action_id=? AND state=?)`,
 		approvalID, string(action.ApprovalApproved), a.ActionID, string(action.StateApproved))
 	if err != nil {
 		return AuthorityApprovedStartResult{}, err
@@ -1833,7 +1833,7 @@ func (s *Store) startApprovedAuthorization(ctx context.Context, approvalID strin
 	if err := tx.QueryRowContext(ctx, `SELECT canonical_params FROM approvals WHERE approval_id=?`, approvalID).Scan(&after); err != nil || !after.Valid || after.String != "" {
 		return AuthorityApprovedStartResult{}, ErrApprovalEvidenceCorrupt
 	}
-	updated, err := tx.ExecContext(ctx, `UPDATE actions SET state=? WHERE action_id=? AND state=?`,
+	updated, err := s.txExec(ctx, tx, `UPDATE actions SET state=? WHERE action_id=? AND state=?`,
 		string(action.StateAuthorized), a.ActionID, string(action.StateApproved))
 	if err != nil {
 		return AuthorityApprovedStartResult{}, err
@@ -1946,13 +1946,13 @@ func (s *Store) StartAuthorization(ctx context.Context, request AuthorityStartRe
 		return AuthorityStartResult{}, err
 	}
 	identityDigest := signed.Digest
-	if _, err = tx.ExecContext(ctx, `INSERT INTO actions(action_id,schema_version,correlation_id,source_kind,source_protocol,source_channel,op_namespace,op_name,op_version,parameters_digest,effect_class,state,requested_at,principal_id,intent_id,authority_refs,identity_version,identity_evidence_digest,identity_canonical_evidence,identity_signing_key_id,identity_signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,2,?,?,?,?)`, env.ActionID, env.SchemaVersion, env.CorrelationID, env.Source.Kind, env.Source.Protocol, env.Source.Channel, env.Operation.Namespace, env.Operation.Name, env.Operation.Version, env.ParametersDigest, env.Effect.Class, string(action.StateAuthorized), env.RequestedAt.UTC().Format(time.RFC3339Nano), actorPrincipalID, resolved.intent.IntentID, authorityRefsValue(resolved.refs), signed.Digest, signed.Canonical, signed.SigningKeyID, signed.Signature); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO actions(action_id,schema_version,correlation_id,source_kind,source_protocol,source_channel,op_namespace,op_name,op_version,parameters_digest,effect_class,state,requested_at,principal_id,intent_id,authority_refs,identity_version,identity_evidence_digest,identity_canonical_evidence,identity_signing_key_id,identity_signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,2,?,?,?,?)`, env.ActionID, env.SchemaVersion, env.CorrelationID, env.Source.Kind, env.Source.Protocol, env.Source.Channel, env.Operation.Namespace, env.Operation.Name, env.Operation.Version, env.ParametersDigest, env.Effect.Class, string(action.StateAuthorized), env.RequestedAt.UTC().Format(time.RFC3339Nano), actorPrincipalID, resolved.intent.IntentID, authorityRefsValue(resolved.refs), signed.Digest, signed.Canonical, signed.SigningKeyID, signed.Signature); err != nil {
 		return AuthorityStartResult{}, err
 	}
 	if err := insertEvidenceTx(ctx, tx, signed); err != nil {
 		return AuthorityStartResult{}, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO action_decisions(action_id,outcome,rule,decided_at,policy_version,policy_digest) VALUES(?, 'allow','authority',?,?,?)`, actionID, request.At.UTC().Format(time.RFC3339Nano), request.PolicyVersion, request.PolicyDigest); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO action_decisions(action_id,outcome,rule,decided_at,policy_version,policy_digest) VALUES(?, 'allow','authority',?,?,?)`, actionID, request.At.UTC().Format(time.RFC3339Nano), request.PolicyVersion, request.PolicyDigest); err != nil {
 		return AuthorityStartResult{}, err
 	}
 	if err := s.insertAuthorizationStartTx(ctx, tx, actionID, authorityEvidenceEpoch, resolved,
@@ -2020,7 +2020,7 @@ func (s *Store) insertAuthorizationSnapshotTx(ctx context.Context, tx *sql.Tx, s
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO authorization_snapshots(
+	_, err = s.txExec(ctx, tx, `INSERT INTO authorization_snapshots(
 		action_id,context_version,requester_principal_id,actor_principal_id,evidence_digest,
 		intent_id,intent_version,intent_digest,canonical_context,authorization_digest,
 		snapshot_kind,approval_id,intent_purpose,principal_chain,budget_kind,budget_remaining,
@@ -2494,7 +2494,7 @@ func (s *Store) appendDebitTx(ctx context.Context, tx *sql.Tx, actionID, account
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO budget_debits(action_id,account_id,operation_key,sequence,previous_digest,cumulative_spent,canonical_debit,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?)`, actionID, account, operation, sequence+1, tail, spent+1, canonical, seal.Digest, seal.SigningKeyID, seal.Signature); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO budget_debits(action_id,account_id,operation_key,sequence,previous_digest,cumulative_spent,canonical_debit,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?)`, actionID, account, operation, sequence+1, tail, spent+1, canonical, seal.Digest, seal.SigningKeyID, seal.Signature); err != nil {
 		return err
 	}
 	return s.upsertBudgetCounterTx(ctx, tx, account, operation, spent+1, sequence+1, seal.Digest)
@@ -2509,7 +2509,7 @@ func (s *Store) upsertBudgetCounterTx(ctx context.Context, tx *sql.Tx, account,
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO budget_counters(account_id,operation_key,
+	_, err = s.txExec(ctx, tx, `INSERT INTO budget_counters(account_id,operation_key,
 		spent,sequence,tail_digest,canonical_counter,digest,signing_key_id,signature)
 		VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,operation_key) DO UPDATE SET
 		spent=excluded.spent,sequence=excluded.sequence,tail_digest=excluded.tail_digest,
@@ -2605,7 +2605,7 @@ func (s *Store) insertAuthorizationStartTx(ctx context.Context, tx *sql.Tx,
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO authorization_starts(action_id,generation,
+	if _, err := s.txExec(ctx, tx, `INSERT INTO authorization_starts(action_id,generation,
 		intent_id,intent_version,intent_digest,grant_chain,debit_set_digest,
 		authorization_time,canonical_start,digest,signing_key_id,signature)
 		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, actionID, generation, record.IntentID,

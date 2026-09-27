@@ -327,7 +327,10 @@ func (s *Store) ApprovalDetailUnderLaw(ctx context.Context, approvalID string, l
 }
 
 func (s *Store) approvalDetail(ctx context.Context, approvalID string, law *PolicyPin) (ApprovalDetailRow, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	// A READ: it opens no judged transaction and blocks on nothing (the
+	// official pass's find: a mechanical rewrite had routed it through
+	// beginWrite and a foreign profile could not read its own detail).
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return ApprovalDetailRow{}, fmt.Errorf("action/sqlite: begin approval detail: %w: %w", ErrApprovalUnreadable, err)
 	}
@@ -795,7 +798,7 @@ func approvalRowMoved(seen, now action.Approval) string {
 }
 
 func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID string, law *PolicyPin, wantDigest string, seen *action.Approval) ([]byte, action.Operation, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return nil, action.Operation{}, fmt.Errorf("action/sqlite: begin claim: %w: %w", ErrApprovalUnreadable, err)
 	}
@@ -896,7 +899,7 @@ func (s *Store) ClaimApprovalParamsUnderDigest(ctx context.Context, approvalID s
 	// still being there. ExecuteApprovedAction checks approval=APPROVED and
 	// action=APPROVED before this transaction opens; a state that moved after
 	// those prechecks used to be consumed here and handed to the executor.
-	res, err := tx.ExecContext(ctx,
+	res, err := s.txExec(ctx, tx,
 		`UPDATE approvals SET canonical_params = ''
 		  WHERE approval_id = ? AND canonical_params != '' AND status = ?
 		    AND EXISTS (SELECT 1 FROM actions WHERE action_id = ? AND state = ?)`,

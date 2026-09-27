@@ -31,7 +31,7 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 	path := buildV11LegacyFile(t, broken)
 
 	// Step 0 — the boot fails closed AND points at the procedure.
-	_, err := Open(path)
+	_, err := openFull(path)
 	if err == nil || !strings.Contains(err.Error(), "docs/operations/tombstone-manual-repair.md") {
 		t.Fatalf("the boot error must point the operator at the procedure: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 	// The stored digest was computed over the zero-time preimage (the
 	// legacy row never had a readable date), so restoring a REAL date
 	// makes the digest incoherent — the contract catches exactly that:
-	if _, err := Open(path); err == nil || !strings.Contains(err.Error(), "approval_digest") {
+	if _, err := openFull(path); err == nil || !strings.Contains(err.Error(), "approval_digest") {
 		t.Fatalf("a correction that breaks preimage coherence is caught by name: %v", err)
 	}
 	// The TRUE adjudication for this row: the independent evidence
@@ -126,7 +126,7 @@ func TestManualRepairProcedure_isExecutableEndToEnd(t *testing.T) {
 
 	// Step 6 — verify after: the boot converges and the evidence
 	// reconstructs by its digest.
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("AUDIT R11-R4: after the honest repair the boot must converge: %v", err)
 	}

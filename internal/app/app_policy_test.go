@@ -123,7 +123,7 @@ func policyEnv(id string) *envelope.Envelope {
 
 func openPolicyStore(t *testing.T) *actionsqlite.Store {
 	t.Helper()
-	store, err := actionsqlite.Open(filepath.Join(t.TempDir(), "korvun.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(t.TempDir(), "korvun.db"), testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

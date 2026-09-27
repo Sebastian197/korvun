@@ -68,7 +68,7 @@ func TestValidateToolEffects_wholeSafeToolsetPasses(t *testing.T) {
 // carries only declared tools).
 func TestBuild_declaredToolsStillBoot(t *testing.T) {
 	dbPath := t.TempDir() + "/korvun.db"
-	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("a config of declared tools must keep booting: %v", err)
 	}

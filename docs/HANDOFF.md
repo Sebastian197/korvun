@@ -113,6 +113,597 @@ Para TODA cura, antes de tocar código y POR ESCRITO EN EL CANTO:
 Si una cura no puede cumplir los tres moldes, se dice CUÁL falta y POR QUÉ antes
 de entregar, no después de que lo encuentre el adversario.
 
+## NORMA PERMANENTE — NINGUNA CAPACIDAD ESTÁ TERMINADA SI EL OPERADOR NO LA VE (director, 2026-09-23) — CRÍTICA
+
+Nace de una tarde entera sobre el perfil REAL del director. Para que una acción
+irreversible llegara a aparcar hicieron falta **tres ediciones a mano de un
+fichero JSON** —encender aprobaciones, poner techo de efecto, levantar el
+sombreado de la herramienta—, y en ningún momento la app dijo cuál de las tres
+faltaba. La pantalla recitaba correctamente sus cinco condiciones y no decía
+**cuál** fallaba en ESE perfil, ni ofrecía acción para ninguna.
+
+**Criterio de HECHO, no de estilo.** Toda función que cambie lo que Korvun hace
+con una acción —interruptores, techos, modos, contratos, autoridad, políticas—
+lleva, en el MISMO tren y ANTES de su PR:
+
+| | |
+|---|---|
+| **(a) Su reflejo en «¿Qué pasa hoy?»** | qué ocurre con una acción irreversible en ESTA instalación, qué falta en ESTE perfil, y el botón que lo cambia |
+| **(b) Su frase** | una, en el onboarding o en la pantalla que le corresponda |
+| **(c) Su prueba sobre un perfil REAL migrado de dos versiones atrás** | copia real, migrada. El perfil recién creado no cuenta como cobertura |
+
+**Un tren que añada un interruptor en un fichero sin su pantalla NO SE ACEPTA.**
+
+La pantalla «¿Qué pasa hoy?» nace en la v0.16.2 y desde entonces es requisito de
+cierre de cada tren.
+
+### Por qué (c) es una fila propia y no una recomendación
+
+El perfil del director estaba en **schema 12** y la v0.16.1 escribe **15**. La
+migración corrió al primer arranque, es irreversible —ningún binario anterior
+vuelve a abrir ese fichero— y **no escribió una sola línea en el log**:
+`grep -ci migrat` sobre el log entero devuelve 0. Un perfil recién creado no
+habría enseñado nada de eso, porque nace en la versión actual.
+
+## TREN E reducido de la v0.16.2 — estado en la puerta previa al PR (2026-09-27)
+
+**Qué es.** El plan de fallos del libro que no se puede usar
+(`design-drafts/2026-09-26-tren-E-plan-de-fallos-codex.md`, fuera del
+repositorio): el juez de la forma y de la identidad, la siembra y su residuo,
+la migración, las superficies (el grabador, la CLI y «¿Qué pasa hoy?») y el
+inventario de textos.
+
+**Dónde está.** Rama `v0162-mockups`, worktree `korvun-tag0161.nosync`, sobre
+`518ba15` (el `master` con el PR #68; la rama avanzó en fast-forward el
+2026-09-27, sin reescribir nada). Todo el trabajo de la v0.16.2, el tren E
+incluido, va en el PR de esta rama. La fusión es del director.
+
+**Tandas.** 1 (GE2–GE4, el juez y el hook), 2 (GE1, GE1b, GE5, la siembra, el
+residuo y la forma), 3 (GE6, la migración; el timeout de test sube a 60 m en
+el Makefile y en CI) y 4 (GE7–GE9, las superficies): cerradas y adjudicadas.
+5 (GE10, el inventario de textos, TE54 y MU54): entregada.
+
+**La puerta previa al PR (2026-09-27).**
+- El barrido de letreros: una corrección, de comentario, en el godoc de
+  `ErrLedgerUnreadable` de `internal/controlapi/act.go`.
+- A · el caso sano de un perfil de la v0.16.0 es «Libro anterior a esta
+  versión»: `legacy_unfounded` en la pantalla y en `ledger check` (sale con 0 y
+  la cadena intacta), sin D2 ni D3, con los botones activos y el acto nuevo
+  encadenado tras los recibos anteriores. La orden de la puerta decía «libro
+  ok»; el director la corrigió en esos términos.
+- B · la pasada con la app empaquetada vio, tras un cambio aplicado y guardado,
+  la frase «aplicando; tu perfil en disco todavía no ha cambiado» detrás de
+  «Hecho». Curado: cuando el sondeo llega a un estado terminal, la fila dice
+  solo la frase de su desenlace. Molde:
+  `cmd/korvun-desktop/frontend/src/views/WhatsHappening.terminal.test.tsx`,
+  con los cuerpos reales de las puertas fijados por
+  `internal/controlapi/whats_happening_applying_wire_test.go`.
+- TE50 se hace con la app compilada desde el árbol de este commit (árbol fijo,
+  commit desechable en un clon aparte, build limpia por la receta de
+  `release-desktop.yml` y manifiesto) sobre una copia de un perfil creado con la
+  v0.16.0 publicada: sano, ilegible y no disponible. El de entorno, por D-2, se
+  prueba en proceso (el HTTP real de la app y jsdom). El manifiesto y la
+  evidencia van en el cuerpo del PR.
+- La fila verde: con las aprobaciones encendidas, D2 y D3 de entorno salían
+  con «Una acción irreversible se aparca y te espera» al lado, y en esos dos
+  estados ningún acto se registra. Curado por decisión del director
+  (2026-09-27): con `unreadable` y `environment` esa fila no se pinta y las
+  jaulas salen desactivadas; con `unavailable` no cambia nada. Molde:
+  `cmd/korvun-desktop/frontend/src/views/WhatsHappening.parks.test.tsx`.
+- El adversario, sobre el diff completo del tren con la cura de B
+  (`.claude/adversary/v0162-tren-E-diff-verdict.md`): VETO LEVANTADO, sin P1
+  ni P2. De sus once P3, las cuatro frases que se sabían falsas (H7–H10) y los
+  tres comentarios del tren que localizaban por posición (H11) se curaron en la
+  puerta; H1–H6 van a la lista de cierre.
+
+**Límites conocidos, para la v0.16.3** (decisión D-1 del director: la v0.16.2
+sale con el tren E solo).
+- G: un libro sin marca no tiene botón para fundarlo desde la pantalla; y tras
+  «Activar almacén» con sondeo la fila no dice dónde vive el libro (la cura
+  prevista lleva la ruta en un campo propio de la respuesta, no en el
+  `detail`).
+- H: las puertas de escritura y la CLI que escribe dan los fallos del libro sin
+  clase propia, y el texto de `ErrLedgerUnreadable` habla de la fila de
+  identidad también ante un daño de forma.
+- Dos aperturas simultáneas sobre un fichero que aún no existe pueden fallar
+  con `ledger_busy`.
+- F: la clave de firma (crash al crearla o rotarla, registro concurrente,
+  recuperación concurrente de su `.new`).
+
+**Pendiente.** Los checks requeridos del PR sobre su SHA exacto; el informe
+externo de Codex, que lanza el director; la pasada UX del director sobre la
+frase NUEVA de D2 y los tres estados de la pantalla (plan §7); y, antes de
+etiquetar, su pasada manual sobre la build empaquetada.
+
+**El marcador.** Este PR lleva el marcador SIN versión («VETO LEVANTADO <C>»,
+con el commit de código como padre). El versionado
+(`KORVUN-REBASE-EVIDENCE v1`, con el número real del PR) queda para la
+integración, por decisión del director: el número no existía antes de abrir el
+PR, antes de la integración `scripts/rebase_evidence.py` solo admite el
+versionado con el commit de código como padre directo, y ponerlo aquí exigiría
+forzar el push.
+
+**La lista de cierre (P3).**
+1. `ledger_busy` al nacer la conexión sobre una ruta nueva (tanda 3); su texto
+   es del tren H.
+2. El registro por ruta en los seams de fallo del juez y de etapa, propuesto
+   y sin aplicar (tanda 3).
+3. La redundancia de las rejillas del paquete sqlite, contada y sin quitar
+   (tanda 3).
+4. MU60-callback, registrada como inaplicable: la guarda del callback de
+   confirmación no existe (tanda 4).
+5. `mapGuardError` nombra el busy de un `BeginTx`, pero su causa queda solo
+   como texto (tanda 1); es del tren H.
+6. D21 (`TestBuild_bootsOverABadShapeAndNamesIt`, en
+   `internal/app/ledger_shape_boot_test.go`) no se ha tocado: el plan pedía
+   endurecer sus asertos, la tanda 4 limitó los cambios a tests aprobados a
+   dos, y TE12, TE40 y TE41 cubren con moldes nuevos lo que el plan le pedía.
+7. Una respuesta que ya llega terminal en el POST, sin sondeo (por ejemplo
+   `not_applied` con su `detail`), pinta la frase del desenlace y detrás su
+   `detail`, que dice lo mismo con otras palabras: redundante, no falso; fuera
+   del contrato de B.
+8. `cmd/korvun-desktop/frontend/src/views/Console.tsx` lleva una directiva
+   `eslint-disable` sin uso (un aviso de lint, no un error); ajeno al tren.
+9. El `fetch` de «¿Qué pasa hoy?» no tiene límite de tiempo: `getJSON` llama a
+   `fetch(url, { cache: 'no-store' })` sin `AbortController`, y ni el proxy
+   del shell ni el servidor de assets de Wails ponen uno. Un núcleo que no
+   contesta deja la pantalla en «Leyendo tu perfil…». Medido en la puerta
+   previa al PR: WebKit, con un esquema propio, esperó 75 s sin cortar la
+   petición. No se toca en la v0.16.2 (director, 2026-09-27).
+10. H1 del adversario: el juicio del libro lee la fila de identidad y la marca
+    en dos instantáneas; una fundación o adopción que confirma entre las dos,
+    desde otro pool, da un `ledger_unreadable` falso, y en el hook ese
+    veredicto se queda pegado a la conexión. Declarado en las notas y en
+    `docs/operations/ledger-restore.md` (comprobar otra vez con todo parado).
+11. H2: D2 manda borrar el `-wal` y el `-shm` del libro dañado;
+    `docs/operations/ledger-restore.md` manda guardarlos como evidencia. La
+    copia de D2 la decide el director.
+12. H3: si el sondeo llega a un estado terminal sin `receipt_id`, la fila del
+    acto sigue diciendo que el recibo «llegará cuando el cambio termine».
+13. H4: agotado el presupuesto de sondeo, la fila dice «tu perfil en disco
+    todavía no ha cambiado» sin saberlo.
+14. H5: una versión guardada como BLOB que el parser lee como anterior es
+    «behind» para el lector y `ledger_unreadable` para el arranque (el bump
+    compara el valor crudo).
+15. H6: la rama de `app.Build` que arranca sobre una marca malformada no tiene
+    molde (la mutación GM-Z deja `./internal/app` en verde).
+16. Comentarios que localizan por posición («above», «below») y entran con
+    este PR. Dos están en moldes congelados del tren E y no se tocan sin
+    permiso: `internal/action/sqlite/ledger_e1_persistent_test.go` («every open
+    below births afresh») e `internal/cli/ledger_e4_test.go` («what the mould
+    above does»). Los demás vienen de piezas de la v0.16.2 anteriores al tren
+    E, casi todos en tests; entre ellos, `internal/action/sqlite/ledger_identity.go`
+    («the judgement above», «the write below») y el comentario del test
+    aprobado `keeps polling until the supervisor reports a terminal state`. No
+    son falsos hoy; la ley los prohíbe porque se pudren.
+17. AS07 (`TestAuthority_ConcurrentStartsShareAncestorBudget`, de la v0.16.1)
+    vive en el borde del `busy_timeout` de 5 s. Aislado, con `-race` y
+    cobertura, pasa 10 de 10 a 4,8–5,1 s por pasada, igual en esta rama que en
+    `master` (`518ba15`). En la pasada de cobertura del `make quality` del
+    2026-09-27 tardó 20,67 s y un arranque dio `ledger_busy`
+    (committed=12 exhausted=35). No se toca en la v0.16.2: es un test aprobado
+    de la v0.16.1 (director, 2026-09-27).
+
+Cerrados: el nombre viejo de D07 en el pretest del marcador (marcado como
+superado, tanda 5); el entorno sin pintar en pantalla (tanda 4); el tiempo
+del paquete sqlite frente al timeout de 30 m (tanda 3); en la puerta previa al
+PR, la frase de `applying` que sobrevivía al estado terminal (B), la fila verde
+junto a D2 y D3 de entorno, y los comentarios del tren que localizaban por
+posición («Seeded above» en `store.go`, «the three classes below» en
+`ledger_class.go`, «the reads below» en `profile_standing.go`), cuya entrada
+en esta lista los daba por ajenos al tren, y no lo eran (H11).
+
+**Fuera del tren.** El vocabulario de los mensajes de error del almacén,
+empezando por «the ledger's identity row cannot be read» para toda forma
+ilegible, es del tren H (plan §5): el tren E no afirma un vocabulario de
+errores limpio en toda la release.
+
+## Fichado — la jaula de red de `webhook_call` es un bloqueo más sin acción en pantalla (director, 2026-09-24)
+
+Cuarto bloqueo de la misma familia que los tres de «¿Qué pasa hoy?»: el
+`allow_hosts` de `webhook_call`. Hoy solo se cambia editando el fichero.
+
+**Lo que el director pidió**: que la pantalla lo muestre en el estado VERDE
+—«puede hablar con: …»— y ofrezca «Añadir host» con confirmación, por la Control
+API como los demás botones.
+
+### La reproducción, contra su almacén y corregida donde hacía falta
+
+**Lo que el almacén prueba**, leído sobre una copia:
+
+| | |
+|---|---|
+| `apr_2cc4cf29e5399088c33917a06d9d5047` | **APPROVED** por `principal_operator` el 2026-09-24T06:12:16Z |
+| su recibo de decisión | `rcpt_1f4f9a52598ce4a1c4eea5f94542dd5c` — `chain_seq 54`, `SUCCEEDED`, `unclassified` |
+| su acción, `act_b43031738c5de40d5c7082133157a358` | terminó **FAILED** |
+| el recibo de esa ejecución | `rcpt_767d025451c073fb96bdb9dd27a42cb8` — `chain_seq 55`, `FAILED`, `write_irreversible` |
+| el `allow_hosts` de hoy | `["127.0.0.1:8765"]` |
+
+**Dos correcciones a la reproducción tal como llegó**, y las dos importan:
+
+1. **No fue `apr_843888a7…`.** Esa aprobación —la que quedó en la bandeja anoche—
+   **EXPIRÓ** a las 06:10:10 con decisión `clock` y **sin recibo de decisión**.
+   Nadie la aprobó. La que se aprobó es otra, nacida esta mañana.
+2. **`rcpt_1f4f9a52…` NO es el recibo del rechazo de la jaula: es el recibo de la
+   DECISIÓN.** El de la ejecución fallida es `rcpt_767d0254…`, el siguiente de la
+   cadena.
+
+**Y eso segundo es, en sí, un hallazgo de la misma familia**: el operador cogió
+el recibo que la pantalla le enseñó tras aprobar —el de su propia decisión— y ese
+**no** es el que registra qué le pasó a la acción. La pantalla le da un
+identificador que no lleva al desenlace.
+
+**Lo que el almacén NO prueba**: a qué host apuntaba la petición. La reclamación
+purga los parámetros, por diseño, así que «la jaula rechazó `127.0.0.1:5678`» es
+la palabra del director más un `allow_hosts` coherente con ella, no algo que el
+almacén afirme. El recibo tampoco lleva `result_digest`.
+
+### Recomendación de reparto, para que no retrase la v0.16.2
+
+- **En la v0.16.2**: mostrar la jaula en el estado verde. Es lectura, no abre
+  camino de escritura nuevo, y cabe.
+- **En la v0.16.3, con el tren del symlink**: el botón «Añadir host» con
+  confirmación. Es una cuarta acción de escritura con sus moldes y su plan de
+  fallos —¿qué pasa con un host que no resuelve, con uno que ya está, con uno
+  que abre la jaula entera?—, y meterla ahora es crecer el alcance de un tren
+  que ya tiene tres curas en rojo.
+
+Adjudicación del director pendiente.
+
+## CERRADO en la v0.16.2 — los actos del operador por la Control API ya quedan en el libro (director, 2026-09-24)
+
+**El director revocó la reducción el mismo día que se propuso**: «G3 NO SE RETIRA
+NI SE FICHA», y la pieza entró en el tren de la v0.16.2 antes del tag.
+
+Lo que sigue es el hallazgo tal como se levantó, conservado porque explica por qué
+la pieza cubre también la puerta del builder y no solo los botones nuevos. La
+cura, su plan de fallos y sus dieciséis mutaciones están en
+`docs/superpowers/specs/2026-09-24-v0162-el-acto-del-operador-pretest.md` y en
+`docs/superpowers/specs/evidence/v0.16.2/mutations.txt`.
+
+**Lo que queda abierto de esta ficha**, y es una sola cosa: la ventana entre el
+cutover y el cierre del acto no se prueba con un crash real. El estado que deja
+—acto `authorized` sin cerrar, que dice «se intentó» y no «se logró»— está
+declarado en el plan. Un molde de crash-restart con sonda del punto exacto de
+interrupción queda fichado para un tren propio.
+
+### El hallazgo original, conservado
+
+
+
+**Hallado** por la pasada adversaria interna sobre el diff de la v0.16.2, al
+comprobar una garantía del papel en vez de creerla.
+
+El papel de la v0.16.2 prometía, en su G3, que cada acción de la pantalla
+«queda como acto del operador en el libro», citando «el patrón de
+`recordAuthorityAct`». Ejecutado: `recordAuthorityAct` vive en `internal/cli` y
+necesita un `actionsqlite.Store` abierto que la Control API no tiene. Y
+`POST /api/config` —la puerta por la que el builder escribe el perfil desde la
+Etapa 14— **tampoco registra ningún acto**.
+
+**Alcance real, medido:** ningún cambio de configuración hecho desde la ventana
+(builder incluido) deja rastro en el libro de acciones. Solo lo dejan los actos
+de autoridad de la CLI.
+
+**No es una regresión de la v0.16.2.** Es un hueco que esa release hereda, y que
+sus puertas nuevas heredan con ella. G3 se redujo a lo que el árbol sostiene
+—la misma validación y el mismo guardián de autobloqueo que la puerta hermana— y
+la mitad retirada es esta ficha.
+
+**Adjudicado por el director el 2026-09-24:** el libro SÍ cubre los cambios de
+perfil por la Control API. La identidad es la del propio surface — la credencial
+de consola delante, la carga de trabajo del operador de la Control API detrás
+(`__control_api__`), el rol de administrador como responsable — que es lo que hace
+atribuible un cambio hecho desde la ventana sin inventar una firma que nadie dio.
+
+---
+
+## CERRADO en la v0.16.2 — el perfil sin almacén, la puerta que lo funda, y el acto que cierra tras un cutover REAL (director, 2026-09-24)
+
+**La decisión del director sobre el §0 del handoff de sesión** (los tres tests
+rojos de `internal/shell` por perfiles sin `storage`): un perfil sin almacén NO
+se muta por la Control API —cada puerta rehúsa por nombre, `no_ledger`— SALVO
+la mutación que activa el almacén, que funda el libro y deja en él su primer
+acto antes del cutover. Aplicada así:
+
+| | |
+|---|---|
+| la puerta | `POST /api/whats-happening/enable-storage`, sin confirmación; la fila `store` de la pantalla lleva el botón «Activar almacén» (16 filas, seis con botón, diez de texto, cinco puertas) |
+| dónde funda | la ruta por defecto de `storage: {}` en todo el árbol (`<UserConfigDir>/korvun/korvun.db`), la misma que resuelve el arranque. Solo CREA: un fichero ya presente que este proceso no fundó rehúsa `ledger_exists` con la ruta (es el libro del escritorio en esa máquina); el que este proceso fundó en un intento que rodó atrás se readopta para poder reintentar |
+| los tres tests | reescritos a esa verdad y declarados antes/después en el papel: `TestReload_pristinePersistAndAddrRotation` y `TestProxy_reloadCutover_pollNeverSeesPhantomFailure` con almacén y el acto `SUCCEEDED` en el libro; `TestReload_reprovisionsKeychainSecret` pasa por el 503, el botón, el 202 y el canal |
+
+**El hallazgo que apareció al cerrarlo, capturado antes de diseñar**
+(`docs/superpowers/specs/evidence/v0.16.2/probe-real-cutover.txt`): contra el
+supervisor REAL, el acto del operador de cualquier puerta acababa
+`OUTCOME_UNKNOWN`. El app que sella el acto se apaga antes de que el estado sea
+terminal, así que el sondeo del estado llegaba a un app que no conocía el acto;
+y el `Build` del app nuevo corre `RecoverPreviousLife`, que cierra todo
+`AUTHORIZED` como huérfano de «una vida anterior». Todos los moldes de la pieza
+del acto usaban un recargador falso; ninguno lo vio. La cura, en cuatro
+costuras: `supervisor.WithStateObserver` (el proceso se entera de cada estado),
+`app.ConfigActRegistry` (uno por proceso, por ciclo en el escritorio: recuerda
+en qué libro vive cada acto desde el sello, cierra UNA vez por el libro vivo o
+por apertura transitoria, y el segundo cerrador ESPERA el recibo),
+`Store.RecoverPreviousLife(ctx, keep...)` (respeta los actos que este proceso
+todavía gobierna, y solo esos) y el `ledgerlessRecorder` del app sin almacén.
+Probado sobre cutovers reales: éxito, vuelta atrás, y sin que nadie sondee.
+Papel: `docs/superpowers/specs/2026-09-24-v0162-el-almacen-y-el-cierre-del-acto-pretest.md`
+(lectura interna de 10 min: 3 P2 plegados como delta, §7).
+
+**Pasada interna sobre el diff completo (≈7 min): VETO LEVANTADO**, con un P2
+de instrumento y ocho P3, los nueve curados en la misma sesión (papel §8):
+`keep` por fichero y no por grafía; un recorder desatado nunca cierra; memoria
+de actos cerrados acotada (512); los 409 responden el acto cerrado con recibo;
+la pantalla sondea hasta estado terminal (250 ms, 30 s); frases y asertos
+corregidos. 36 mutaciones ejecutadas, 34 rojas, dos verdes que fueron hallazgo
+del instrumento (M66, M84) y se repitieron en rojo, una declarada (M79).
+
+**Pasada OFICIAL (10 min de 30): VETO MANTENIDO por un solo P2 de producto, de
+letrero** («en la carpeta del perfil» donde el código dice carpeta de usuario),
+más nueve P3; los diez plegados en la misma vuelta (papel §9): creación
+exclusiva del libro (`O_EXCL`), refusal de ruta relativa, molde de vuelta atrás
+sin sondeo sobre el supervisor real, godocs a la verdad. Segunda vuelta de la
+oficial, acotada al delta (7 min): VETO LEVANTADO, dos P2 de instrumento (un
+residuo de mutación en el árbol; una captura `[build failed]` contada como
+rojo) y cinco P3, los siete plegados (papel §10).
+
+**Dos preguntas al director, aplicada la opción conservadora en ambas:**
+
+1. El escritorio NUNCA arranca un perfil sin almacén: `EnsureDefaultConfig` llama
+   a `EnsureChatBlocks`, que inyecta `storage: {}` en todo perfil
+   (`internal/shell/upgrade.go`). La fila con botón la alcanza un perfil de
+   `korvun serve` escrito a mano, o uno al que se le quitó el bloque. No se ha
+   tocado `EnsureChatBlocks`. Si el director quiere que el primer arranque nazca
+   SIN almacén para que la pantalla lo explique y lo active, es decisión suya.
+2. La ruta donde se funda el libro es la de `storage: {}` (carpeta de usuario),
+   no «junto al fichero del perfil»: la app no conoce la ruta del perfil, solo
+   el supervisor. Un `serve` con el perfil en otra carpeta recibe su libro en la
+   carpeta de usuario. Cambiarlo exige pasar la ruta del perfil al app.
+
+**Deuda declarada de esta pieza (no bloquea el tag):** un crash del PROCESO en
+la ventana cutover→cierre sigue sin molde de reinicio real (el arranque
+siguiente lo cierra `OUTCOME_UNKNOWN` con recibo, y ESO sí tiene molde); `keep`
+protege solo los actos de config de este proceso — un acto de autoridad de la
+CLI en vuelo junto al servidor sigue recuperándose como hoy (preexistente), y un
+segundo `korvun serve` sobre el mismo fichero con registro vacío se los lleva;
+la rama «clave ilegible → no se cierra» del cierre transitorio queda declarada
+sin rojo alcanzable (M79).
+
+## PENDIENTE DE CIERRE en la v0.16.2, REDISEÑADO — el libro sabe qué perfil lo fundó (orden del director, 2026-09-24; rediseño autorizado el mismo día, tren B; el tren E sigue abierto)
+
+**Qué pasó antes:** el primer diseño (la marca en la celda `result_digest` del
+recibo, un `refuseIfForeign` de Go en cada puerta y dos paseos estructurales
+sobre el fuente como garantía de completitud) llegó a SEIS rondas oficiales con
+veto: cada ronda halló una forma más que el paseo aceptaba y la tabla de puertas
+no veía, y tres de ellas un defecto de producto en la misma zona (una marca
+malformada leída como ausencia; la adopción que no juzgaba la marca; la guarda
+de la adopción leída desde la caché del handle). El director paró el tren
+(`STOPPED_FOR_REDESIGN`) y autorizó el rediseño con sonda previa y plan de
+fallos completo antes del rojo. La historia entera, ronda a ronda, está en
+`docs/superpowers/specs/2026-09-24-v0162-el-libro-fundado-por-este-perfil-pretest.md`
+(§9–§14) y en el paquete de parada del informe de sesión.
+
+**Qué es ahora** (papel: `docs/superpowers/specs/2026-09-24-v0162-el-marcador-rediseñado-pretest.md`):
+
+- **R2 · la identidad en su tabla.** `ledger_identity`, una fila (`id = 1`),
+  `owner_digest` con `CHECK` de forma canónica (`sha256:` y 64 hex
+  minúsculas), `founded_by_action`, `adopted_by_action`, `written_at`. La
+  escriben solo `FinishFounding` (INSERT) y `AdoptLedger` (UPSERT), en la MISMA
+  transacción que su recibo (seam de crash probado: o los dos o ninguno). Se
+  lee con una consulta, sin `LIKE`, sin plegado, sin caché. Migración v15 → v16:
+  crea la tabla y siembra la fila desde el último recibo `SUCCEEDED` con marca
+  canónica — el último recibo marcado, si su marca es canónica; si no lo es,
+  sin fila y `ledger_mark_malformed` (clase ilegible), aunque haya un recibo
+  canónico anterior (fail closed). Ese paso v15 → v16 lo hace el primer
+  perfil que abra el libro, ajeno incluido (no hay fila que juzgar); desde
+  v16, un libro ajeno no se migra. Sin fila y sin marca: legacy. Sin fila y
+  con recibo marcado (fila borrada): `ledger_unreadable`.
+- **R3 · transacciones inmediatas y handles con identidad.** Todo handle que
+  escribe abre con `_txlock=immediate`; `beginWrite` juzga la fila DENTRO de la
+  transacción (ninguna reescritura confirmada por otra conexión cabe entre el
+  juicio y la escritura), rehúsa por nombre y refresca la guarda; `BUSY` se
+  nombra `ledger_busy`. Los abridores exportados son `OpenFor`, `OpenOperatorFor`
+  y `OpenReadOnlyFor`, con el digest como parámetro; los sin identidad son del
+  paquete; `SetProfileIdentity` no existe: un handle sirve a un perfil toda su
+  vida. Ocho llamadores de producción migrados (app, registro, `CreateLedger`,
+  CLI ×3, e2e-harness). El mantenimiento (recuperación, poda) y la migración de
+  un esquema existente rehúsan sobre un libro ajeno (la poda juzga y borra en
+  UNA transacción inmediata: ninguna adopción cabe entre su juicio y su
+  `DELETE`, tren C; y en el arranque la poda decide: una adopción confirmada
+  entre el juicio y la poda es «sin poda», no arranque fallido, tren D); el
+  arranque sobre un libro
+  ajeno arranca sin intento raíz ni registro de identidad (son escrituras) y
+  muestra el estado — cuando las claves del perfil acompañan al libro: sin
+  su carpeta `keys`, la comprobación de tinta previa a este tren rehúsa el
+  arranque por conflicto de identidad, como antes.
+- **R1 · el bloqueo en el almacenamiento, por conexión.** El hook de conexión
+  del driver (`modernc.org/sqlite`, seleccionado por un parámetro propio del
+  DSN) JUZGA cada conexión que el pool abre sobre ella misma (la fila de
+  identidad contra la identidad del handle) e instala una tabla temporal
+  `profile_guard` con ese estado y doce triggers temporales `BEFORE INSERT`/`UPDATE` sobre las
+  siete tablas de actos, las dos de ciclo de vida y las tres de identidad, con
+  tres triggers por evento (treinta y seis): uno por estado que bloquea y uno
+  para la guarda ausente, cada uno con `RAISE(ABORT, 'ledger_guard:<estado>')`
+  — el trigger nombra el estado que evaluó y el store no guarda copia alguna;
+  una guarda vacía falla CERRADA (`ledger_guard_unset`). La FORMA del fichero
+  se juzga en UN solo sitio, `judgeShape` (tren D, tras la oficial del tren C),
+  contra la lista constante de las 34 tablas del esquema v16: FRESCO (ninguna
+  tabla del almacén de actos, o solo un prefijo vacío de su siembra v1 —el
+  residuo de una siembra que murió entre sentencias—, tren E; el fichero
+  compartido lleva las de conversaciones y no cuentan), ANTERIOR
+  (`action_schema` de una fila numérica por debajo de la versión del binario;
+  qué tablas tiene esa versión es asunto de la migración), ACTUAL (versión
+  del binario, las 34 tablas como tablas ordinarias y sus tres índices UNIQUE
+  enteros, tren E), MÁS NUEVO, o MALA (tablas de actos sin `action_schema`,
+  0 o 2 filas, versión ilegible o < 1, cualquier tabla ausente en la versión
+  actual y, desde el tren E, una tabla virtual en lugar de una del esquema o
+  un índice UNIQUE que falta). El hook la consulta: fresco y anterior abren
+  `ok`, actual juzga la fila, más nuevo y mala abren `ledger_unreadable`;
+  desde el tren E, una lectura del hook que falla con un código estructural
+  es un veredicto (abre `ledger_unreadable`), y cualquier otro fallo de
+  consulta rehúsa la conexión (el pool abre otra), nunca es un veredicto. Los
+  abridores la consultan: fresco se siembra, anterior se migra, actual y más
+  nuevo como manda el dueño, y MALA se abre con la guarda ilegible sin
+  migrar, sin sembrar, sin podar ni recuperar — ninguna tabla se recrea
+  jamás (`sqlite_master` idéntico antes y después, probado desde un handle
+  nuevo y desde el binario en proceso aparte). Los lectores la consultan:
+  `Standing`, `ledger check` y la pantalla nombran `ledger_unreadable` con la
+  tabla que falta. El veredicto `ledger_unreadable` es pegajoso en la
+  conexión por una sola rama, el `WHERE` del `UPDATE` de la guarda: la
+  primera línea no lo levanta, solo una conexión nueva lo re-juzga. De los
+  fallos de consulta, las tres puertas del veredicto (`beginWrite`,
+  `refreshGuard`, el hook) solo toman por veredicto el que llega con un
+  código estructural (tren E): un libro ocupado y un entorno que falla tienen
+  su propio nombre. Un hook que falla cierra la conexión (el driver la cierra
+  antes de devolver el error). El arranque de la app sobre un libro ilegible
+  no siempre arranca. Estos casos mueren con su nombre, y la lista no es
+  exhaustiva: un perfil estricto con un cerebro agente (TE58, tren E); un
+  juicio que falla sin veredicto (ocupado, el entorno), fatal en `app.Build`
+  y sin molde propio; un esquema más nuevo que el binario, con
+  `ErrSchemaFromTheFuture` (TE18); un fichero que no es una base de datos,
+  antes, en el almacén de conversaciones (TE31); una tabla del esquema que es
+  virtual, porque la apertura no da un handle (TE32); un paso de migración
+  que falla (TE36, TE38); una sentencia del hook que falla (TE29); y la
+  siembra que encuentra bajo su candado una forma mala (`seedLocked`). Si
+  arranca, carga la tinta del fichero sin registrarla, salta con aviso la
+  comprobación de
+  activación y el barrido de caducadas, no recupera ni funda, y la pantalla
+  dice `unreadable` con la causa (probado sobre las 34 tablas, una ausente
+  cada vez, en app real). Los `refuseIfForeign` de Go y
+  los dos paseos estructurales SE RETIRARON: su trabajo lo hace SQLite y lo
+  prueba una puerta escrita a propósito sin guarda en seis grafías.
+- **R13 · las puertas de aprobación nombran** `ledger_foreign_profile` (409) y
+  `ledger_unreadable` (503); el registro `outcomes` tiene 24 nombres y §12-ter
+  de su especificación las dos filas nuevas.
+
+**Sondas (capturas en `evidence/v0.16.2/probe-temp-triggers.txt`):** triggers
+temporales por conexión con el driver del repo, ocho preguntas limpias y una
+trampa (el `WHEN` sin `COALESCE` falla abierto); el hook de conexión corre en
+cada conexión nueva del pool y falla cerrado (Q9).
+
+**Límites declarados, con su fila:** la fila es estado y no evidencia — una
+edición a mano con un digest canónico cambia el dueño que los lectores nombran
+(R04, tamper-evident); una puerta que se salte `beginWrite` actúa sobre la
+última guarda juzgada, nunca sobre ninguna (R17, molde de límite); un callee
+que reciba el puntero del store puede reatar sus campos (declarado); la
+registración de identidad de la CLI está bajo la guarda y `beginWrite` la
+rehúsa antes (R19); la privacidad del digest (R21); el coste del `WHEN` (R23):
+  sin benchmark en este tren, declarado pendiente.
+
+**Pasadas del rediseño:** interna sobre el diff y oficial ronda 1, curadas
+(§11 y §12 del papel); oficial ronda 2, VETO MANTENIDO con un P2 de producto
+(tres ramas del hook fallaban abierto) y seis P3 → parada por el tope de dos
+rondas y paquete al director; **tren C** (2026-09-25, §13 del papel): la cura
+acotada — el hook por enumeración de estados benignos, el molde de nombres por
+la puerta sin juicio, el paseo de abridores sobre todo tipo de resultado (límite
+declarado: un `*Store` tras una interfaz no se ve estáticamente), los textos
+rancios, la mutación del rechazo capturada (M255), una sola carga del registro
+en el hook, la poda en una transacción — y una ronda oficial acotada al delta,
+VETO MANTENIDO: el abridor resembraba las tablas v1 en cualquier libro con
+`action_schema` y deshacía el veredicto del hook a la conexión siguiente
+(P2), más nueve P3; y el gate completo sobre ese árbol era ROJO (la regla
+«fichero fresco» rompía el fichero compartido). **Tren D** (2026-09-25, §14 del
+papel): el gate primero, `judgeShape` como única función de forma consultada
+por hook, abridores y lectores, los diez hallazgos curados, el recuento de
+mutaciones derivado por `scripts/mutation_tally.py` en el gate, y la NORMA:
+ninguna ronda se abre sin el gate completo verde sobre el árbol que audita.
+
+**Fichado:** el molde de crash real de la fundación es in-process con seam
+(no proceso OS aparte); Windows y symlink por lectura (tren del symlink);
+`korvun ledger adopt` por CLI; la pantalla ante `ledger_unreadable` tiene fila
+sin botón y causa visible (R24).
+
+## TREN MÍNIMO, inmediatamente después de la v0.16.2 — `WriteConfigAtomic` destruye un perfil que es enlace simbólico (director, 2026-09-24) — CRÍTICO
+
+**No es una ficha a largo plazo: es PÉRDIDA DE DATOS**, y el director lo sacó de
+la cola de fichas para darle tren propio en cuanto la v0.16.2 salga.
+
+Hallado por la lectura adversaria del papel de la v0.16.2 y **capturado
+ejecutando** una copia verbatim de `WriteConfigAtomic`
+(`internal/supervisor/supervisor.go`) sobre un perfil que es un enlace simbólico
+a otro directorio:
+
+```
+BEFORE  link mode=Lrwxr-xr-x isSymlink=true
+BEFORE  target bytes={"state":"OLD"}
+WriteConfigAtomic returned: nil          <-- reportó ÉXITO
+AFTER   link mode=-rw------- isSymlink=false
+AFTER   link bytes={ "state": "NEW" }
+AFTER   TARGET bytes={"state":"OLD"}     <-- el fichero que el enlace nombraba
+```
+
+**Qué pasa**: el enlace desaparece. El destino sigue vivo e intacto en una ruta
+que ya nadie lee, y en el sitio del enlace queda un fichero regular nuevo. No
+están ni «el viejo» ni «solo el nuevo»: están los dos, y el operador ha perdido
+su disposición **sin un solo error**.
+
+**Por qué el `EXDEV` no avisa**: `os.CreateTemp(filepath.Dir(path), …)` crea el
+temporal junto al ENLACE, no junto al DESTINO, así que el `rename` ocurre dentro
+del mismo sistema de ficheros aunque el destino real esté en otro.
+
+**Y la frase que hay que acotar o probar**: «el `rename` dentro del mismo sistema
+de ficheros es atómico: o está el viejo o está el nuevo» es un ABSOLUTO, y la
+ley de verificación cruzada no admite absolutos sin un test desde fuera. Hoy es
+falsa tal como está escrita.
+
+**La v0.16.2 NO lo hereda**, porque su rediseño deja de escribir el fichero: es
+el supervisor quien persiste, tras un `Start` confirmado. Escribirlo como si esa
+pieza lo curara sería mentir.
+
+**Lo que el tren mínimo debe llevar**: resolver el enlace antes de escribir, o
+rehusar por nombre ante un perfil enlazado; molde con su mutación; y el mismo
+ataque contra el OTRO camino de escritura, `writeRawConfigAtomic`
+(`internal/shell/upgrade.go`), que no se ha probado y puede tener la misma forma.
+
+## Fichado para la v0.16.2 — la pantalla «¿Qué pasa hoy?» (director, 2026-09-23)
+
+El encargo, con lo que la tarde del 2026-09-23 estableció por ejecución sobre el
+perfil real. NO es «falta un botón»: el estado que hay que curar tiene varias
+formas y la acción correcta depende de cuál.
+
+**Las cinco condiciones que `brainsThatCanPark` exige** (`internal/app/approvals_adapter.go`):
+el almacén de acciones configurado; un cerebro AGENTE; un techo de efecto en la
+escalera que alcance `write_irreversible`; al menos una herramienta de esa clase
+en su jaula y por debajo del techo; y esa herramienta permitida por la
+gobernanza (`mode: "allow"`, no `shadow`).
+
+**Lo que la pantalla hace hoy**: las recita las cinco y ofrece «Abrir la carpeta
+de configuración». **Lo que no hace**: decir cuál falla aquí, ni dar la acción.
+
+| Estado observado ese día | Qué faltaba | Qué debería ofrecer |
+|---|---|---|
+| «APROBACIONES APAGADAS» | `approvals.enabled` | Encender aprobaciones |
+| «NINGÚN CEREBRO PUEDE APARCAR», con aprobaciones ya encendidas | el techo de efecto del cerebro | Poner techo `write_irreversible` |
+| Lo mismo, con techo ya puesto | `webhook_call` en `mode: "shadow"` | Levantar la sombra — y decir qué implica: hoy esa herramienta NUNCA se ejecuta |
+
+Los tres estados se observaron **en ese orden**, cada uno detrás del anterior, lo
+que es exactamente el argumento: el operador no ve una pared, ve tres seguidas.
+
+**Y el resultado en una frase**, que es lo que la pantalla debe decir arriba del
+todo: *se ejecuta* / *se aparca y te pregunta* / *se observa sin ejecutar*.
+
+Maqueta ANTES de rojo, por la sexta ley. Plan de fallos con las filas «perfil
+migrado de dos versiones atrás» y «reload fallido». Tres moldes por cura.
+
+## Fichado para la v0.16.2 — el indicador de `/healthz`, MEDIDO (director, 2026-09-23)
+
+El director pidió medir antes de rediseñar. Medido en la fuente, no supuesto:
+
+| Pregunta suya | Respuesta, con su cable |
+|---|---|
+| ¿Cada cuánto consulta? | **Cada 2000 ms** — `POLL_INTERVAL_MS` en `cmd/korvun-desktop/frontend/src/status/store.ts`, usado por el `setInterval` de ese mismo fichero |
+| ¿Avanza el contador entre consultas? | **Sí. NO es fallo de código.** `pollOnce` fija `lastOkAt = Date.now()` en cada OK y notifica a los oyentes **aunque el estado no cambie**, con el comentario que dice para qué: «so the header's "hace Xs" ticks». Observado en capturas reales de hoy: «hace 0 s» y «hace 1 s» |
+| ¿Entonces? | El rótulo es **verdad e inútil**: sondeando cada 2 s, «hace X s» solo puede leer 0, 1 o 2 mientras todo va bien. Informa de nada |
+| ¿Se mide el tiempo de respuesta? | **No.** `pollOnce` no cronometra el `fetch` en ningún punto |
+| ¿Qué pasa cuando `/healthz` deja de responder? | `HealthzBadge` **sí** tiene estado visible: `/healthz · sin respuesta` cuando el núcleo está `stopped` o `unreachable`. Pero **descarta `lastOkAt` de la pantalla**, que es justo el dato que importa en ese momento: cuándo funcionó por última vez. El valor sigue en el store —nunca se borra—; es el rótulo el que deja de enseñarlo |
+
+**La cura, por tanto, es la que el director anticipó, más una que la medición
+añade**: pasar a «en vivo · última respuesta HH:MM:SS» con el tiempo de respuesta
+en ms —que hay que empezar a medir, porque hoy no se mide—; y que el estado de
+fallo **conserve** la última respuesta buena en vez de tirarla.
+
+Maqueta junto con la de «¿Qué pasa hoy?».
+
 ## Para las notas de la v0.16.0 — CAMBIO DE COMPORTAMIENTO del modo estricto (director, 2026-09-22)
 
 La pieza 3 fase 3 cura un defecto que el adversario encontró (F2): los

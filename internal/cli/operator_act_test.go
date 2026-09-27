@@ -136,7 +136,7 @@ func TestOperatorAct_endToEnd(t *testing.T) {
 
 	// THE TRAIL: every step above — including every refusal — left its
 	// identified receipt under the operator with loopback evidence.
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

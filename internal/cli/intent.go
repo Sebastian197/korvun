@@ -92,7 +92,10 @@ func openOperatorStore(configPath string) (*actionsqlite.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return actionsqlite.OpenReadOnly(app.StoragePath(cfg))
+	// The handle is born for the profile at configPath, so the readers can
+	// NAME the ledger's standing (the durable mark). A read-only handle blocks
+	// nothing.
+	return actionsqlite.OpenReadOnlyFor(app.StoragePath(cfg), app.ProfileIdentity(configPath))
 }
 
 // openOperatorStoreSealed opens the store WITH the profile's ink wired
@@ -111,7 +114,10 @@ func openOperatorStoreSealed(configPath string) (*actionsqlite.Store, error) {
 		return nil, err
 	}
 	storage := app.StoragePath(cfg)
-	store, err := actionsqlite.OpenOperator(storage)
+	// The handle is born for the profile at configPath: every operator act
+	// through it is judged against the ledger's identity, and a ledger another
+	// profile owns refuses them by name (ledger_foreign_profile).
+	store, err := actionsqlite.OpenOperatorFor(storage, app.ProfileIdentity(configPath))
 	if err != nil {
 		return nil, err
 	}

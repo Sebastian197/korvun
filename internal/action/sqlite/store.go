@@ -90,6 +90,11 @@ var ErrSchemaFromTheFuture = errors.New("action/sqlite: schema version from the 
 // references its action row.
 const dsnQuery = "_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(on)"
 
+// dsnQueryWriter is dsnQuery for the handles that WRITE: every transaction
+// begins IMMEDIATE, so the write lock is taken at BEGIN and nothing another
+// connection commits can slip between a door's judgement and its write (R3).
+const dsnQueryWriter = dsnQuery + "&_txlock=immediate"
+
 // createStmt is the store's v1 schema. CREATE TABLE IF NOT EXISTS keeps
 // the bootstrap idempotent; `action_schema` is this store's OWN lifecycle
 // marker, deliberately separate from every conversation table.
@@ -123,8 +128,28 @@ CREATE TABLE IF NOT EXISTS action_decisions (
     decided_at TEXT NOT NULL
 ) WITHOUT ROWID;`
 
+// bootstrapStatements is createStmt one statement at a time, in its order:
+// the seed sends them one by one, so each is counted and each is a point a
+// crash can stop after (plan §7, S1/S2). No literal in createStmt holds a
+// semicolon.
+var bootstrapStatements = splitStatements(createStmt)
+
+// seedVersionStmt is the seed's version row.
+const seedVersionStmt = `INSERT INTO action_schema (version) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM action_schema)`
+
+// splitStatements cuts a script of statements at its semicolons.
+func splitStatements(script string) []string {
+	var out []string
+	for _, s := range strings.Split(script, ";") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // schemaVersionCurrent is the version this binary writes and understands.
-const schemaVersionCurrent = 15
+const schemaVersionCurrent = 16
 
 // migrations maps a FROM-version to the DDL that lifts it one version.
 // Each step runs in ONE transaction together with its version bump, so a
@@ -672,6 +697,22 @@ CREATE TABLE IF NOT EXISTS legacy_authority_imports (
     baseline_spent INTEGER NOT NULL,
     imported_at TEXT NOT NULL
 ) WITHOUT ROWID;`,
+	// v15 → v16 (train B of the v0.16.2, 2026-09-24): the ledger's identity —
+	// who founded or last adopted it — leaves the receipt's result cell for a
+	// one-row table whose CHECK admits only a canonical sha256 digest (the
+	// bare digest: the receipt keeps the prefixed mark), written by the founding
+	// and the adoption in the same
+	// transaction as their receipt and read with one query. The receipt keeps
+	// the mark as EVIDENCE sealed by the chain; the row is the STATE.
+	15: `
+CREATE TABLE IF NOT EXISTS ledger_identity (
+    id                 INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+    owner_digest       TEXT    NOT NULL CHECK (owner_digest GLOB 'sha256:[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]' AND length(owner_digest) = 71),
+    founded_by_action  TEXT    NOT NULL,
+    adopted_by_action  TEXT,
+    written_at         TEXT    NOT NULL
+);
+`,
 }
 
 // migrationsPost holds the destructive tail of a hybrid step (R8-Z1):
@@ -684,15 +725,22 @@ ALTER TABLE approval_tombstones_v11 RENAME TO approval_tombstones;
 CREATE INDEX tombstones_by_action ON approval_tombstones(action_id);`,
 }
 
-// migrate lifts the store to schemaVersionCurrent, one version per
+// migrateIn lifts the store to schemaVersionCurrent, one version per
 // transaction (DDL + version bump commit atomically). A version newer
 // than this binary fails CLOSED with ErrSchemaFromTheFuture — the store
-// never guesses at structure it does not understand.
-func migrate(db *sql.DB) error {
+// never guesses at structure it does not understand. ctx carries the
+// file's judge scope (origin, path), so the instrumentation can name its
+// steps.
+func migrateIn(ctx context.Context, db *sql.DB) error {
+	path := judgeScopeOf(ctx).path
 	for {
-		var v int
-		if err := db.QueryRow(`SELECT version FROM action_schema`).Scan(&v); err != nil {
+		var stored any
+		if err := db.QueryRow(`SELECT version FROM action_schema`).Scan(&stored); err != nil {
 			return fmt.Errorf("action/sqlite: read schema version for migration: %w", err)
+		}
+		v, err := parseStoredVersion(stored)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrLedgerUnreadable, err)
 		}
 		if v == schemaVersionCurrent {
 			return nil
@@ -701,11 +749,12 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("%w: stored %d, this binary understands %d",
 				ErrSchemaFromTheFuture, v, schemaVersionCurrent)
 		}
+		migrationPoint(path, fmt.Sprintf("migrate:read#%d", v))
 		step, ok := migrations[v]
 		if !ok {
 			return fmt.Errorf("action/sqlite: no migration from schema version %d", v)
 		}
-		if err := migrateStep(db, step, migrationCopies[v], v); err != nil {
+		if err := migrateStepIn(ctx, db, step, migrationCopies[v], v); err != nil {
 			return err
 		}
 	}
@@ -721,6 +770,7 @@ var migrationCopies = map[int]func(*sql.Tx) error{
 	11: revalidateTombstonesV11toV12,
 	13: addIdentityV14Columns,
 	14: addAuthorityV15Columns,
+	15: seedIdentityRowV15toV16,
 }
 
 func addAuthorityV15Columns(tx *sql.Tx) error {
@@ -1222,31 +1272,128 @@ func nullOrString(v sql.NullString) any {
 // migrateStep runs ONE migration — DDL, optional in-tx Go copy, and
 // the version bump — in one transaction.
 func migrateStep(db *sql.DB, step string, copy func(*sql.Tx) error, from int) error {
+	return migrateStepIn(context.Background(), db, step, copy, from)
+}
+
+// migrateStepIn is migrateStep for a file whose judge scope ctx carries: each
+// stage's result passes the stage seam (S3) and each completed stage is a
+// named point (S4/S5).
+func migrateStepIn(ctx context.Context, db *sql.DB, step string, copy func(*sql.Tx) error, from int) error {
+	path := judgeScopeOf(ctx).path
 	tx, err := db.Begin()
-	if err != nil {
+	if err = stageFault(path, "migrate:begin", err); err != nil {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
 		return fmt.Errorf("action/sqlite: begin migration from v%d: %w", from, err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.Exec(step); err != nil {
-		return fmt.Errorf("action/sqlite: migration from v%d: %w", from, err)
+	migrationPoint(path, fmt.Sprintf("migrate:begin#%d", from))
+	// The version this step lifts is the one stored NOW, read through the
+	// step's own transaction — which the writer's DSN begins IMMEDIATE, so
+	// after its write lock and before any of its writes — never the outer
+	// loop's read, which another migrator may have made stale (plan §4
+	// «Migration»).
+	stored, err := rereadVersion(ctx, tx, from)
+	if err != nil {
+		return err
 	}
+	if stored != from {
+		// Another migrator committed this step, and maybe more: this one
+		// writes nothing, and the outer loop reads what is stored now.
+		migrationWork(path, "skip")
+		migrationPoint(path, fmt.Sprintf("migrate:stale#%d", from))
+		return nil
+	}
+	migrationWork(path, "ddl")
+	_, err = tx.Exec(step)
+	if err = stageFault(path, "migrate:ddl", err); err != nil {
+		return migrationDataFailure(from, fmt.Errorf("action/sqlite: migration from v%d: %w", from, err))
+	}
+	migrationPoint(path, fmt.Sprintf("migrate:ddl#%d", from))
 	if copy != nil {
-		if err := copy(tx); err != nil {
-			return err
+		if err := stageFault(path, "migrate:copy", copy(tx)); err != nil {
+			return migrationDataFailure(from, err)
 		}
+		migrationPoint(path, fmt.Sprintf("migrate:copy#%d", from))
 	}
 	if post, ok := migrationsPost[from]; ok {
-		if _, err := tx.Exec(post); err != nil {
-			return fmt.Errorf("action/sqlite: migration tail from v%d: %w", from, err)
+		_, err := tx.Exec(post)
+		if err = stageFault(path, "migrate:tail", err); err != nil {
+			return migrationDataFailure(from, fmt.Errorf("action/sqlite: migration tail from v%d: %w", from, err))
 		}
+		migrationPoint(path, fmt.Sprintf("migrate:tail#%d", from))
 	}
-	if _, err := tx.Exec(`UPDATE action_schema SET version = ?`, from+1); err != nil {
+	migrationWork(path, "bump")
+	// The bump changes exactly the row the step reread: a version its own
+	// writes moved leaves it nothing to change, and the step is a verdict on
+	// the ledger, rolled back whole.
+	res, err := tx.Exec(`UPDATE action_schema SET version = ? WHERE version = ?`, from+1, from)
+	if err = stageFault(path, "migrate:bump", err); err != nil {
 		return fmt.Errorf("action/sqlite: bump schema version to v%d: %w", from+1, err)
 	}
+	changed, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("action/sqlite: bump schema version to v%d: %w", from+1, err)
+	}
+	if changed != 1 {
+		return fmt.Errorf("%w: the bump from v%d to v%d changed %d version rows, want 1", ErrLedgerUnreadable, from, from+1, changed)
+	}
+	migrationPoint(path, fmt.Sprintf("migrate:bump#%d", from))
+	if err := stageFault(path, "migrate:pre-commit", nil); err != nil {
+		return fmt.Errorf("action/sqlite: commit migration to v%d: %w", from+1, err)
+	}
+	migrationPoint(path, fmt.Sprintf("migrate:before-commit#%d", from))
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("action/sqlite: commit migration to v%d: %w", from+1, err)
 	}
+	migrationPoint(path, fmt.Sprintf("migrate:after-commit#%d", from))
 	return nil
+}
+
+// rereadVersion reads the version stored in the step's transaction (site
+// QversionTx) and judges it against the version the step lifts, from: from
+// itself, or a later one another migrator committed, is returned; a version
+// above this binary's is ErrSchemaFromTheFuture; a lower one, one that is not
+// a version, or a count of version rows other than one is unreadable, named.
+// A read that fails with a structural code is unreadable carrying its cause;
+// any other failed read keeps its class and comes back as it is.
+func rereadVersion(ctx context.Context, tx *sql.Tx, from int) (int, error) {
+	stored, err := dbShapeQuerier{q: tx}.scalars(ctx, siteVersionTx, `SELECT version FROM action_schema`)
+	if err != nil {
+		if readVerdict(siteVersionTx, err) {
+			return 0, fmt.Errorf("%w: the migration from v%d cannot reread the version: %w", ErrLedgerUnreadable, from, err)
+		}
+		return 0, fmt.Errorf("action/sqlite: the migration from v%d rereads the version: %w", from, err)
+	}
+	if len(stored) != 1 {
+		return 0, fmt.Errorf("%w: the migration from v%d reread %d version rows, want 1", ErrLedgerUnreadable, from, len(stored))
+	}
+	v, err := parseStoredVersion(stored[0])
+	if err != nil {
+		return 0, fmt.Errorf("%w: the migration from v%d reread %w", ErrLedgerUnreadable, from, err)
+	}
+	switch {
+	case v > schemaVersionCurrent:
+		return 0, fmt.Errorf("%w: the migration from v%d reread v%d, this binary understands %d", ErrSchemaFromTheFuture, from, v, schemaVersionCurrent)
+	case v < from:
+		return 0, fmt.Errorf("%w: the migration from v%d reread v%d", ErrLedgerUnreadable, from, v)
+	}
+	return v, nil
+}
+
+// migrationDataFailure names a step that failed on the data it transforms —
+// a stored tombstone the typed judge refuses, or a constraint (19) the
+// copied rows break — as a verdict on the ledger, at this site only (plan
+// §5), with the typed fault and the native code kept in the chain. Every
+// other failure of the step comes back as it is and keeps its own class.
+func migrationDataFailure(from int, err error) error {
+	var fault *TombstoneFault
+	var coded interface{ Code() int }
+	if errors.As(err, &fault) || (errors.As(err, &coded) && coded.Code()&0xff == 19) {
+		return fmt.Errorf("%w: the migration from v%d: %w", ErrLedgerUnreadable, from, err)
+	}
+	return err
 }
 
 // buildFileDSN is the house DSN builder (conversation store mold): url.URL
@@ -1259,11 +1406,23 @@ func buildFileDSN(slashed string) string {
 	return (&url.URL{Scheme: "file", Path: slashed, RawQuery: dsnQuery}).String()
 }
 
+// buildWriterDSN is buildFileDSN with immediate transactions (dsnQueryWriter).
+func buildWriterDSN(slashed string) string {
+	if len(slashed) == 0 || slashed[0] != '/' {
+		slashed = "/" + slashed
+	}
+	return (&url.URL{Scheme: "file", Path: slashed, RawQuery: dsnQueryWriter}).String()
+}
+
 // Store persists actions and decisions. All access flows through one
 // serialized connection (the house single-writer discipline), so method
 // calls are safe from concurrent brain workers.
 type Store struct {
 	db *sql.DB
+	// seams are the crash seams the redesign's moulds interrupt (R11).
+	seams identitySeams
+	// guard is the connection guard's Go-side mirror (R1).
+	guard guardState
 	// path is the file this store was opened on, kept so a test can open a
 	// SECOND real connection to the same database and attack from outside
 	// the component (the cross-verification law, §4).
@@ -1277,6 +1436,9 @@ type Store struct {
 	// the connection is sealed with PRAGMA query_only and no lifecycle
 	// pass (migration/recovery/prune) has run.
 	readOnly bool
+	// profile is the identity of the profile this handle serves, for the
+	// durable mark «ledger founded by this profile» (profile_standing.go).
+	profile profileIdentity
 	// sealer, when non-nil, signs and appends one receipt per terminal
 	// outcome INSIDE the recording transaction (Etapa 4, FR-LED). The app
 	// injects it with the active profile key; nil = pre-stage behavior.
@@ -1358,7 +1520,7 @@ func openWithCap(path string, capRows int) (*Store, error) {
 // then runs the HONEST recovery pass — non-terminal actions from a
 // previous life close FAILED with the recovery marker, never re-executed
 // — and the retention prune.
-func Open(path string) (*Store, error) {
+func openFull(path string) (*Store, error) {
 	store, err := open(path)
 	if err != nil {
 		return nil, err
@@ -1381,44 +1543,78 @@ func Open(path string) (*Store, error) {
 // not close its in-flight work or lift the schema under it). A fresh
 // profile is a clean bootstrap — there is no previous life to harm —
 // which keeps the intent-create-before-first-boot flow alive.
-func OpenOperator(path string) (*Store, error) {
+func openOperator(path string) (*Store, error) { return openOperatorWithIdentity(path, "") }
+
+// openOperatorWithIdentity is openOperator for a handle born with a profile.
+func openOperatorWithIdentity(path, identity string) (*Store, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("action/sqlite: resolve path %q: %w", path, err)
 	}
-	if _, err := os.Stat(abs); err == nil {
-		version, err := storedSchemaVersion(abs)
+	// Whether the file existed when the door was called is kept: the
+	// operator's door never seeds nor migrates such a file (plan §13.1).
+	_, statErr := os.Stat(abs)
+	existed := statErr == nil
+	if existed {
+		shape, err := probeShape(abs)
 		if err != nil {
 			return nil, err
 		}
-		if version != schemaVersionCurrent {
-			return nil, fmt.Errorf("action/sqlite: store %q is at schema v%d, this binary writes v%d — an operator act never migrates an existing store; run the server boot to lift the schema", abs, version, schemaVersionCurrent)
+		switch shape.shape {
+		case shapeFresh:
+			return nil, fmt.Errorf("%w: read schema version of %q (not a korvun store?)", ErrNoActionStore, abs)
+		case shapeOlder:
+			return nil, fmt.Errorf("%w: store %q is at schema v%d, this binary writes v%d — an operator act never migrates an existing store; run the server boot to lift the schema", ErrSchemaBehind, abs, shape.version, schemaVersionCurrent)
+		case shapeNewer:
+			return nil, fmt.Errorf("%w: store %q is at schema v%d, this binary writes v%d", ErrSchemaFromTheFuture, abs, shape.version, schemaVersionCurrent)
 		}
 	}
-	return open(path)
+	return openWithIdentityMode(path, identity, openMode{operator: true, existed: existed})
 }
 
-// storedSchemaVersion probes an existing store's version through a
-// sealed read-only connection — the probe itself must not mutate.
-func storedSchemaVersion(abs string) (int, error) {
+// probeShape judges the shape of an existing file through a sealed probe
+// connection, for the doors that never bootstrap or migrate.
+func probeShape(abs string) (shapeVerdict, error) {
 	db, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(abs)))
 	if err != nil {
-		return 0, fmt.Errorf("action/sqlite: probe %q: %w", abs, err)
+		return shapeVerdict{}, fmt.Errorf("action/sqlite: probe %q: %w", abs, err)
 	}
 	defer func() { _ = db.Close() }()
-	if _, err := db.Exec(`PRAGMA query_only = 1`); err != nil {
-		return 0, fmt.Errorf("action/sqlite: seal probe connection %q: %w", abs, err)
+	_, err = db.Exec(`PRAGMA query_only = 1`)
+	if err = stageFault(abs, "probe:seal", err); err != nil {
+		return shapeVerdict{}, fmt.Errorf("action/sqlite: seal probe connection %q: %w", abs, err)
 	}
-	var version int
-	if err := db.QueryRow(`SELECT version FROM action_schema`).Scan(&version); err != nil {
-		return 0, fmt.Errorf("action/sqlite: read schema version of %q (not a korvun store?): %w", abs, err)
-	}
-	return version, nil
+	var shape shapeVerdict
+	ctx := withJudgeOrigin(context.Background(), originOperatorProbe, abs)
+	err = withLedgerConnection(ctx, db, func(c *sql.Conn) error {
+		var jerr error
+		shape, jerr = judgeShape(ctx, dbShapeQuerier{q: c})
+		return jerr
+	})
+	return shape, err
 }
 
 // open is the shared mold behind Open and the test seam: pool, bootstrap
 // and ping, with the sealed retention defaults.
-func open(path string) (*Store, error) {
+func open(path string) (*Store, error) { return openWithIdentity(path, "") }
+
+// openWithIdentity is open for a handle born with a profile: its DSN carries
+// the guard's nonce so every connection the pool opens is guarded (R1), and an
+// existing schema of a ledger the profile does not own is not migrated (R10).
+func openWithIdentity(path, identity string) (*Store, error) {
+	return openWithIdentityMode(path, identity, openMode{})
+}
+
+// openMode is how a door opens the ledger: the writer's boot seeds a fresh
+// file and migrates an older one; the operator's door never seeds nor
+// migrates a file that existed when it was called (plan §13.1).
+type openMode struct {
+	operator bool
+	existed  bool
+}
+
+// openWithIdentityMode is openWithIdentity for the door that mode names.
+func openWithIdentityMode(path, identity string, mode openMode) (*Store, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("action/sqlite: resolve path %q: %w", path, err)
@@ -1428,7 +1624,8 @@ func open(path string) (*Store, error) {
 			return nil, fmt.Errorf("action/sqlite: create data dir %q: %w", dir, err)
 		}
 	}
-	db, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(abs)))
+	nonce := registerGuard(identity)
+	db, err := sql.Open("sqlite", guardedDSN(buildWriterDSN(filepath.ToSlash(abs)), nonce))
 	if err != nil {
 		return nil, fmt.Errorf("action/sqlite: open %q: %w", abs, err)
 	}
@@ -1436,28 +1633,169 @@ func open(path string) (*Store, error) {
 	// connection serializes whole transactions, so the write patterns
 	// below are race-free without SQLITE_BUSY between our own callers.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(createStmt); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("action/sqlite: bootstrap schema in %q: %w", abs, err)
+	if lifetime := poolLifetimeForTest.Load(); lifetime != nil {
+		db.SetConnMaxLifetime(*lifetime)
 	}
-	if _, err := db.Exec(
-		`INSERT INTO action_schema (version) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM action_schema)`,
-	); err != nil {
+	// The SHAPE decides the open (judgeShape, train D): a fresh action store
+	// is seeded; an older one is migrated; a current or newer one is opened
+	// as its owner allows; a BAD one is opened with the guard unreadable —
+	// never migrated, never seeded, never repaired — so that it can be named,
+	// and a handle with no identity refuses it outright.
+	// The judgement reads through ONE connection obtained first: a
+	// connection that cannot be born is the open's error, never a shape.
+	var shape shapeVerdict
+	judgeCtx := withJudgeOrigin(context.Background(), originPoolOpenShape, abs)
+	if err := withLedgerConnection(judgeCtx, db, func(c *sql.Conn) error {
+		var jerr error
+		shape, jerr = judgeShape(judgeCtx, dbShapeQuerier{q: c})
+		if jerr != nil || shape.shape != shapeBad {
+			return jerr
+		}
+		// A bad verdict is judged once more, on the same connection, before
+		// the open acts on it (plan §13.1): a failure met once does not
+		// block a file whose only defect is being fresh.
+		confirmCtx := withJudgeOrigin(context.Background(), originPoolOpenConfirm, abs)
+		shape, jerr = judgeShape(confirmCtx, dbShapeQuerier{q: c})
+		return jerr
+	}); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("action/sqlite: seed schema version in %q: %w", abs, err)
+		return nil, err
 	}
-	if err := migrate(db); err != nil {
+	if mode.operator && mode.existed {
+		// The operator's door on a file that existed when it was called:
+		// never a seed, never a migration, whatever its probe saw.
+		switch shape.shape {
+		case shapeFresh:
+			_ = db.Close()
+			return nil, fmt.Errorf("%w: read schema version of %q (not a korvun store?)", ErrNoActionStore, abs)
+		case shapeOlder:
+			_ = db.Close()
+			return nil, fmt.Errorf("%w: store %q is at schema v%d, this binary writes v%d — an operator act never migrates an existing store; run the server boot to lift the schema", ErrSchemaBehind, abs, shape.version, schemaVersionCurrent)
+		}
+	}
+	if shape.shape == shapeFresh {
+		seedPoint(abs, "seed:observed-fresh", nil)
+		locked, seeded, err := seedLocked(abs, db)
+		if err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		if !seeded {
+			if locked.shape == shapeBad {
+				// A shape met under the seed's lock that is not the file this
+				// open judged: the seed's race is fatal and named, never the
+				// blocked handle of an ordinary bad file (plan §7).
+				_ = db.Close()
+				return nil, fmt.Errorf("%w (%s)", locked.unreadable(), abs)
+			}
+			shape = locked
+		}
+	}
+	switch shape.shape {
+	case shapeFresh:
+		// Seeded by seedLocked, in its own transaction; the migrations lift it.
+		if err := migrateIn(withJudgeOrigin(context.Background(), originMigrationReread, abs), db); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("action/sqlite: migrate %q: %w", abs, err)
+		}
+	case shapeNewer:
+		// A readable version above this binary's is named before anything
+		// reads the owner (GE4): a newer ledger is never read, migrated or
+		// opened blocked by this binary, whoever owns it.
 		_ = db.Close()
-		return nil, fmt.Errorf("action/sqlite: migrate %q: %w", abs, err)
+		return nil, fmt.Errorf("%w: store %q is at schema v%d, this binary writes v%d", ErrSchemaFromTheFuture, abs, shape.version, schemaVersionCurrent)
+	case shapeOlder, shapeCurrent:
+		owned, ownerKnown := true, true
+		if shape.shape == shapeCurrent && identity != "" {
+			owner, found, err := readOwner(withJudgeOrigin(context.Background(), originReadOwnerAtOpen, abs), db)
+			switch {
+			case err == nil:
+				owned = !found || owner == identity
+			case errors.Is(err, ErrLedgerUnreadable) && !isBirthFailure(err):
+				// The owner read is a verdict on the file: no step that
+				// depends on the owner runs, and the guard's judgement names
+				// the ledger once the handle knows its profile.
+				ownerKnown = false
+			default:
+				_ = db.Close()
+				return nil, err
+			}
+		}
+		switch {
+		case !ownerKnown:
+		case owned:
+			if err := migrateIn(withJudgeOrigin(context.Background(), originMigrationReread, abs), db); err != nil {
+				_ = db.Close()
+				return nil, fmt.Errorf("action/sqlite: migrate %q: %w", abs, err)
+			}
+		default:
+			if err := requireCurrentSchema(db, abs); err != nil {
+				_ = db.Close()
+				return nil, err
+			}
+		}
+	default:
+		if identity == "" {
+			_ = db.Close()
+			return nil, fmt.Errorf("%w (%s)", shape.unreadable(), abs)
+		}
 	}
-	if err := db.Ping(); err != nil {
+	if err := stageFault(abs, "open:ping", db.Ping()); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("action/sqlite: ping %q: %w", abs, err)
 	}
 	return &Store{
-		db: db, path: abs, capRows: defaultCapRows, pruneEvery: defaultPruneEvery,
+		guard: guardState{nonce: nonce},
+		db:    db, path: abs, capRows: capRowsFor(abs), pruneEvery: defaultPruneEvery,
 		identityNow: time.Now, authorityNewActionID: newAuthorityActionID,
 	}, nil
+}
+
+// seedLocked seeds a file the open judged fresh, in ONE immediate
+// transaction (plan §4, §7 «Locked seed»): the file is judged again INSIDE
+// the lock, through the transaction itself — never through the pool, whose
+// one connection the transaction holds — and only a file still fresh gets
+// the five bootstrap statements and its version row, committed together.
+// Any other shape is left untouched: the transaction rolls back and the
+// caller acts on that shape. seeded reports the commit.
+func seedLocked(abs string, db *sql.DB) (locked shapeVerdict, seeded bool, err error) {
+	ctx := withJudgeOrigin(context.Background(), originSeedLockedRejudge, abs)
+	err = withLedgerConnection(ctx, db, func(c *sql.Conn) error {
+		tx, err := c.BeginTx(ctx, nil) // the writer's DSN begins IMMEDIATE
+		if err != nil {
+			return fmt.Errorf("action/sqlite: begin the seed in %q: %w", abs, err)
+		}
+		defer func() { _ = tx.Rollback() }()
+		seedPoint(abs, "seed:locked", tx)
+		locked, err = judgeShape(ctx, dbShapeQuerier{q: tx})
+		seedPoint(abs, "seed:rejudged", tx)
+		if err != nil || locked.shape != shapeFresh {
+			return err
+		}
+		seedPoint(abs, "seed:begin", tx)
+		for i, stmt := range bootstrapStatements {
+			seedSent(abs, false)
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				seedStatementFailed(abs, i+1, err)
+				return fmt.Errorf("action/sqlite: bootstrap schema in %q: %w", abs, err)
+			}
+			seedPoint(abs, fmt.Sprintf("seed:ddl#%d", i+1), tx)
+		}
+		seedSent(abs, true)
+		if _, err := tx.ExecContext(ctx, seedVersionStmt); err != nil {
+			seedStatementFailed(abs, len(bootstrapStatements)+1, err)
+			return fmt.Errorf("action/sqlite: seed schema version in %q: %w", abs, err)
+		}
+		seedPoint(abs, "seed:insert", tx)
+		seedPoint(abs, "seed:before-commit", tx)
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("action/sqlite: commit the seed in %q: %w", abs, err)
+		}
+		seeded = true
+		seedPoint(abs, "seed:after-commit", nil)
+		return nil
+	})
+	return locked, seeded, err
 }
 
 // RecoverPreviousLife closes every non-terminal action left behind by
@@ -1474,7 +1812,26 @@ func open(path string) (*Store, error) {
 // APPROVED action whose params were CLAIMED was mid-execution — the
 // external effect may or may not have fired; it closes OUTCOME_UNKNOWN
 // with the uncertainty NAMED, never a FAILED lie.
-func (s *Store) RecoverPreviousLife(ctx context.Context) (skipped int, err error) {
+//
+// keep names the actions the LIVING process still owns and is not an
+// exemption by state or by kind (v0.16.2, the store-and-act-close plan):
+// a config change made through the Control API is sealed AUTHORIZED by
+// the app that serves the request, and the supervisor then builds a NEW
+// app on the same file before the cutover's outcome is known. That boot
+// is not a previous life — the process that owns the act is alive and
+// will close it with the result — so the act's id travels here and the
+// pass skips it. Every other row is judged exactly as before, and a
+// process that starts with nothing to keep (a real previous life) recovers
+// everything. An id that names no row here is inert.
+func (s *Store) RecoverPreviousLife(ctx context.Context, keep ...string) (skipped int, err error) {
+	// A ledger this profile does not own gets no maintenance from it (R10).
+	if err := s.refuseMaintenance(ctx); err != nil {
+		return 0, err
+	}
+	kept := make(map[string]bool, len(keep))
+	for _, id := range keep {
+		kept[id] = true
+	}
 	passes := []struct {
 		query     string
 		args      []any
@@ -1532,6 +1889,10 @@ func (s *Store) RecoverPreviousLife(ctx context.Context) (skipped int, err error
 			// lost clean race is changed=false and the loop moves on.
 			if err := ctx.Err(); err != nil {
 				return skipped, fmt.Errorf("action/sqlite: recovery pass: %w", err)
+			}
+			if kept[id] {
+				// Owned by the living process: not an orphan (see keep).
+				continue
 			}
 			if _, err := s.closeCrashOrphan(ctx, id, pass.to, pass.marker, pass.predicate, now); err != nil {
 				if isBusyClass(err) {
@@ -1606,12 +1967,12 @@ func (s *Store) collectIDs(ctx context.Context, query string, args ...any) ([]st
 // (a concurrent Finish, another recovery) owned the row legitimately:
 // no receipt, no drama, changed=false.
 func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action.State, marker, predicate string, at time.Time) (bool, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return false, fmt.Errorf("action/sqlite: begin crash close %q: %w", actionID, err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	res, err := tx.ExecContext(ctx,
+	res, err := s.txExec(ctx, tx,
 		`UPDATE actions SET state = ?, recovery_marker = ?, finished_at = ?
 		  WHERE action_id = ?`+predicate, // #nosec G202 -- predicate is one of three package constants
 		string(to), marker, at.Format(time.RFC3339Nano), actionID)
@@ -1652,19 +2013,31 @@ func (s *Store) closeCrashOrphan(ctx context.Context, actionID string, to action
 // the cap — or until no terminal remains, because live rows are never
 // touched, cap or no cap. Returns how many actions were removed.
 func (s *Store) Prune(ctx context.Context) (int, error) {
-	total, err := s.Count(ctx)
+	// The judgement and the DELETE share ONE immediate transaction (R10, and
+	// the round-2 find): a ledger this profile does not own or cannot read
+	// refuses by name inside beginWrite, and no adoption can commit between
+	// the judgement and the deletion.
+	tx, err := s.beginWrite(withJudgeOrigin(ctx, originBeginWrite, s.path))
 	if err != nil {
 		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var total int
+	if err := stageFault(s.path, "prune:count", tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM actions`).Scan(&total)); err != nil {
+		return 0, fmt.Errorf("action/sqlite: count: %w", err)
 	}
 	excess := total - s.capRows
 	if excess <= 0 {
 		return 0, nil
 	}
+	if s.seams.beforePruneDelete != nil {
+		s.seams.beforePruneDelete()
+	}
 	// C6: the E5/C5 terminals (REJECTED, OUTCOME_UNKNOWN) are prunable
 	// like every other terminal — without them the retention cap leaks.
 	// The evidence exemption is elsewhere by construction: receipts
 	// live in their own chain and are never touched by this pass.
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.txExec(ctx, tx,
 		`DELETE FROM actions WHERE action_id IN (
 		    SELECT action_id FROM actions
 		     WHERE state IN (?, ?, ?, ?, ?, ?)
@@ -1675,26 +2048,51 @@ func (s *Store) Prune(ctx context.Context) (int, error) {
 		string(action.StateRejected), string(action.StateOutcomeUnknown),
 		excess,
 	)
-	if err != nil {
+	if err = stageFault(s.path, "prune:delete", err); err != nil {
 		return 0, fmt.Errorf("action/sqlite: prune: %w", err)
 	}
 	removed, err := res.RowsAffected()
-	if err != nil {
+	if err = stageFault(s.path, "prune:rows-affected", err); err != nil {
 		return 0, fmt.Errorf("action/sqlite: prune rows affected: %w", err)
+	}
+	if err := stageFault(s.path, "prune:commit", tx.Commit()); err != nil {
+		return 0, fmt.Errorf("action/sqlite: commit prune: %w", err)
 	}
 	return int(removed), nil
 }
 
 // Close releases the store's connection pool.
 func (s *Store) Close() error {
+	forgetGuard(s.guard.nonce)
 	return s.db.Close()
 }
 
 // SchemaVersion reports the store's OWN schema lifecycle version.
+// It reads the first stored version row through the shared parser
+// (parseStoredVersion): a value that is not a version, or a read that fails
+// with a structural code, is 0 and ErrLedgerUnreadable; any other failure is
+// its own error. It answers the version; it judges nothing else of the
+// schema.
 func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
-	var v int
-	if err := s.db.QueryRowContext(ctx, `SELECT version FROM action_schema`).Scan(&v); err != nil {
+	ctx = withJudgeOrigin(ctx, originSchemaVersion, s.path)
+	var versions []any
+	err := withLedgerConnection(ctx, s.db, func(c *sql.Conn) error {
+		var rerr error
+		versions, rerr = dbShapeQuerier{q: c}.scalars(ctx, siteVersion, `SELECT version FROM action_schema`)
+		return rerr
+	})
+	if err != nil {
+		if !isBirthFailure(err) && readVerdict(siteVersion, err) {
+			return 0, fmt.Errorf("%w: action_schema.version cannot be read: %w", ErrLedgerUnreadable, err)
+		}
 		return 0, fmt.Errorf("action/sqlite: read schema version: %w", err)
+	}
+	if len(versions) == 0 {
+		return 0, fmt.Errorf("action/sqlite: read schema version: %w", sql.ErrNoRows)
+	}
+	v, err := parseStoredVersion(versions[0])
+	if err != nil {
+		return 0, fmt.Errorf("%w: %w", ErrLedgerUnreadable, err)
 	}
 	return v, nil
 }
@@ -1711,12 +2109,12 @@ func (s *Store) RecordAttempt(ctx context.Context, env action.Envelope, d Decisi
 	default:
 		return fmt.Errorf("%w: %s", ErrNotADecisionState, state)
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin record: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO actions (action_id, schema_version, correlation_id,
 		    source_kind, source_protocol, source_channel,
 		    op_namespace, op_name, op_version,
@@ -1730,7 +2128,7 @@ func (s *Store) RecordAttempt(ctx context.Context, env action.Envelope, d Decisi
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert action %q: %w", env.ActionID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at, policy_version, policy_digest)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		env.ActionID, d.Outcome, d.Rule, env.RequestedAt.UTC().Format(time.RFC3339Nano),
@@ -1950,7 +2348,7 @@ func (s *Store) Count(ctx context.Context) (int, error) {
 // the ceremony's "verify migrated the profile" precedent can not
 // recur; a NEWER schema is refused too (an older binary must not
 // misread a future store).
-func OpenReadOnly(path string) (*Store, error) {
+func openReadOnly(path string) (*Store, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("action/sqlite: resolve path %q: %w", path, err)
@@ -1963,18 +2361,41 @@ func OpenReadOnly(path string) (*Store, error) {
 		return nil, fmt.Errorf("action/sqlite: read-only open %q: %w", abs, err)
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(`PRAGMA query_only = 1`); err != nil {
+	_, err = db.Exec(`PRAGMA query_only = 1`)
+	if err = stageFault(abs, "readonly:seal", err); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("action/sqlite: seal read-only connection %q: %w", abs, err)
 	}
-	var version int
-	if err := db.QueryRow(`SELECT version FROM action_schema`).Scan(&version); err != nil {
+	// The shape decides (judgeShape): a fresh or older file is not read, a
+	// newer one is named, and a BAD one is opened so that the readers can
+	// name it (Standing judges the shape first).
+	var shape shapeVerdict
+	judgeCtx := withJudgeOrigin(context.Background(), originReadOnlyOpen, abs)
+	if err := withLedgerConnection(judgeCtx, db, func(c *sql.Conn) error {
+		var jerr error
+		shape, jerr = judgeShape(judgeCtx, dbShapeQuerier{q: c})
+		if jerr != nil || shape.shape != shapeBad {
+			return jerr
+		}
+		// A bad verdict is judged once more before the reader is handed out
+		// over it (plan §13.1).
+		confirmCtx := withJudgeOrigin(context.Background(), originReadOnlyConfirm, abs)
+		shape, jerr = judgeShape(confirmCtx, dbShapeQuerier{q: c})
+		return jerr
+	}); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("action/sqlite: read schema version of %q (not a korvun store?): %w", abs, err)
+		return nil, err
 	}
-	if version != schemaVersionCurrent {
+	switch shape.shape {
+	case shapeFresh:
 		_ = db.Close()
-		return nil, fmt.Errorf("action/sqlite: store %q is at schema v%d, this binary reads v%d — a read-only consult never migrates; run the server boot to lift the schema", abs, version, schemaVersionCurrent)
+		return nil, fmt.Errorf("%w: read schema version of %q (not a korvun store?)", ErrNoActionStore, abs)
+	case shapeOlder:
+		_ = db.Close()
+		return nil, fmt.Errorf("%w: store %q is at schema v%d, this binary reads v%d — a read-only consult never migrates; run the server boot to lift the schema", ErrSchemaBehind, abs, shape.version, schemaVersionCurrent)
+	case shapeNewer:
+		_ = db.Close()
+		return nil, fmt.Errorf("%w: store %q is at schema v%d, this binary reads v%d", ErrSchemaFromTheFuture, abs, shape.version, schemaVersionCurrent)
 	}
 	// identityNow is set here for the same reason open() sets it: every
 	// identity-bearing path dereferences it, and a constructor that leaves it

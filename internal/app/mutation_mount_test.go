@@ -36,6 +36,7 @@ func TestBuild_mutationMountedOnlyWithToken(t *testing.T) {
 		a, err := Build(cfg,
 			withChannelFactory(okFactory(newFakeChannel("telegram"))),
 			WithReloader(stubReloader{}),
+			withTestProfile(),
 		)
 		if err != nil {
 			t.Fatalf("Build: %v", err)

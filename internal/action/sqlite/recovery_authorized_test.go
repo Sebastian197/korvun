@@ -43,7 +43,7 @@ func TestRecovery_anAuthorizedRowClosesUnknownNotFailed(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	reopened, err := Open(path)
+	reopened, err := openFull(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}

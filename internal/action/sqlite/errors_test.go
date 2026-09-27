@@ -25,7 +25,7 @@ func TestOpen_corruptFileFailsAtOpenNotFirstWrite(t *testing.T) {
 	if err := os.WriteFile(path, []byte("this is not a sqlite database, honestly"), 0o600); err != nil {
 		t.Fatalf("seed corrupt file: %v", err)
 	}
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err == nil {
 		_ = store.Close()
 		t.Fatal("a corrupt database must fail at Open (boot-fatal), not at first write")
@@ -84,7 +84,7 @@ func TestBuildFileDSN_canonicalizesAndKeepsPragmas(t *testing.T) {
 func TestOpenWithCap_pruneRunsOnTheSeam(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestOpen_parentBlockedByAFileFailsLoud(t *testing.T) {
 	if err := os.WriteFile(blocker, []byte("file, not dir"), 0o600); err != nil {
 		t.Fatalf("seed blocker: %v", err)
 	}
-	if store, err := Open(filepath.Join(blocker, "korvun.db")); err == nil {
+	if store, err := openFull(filepath.Join(blocker, "korvun.db")); err == nil {
 		_ = store.Close()
 		t.Fatal("a parent blocked by a regular file must fail at Open")
 	}
@@ -164,7 +164,7 @@ func blockWrites(t *testing.T, store *Store, event string) {
 func TestOpen_recoveryFailureIsBootFatal(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestOpen_recoveryFailureIsBootFatal(t *testing.T) {
 	}
 	// R3 re-map: the recovery moved out of Open (the boot calls it after
 	// wiring the sealer); the boot-fatal pin now covers the explicit pass.
-	reopened, err := Open(path)
+	reopened, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open no longer recovers and must succeed: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestFinish_updateFailurePropagates(t *testing.T) {
 func TestOpenWithCap_pruneFailureIsBootFatalOnTheSeam(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestOpenWithCap_pruneFailureIsBootFatalOnTheSeam(t *testing.T) {
 func TestOpen_seedFailureIsBootFatal(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestOpen_seedFailureIsBootFatal(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if reopened, err := Open(path); err == nil {
+	if reopened, err := openFull(path); err == nil {
 		_ = reopened.Close()
 		t.Fatal("a failing schema seed must fail Open")
 	}

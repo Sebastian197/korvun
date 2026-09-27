@@ -59,7 +59,7 @@ func parkedRequestExpiring(t *testing.T, expiresAt time.Time) (cfgPath, dbPath, 
 	if err != nil {
 		t.Fatalf("law: %v", err)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestApprovalsApprove_executesAndReportsTheRealOutcome(t *testing.T) {
 	if !strings.Contains(stdout, "42") || !strings.Contains(stdout, "SUCCEEDED") {
 		t.Fatalf("approve must report the REAL outcome of the real execution: %q", stdout)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestApprovalsReject_closesWithItsInk(t *testing.T) {
 	if !strings.Contains(stdout, "rejected") {
 		t.Fatalf("the verdict names itself: %q", stdout)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestReceiptVerify_approvalCoherence(t *testing.T) {
 		t.Fatalf("approve: %q", stderr)
 	}
 	// The executed outcome receipt seals the approval — verify green.
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -458,7 +458,7 @@ func parkedWebhookExpiring(t *testing.T, host, url string) (cfgPath, dbPath, app
 	if err != nil {
 		t.Fatalf("law: %v", err)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestApprovalsApprove_aDeadlineIsNeverPrintedAsSuccess(t *testing.T) {
 	}
 
 	// And the LEDGER agrees with the screen: one story, not three.
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -595,7 +595,7 @@ func TestApprovalsApprove_aDeliveredPostIsNeverPrintedAsFailure(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("exit = %d, want 1 over an unaccountable effect", code)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/app"
 	"github.com/Sebastian197/korvun/internal/channel"
 	"github.com/Sebastian197/korvun/internal/config"
@@ -129,6 +130,35 @@ func testController(extra ...app.Option) *Controller {
 		opts = append(opts, WithBuildOptions(extra...))
 	}
 	return New(opts...)
+}
+
+// startedControllerWithLedger is startedController over a profile that
+// carries an action ledger in its own temp dir: the shape every builder-driven
+// reload needs since a profile with no ledger refuses the builder (2026-09-24).
+func startedControllerWithLedger(t *testing.T, ollamaURL string) (*Controller, string, string) {
+	t.Helper()
+	t.Setenv(adminTokenEnv, "")
+	c := testController(fakeFactory())
+	cfg := minimalCfg(ollamaURL)
+	ledger := filepath.Join(t.TempDir(), "korvun.db")
+	cfg.Storage = &config.StorageConfig{Path: ledger}
+	path := writeCfg(t, cfg)
+	if err := c.LoadConfig(path); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := c.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() {
+		if c.Status().Running {
+			sctx, sc := context.WithTimeout(context.Background(), 10*time.Second)
+			defer sc()
+			_ = c.Stop(sctx)
+		}
+	})
+	return c, path, ledger
 }
 
 // startedController loads the minimal config and starts the core, failing the
@@ -472,15 +502,27 @@ func TestWithEphemeralAdmin_copySemantics(t *testing.T) {
 // end-to-end — the exact place the pristine-persist property matters: the
 // build seam re-applies the ephemeral override to the incoming config while
 // the persist seam writes the user's config (pinned addr, never :0) to disk.
+//
+// REWRITTEN 2026-09-24 (director's decision on the profile with no ledger):
+// before, the profile had no storage block and the builder's door answered 202;
+// now a profile with no ledger REFUSES the builder (no_ledger), so this profile
+// carries a ledger in its temp dir — and the mould is ELEVATED to pin what the
+// real cutover does to the operator act: after `succeeded`, the status door on
+// the NEW app answers the act with its receipt, and the ledger row is SUCCEEDED.
+// (Captured before the cure: OUTCOME_UNKNOWN, evidence/v0.16.2/probe-real-cutover.txt.)
+//
+// PROBING MUTATION (to be executed): call RecoverPreviousLife with no keep in
+// Build. The row reads OUTCOME_UNKNOWN and this reddens on the state.
 func TestReload_pristinePersistAndAddrRotation(t *testing.T) {
 	srv := fakeOllama(t)
-	c, path := startedController(t, srv.URL)
+	c, path, ledger := startedControllerWithLedger(t, srv.URL)
 
 	before := c.Status()
 	token := os.Getenv(adminTokenEnv)
 
 	// POST a mutated but valid config (a new model id marks the reload).
 	mutated := minimalCfg(srv.URL)
+	mutated.Storage = &config.StorageConfig{Path: ledger}
 	mutated.Brains[0].Models[0].ModelID = "llama3.2-reloaded"
 	body, err := json.Marshal(mutated)
 	if err != nil {
@@ -499,10 +541,14 @@ func TestReload_pristinePersistAndAddrRotation(t *testing.T) {
 		t.Fatalf("POST /api/config status = %d (%s), want 202", resp.StatusCode, accepted)
 	}
 	var handle struct {
-		Handle string `json:"handle"`
+		Handle   string `json:"handle"`
+		ActionID string `json:"action_id"`
 	}
 	if err := json.Unmarshal(accepted, &handle); err != nil || handle.Handle == "" {
 		t.Fatalf("202 body %q: want a reload handle", accepted)
+	}
+	if handle.ActionID == "" {
+		t.Fatalf("202 body %q: want the operator act's id", accepted)
 	}
 
 	// Poll the handle to "succeeded". The admin address ROTATES on cutover
@@ -510,18 +556,18 @@ func TestReload_pristinePersistAndAddrRotation(t *testing.T) {
 	// tolerate the transition window's connection errors.
 	deadline := time.Now().Add(10 * time.Second)
 	state := ""
+	var statusBody map[string]string
 	for time.Now().Before(deadline) && state != "succeeded" {
 		addr := c.Status().AdminAddr
 		if addr != "" {
 			sReq, _ := http.NewRequest(http.MethodGet, "http://"+addr+"/api/reload/"+handle.Handle, nil)
 			if sResp, sErr := http.DefaultClient.Do(sReq); sErr == nil {
-				var got struct {
-					State string `json:"state"`
-				}
+				var got map[string]string
 				b, _ := io.ReadAll(sResp.Body)
 				_ = sResp.Body.Close()
 				_ = json.Unmarshal(b, &got)
-				state = got.State
+				state = got["state"]
+				statusBody = got
 				if state == "failed" || state == "rolled-back" {
 					t.Fatalf("reload ended in state %q", state)
 				}
@@ -533,6 +579,21 @@ func TestReload_pristinePersistAndAddrRotation(t *testing.T) {
 	}
 	if state != "succeeded" {
 		t.Fatalf("reload did not reach succeeded within deadline (last state %q)", state)
+	}
+
+	// The operator act, across the REAL cutover: the status door on the NEW app
+	// answers the act and its receipt, and the ledger says SUCCEEDED — not the
+	// OUTCOME_UNKNOWN the boot's recovery used to leave (the capture that opened
+	// this piece).
+	if statusBody["action_id"] != handle.ActionID || statusBody["receipt_id"] == "" {
+		t.Fatalf("the status door on the new app answered %v, want action %q with its receipt", statusBody, handle.ActionID)
+	}
+	row, receipts := ledgerRow(t, ledger, handle.ActionID)
+	if row.State != action.StateSucceeded {
+		t.Fatalf("the act ended %q after a cutover that succeeded, want SUCCEEDED", row.State)
+	}
+	if len(receipts) != 1 || receipts[0].ReceiptID != statusBody["receipt_id"] || receipts[0].Outcome != string(action.StateSucceeded) {
+		t.Fatalf("ledger receipts %+v, want one sealing SUCCEEDED and named by the status door", receipts)
 	}
 
 	// The file on disk holds the user's PRISTINE mutated config: the pinned

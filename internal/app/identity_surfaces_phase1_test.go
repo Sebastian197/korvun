@@ -27,7 +27,7 @@ func TestIdentity_SecretsNeverEnterEvidenceOrFeeds(t *testing.T) {
 	channel := newFakeChannel("telegram")
 	built, err := Build(cfgWith(ollamaBrain()),
 		WithLogger(slog.New(slog.NewJSONHandler(&logs, nil))),
-		withChannelFactory(okFactory(channel)))
+		withChannelFactory(okFactory(channel)), withTestProfile())
 	if err != nil {
 		t.Fatal(err)
 	}

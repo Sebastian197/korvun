@@ -68,7 +68,7 @@ func approvedFlowWithPath(t *testing.T) (*actionsqlite.Store, *executor.Executor
 func approvedFlowWithParams(t *testing.T, rawParams string) (*actionsqlite.Store, *executor.Executor, *countingTool, string, string) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
-	app, err := Build(approvalsConfig(t, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(approvalsConfig(t, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestExecuteApproved_theDigestBelt(t *testing.T) {
 func TestExecuteApproved_aNoNeverExecutes(t *testing.T) {
 	t.Parallel()
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
-	app, err := Build(approvalsConfig(t, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(approvalsConfig(t, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestExecuteApproved_ghostAndPending(t *testing.T) {
 //	go test ./internal/app/ -run '^$' -bench BenchmarkRequestApproval -benchtime 2s
 func BenchmarkRequestApproval(b *testing.B) {
 	dbPath := filepath.Join(b.TempDir(), "korvun.db")
-	app, err := Build(approvalsConfig(&testing.T{}, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(approvalsConfig(&testing.T{}, dbPath, true), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		b.Fatalf("Build: %v", err)
 	}

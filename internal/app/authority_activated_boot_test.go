@@ -28,7 +28,7 @@ func activateAuthorityOnDisk(t *testing.T, cfg *config.Config) string {
 func activateAuthorityProfileOnDisk(t *testing.T, cfg *config.Config, profile, actID string) string {
 	t.Helper()
 	ctx := context.Background()
-	store, err := actionsqlite.Open(StoragePath(cfg))
+	store, err := actionsqlite.OpenFor(StoragePath(cfg), testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestBuild_RefusesANonStrictBootOverAnActivatedProfile(t *testing.T) {
 	digest := activateAuthorityOnDisk(t, cfg)
 
 	t.Run("without the authority block the boot refuses by name", func(t *testing.T) {
-		app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if app != nil {
 			shutdownApp(t, app)
 		}
@@ -176,7 +176,7 @@ func TestBuild_RefusesANonStrictBootOverAnActivatedProfile(t *testing.T) {
 	t.Run("a non-strict block is refused too", func(t *testing.T) {
 		loose := kernelWiringConfig(dbPath)
 		loose.Authority = &config.AuthorityConfig{Mode: "off"}
-		app, err := Build(loose, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		app, err := Build(loose, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if app != nil {
 			shutdownApp(t, app)
 		}
@@ -191,7 +191,7 @@ func TestBuild_RefusesANonStrictBootOverAnActivatedProfile(t *testing.T) {
 	t.Run("with the strict block it boots", func(t *testing.T) {
 		strict := kernelWiringConfig(dbPath)
 		strict.Authority = &config.AuthorityConfig{Mode: "strict", ActivationDigest: digest}
-		app, err := Build(strict, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		app, err := Build(strict, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if err != nil {
 			t.Fatalf("the strict boot over its own activated profile: %v", err)
 		}
@@ -204,7 +204,7 @@ func TestBuild_RefusesANonStrictBootOverAnActivatedProfile(t *testing.T) {
 	// digests, and keeps its own sentinel.
 	t.Run("two activated profiles are named, not called corrupt", func(t *testing.T) {
 		second := activateSecondAuthorityOnDisk(t, cfg)
-		app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if app != nil {
 			shutdownApp(t, app)
 		}
@@ -225,7 +225,7 @@ func TestBuild_RefusesANonStrictBootOverAnActivatedProfile(t *testing.T) {
 	// every profile in the field today.
 	t.Run("an un-activated profile is untouched", func(t *testing.T) {
 		fresh := kernelWiringConfig(filepath.Join(t.TempDir(), "fresh.db"))
-		app, err := Build(fresh, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		app, err := Build(fresh, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if err != nil {
 			t.Fatalf("a non-strict boot over a profile that was never activated: %v", err)
 		}

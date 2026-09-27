@@ -45,7 +45,7 @@ func TestAuthority_RepeatedActionIDCannotSpendOrStartTwice(t *testing.T) {
 
 	t.Run("the same id raced from two real pools", func(t *testing.T) {
 		f := newAuthoritySQLiteFixture(t, 5)
-		second, err := Open(f.store.path)
+		second, err := openFull(f.store.path)
 		if err != nil {
 			t.Fatal(err)
 		}

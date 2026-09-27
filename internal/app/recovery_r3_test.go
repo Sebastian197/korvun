@@ -26,7 +26,7 @@ func TestBootRecovery_closesWithSignedReceipts(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
 	// A previous life leaves an in-flight action behind (no sealer —
 	// the crash predates any ledger ink for it).
-	store, err := actionsqlite.OpenOperator(dbPath)
+	store, err := actionsqlite.OpenOperatorFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("seed open: %v", err)
 	}
@@ -41,13 +41,13 @@ func TestBootRecovery_closesWithSignedReceipts(t *testing.T) {
 	_ = store.Close()
 
 	// The REAL boot: Build wires keystore and sealer, THEN recovers.
-	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
 	shutdownApp(t, app)
 
-	ro, err := actionsqlite.OpenReadOnly(dbPath)
+	ro, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

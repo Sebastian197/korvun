@@ -26,7 +26,7 @@ func approvedReceiptID(t *testing.T, cfgPath, dbPath, approvalID string) string 
 	if code, _, stderr := runIntentCLI(t, "approvals", "approve", "--config", cfgPath, approvalID); code != 0 {
 		t.Fatalf("approve: %q", stderr)
 	}
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

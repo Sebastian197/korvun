@@ -24,7 +24,7 @@ import (
 // Probing mutation executed: the activation check skipped — red with «error =
 // <nil>, want action/sqlite: authorization snapshot corrupt».
 func TestPrepareStrictAuthority_RefusesUnverifiedActivation(t *testing.T) {
-	store, err := actionsqlite.Open(filepath.Join(t.TempDir(), "authority.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(t.TempDir(), "authority.db"), testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}

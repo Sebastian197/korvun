@@ -58,7 +58,7 @@ func newStrictDoorFixture(t *testing.T) *strictDoorFixture {
 	ctx := context.Background()
 	now := time.Now().UTC().Truncate(time.Second)
 	dbPath := filepath.Join(t.TempDir(), "strict.db")
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}

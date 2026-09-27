@@ -41,7 +41,7 @@ func operatorReceipt(t *testing.T) (cfgPath, dbPath, receiptID, actionID string)
 	if code != 0 {
 		t.Fatalf("create: %d %q", code, stderr)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -183,7 +183,7 @@ func countRows(t *testing.T, dbPath, table string) int {
 // hash — only the signature can catch this forgery.
 func rehashForgedOutcome(t *testing.T, dbPath, receiptID string) {
 	t.Helper()
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestReceiptVerify_actionWithNoReceiptsFailsLoud(t *testing.T) {
 	cfgPath, dbPath, _, _ := operatorReceipt(t)
 	// An AUTHORIZED action has no receipt yet — verify by its action id
 	// must say so, not report OK on nothing.
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -307,7 +307,7 @@ func operatorProbeEnvelope(id string) action.Envelope {
 func TestReceiptVerify_besideALiveServerLeavesInFlightActionsIntact(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath, receiptID, _ := operatorReceipt(t)
-	server, err := actionsqlite.Open(dbPath)
+	server, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("server open: %v", err)
 	}

@@ -131,7 +131,7 @@ func personaAgentCfg(baseURL string, p *config.PersonaConfig) *config.Config {
 func runAndAsk(t *testing.T, cfg *config.Config) {
 	t.Helper()
 	ch := newCapturingChannel("telegram")
-	a, err := Build(cfg, withChannelFactory(okFactory(ch)))
+	a, err := Build(cfg, withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

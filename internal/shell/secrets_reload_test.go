@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/app"
 	"github.com/Sebastian197/korvun/internal/config"
 )
@@ -59,7 +61,22 @@ func templateCfg(ollamaURL string) *config.Config {
 // back to "failed". This reproduces the EXACT scenario: core running with the
 // 0-channel template + the discord token only in the keychain double + the
 // assistant's POST -> the channel must connect.
+//
+// REWRITTEN 2026-09-24 (director's decision on the profile with no ledger).
+// BEFORE: the store-less template accepted the assistant's POST with 202.
+// AFTER: a profile with no ledger REFUSES the builder's door by name
+// (no_ledger); the ONE door open is «Activar almacén», which founds the ledger
+// under the sandboxed default path, seals the founding act, and applies through
+// a REAL cutover; only then does the assistant's POST reach 202, and F1's
+// guarantee — the keychain-only secret re-provisioned in the reload — is proved
+// exactly as before, one door later.
+//
+// PROBING MUTATIONS (to be executed): treat a store-less app's recorder as
+// «record nothing» (the first POST answers 202 and the refusal leg reddens);
+// seal the founding act AFTER RequestReload (the seal is racing the cutover and
+// the ledger assertion reddens or flakes — the order is the guarantee).
 func TestReload_reprovisionsKeychainSecret(t *testing.T) {
+	sandboxUserDir(t)             // the ledger lands at the DEFAULT path: never the real one
 	t.Setenv(adminTokenEnv, "")   // the shell mints the bearer per cycle
 	t.Setenv(discordTokenEnv, "") // the secret is NOT in the environment...
 	store := newFakeStore()
@@ -97,12 +114,55 @@ func TestReload_reprovisionsKeychainSecret(t *testing.T) {
 		Type: "discord", Mode: "gateway", TokenEnv: discordTokenEnv,
 	})
 	withChannel.Routes = append(withChannel.Routes, config.RouteConfig{Channel: "discord", Brain: "asistente"})
+
+	// 1 · Without a ledger the builder's door refuses by name, and nothing moves.
+	if code, refusal := postConfigStatus(t, srv, withChannel); code != http.StatusServiceUnavailable || refusal["error_code"] != "no_ledger" {
+		t.Fatalf("POST /api/config on a store-less profile = %d %v, want 503 no_ledger", code, refusal)
+	}
+	if _, chans := get(t, srv.Client(), srv.URL+"/api/channels", nil); strings.Contains(chans, `"discord"`) {
+		t.Fatalf("the channel was added over a refused change: %q", chans)
+	}
+
+	// 2 · The one door open: found the ledger, seal the founding act, cut over.
+	code, founded := pressDoor(t, srv, "enable-storage", `{}`)
+	if code != http.StatusOK {
+		t.Fatalf("enable-storage = %d %+v, want 200", code, founded)
+	}
+	if founded.Act.ActionID == "" {
+		t.Fatal("the founding act was not answered")
+	}
+	if founded.Outcome == "applying" {
+		if st := waitReloadThroughProxy(t, srv, founded.Handle, firstRunBootTimeout); st["state"] != "succeeded" {
+			t.Fatalf("founding the ledger ended %q, want succeeded", st["state"])
+		}
+	} else if founded.Outcome != "applied" {
+		t.Fatalf("enable-storage outcome = %q, want applied/applying", founded.Outcome)
+	}
+	ledger := defaultLedgerPath(t)
+	onDisk, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("reload profile: %v", err)
+	}
+	if onDisk.Storage == nil || onDisk.Storage.Path != ledger {
+		t.Fatalf("the profile on disk names storage %+v, want the founded ledger %q", onDisk.Storage, ledger)
+	}
+	if !strings.Contains(founded.Detail, ledger) {
+		t.Fatalf("the operator was not told where the book lives: %q", founded.Detail)
+	}
+	row := waitLedgerTerminal(t, ledger, founded.Act.ActionID, 10*time.Second)
+	_, receipts := ledgerRow(t, ledger, founded.Act.ActionID)
+	if row.State != action.StateSucceeded || len(receipts) != 1 {
+		t.Fatalf("the founding act is %q with %d receipts, want SUCCEEDED with its receipt — the FIRST receipt of the book it founded", row.State, len(receipts))
+	}
+
+	// 3 · F1, exactly as before, one door later: the channel with the
+	// keychain-only secret goes in through a reload and connects.
+	withChannel.Storage = &config.StorageConfig{Path: ledger}
 	body, err := json.Marshal(withChannel)
 	if err != nil {
 		t.Fatalf("marshal channel config: %v", err)
 	}
-
-	postConfigReload(t, srv.Client(), srv.URL, body) // fails here before the fix (rollback)
+	postConfigReload(t, srv.Client(), srv.URL, body) // fails here before the F1 fix (rollback)
 
 	_, chans := get(t, srv.Client(), srv.URL+"/api/channels", nil)
 	if !strings.Contains(chans, `"discord"`) {

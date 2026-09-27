@@ -534,7 +534,7 @@ func parkingProfile(t *testing.T) (*config.Config, *actionsqlite.Store, func()) 
 		EffectCeiling: "critical",
 		WebhookCall:   &config.WebhookCallToolConfig{AllowHosts: []string{"hooks.acme.io"}},
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

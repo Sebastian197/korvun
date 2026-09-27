@@ -43,7 +43,7 @@ func BenchmarkRunToolHotPath(b *testing.B) {
 // digest + atomic record + execute + terminal finish against a real sqlite
 // store on a temp file — the number the spec bounds at <=5ms p95.
 func BenchmarkRunToolHotPathRecorded(b *testing.B) {
-	store, err := actionsqlite.Open(filepath.Join(b.TempDir(), "korvun.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(b.TempDir(), "korvun.db"), testProfileIdentity)
 	if err != nil {
 		b.Fatalf("open action store: %v", err)
 	}

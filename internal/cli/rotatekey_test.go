@@ -49,7 +49,7 @@ func TestReceiptRotateKey_historicalReceiptsStillVerify(t *testing.T) {
 		t.Fatalf("historical receipts must keep verifying after rotation: %d %q %q", code, stdout, stderr)
 	}
 	// Each era used ITS key: the ledger must carry both key ids.
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestReceiptRotateKey_retiresTheOldKeyAndSwapsTheFile(t *testing.T) {
 	if code, _, stderr := runIntentCLI(t, "receipt", "rotate-key", "--config", cfgPath); code != 0 {
 		t.Fatalf("rotate-key: %d %q", code, stderr)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestReceiptRotateKey_staleFileKeyIsRefusedClosed(t *testing.T) {
 	cfgPath, dbPath := seedChain(t, 1)
 	// Simulate the crash window: the registry rotates but the file swap
 	// never lands — the file still carries the RETIRED key.
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

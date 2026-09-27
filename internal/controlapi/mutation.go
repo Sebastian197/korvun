@@ -9,8 +9,10 @@
 package controlapi
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -38,13 +40,23 @@ type Reloader interface {
 // RegisterMutation mounts the write + status endpoints on m. Call it ONLY when a
 // non-empty bearer token is configured; with no token the caller does not call it
 // and the mutation surface simply is not mounted (ADR-0028 §1). The write route is
-// wrapped by the bearer gate; the status route is a read and stays open on loopback
-// (ADR-0028 §2). Call before the server starts (the mux is not safe to mutate once
-// serving).
-func RegisterMutation(m Mounter, rl Reloader, token string) {
-	m.Handle("POST /api/config", bearerAuth(token)(configHandler(rl)))
+// wrapped by the bearer gate; the status route stays open on loopback (ADR-0028
+// §2). Since 2026-09-24 that route is not a pure read: it answers the act bound
+// to a handle with its receipt, and a poll that arrives before the process's
+// own observer has closed the act performs that close — always with the
+// SUPERVISOR's outcome, never anything the caller sent. No client input reaches
+// the ledger through it; what an unauthenticated loopback caller can do is learn
+// the ids of a change already made. Call before the server starts (the mux is
+// not safe to mutate once serving).
+// rec records the operator act behind every write. A nil rec is NOT «record
+// nothing»: the write door then refuses by name. The builder has written the
+// profile through this door since Stage 14 and left no trace in the action
+// ledger; from 2026-09-24 a profile change that cannot be recorded is not applied
+// (director's ruling).
+func RegisterMutation(m Mounter, rl Reloader, token string, rec ActRecorder) {
+	m.Handle("POST /api/config", bearerAuth(token)(configHandler(rl, rec)))
 	m.Handle("GET /api/config", bearerAuth(token)(configGetHandler(rl)))
-	m.Handle("GET /api/reload/{handle}", statusHandler(rl))
+	m.Handle("GET /api/reload/{handle}", statusHandler(rl, rec))
 }
 
 // configGetHandler serves the raw current config as the builder's editing baseline
@@ -113,7 +125,7 @@ const maxConfigBodyBytes = 1 << 20 // 1 MiB
 
 // configHandler accepts a full config document, validates it, refuses a self-locking
 // config (F11), then hands it to the supervisor and returns 202 + an opaque handle.
-func configHandler(rl Reloader) http.Handler {
+func configHandler(rl Reloader, rec ActRecorder) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Cap the body BEFORE decoding so an oversized document is cut at the reader,
 		// never fully buffered (a MaxBytesError surfaces from Decode as a 413).
@@ -123,7 +135,11 @@ func configHandler(rl Reloader) http.Handler {
 		// unknown key was silently dropped, the reload succeeded, and the
 		// persisted file lost the typo ("governence" => an ungoverned agent
 		// brain the operator believed governed).
-		dec := json.NewDecoder(r.Body)
+		// The raw bytes are kept so the act can seal their digest. The decoder
+		// reads from a tee rather than a second read of the body, which is gone
+		// once decoded.
+		var rawBuf bytes.Buffer
+		dec := json.NewDecoder(io.TeeReader(r.Body, &rawBuf))
 		dec.DisallowUnknownFields()
 		var cfg config.Config
 		if err := dec.Decode(&cfg); err != nil {
@@ -145,6 +161,7 @@ func configHandler(rl Reloader) http.Handler {
 			writeError(w, http.StatusBadRequest, "trailing data after the config document")
 			return
 		}
+		raw := rawBuf.Bytes()
 		if err := cfg.Validate(); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -157,29 +174,105 @@ func configHandler(rl Reloader) http.Handler {
 				"the new config would remove the admin token and lock the builder out of itself; edit the -config file and restart to recover")
 			return
 		}
-		h, err := rl.RequestReload(&cfg)
-		if err != nil {
-			if errors.Is(err, supervisor.ErrReloadInProgress) {
-				writeErrorCode(w, http.StatusConflict, "reload_in_progress", "a reload is already in progress")
-				return
-			}
-			writeError(w, http.StatusInternalServerError, "reload could not be started")
+		// THE ACT COMES BEFORE THE CHANGE, exactly as on the screen's four doors.
+		// Everything above could refuse with nothing attempted; from here a
+		// change is going to be asked for, and the book says so first.
+		if rec == nil {
+			writeErrorCode(w, http.StatusServiceUnavailable, "no_ledger", noLedgerMessage)
 			return
 		}
-		writeJSONStatus(w, http.StatusAccepted, map[string]string{"handle": string(h)})
+		// The act seals the DIGEST of the document, not the document: a config
+		// carries env-var names and shapes an operator may not want copied into
+		// the ledger's parameters, and what the book needs is proof of WHICH
+		// change this was.
+		sum := sha256.Sum256(raw)
+		act, err := rec.BeginConfigAct(r.Context(), actVerb("post-config"),
+			[]byte(`{"door":"post-config","document_sha256":"`+hex.EncodeToString(sum[:])+`"}`))
+		if err != nil {
+			// A recorder that exists and has no ledger (a profile with no
+			// storage block) says so by name, and the operator reads the same
+			// refusal a nil recorder gives — not «the book refused».
+			if errors.Is(err, ErrNoLedger) {
+				writeErrorCode(w, http.StatusServiceUnavailable, "no_ledger", noLedgerMessage)
+				return
+			}
+			if errors.Is(err, ErrLedgerForeign) {
+				writeErrorCode(w, http.StatusConflict, "ledger_foreign_profile", ledgerForeignMessage)
+				return
+			}
+			writeErrorCode(w, http.StatusServiceUnavailable, "act_not_recorded",
+				"the change was not attempted because the operator act could not be recorded: "+err.Error())
+			return
+		}
+		h, err := rl.RequestReload(&cfg)
+		if err != nil {
+			// The act closes FAILED — the supervisor never took the change —
+			// and the refusal names the closed act with its receipt, so the
+			// builder can show what the book recorded.
+			act = rec.SettleAct(r.Context(), act.ActionID, false, err.Error())
+			if errors.Is(err, supervisor.ErrReloadInProgress) {
+				writeJSONStatus(w, http.StatusConflict, map[string]string{
+					"error_code": "reload_in_progress", "message": "a reload is already in progress",
+					"action_id": act.ActionID, "receipt_id": act.ReceiptID,
+				})
+				return
+			}
+			writeJSONStatus(w, http.StatusInternalServerError, map[string]string{
+				"error":     "reload could not be started",
+				"action_id": act.ActionID, "receipt_id": act.ReceiptID,
+			})
+			return
+		}
+		rec.BindReload(act.ActionID, string(h))
+		if settled, applied := actOutcome(rl.Status(h)); settled {
+			act = rec.SettleAct(r.Context(), act.ActionID, applied, string(rl.Status(h)))
+		}
+		writeJSONStatus(w, http.StatusAccepted, map[string]string{
+			"handle": string(h), "action_id": act.ActionID, "receipt_id": act.ReceiptID,
+		})
 	})
 }
 
+// noLedgerMessage is the builder door's refusal on a profile with no action
+// store. The builder paints it verbatim, so it names the way out: the one door
+// open on such a profile, and the hand edit.
+const noLedgerMessage = "this profile has no action store, so a change could not be recorded as an operator act; nothing is applied without a book to write it in. Press «Activar almacén» on the app's «¿Qué pasa hoy?» screen, or add storage.path to the profile and restart"
+
+// ledgerForeignMessage is the builder door's refusal on a ledger another
+// profile founded or adopted. The builder paints it verbatim.
+const ledgerForeignMessage = "this profile's action store was founded or adopted by another profile, so no act of this profile can be recorded in it; nothing is applied. Press «Adoptar libro» on the app's «¿Qué pasa hoy?» screen to take the book for this profile"
+
 // statusHandler serves the state of a reload handle. The state lives in the
 // supervisor and survives the cutover (ADR-0027 §F4); this handler only exposes it.
-func statusHandler(rl Reloader) http.Handler {
+func statusHandler(rl Reloader, rec ActRecorder) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		st := rl.Status(supervisor.Handle(r.PathValue("handle")))
+		handle := r.PathValue("handle")
+		st := rl.Status(supervisor.Handle(handle))
 		if st == "" {
 			writeError(w, http.StatusNotFound, "unknown reload handle")
 			return
 		}
-		writeJSON(w, map[string]string{"state": string(st)})
+		// The act is normally closed by the process itself, the moment the
+		// supervisor stores a terminal state (internal/app's registry, through
+		// the supervisor's observer). This door READS that close and answers the
+		// receipt; when a poll arrives first, it performs the close with the same
+		// outcome, once, and the rest of the polls answer the same receipt.
+		// `RequestReload` is asynchronous — it answers a `pending` handle — so a
+		// close in the write handler would have recorded a wish.
+		answer := map[string]string{"state": string(st)}
+		if rec != nil {
+			if settled, applied := actOutcome(st); settled {
+				// The receipt is born at the close, so this is the first moment
+				// it can travel. The screen polling a cutover gets it here.
+				if act := rec.SettleReload(r.Context(), handle, applied, string(st)); act.ActionID != "" {
+					answer["action_id"] = act.ActionID
+					if act.ReceiptID != "" {
+						answer["receipt_id"] = act.ReceiptID
+					}
+				}
+			}
+		}
+		writeJSON(w, answer)
 	})
 }
 

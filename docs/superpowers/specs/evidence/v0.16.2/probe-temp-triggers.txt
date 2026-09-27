@@ -1,0 +1,24 @@
+=== RUN   TestProbe_tempTriggersArePerConnection
+    profile_guard_probe_test.go:71: Q0 install: A has 2 temp triggers; B has 0
+    profile_guard_probe_test.go:75: Q1 A INSERT outside tx: err=constraint failed: ledger_foreign_profile (1811) named=true
+    profile_guard_probe_test.go:93: Q2 A INSERT in tx: err=constraint failed: ledger_foreign_profile (1811) named=true; triggers after rollback=2; second tx err named=true
+    profile_guard_probe_test.go:97: Q3 B temp triggers=0; B INSERT err=<nil>
+    profile_guard_probe_test.go:102: Q4 B UPDATE err=<nil>; A UPDATE err=constraint failed: ledger_foreign_profile (1811) named=true
+    profile_guard_probe_test.go:109: Q5 A INSERT with standing ok: err=<nil>; with malformed: err=constraint failed: ledger_foreign_profile (1811) named(foreign)=true
+    profile_guard_probe_test.go:116: Q6 A temp triggers after 5 queries=2
+    profile_guard_probe_test.go:130: Q7 empty guard table: naive WHEN err=<nil> (nil means FAIL-OPEN); COALESCE WHEN err=constraint failed: ledger_guard_unset (1811) named(unset)=true
+    profile_guard_probe_test.go:139: Q8 error type: *sqlite.Error; has Code(): true; code=1811; text="constraint failed: ledger_foreign_profile (1811)"
+    profile_guard_probe_test.go:146: FINAL actions in the file=3 (expected 3: act_b1, act_a4 and act_c1 — the fail-open one)
+--- PASS: TestProbe_tempTriggersArePerConnection (0.05s)
+PASS
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.556s
+=== RUN   TestProbe_connectionHookInstallsTheGuardOnEveryConnection
+    profile_guard_probe_test.go:217: Q9a guarded DSN opens: err=<nil> triggers=1 hook calls=1 guarded=1
+    profile_guard_probe_test.go:219: Q9b INSERT on the guarded handle: err=constraint failed: ledger_guard (1811)
+    profile_guard_probe_test.go:225: Q9c after ConnMaxLifetime expiry: triggers=1 err=<nil> hook calls=2 guarded=2; INSERT err=constraint failed: ledger_guard (1811)
+    profile_guard_probe_test.go:230: Q9d plain DSN: triggers=0 INSERT err=<nil>
+    profile_guard_probe_test.go:235: Q9e hook error: ping err=connection hook: probe: hook refused this connection; INSERT err=connection hook: probe: hook refused this connection
+    profile_guard_probe_test.go:240: FINAL actions=1 (expected 1: act_p1)
+--- PASS: TestProbe_connectionHookInstallsTheGuardOnEveryConnection (0.06s)
+PASS
+ok  	github.com/Sebastian197/korvun/internal/action/sqlite	0.558s

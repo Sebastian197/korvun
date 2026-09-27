@@ -32,6 +32,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
@@ -129,7 +130,7 @@ func (s *Store) appendReceiptTx(ctx context.Context, tx *sql.Tx, r action.Receip
 	if r.Signature == "" || action.VerifyReceiptSignature(ed25519.PublicKey(pub), r) != nil {
 		return fmt.Errorf("action/sqlite: signature_invalid_at_birth: the seal for %q does not verify against registered key %s — refusing the receipt", r.ActionID, r.SigningKeyID)
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO receipts (receipt_id, action_id, intent_digest, principal_id,
 		    authority_digest, decision_digest, action_digest, effect_class, attempt,
 		    outcome, result_digest, started_at, finished_at, partition, chain_seq,
@@ -350,13 +351,40 @@ func (s *Store) Finish(ctx context.Context, actionID string, to action.State, fi
 
 // FinishWithResult closes an action into a terminal state AND births its
 // receipt in the same transaction, carrying the on-the-fly result digest
-// (sealed NC-3: the digest travels, raw content never touches disk).
+// (sealed NC-3: the digest travels, raw content never touches disk). A result
+// carrying the profile mark is refused by name: only FinishFounding and
+// AdoptLedger write it (profile_standing.go).
 func (s *Store) FinishWithResult(ctx context.Context, actionID string, to action.State, finishedAt time.Time, resultDigest string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	// Case-insensitively: SQLite's LIKE folds ASCII case, so a `PROFILE:`
+	// that slipped past an exact check would read as a mark nobody can match.
+	if strings.HasPrefix(strings.ToLower(resultDigest), ProfileMarkPrefix) {
+		return ErrReservedResultDigest
+	}
+	return s.finishWithResult(ctx, actionID, to, finishedAt, resultDigest)
+}
+
+// finishWithResult is FinishWithResult without the reserved-prefix check: the
+// body every close shares, reached with the mark only through FinishFounding.
+func (s *Store) finishWithResult(ctx context.Context, actionID string, to action.State, finishedAt time.Time, resultDigest string) error {
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin finish: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.finishWithResultTx(ctx, tx, actionID, to, finishedAt, resultDigest); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("action/sqlite: commit finish %q: %w", actionID, err)
+	}
+	return nil
+}
+
+// finishWithResultTx is finishWithResult inside a caller's transaction, for
+// the closes that must land together with something else (the founding's
+// identity row).
+func (s *Store) finishWithResultTx(ctx context.Context, tx *sql.Tx, actionID string, to action.State, finishedAt time.Time, resultDigest string) error {
+	var err error
 	var current string
 	err = tx.QueryRowContext(ctx, `SELECT state FROM actions WHERE action_id = ?`, actionID).Scan(&current)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -368,7 +396,7 @@ func (s *Store) FinishWithResult(ctx context.Context, actionID string, to action
 	if err := action.Transition(action.State(current), to); err != nil {
 		return fmt.Errorf("action/sqlite: finish %q: %w", actionID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`UPDATE actions SET state = ?, finished_at = ? WHERE action_id = ?`,
 		string(to), finishedAt.UTC().Format(time.RFC3339Nano), actionID,
 	); err != nil {
@@ -392,9 +420,6 @@ func (s *Store) FinishWithResult(ctx context.Context, actionID string, to action
 		if err := s.appendReceiptTx(ctx, tx, receipt); err != nil {
 			return err
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("action/sqlite: commit finish %q: %w", actionID, err)
 	}
 	return nil
 }

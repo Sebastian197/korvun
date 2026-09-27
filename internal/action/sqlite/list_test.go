@@ -53,7 +53,7 @@ func TestListIntents_returnsAllOrderedById(t *testing.T) {
 // shared path return).
 func openTemp2(t *testing.T) (*Store, error) {
 	t.Helper()
-	return Open(t.TempDir() + "/korvun.db")
+	return openFull(t.TempDir() + "/korvun.db")
 }
 
 func TestListByOperation_filtersExactly(t *testing.T) {

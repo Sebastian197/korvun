@@ -46,7 +46,7 @@ import (
 // <nil>».
 func TestAuthority_DelegateAndRevokeSerialize(t *testing.T) {
 	f := newAuthoritySQLiteFixture(t, 10)
-	revoker, err := Open(f.store.path)
+	revoker, err := openFull(f.store.path)
 	if err != nil {
 		t.Fatal(err)
 	}

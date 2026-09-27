@@ -65,7 +65,7 @@ func sweepTombstoneRow(aprID, actID string) [10]any {
 func TestMigrationV12_sweepClosedApprovalMigratesClean(t *testing.T) {
 	t.Parallel()
 	path := buildV11LegacyFile(t, sweepTombstoneRow("apr_r12_sweep0000000000000000001", "act_r12_sweep"))
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("AUDIT R12-A1 (P1#1, normal use): a sweep-closed approval is the DOMAIN's truth and must migrate clean: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestMigrationV10Copy_sweepTombstoneMigratesCleanToV12(t *testing.T) {
 	a.DecisionAt = time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
 	seedV10RawRow(t, path, [9]any{a.ActionID, a.ApprovalID, a.ActionDigest, a.PreviewDigest,
 		a.PolicyVersion, a.PolicyDigest, "", "clock", a.DecisionAt.Format(time.RFC3339Nano)})
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("AUDIT R12-P3-4: the v10 sweep tombstone is the domain's truth at that door too: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestMigrationV12_humanVerbWithEmptyPrincipalIsCorrupt(t *testing.T) {
 	row := [10]any{a.ApprovalID, a.Digest(), a.ActionID, a.ActionDigest, a.PreviewDigest,
 		a.PolicyVersion, a.PolicyDigest, "", a.Decision, a.DecisionAt.Format(time.RFC3339Nano)}
 	path := buildV11LegacyFile(t, row)
-	_, err := Open(path)
+	_, err := openFull(path)
 	var fault *TombstoneFault
 	if err == nil || !errors.As(err, &fault) || fault.Field != "decision_principal_id" {
 		t.Fatalf("AUDIT R12-A2: a human decision without a principal is corrupt, named by stable field: %v", err)
@@ -130,7 +130,7 @@ func TestMigrationV12_clockWithPrincipalIsCorrupt(t *testing.T) {
 	row := [10]any{a.ApprovalID, a.Digest(), a.ActionID, a.ActionDigest, a.PreviewDigest,
 		a.PolicyVersion, a.PolicyDigest, a.DecisionPrincipalID, "clock", a.DecisionAt.Format(time.RFC3339Nano)}
 	path := buildV11LegacyFile(t, row)
-	_, err := Open(path)
+	_, err := openFull(path)
 	var fault *TombstoneFault
 	if err == nil || !errors.As(err, &fault) || fault.Field != "decision_principal_id" {
 		t.Fatalf("AUDIT R12-A3: a clock decision carrying a principal is an anomaly, named: %v", err)
@@ -186,7 +186,7 @@ func TestMigrationV12_typeCorruptPolicyVersionIsFaultTyped(t *testing.T) {
 	row := legacyGoodRow("apr_r12_type0000000000000000001", "act_r12_type")
 	row[5] = "abc"
 	path := buildV11LegacyFile(t, row)
-	_, err := Open(path)
+	_, err := openFull(path)
 	var fault *TombstoneFault
 	// R13: the CLASS is what condemns 'abc' — the Detail names it
 	// (an exact equality; R12's "non-integer bytes" left the taxonomy).
@@ -233,7 +233,7 @@ func TestMigrationV12_bumpInterruptLeavesV11IntactAndRetryConverges(t *testing.T
 		t.Fatalf("arm: %v", err)
 	}
 	_ = db.Close()
-	if _, err := Open(path); err == nil {
+	if _, err := openFull(path); err == nil {
 		t.Fatal("the aborted bump must be boot-fatal")
 	}
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 11 {
@@ -247,7 +247,7 @@ func TestMigrationV12_bumpInterruptLeavesV11IntactAndRetryConverges(t *testing.T
 		t.Fatalf("drop: %v", err)
 	}
 	_ = db2.Close()
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("the retry converges: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestMigrationV12_badFirstRowFailsNamed(t *testing.T) {
 	bad[9] = ""
 	path := buildV11LegacyFile(t, bad,
 		legacyGoodRow("apr_r12_zzok00000000000000000001", "act_r12_zzok"))
-	_, err := Open(path)
+	_, err := openFull(path)
 	var fault *TombstoneFault
 	if err == nil || !errors.As(err, &fault) ||
 		fault.ApprovalID != "apr_r12_aabad000000000000000001" || fault.Field != "decision_at" {
@@ -282,7 +282,7 @@ func TestMigrationV12_faultTypeSurvivesWrapping(t *testing.T) {
 	row := legacyGoodRow("apr_r12_as000000000000000000001", "act_r12_as")
 	row[9] = "not-a-date"
 	path := buildV11LegacyFile(t, row)
-	_, err := Open(path)
+	_, err := openFull(path)
 	var fault *TombstoneFault
 	if err == nil || !errors.As(err, &fault) {
 		t.Fatalf("AUDIT R12-A10: the typed fault must survive wrapping to the boot error: %v", err)
@@ -460,7 +460,7 @@ func TestMigrationV12_outOfVocabularyVerbIsCorruptAtDecision(t *testing.T) {
 	for _, verb := range outOfVocabularyVerbs {
 		row, _ := badVerbRow("apr_r12_h2mig_"+verb+"0000000000001", "act_r12_h2mig_"+verb, verb)
 		path := buildV11LegacyFile(t, row)
-		_, err := Open(path)
+		_, err := openFull(path)
 		var fault *TombstoneFault
 		if err == nil || !errors.As(err, &fault) || fault.Field != "decision" {
 			t.Fatalf("AUDIT R12-H2(a) migration, verb %q: must be the typed fault at decision, never err=nil: %v", verb, err)

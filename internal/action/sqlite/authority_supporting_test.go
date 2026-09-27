@@ -748,7 +748,7 @@ func TestAuthority_StartRefusalTaxonomy(t *testing.T) {
 			request := tt.setup(t, f)
 			starter := f.store
 			if strings.Contains(tt.name, "never pinned the activation") {
-				unpinned, err := Open(f.store.path)
+				unpinned, err := openFull(f.store.path)
 				if err != nil {
 					t.Fatal(err)
 				}

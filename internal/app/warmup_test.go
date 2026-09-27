@@ -91,7 +91,7 @@ func runApp(t *testing.T, cfg *config.Config) (*App, *[]slog.Record, *sync.Mutex
 	t.Helper()
 	logger, recs, mu := newCapturingLogger()
 	ch := newFakeChannel("telegram")
-	a, err := Build(cfg, WithLogger(logger), withChannelFactory(okFactory(ch)))
+	a, err := Build(cfg, WithLogger(logger), withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestWarmup_shutdownCancelsInFlight(t *testing.T) {
 	logger, _, _ := newCapturingLogger()
 	ch := newFakeChannel("telegram")
 	// A long request_timeout so the warmup is genuinely in flight at Shutdown.
-	a, err := Build(oneLocalModelCfg(t, srv.URL, "30s", 0, true), WithLogger(logger), withChannelFactory(okFactory(ch)))
+	a, err := Build(oneLocalModelCfg(t, srv.URL, "30s", 0, true), WithLogger(logger), withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

@@ -74,7 +74,7 @@ func mutationMux(token string, rl Reloader) *http.ServeMux {
 	mux := http.NewServeMux()
 	Register(mux, fakeReader{})
 	if token != "" {
-		RegisterMutation(mux, rl, token)
+		RegisterMutation(mux, rl, token, newFakeActs())
 	}
 	return mux
 }
@@ -340,7 +340,7 @@ func TestMutation_emptyConfiguredToken_neverAuthenticates(t *testing.T) {
 	t.Setenv(adminEnv, "adminval") // wouldSelfLock is false, so a bypass would reach 202
 	rl := &fakeReloader{handle: "r1"}
 	mux := http.NewServeMux()
-	RegisterMutation(mux, rl, "") // deliberately mount with an empty token (the footgun)
+	RegisterMutation(mux, rl, "", newFakeActs()) // deliberately mount with an empty token (the footgun)
 
 	if rec := do(mux, "POST", "/api/config", "Bearer ", validCfgBody); rec.Code != http.StatusUnauthorized {
 		t.Errorf("empty configured token + empty presented bearer: got %d, want 401 (no sha256(\"\") bypass)", rec.Code)

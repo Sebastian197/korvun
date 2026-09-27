@@ -36,7 +36,7 @@ func TestMigrationV11_emptyDecisionAtIsEmptyEvidenceNotAbsence(t *testing.T) {
 		t.Fatalf("auditor's UPDATE: %v", err)
 	}
 	_ = db.Close()
-	_, err = Open(path)
+	_, err = openFull(path)
 	if err == nil {
 		t.Fatal("AUDIT R10-V1: empty bytes are empty EVIDENCE — the migration must fail closed, '' is not NULL")
 	}

@@ -43,7 +43,7 @@ func TestIdentityRuntime_MintsEvidenceTheBootsRegistryAccepts(t *testing.T) {
 		t.Fatalf("no ingress issuer for channel %q: issuers = %v", "telegram", issuers)
 	}
 
-	store, err := actionsqlite.Open(StoragePath(cfg))
+	store, err := actionsqlite.OpenFor(StoragePath(cfg), testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}

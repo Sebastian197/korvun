@@ -102,7 +102,7 @@ func sealedStore(t *testing.T) (*Store, ed25519.PublicKey) {
 func TestMigrationV6_freshFileLandsOnV6WithReceipts(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestMigrationV6_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatalf("close raw: %v", err)
 	}
-	if _, err := Open(path); err == nil {
+	if _, err := openFull(path); err == nil {
 		t.Fatal("an aborted v6 migration must be boot-fatal")
 	}
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 5 {
@@ -158,7 +158,7 @@ func TestMigrationV6_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 	if err := db2.Close(); err != nil {
 		t.Fatalf("close raw 2: %v", err)
 	}
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("the next boot must complete: %v", err)
 	}

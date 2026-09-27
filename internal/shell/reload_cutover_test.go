@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sebastian197/korvun/internal/action"
 	"github.com/Sebastian197/korvun/internal/config"
 )
 
@@ -28,11 +29,20 @@ import (
 //     supervisor and survives the cutover (ADR-0027 §F4), port change or not;
 //   - reach "succeeded", and keep answering "succeeded" on the NEW cycle's
 //     admin server after the cutover.
+//
+// REWRITTEN 2026-09-24 (director's decision on the profile with no ledger): the
+// profile carries a ledger, because a profile without one now refuses the
+// builder's door with no_ledger; and every one of the five rounds leaves its
+// operator act SUCCEEDED in the ledger — five real cutovers, five closed acts.
+//
+// PROBING MUTATION (to be executed): call RecoverPreviousLife with no keep in
+// Build. Each round's act reads OUTCOME_UNKNOWN and this reddens on the tally.
 func TestProxy_reloadCutover_pollNeverSeesPhantomFailure(t *testing.T) {
 	ollama := fakeOllama(t)
-	c, _ := startedController(t, ollama.URL)
+	c, _, ledger := startedControllerWithLedger(t, ollama.URL)
 	srv := proxyServer(t, c)
 	client := srv.Client()
+	var acts []string
 
 	for round := 1; round <= 5; round++ {
 		addrBefore := c.Status().AdminAddr
@@ -48,7 +58,8 @@ func TestProxy_reloadCutover_pollNeverSeesPhantomFailure(t *testing.T) {
 		}
 		cfg.Brains[0].Models[0].ModelID = fmt.Sprintf("llama3.2-round%d", round)
 
-		handle := postConfigForHandle(t, client, srv.URL, &cfg, round)
+		handle, actionID := postConfigForHandle(t, client, srv.URL, &cfg, round)
+		acts = append(acts, actionID)
 
 		// Tight poll through the proxy, across the cutover. 2ms keeps polls
 		// landing inside the admin-rebind window without busy-spinning.
@@ -110,12 +121,22 @@ func TestProxy_reloadCutover_pollNeverSeesPhantomFailure(t *testing.T) {
 			t.Logf("round %d: kernel reused admin addr %s", round, addrAfter)
 		}
 	}
+
+	// Five cutovers, five acts, each closed with the outcome the supervisor
+	// reached — read back through a read-only open, never the running app.
+	for i, id := range acts {
+		row := waitLedgerTerminal(t, ledger, id, 10*time.Second)
+		if row.State != action.StateSucceeded {
+			t.Fatalf("round %d: act %s ended %q, want SUCCEEDED", i+1, id, row.State)
+		}
+	}
 }
 
 // postConfigForHandle POSTs the config through the proxy and returns the 202
-// reload handle, retrying briefly on 409 (the single-flight window right
-// after the previous round's terminal state, before finishReload lands).
-func postConfigForHandle(t *testing.T, client *http.Client, base string, cfg *config.Config, round int) string {
+// reload handle and the operator act's id, retrying briefly on 409 (the
+// single-flight window right after the previous round's terminal state,
+// before finishReload lands).
+func postConfigForHandle(t *testing.T, client *http.Client, base string, cfg *config.Config, round int) (string, string) {
 	t.Helper()
 	payload, err := json.Marshal(cfg)
 	if err != nil {
@@ -128,7 +149,8 @@ func postConfigForHandle(t *testing.T, client *http.Client, base string, cfg *co
 			t.Fatalf("round %d: POST /api/config: %v", round, err)
 		}
 		var out struct {
-			Handle string `json:"handle"`
+			Handle   string `json:"handle"`
+			ActionID string `json:"action_id"`
 		}
 		decodeErr := json.NewDecoder(resp.Body).Decode(&out)
 		_ = resp.Body.Close()
@@ -137,7 +159,10 @@ func postConfigForHandle(t *testing.T, client *http.Client, base string, cfg *co
 			if decodeErr != nil || out.Handle == "" {
 				t.Fatalf("round %d: 202 without a handle (err %v)", round, decodeErr)
 			}
-			return out.Handle
+			if out.ActionID == "" {
+				t.Fatalf("round %d: 202 without the operator act's id", round)
+			}
+			return out.Handle, out.ActionID
 		case resp.StatusCode == http.StatusConflict && time.Now().Before(deadline):
 			time.Sleep(20 * time.Millisecond)
 		default:

@@ -27,7 +27,7 @@ const budgetTotalKey = ""
 // Zero limits are UNLIMITED (the domain's semantics), but consumption is
 // still recorded so later, tighter contracts see honest history.
 func (s *Store) ConsumeBudget(ctx context.Context, scopeID string, limits action.Budgets, operation string) (string, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return "", fmt.Errorf("action/sqlite: begin consume: %w", err)
 	}
@@ -54,7 +54,7 @@ func (s *Store) ConsumeBudget(ctx context.Context, scopeID string, limits action
 		keys = append(keys, operation)
 	}
 	for _, key := range keys {
-		if _, err := tx.ExecContext(ctx,
+		if _, err := s.txExec(ctx, tx,
 			`INSERT INTO budget_spent (scope_id, operation, spent) VALUES (?, ?, 1)
 			 ON CONFLICT (scope_id, operation) DO UPDATE SET spent = spent + 1`,
 			scopeID, key,

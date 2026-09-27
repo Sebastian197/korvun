@@ -169,7 +169,7 @@ func TestBuildBrain_agent_multiModel(t *testing.T) {
 // Ollama running — a downed local provider is not a boot error (ADR-0017 §5).
 func TestBuild_success_ollamaDownIsNotFatal(t *testing.T) {
 	fake := newFakeChannel("telegram")
-	app, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(fake)))
+	app, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(fake)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build (Ollama down should still boot): %v", err)
 	}
@@ -188,7 +188,7 @@ func TestBuild_telegramTokenEnvMissing(t *testing.T) {
 	// names the var, WITHOUT any network call (fails before telegram.New).
 	cfg := cfgWith(ollamaBrain())
 	cfg.Channels[0].TokenEnv = "KORVUN_TEST_TOKEN_DEFINITELY_UNSET"
-	_, err := Build(cfg) // no factory injection → defaultChannelFactory
+	_, err := Build(cfg, withTestProfile()) // no factory injection → defaultChannelFactory
 	if !errors.Is(err, ErrMissingSecret) {
 		t.Fatalf("err = %v, want ErrMissingSecret", err)
 	}
@@ -203,7 +203,7 @@ func TestBuild_telegramTokenEnvMissing(t *testing.T) {
 func TestBuild_channelConstructionFails(t *testing.T) {
 	boom := errors.New("telegram: bot.New: getMe: 401 Unauthorized")
 	failFactory := func(*builder, config.ChannelConfig) (Channel, error) { return nil, boom }
-	_, err := Build(cfgWith(ollamaBrain()), withChannelFactory(failFactory))
+	_, err := Build(cfgWith(ollamaBrain()), withChannelFactory(failFactory), withTestProfile())
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want wrapped getMe failure", err)
 	}
@@ -221,7 +221,7 @@ func TestBuild_missingGroqKey(t *testing.T) {
 			{Provider: "groq", ModelID: "llama-3.3-70b-versatile", Locality: "cloud", APIKeyEnv: "KORVUN_TEST_GROQ_UNSET"},
 		},
 	}
-	_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if !errors.Is(err, ErrMissingSecret) {
 		t.Fatalf("err = %v, want ErrMissingSecret", err)
 	}
@@ -241,7 +241,7 @@ func TestBuild_unknownProvider(t *testing.T) {
 			{Provider: "openai", ModelID: "gpt", Locality: "cloud", APIKeyEnv: "X"},
 		},
 	}
-	_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if !errors.Is(err, ErrUnknownProvider) {
 		t.Fatalf("err = %v, want ErrUnknownProvider", err)
 	}
@@ -263,7 +263,7 @@ func TestBuild_privateBrainCloudOnly(t *testing.T) {
 			{Provider: "groq", ModelID: "llama-3.3-70b-versatile", Locality: "cloud", APIKeyEnv: "KORVUN_TEST_GROQ_KEY"},
 		},
 	}
-	_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if !errors.Is(err, policy.ErrNoEligibleModels) {
 		t.Fatalf("err = %v, want policy.ErrNoEligibleModels", err)
 	}
@@ -285,7 +285,7 @@ func TestBuild_groqAndBaseURL(t *testing.T) {
 	}
 	app, err := Build(cfgWith(b),
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build groq+base_url: %v", err)
 	}
@@ -305,7 +305,7 @@ func TestBuild_appLayerGuards(t *testing.T) {
 			Policy: config.PolicyConfig{Kind: "vote"},
 			Models: []config.ModelConfig{{Provider: "ollama", ModelID: "m", Locality: "local"}},
 		}
-		_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if !errors.Is(err, ErrUnknownPolicy) {
 			t.Fatalf("err = %v, want ErrUnknownPolicy", err)
 		}
@@ -316,7 +316,7 @@ func TestBuild_appLayerGuards(t *testing.T) {
 			Policy: config.PolicyConfig{Kind: "priority"},
 			Models: []config.ModelConfig{{Provider: "ollama", ModelID: "m", Locality: "local"}},
 		}
-		_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if !errors.Is(err, policy.ErrUnknownSensitivity) {
 			t.Fatalf("err = %v, want policy.ErrUnknownSensitivity", err)
 		}
@@ -335,7 +335,7 @@ func TestBuild_sequentialDispatchAndConsensus(t *testing.T) {
 			{Provider: "ollama", ModelID: "llama3.2", Locality: "local"},
 		},
 	}
-	app, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build sequential+consensus: %v", err)
 	}
@@ -357,7 +357,7 @@ func TestBuild_unknownLocality(t *testing.T) {
 			{Provider: "ollama", ModelID: "m", Locality: "edge"},
 		},
 	}
-	_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	_, err := Build(cfgWith(b), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if !errors.Is(err, ErrUnknownLocality) {
 		t.Fatalf("err = %v, want ErrUnknownLocality", err)
 	}
@@ -370,7 +370,7 @@ func TestBuild_unknownChannelType(t *testing.T) {
 	cfg := cfgWith(ollamaBrain())
 	cfg.Channels[0].Type = "slack"
 	cfg.Routes[0].Channel = "slack"
-	_, err := Build(cfg) // default factory → unknown type
+	_, err := Build(cfg, withTestProfile()) // default factory → unknown type
 	if !errors.Is(err, ErrUnknownChannelType) {
 		t.Fatalf("err = %v, want ErrUnknownChannelType", err)
 	}
@@ -391,7 +391,7 @@ func TestBuild_discordWired(t *testing.T) {
 	cfg.Channels[0] = discordChannel()
 	cfg.Routes[0].Channel = "discord"
 
-	app, err := Build(cfg) // real defaultChannelFactory, no injection
+	app, err := Build(cfg, withTestProfile()) // real defaultChannelFactory, no injection
 	if err != nil {
 		t.Fatalf("Build with discord + env set = %v, want nil", err)
 	}
@@ -429,7 +429,7 @@ func TestBuild_discordTokenEnvMissing(t *testing.T) {
 	cfg.Channels[0].TokenEnv = "KORVUN_DISCORD_TOKEN_DEFINITELY_UNSET"
 	cfg.Routes[0].Channel = "discord"
 
-	_, err := Build(cfg)
+	_, err := Build(cfg, withTestProfile())
 	if !errors.Is(err, ErrMissingSecret) {
 		t.Fatalf("err = %v, want ErrMissingSecret", err)
 	}
@@ -520,7 +520,7 @@ func (c *startErrChannel) Stop(context.Context) error {
 // it in ADR-0008 order without hanging.
 func TestRunShutdown_lifecycle(t *testing.T) {
 	fake := newFakeChannel("telegram")
-	app, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(fake)))
+	app, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(fake)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -559,7 +559,7 @@ func TestRunShutdown_lifecycle(t *testing.T) {
 // TestBuild_noStorage_stateless confirms the default: with no storage block, no
 // store is opened and the app owns no closer — exact Stage 11 / ADR-0018 behavior.
 func TestBuild_noStorage_stateless(t *testing.T) {
-	app, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -589,7 +589,7 @@ func TestBuild_storage_opensSharedStoreAndOwnsCloser(t *testing.T) {
 		Routes:  []config.RouteConfig{{Channel: "telegram", Brain: "a"}},
 		Storage: &config.StorageConfig{Path: dbPath},
 	}
-	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build with storage: %v", err)
 	}
@@ -639,7 +639,7 @@ func TestBuild_storage_openFailureIsFatal(t *testing.T) {
 	}
 	cfg := cfgWith(ollamaBrain())
 	cfg.Storage = &config.StorageConfig{Path: filepath.Join(blocker, "korvun.db")}
-	_, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	_, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err == nil {
 		t.Fatal("Build with an unopenable store returned nil error, want a fatal boot error")
 	}
@@ -660,7 +660,7 @@ func TestBuild_storage_emptyPathUsesDefault(t *testing.T) {
 	t.Setenv("AppData", tmp)         // windows: %AppData%
 	cfg := cfgWith(ollamaBrain())
 	cfg.Storage = &config.StorageConfig{} // present, empty path → default
-	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build with default storage path: %v", err)
 	}

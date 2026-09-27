@@ -24,7 +24,7 @@ func TestReceiptVerify_theNoSurvivesThePrune(t *testing.T) {
 	if code, _, stderr := runIntentCLI(t, "approvals", "reject", "--config", cfgPath, approvalID); code != 0 {
 		t.Fatalf("reject: %q", stderr)
 	}
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
