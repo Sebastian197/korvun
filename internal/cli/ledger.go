@@ -42,8 +42,12 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
+
+	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 )
 
 // ledgerCmd dispatches the `ledger` noun's verbs.
@@ -86,6 +90,10 @@ func (c *cli) ledgerCheck(args []string) int {
 	}
 	defer func() { _ = store.Close() }()
 	ctx := context.Background()
+	// The ledger's standing for THIS profile (the durable mark), named before
+	// the chain is walked and never part of the verdict: a foreign ledger can
+	// be perfectly intact, and the operator needs both facts.
+	printLedgerStanding(ctx, c.stdout, store)
 	receipts, err := store.ListReceipts(ctx, *partition)
 	if err != nil {
 		_, _ = fmt.Fprintf(c.stderr, "korvun ledger check: %v\n", err)
@@ -133,4 +141,55 @@ func (c *cli) ledgerCheck(args []string) int {
 	}
 	_, _ = fmt.Fprintf(c.stdout, "ledger %s: %d receipts, chain intact\n", *partition, len(receipts))
 	return 0
+}
+
+// ledgerStandingSource is what printLedgerStanding reads: the standing and
+// the profile the handle serves. *actionsqlite.Store is the one production
+// source; a unit mould stands a double in its place.
+type ledgerStandingSource interface {
+	Standing(ctx context.Context) (actionsqlite.LedgerStanding, string, error)
+	ProfileIdentity() string
+}
+
+// printLedgerStanding names what the ledger is to the profile the handle
+// serves — ok, legacy_unfounded or ledger_foreign_profile (with the owner the
+// last mark names and this profile's own identity) — on one line, on stdout.
+// It changes no verdict: a standing that could not be read is said as such,
+// by the store's name for the failure (standingClass).
+func printLedgerStanding(ctx context.Context, out io.Writer, store ledgerStandingSource) {
+	standing, owner, err := store.Standing(ctx)
+	switch {
+	case err != nil:
+		// The failure's own name, then its cause. Only ledger_unreadable is a
+		// verdict on the book, and its remedy is replacing the file
+		// (docs/operations/ledger-restore.md); the others say nothing against
+		// the book — unavailable is a ledger that could not be checked now.
+		_, _ = fmt.Fprintf(out, "ledger standing: %s (%v)\n", standingClass(err), err)
+	case standing == actionsqlite.LedgerStandingForeignProfile:
+		_, _ = fmt.Fprintf(out, "ledger standing: %s (founded or adopted by %s; this profile is %s — adopt it from the app's «¿Qué pasa hoy?» screen before recording new acts)\n",
+			standing, owner, store.ProfileIdentity())
+		_, _ = fmt.Fprintf(out, "identity row: not covered by the chain (owner %s; the founding receipt is the evidence, the row is the state)\n", owner)
+	case standing == actionsqlite.LedgerStandingOK:
+		_, _ = fmt.Fprintf(out, "ledger standing: %s\n", standing)
+		_, _ = fmt.Fprintf(out, "identity row: not covered by the chain (owner %s; the founding receipt is the evidence, the row is the state)\n", owner)
+	default:
+		_, _ = fmt.Fprintf(out, "ledger standing: %s\n", standing)
+	}
+}
+
+// standingClass is the store's name for a failed Standing, by errors.Is and
+// the first match in this order (plan §13.2): the two verdicts are
+// ledger_unreadable, then ledger_environment, then ledger_busy, and every
+// other failure is unavailable.
+func standingClass(err error) string {
+	switch {
+	case errors.Is(err, actionsqlite.ErrLedgerUnreadable), errors.Is(err, actionsqlite.ErrLedgerMarkMalformed):
+		return string(actionsqlite.LedgerStandingUnreadable)
+	case errors.Is(err, actionsqlite.ErrLedgerEnvironment):
+		return "ledger_environment"
+	case errors.Is(err, actionsqlite.ErrLedgerBusy):
+		return "ledger_busy"
+	default:
+		return "unavailable"
+	}
 }

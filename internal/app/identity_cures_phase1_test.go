@@ -58,7 +58,7 @@ func TestIdentity_DuplicateChannelTypeStillBoots(t *testing.T) {
 		t.Fatalf("webhook bindings = %d, want exactly one shared by both channels", webhookBindings)
 	}
 
-	built, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("webhook"))))
+	built, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("webhook"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build with two channels of one type = %v, want a running app", err)
 	}

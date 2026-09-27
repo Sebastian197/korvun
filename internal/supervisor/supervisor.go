@@ -123,6 +123,10 @@ type Supervisor struct {
 	persist    PersistFunc
 	signalCh   <-chan os.Signal
 	logger     *slog.Logger
+	// observe is told every state transition of every reload handle, from
+	// the goroutine that makes it and BEFORE setStatus returns (see
+	// WithStateObserver). nil is «nobody listens».
+	observe func(Handle, State)
 
 	reloadCh chan reloadReq
 
@@ -161,6 +165,29 @@ func WithLogger(l *slog.Logger) Option {
 	return func(s *Supervisor) {
 		if l != nil {
 			s.logger = l
+		}
+	}
+}
+
+// WithStateObserver registers a function told of EVERY state transition of
+// every reload handle — `pending` from RequestReload, and each later state
+// from the Run loop — synchronously, on the goroutine that stores the state,
+// after the state is stored and logged. What the observer is told is what
+// Status already answers.
+//
+// It exists because a cutover kills the app that asked for it: the old app is
+// shut down before the state turns terminal, and a rollback is emitted with NO
+// app alive at all. A piece that must act on the outcome — the operator act's
+// registry (internal/app) closes the act with the result — cannot learn it from
+// a poll of the app that sealed it, and the screen's poll is bounded. The
+// observer is the process-wide ear.
+//
+// The observer runs on the supervisor's goroutine and must return promptly; a
+// nil observer is ignored.
+func WithStateObserver(f func(Handle, State)) Option {
+	return func(s *Supervisor) {
+		if f != nil {
+			s.observe = f
 		}
 	}
 }
@@ -369,6 +396,9 @@ func (s *Supervisor) RequestReload(cfg *config.Config) (Handle, error) {
 	// states lived only in memory — the next one must be diagnosable from
 	// the profile log alone.
 	s.logger.Info("reload state", "handle", string(h), "state", string(StatePending))
+	if s.observe != nil {
+		s.observe(h, StatePending)
+	}
 
 	s.reloadCh <- reloadReq{cfg: cfg, handle: h}
 	return h, nil
@@ -415,6 +445,11 @@ func (s *Supervisor) setStatus(h Handle, st State) {
 	s.mu.Unlock()
 	// See RequestReload: the reload trail must exist in the log (B7).
 	s.logger.Info("reload state", "handle", string(h), "state", string(st))
+	// The observer is told AFTER the state is stored, so a settler acting on
+	// what it hears acts on what Status confirms (WithStateObserver).
+	if s.observe != nil {
+		s.observe(h, st)
+	}
 }
 
 func (s *Supervisor) finishReload() {

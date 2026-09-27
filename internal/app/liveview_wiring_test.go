@@ -25,7 +25,7 @@ import (
 func TestBuild_busAndLiveViewWiredWhenObservabilityOn(t *testing.T) {
 	app, err := Build(cfgWith(ollamaBrain()),
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestBuild_busDormantWhenObservabilityOff(t *testing.T) {
 
 	app, err := Build(cfg,
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestLiveView_endToEnd_inboundProducesSSEEvent(t *testing.T) {
 	fc := newFakeChannel("telegram")
 	app, err := Build(cfgWith(ollamaBrain()),
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(fc)))
+		withChannelFactory(okFactory(fc)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

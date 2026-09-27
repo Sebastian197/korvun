@@ -52,7 +52,7 @@ func TestGrantIssue_underActiveIntentWithReceipt(t *testing.T) {
 	cfgPath, dbPath := intentTestConfig(t)
 	intentID := activeIntentID(t, cfgPath)
 	grantID := issueGrantID(t, cfgPath, intentID)
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestGrantIssue_inactiveOrExpiredIntentFailsClosed(t *testing.T) {
 			action.RuleIntentExpired, code, stderr)
 	}
 	// Both refusals leave DENIED receipts with their sealed rules.
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestGrantDelegate_wideningDeniedNamingTheDimension(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "budget") {
 		t.Fatalf("the denial must NAME the widened dimension: %d %q", code, stderr)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestGrantDelegate_attenuatedChildPersists(t *testing.T) {
 		t.Fatalf("a strict subset delegation must pass: %d %q", code, stderr)
 	}
 	childID := extractID(t, stdout, "grant_")
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

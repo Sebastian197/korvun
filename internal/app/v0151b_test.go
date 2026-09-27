@@ -533,14 +533,14 @@ func bootAdmin(t *testing.T, bindAddr string) (port string, a action.Approval, d
 	cfg.Observability = &config.ObservabilityConfig{Addr: bindAddr}
 	t.Setenv("KORVUN_TEST_ADMIN_P27", "s3cr3t")
 
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
 	a = parkOne(t, cfg, store, "act_p27")
 	_ = store.Close()
 
-	ap, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))), WithReloader(stubReloader{}))
+	ap, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))), WithReloader(stubReloader{}), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -658,7 +658,7 @@ func TestV0151B_P2_7_noRouteServesOrDecidesForARemotePeer(t *testing.T) {
 	if after := countDecisionActs(t, dbPath); after != before {
 		t.Errorf("decision acts %d -> %d: a remote peer's decision was recorded", before, after)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -809,7 +809,7 @@ func TestV0151B_P2_6_sister_aCorruptApprovalRowNeverBlocksTheBoot(t *testing.T) 
 	attackerExec(t, store, `UPDATE approvals SET policy_version = 'x' WHERE approval_id = ?`, a.ApprovalID)
 	done()
 
-	ap, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	ap, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build over a store with one corrupt approval row: %v — the core must boot", err)
 	}

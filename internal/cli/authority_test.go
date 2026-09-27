@@ -29,7 +29,7 @@ func authorityCLIFixture(t *testing.T) (string, string, action.IntentContractV2)
 			t.Fatalf("%s: code=%d stderr=%q", strings.Join(args[:2], " "), code, stderr)
 		}
 	}
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}

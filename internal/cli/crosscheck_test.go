@@ -27,7 +27,7 @@ import (
 func TestCrossCheck_consultsBesideAWritingServer(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath, receiptID, _ := operatorReceipt(t)
-	server, err := actionsqlite.Open(dbPath)
+	server, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("server open: %v", err)
 	}

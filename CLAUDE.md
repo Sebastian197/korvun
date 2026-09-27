@@ -381,6 +381,31 @@ profile during a "read-only" verify was narrated instead of stopped).
    family before the tag when the director so orders — an
    institutionalized gate, not a suggestion.
 
+## The seventh law — NOTHING IS DONE THE OPERATOR CANNOT SEE (2026-09-23) — CRITICAL
+
+Born from an afternoon on the director's REAL profile: making one irreversible
+action park took THREE hand edits of a JSON file — enable approvals, set the
+effect ceiling, lift the tool's shadow — and at no point did the app say which of
+the three was missing. The screen recited its five conditions correctly and never
+said WHICH one failed in that profile, nor offered an action for any.
+
+**A criterion of DONE, not of style.** Any capability that changes what Korvun
+does with an action — switches, ceilings, modes, contracts, authority, policies —
+ships, in the SAME train and BEFORE its PR, with:
+
+1. **its reflection in the «¿Qué pasa hoy?» screen**: what happens to an
+   irreversible action in THIS installation, what is missing in THIS profile, and
+   the button that changes it;
+2. **its sentence**, one, in the onboarding or in the screen it belongs to;
+3. **its proof against a REAL profile migrated from two versions back** — a real
+   copy, migrated. A freshly created profile does not count as coverage, because
+   it is born at the current version and can never show a migration.
+
+**A train that adds a switch in a file without its screen is NOT accepted.**
+
+The «¿Qué pasa hoy?» screen is born in v0.16.2 and from then on is a closing
+requirement of every train.
+
 ## The sixth law — UX-DESIGN-FIRST + MANOS-DE-CHANO (2026-08-23) — CRITICAL
 
 UX-DESIGN-FIRST + MANOS-DE-CHANO: ninguna pieza visible para el usuario

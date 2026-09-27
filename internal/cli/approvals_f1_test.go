@@ -37,7 +37,7 @@ func TestApprovalsApprove_expiredPlusChangedLawClosesAtTheTouch(t *testing.T) {
 	if !strings.Contains(stderr, "approval_expired") {
 		t.Fatalf("AUDIT F1: the expiry touch must win the cross and name itself: %q", stderr)
 	}
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

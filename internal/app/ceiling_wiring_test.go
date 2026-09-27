@@ -69,7 +69,7 @@ func fanoutCfg(baseURL, requestTimeout, override string) *config.Config {
 // timeout and dispatch shape — not on router.DefaultBrainHandlerTimeout (the 5s
 // guillotine that cut Chano's first message). ADR-0031 Decision 2.
 func TestBuild_installsDerivedCeiling_replacingDefault(t *testing.T) {
-	a, err := Build(fanoutCfg("", "200ms", ""), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	a, err := Build(fanoutCfg("", "200ms", ""), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -97,14 +97,14 @@ func TestBuild_installsDerivedCeiling_replacingDefault(t *testing.T) {
 func TestBuild_explicitCeilingOverride(t *testing.T) {
 	t.Run("below derived fails loud", func(t *testing.T) {
 		// Derived is ~200ms + margin; 50ms is below it.
-		_, err := Build(fanoutCfg("", "200ms", "50ms"), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		_, err := Build(fanoutCfg("", "200ms", "50ms"), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if !errors.Is(err, ErrCeilingOverrideTooLow) {
 			t.Fatalf("err = %v, want ErrCeilingOverrideTooLow", err)
 		}
 	})
 
 	t.Run("at or above derived is honored", func(t *testing.T) {
-		a, err := Build(fanoutCfg("", "200ms", "5s"), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		a, err := Build(fanoutCfg("", "200ms", "5s"), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if err != nil {
 			t.Fatalf("Build: %v", err)
 		}
@@ -160,7 +160,7 @@ func TestHandle_boundedByDerivedCeiling(t *testing.T) {
 	t.Cleanup(func() { close(release); srv.Close() })
 
 	ch := newRecordingChannel("telegram")
-	a, err := Build(fanoutCfg(srv.URL, "200ms", ""), withChannelFactory(okFactory(ch)))
+	a, err := Build(fanoutCfg(srv.URL, "200ms", ""), withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

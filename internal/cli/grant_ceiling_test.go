@@ -37,7 +37,7 @@ func TestGrantIssue_ceilingPersistsOnTheStoredGrant(t *testing.T) {
 	cfgPath, dbPath := intentTestConfig(t)
 	intentID := activeIntentID(t, cfgPath)
 	grantID := issueCeilinged(t, cfgPath, intentID)
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestGrantDelegate_inheritsTheParentCeiling(t *testing.T) {
 		t.Fatalf("inheriting delegate must pass: %d %q", code, stderr)
 	}
 	childID := extractID(t, stdout, "grant_")
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestGrantDelegate_ceilingWallNamesTheDimensionOnTheTerminal(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "effect_ceiling") {
 		t.Fatalf("the wall must name the tenth dimension on the terminal: %d %q", code, stderr)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestGrantDelegate_narrowedCeilingPersists(t *testing.T) {
 		t.Fatalf("a narrowed ceiling must pass: %d %q", code, stderr)
 	}
 	childID := extractID(t, stdout, "grant_")
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

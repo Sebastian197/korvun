@@ -107,7 +107,7 @@ func TestMigrationV9_freshCrashAndOrphanRetirement(t *testing.T) {
 	t.Parallel()
 	// Fresh: lands on current with a WORKING cascade.
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestMigrationV9_freshCrashAndOrphanRetirement(t *testing.T) {
 		t.Fatalf("install crash trigger: %v", err)
 	}
 	_ = db.Close()
-	if _, err := Open(crashPath); err == nil {
+	if _, err := openFull(crashPath); err == nil {
 		t.Fatal("an aborted v9 migration must be boot-fatal")
 	}
 	if v := inspect(t, crashPath, `SELECT version FROM action_schema`); v != 8 {
@@ -146,7 +146,7 @@ func TestMigrationV9_freshCrashAndOrphanRetirement(t *testing.T) {
 	_ = db2.Close()
 
 	// The next boot completes: FK live, linked row kept, orphan RETIRED.
-	recovered, err := Open(crashPath)
+	recovered, err := openFull(crashPath)
 	if err != nil {
 		t.Fatalf("the next boot must complete: %v", err)
 	}

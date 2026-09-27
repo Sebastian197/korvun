@@ -30,7 +30,7 @@ import (
 func buildV11LegacyFile(t *testing.T, rawRows ...[10]any) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("open fresh: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestMigrationV12_revalidatesWithZeroWritesUnderAbortTriggers(t *testing.T) 
 		}
 	}
 	_ = db.Close()
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("AUDIT R11-R1: v12 must complete WITH the abort triggers armed (zero writes): %v", err)
 	}
@@ -159,7 +159,7 @@ func TestMigrationV12_contractFailsClosedNamingRowAndField(t *testing.T) {
 			row := legacyGoodRow("apr_r11_f"+f.name+"00000000000001", "act_r11_"+f.name)
 			row[f.idx] = ""
 			path := buildV11LegacyFile(t, row)
-			_, err := Open(path)
+			_, err := openFull(path)
 			// The EXACT class, typed (R12 elevation): the stable Field
 			// coordinate on the fault itself — no substring collisions.
 			var fault *TombstoneFault
@@ -176,7 +176,7 @@ func TestMigrationV12_contractFailsClosedNamingRowAndField(t *testing.T) {
 		row := legacyGoodRow("apr_r11_baddate000000000000000001", "act_r11_baddate")
 		row[9] = "not-a-date"
 		path := buildV11LegacyFile(t, row)
-		_, err := Open(path)
+		_, err := openFull(path)
 		if err == nil || !strings.Contains(err.Error(), "decision_at") ||
 			!strings.Contains(err.Error(), "apr_r11_baddate000000000000000001") {
 			t.Fatalf("unreadable date fails v12 naming row and field: %v", err)
@@ -188,7 +188,7 @@ func TestMigrationV12_contractFailsClosedNamingRowAndField(t *testing.T) {
 		bad[9] = ""
 		path := buildV11LegacyFile(t,
 			legacyGoodRow("apr_r11_aaok00000000000000000001", "act_r11_aaok"), bad)
-		_, err := Open(path)
+		_, err := openFull(path)
 		var fault *TombstoneFault
 		if err == nil || !errors.As(err, &fault) ||
 			fault.ApprovalID != "apr_r11_zzbad0000000000000000001" || fault.Field != "decision_at" {
@@ -209,7 +209,7 @@ func TestMigrationV12_mutatedStoredDigestFailsClosed(t *testing.T) {
 	row := legacyGoodRow("apr_r11_mut000000000000000000001", "act_r11_mut")
 	row[1] = "sha256:mutado"
 	path := buildV11LegacyFile(t, row)
-	_, err := Open(path)
+	_, err := openFull(path)
 	if err == nil || !strings.Contains(err.Error(), "approval_digest") ||
 		!strings.Contains(err.Error(), "apr_r11_mut000000000000000000001") {
 		t.Fatalf("AUDIT R11-R3: a lying stored digest must fail v12 naming row and field: %v", err)
@@ -226,7 +226,7 @@ func TestMigrationV12_emptyDecisionAtInLegacyV11IsBootFatal(t *testing.T) {
 	row := legacyGoodRow("apr_r11_empty0000000000000000001", "act_r11_empty")
 	row[9] = ""
 	path := buildV11LegacyFile(t, row)
-	_, err := Open(path)
+	_, err := openFull(path)
 	var fault *TombstoneFault
 	if err == nil || !errors.As(err, &fault) ||
 		fault.ApprovalID != "apr_r11_empty0000000000000000001" || fault.Field != "decision_at" {

@@ -58,7 +58,7 @@ func (b *authorityBarrier) AwaitParked(t *testing.T, finished <-chan error) {
 // authoritySecondPool opens an independent pool on f's file, able to sign.
 func authoritySecondPool(t *testing.T, f authoritySQLiteFixture) *Store {
 	t.Helper()
-	second, err := Open(f.store.path)
+	second, err := openFull(f.store.path)
 	if err != nil {
 		t.Fatal(err)
 	}

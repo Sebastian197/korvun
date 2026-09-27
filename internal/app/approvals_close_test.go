@@ -124,7 +124,7 @@ func TestExecuteApprovedAction_theCloseOutlivesTheCallersContext(t *testing.T) {
 // ctx to finishAction again ⇒ the attempt stays AUTHORIZED and this reddens.
 func TestBrainPath_theCloseOutlivesTheCallersContext(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
-	app, err := Build(approvalsConfig(t, dbPath, false), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(approvalsConfig(t, dbPath, false), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

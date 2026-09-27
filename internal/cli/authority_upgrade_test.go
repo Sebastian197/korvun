@@ -49,7 +49,7 @@ func phase1CLIRegistry() identityv2.Registry {
 // registered under the profile's own key.
 func plantPhase1CLIProfile(t *testing.T, dbPath string) {
 	t.Helper()
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open the profile: %v", err)
 	}

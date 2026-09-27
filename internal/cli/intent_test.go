@@ -59,7 +59,7 @@ func runIntentCLI(t *testing.T, args ...string) (int, string, string) {
 // receiptOf loads the single CLI receipt recorded for one verb.
 func receiptOf(t *testing.T, dbPath, namespace, name string) (actionsqlite.Record, action.IdentityEvidence) {
 	t.Helper()
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestIntentCreate_persistsDraftWithReceipt(t *testing.T) {
 		t.Fatalf("create must print the new id and DRAFT, got %q", stdout)
 	}
 	id := extractID(t, stdout, "int_")
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestIntentLifecycle_activateRevokeWithHonestFailures(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "lifecycle") {
 		t.Fatalf("re-activate must fail honestly: %d %q", code, stderr)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

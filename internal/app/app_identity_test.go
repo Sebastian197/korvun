@@ -41,9 +41,32 @@ func TestProvenanceRegistry_fromConfig(t *testing.T) {
 		t.Fatalf("bindings=%d issuers=%d, want console plus three configured doors",
 			len(registry.Bindings), len(issuers))
 	}
-	if len(registry.Workloads) != 1 ||
-		registry.Workloads[0].PrincipalID != "principal_brain_alpha" {
-		t.Fatalf("workload registry = %+v", registry.Workloads)
+	// TWO workloads, and this assertion was raised from one on 2026-09-24 rather
+	// than relaxed: one per configured brain, PLUS the Control API's own, which is
+	// what gives an operator act a principal chain when the change comes through
+	// the admin surface instead of through a brain. Pinning both by name means a
+	// future edit cannot drop either one quietly — dropping the Control API's
+	// would leave every profile change unattributable, and dropping a brain's
+	// would break dispatch.
+	wantWorkloads := map[string]string{
+		"alpha":                 "principal_brain_alpha",
+		controlAPIWorkloadBrain: controlAPIOperatorPrincipal,
+	}
+	if len(registry.Workloads) != len(wantWorkloads) {
+		t.Fatalf("workload registry = %+v, want %d workloads", registry.Workloads, len(wantWorkloads))
+	}
+	for _, w := range registry.Workloads {
+		want, ok := wantWorkloads[w.Brain]
+		if !ok {
+			t.Fatalf("unexpected workload for brain %q: %+v", w.Brain, w)
+		}
+		if w.PrincipalID != want {
+			t.Fatalf("workload %q has principal %q, want %q", w.Brain, w.PrincipalID, want)
+		}
+		if w.ResponsiblePrincipalID != consoleResponsiblePrincipal {
+			t.Fatalf("workload %q is responsible to %q, want %q", w.Brain,
+				w.ResponsiblePrincipalID, consoleResponsiblePrincipal)
+		}
 	}
 	wantCredentials := map[string]string{
 		"binding_console": "CONSOLE_TOKEN", "binding_discord": "DISCORD_TOKEN",
@@ -137,12 +160,12 @@ func TestBuild_materializesTheRootIntentIdempotently(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
 	wantDigest := action.RootIntent().Digest()
 	for boot := 0; boot < 2; boot++ {
-		app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+		app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 		if err != nil {
 			t.Fatalf("boot %d: %v", boot, err)
 		}
 		shutdownApp(t, app)
-		store, err := actionsqlite.Open(dbPath)
+		store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 		if err != nil {
 			t.Fatalf("boot %d reopen: %v", boot, err)
 		}
@@ -166,7 +189,7 @@ func TestBuild_rootIntentFailureIsBootFatal(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
 	// Prepare a v2 file whose intents table refuses inserts: the boot that
 	// cannot materialize the root must FAIL, not shrug.
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
@@ -186,14 +209,14 @@ func TestBuild_rootIntentFailureIsBootFatal(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatalf("close raw: %v", err)
 	}
-	if _, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram")))); err == nil {
+	if _, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile()); err == nil {
 		t.Fatal("a boot that cannot persist the root intent must be fatal")
 	}
 }
 
 func TestActionRecorder_identifiedRoundTripsThroughTheStore(t *testing.T) {
 	t.Parallel()
-	store, err := actionsqlite.Open(filepath.Join(t.TempDir(), "korvun.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(t.TempDir(), "korvun.db"), testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

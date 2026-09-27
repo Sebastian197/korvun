@@ -93,6 +93,11 @@ type App struct {
 	// lifecycle (sealed decision 1), nil when stateless. Closed alongside
 	// the conversation store.
 	actions io.Closer
+	// configActs is the recorder of this app's operator acts, attached to the
+	// registry while this app serves; Shutdown detaches it BEFORE the store
+	// closes, so no settler can close into a dead handle. nil when stateless.
+	configActs  *configActRecorder
+	actRegistry *ConfigActRegistry
 	// profileLock is the exclusive profile lock (R4 Phase 1, ADR-0045):
 	// held for the server's whole life so a rotation cannot retire the
 	// signing key under a live sealer; nil when stateless. The OS also
@@ -178,6 +183,15 @@ type builder struct {
 	// reloader is the supervisor seam the mutation endpoint signals (ADR-0027).
 	// When nil (no supervisor above the app), no mutation surface is mounted.
 	reloader controlapi.Reloader
+	// actRegistry is the process-wide memory of operator acts (WithConfigActRegistry);
+	// nil until resolved in Build, where a private one stands in.
+	actRegistry *ConfigActRegistry
+	// profilePath is the profile FILE this boot loads (WithProfilePath); "" when
+	// the embedder did not say, and then the ledger is neither judged nor marked.
+	profilePath string
+	// wrapActLedger, when non-nil, is put over the store the config-act
+	// recorder judges and writes through (withActLedger); nil in production.
+	wrapActLedger func(actLedger) actLedger
 	// warmupTargets accumulates the deduplicated local models marked warmup as the
 	// catalog is built (ADR-0031 sub-phase 6); warmupSeen is its dedup set keyed by
 	// provider|baseURL|modelID.
@@ -206,6 +220,14 @@ func WithLogger(l *slog.Logger) Option {
 			b.logger = l
 		}
 	}
+}
+
+// withActLedger puts wrap over the store the app's config-act recorder judges
+// and writes through. Internal-only, like withChannelFactory: the moulds use it
+// to make ONE method of a real store fail — a Standing that cannot be read —
+// inside a real app; production never sets it.
+func withActLedger(wrap func(actLedger) actLedger) Option {
+	return func(b *builder) { b.wrapActLedger = wrap }
 }
 
 // WithReloader injects the supervisor seam the config-mutation endpoint signals
@@ -279,6 +301,13 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 	b.identityRegistry = registry
 	b.principalResolver = resolver
 	b.ingressIssuers = issuers
+	// The operator acts' registry: the process-wide one when the embedder
+	// handed it in (the shell, `korvun serve`), a private one otherwise.
+	if b.actRegistry == nil {
+		b.actRegistry = NewConfigActRegistry(func(err error) {
+			b.logger.Warn("config act", "error", err.Error())
+		})
+	}
 
 	// Derive the router's per-Handle ceiling from the brains' per-model timeouts
 	// and dispatch shapes, or honor an explicit override that clears it (ADR-0031
@@ -351,12 +380,21 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// terminals and every terminal is born with its receipt).
 		// A storage-configured boot that cannot record actions is a fatal
 		// boot error — proof is part of execution (blueprint §7.8).
-		actions, err := actionsqlite.Open(storagePath(cfg))
+		// The handle is born for the profile this boot loads (the durable
+		// mark's redesign, R3): no handle without its profile. A boot with
+		// storage and no profile file is a caller mistake, named.
+		identity := ProfileIdentity(b.profilePath)
+		if identity == "" {
+			_ = store.Close()
+			return nil, fmt.Errorf("app: open action store: %w (a storage-configured boot needs its profile file, WithProfilePath)", actionsqlite.ErrNoProfileIdentity)
+		}
+		actions, err := actionsqlite.OpenFor(storagePath(cfg), identity)
 		if err != nil {
 			_ = store.Close()
 			return nil, fmt.Errorf("app: open action store: %w", err)
 		}
 		b.actions = actions
+		b.actRegistry.profile = identity
 		// The retention cadence runs AFTER a caller's write has committed, so
 		// its failures are not that caller's (ficha the ficha «Un aparcamiento confirmado puede devolver error», the
 		// P1 cured on 2026-09-22). They still have to be heard by somebody, or
@@ -369,7 +407,32 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// decision 1): deterministic, idempotent across boots, and
 		// boot-fatal — a boot that cannot state the operator's standing
 		// authority must not run.
-		if err := ensureRootIntent(context.Background(), actions); err != nil {
+		// A ledger this profile does not own, or cannot read, gets no root
+		// intent and no identity registration from this boot (R10, R19): both
+		// are writes the guard refuses, and the boot must still come up to
+		// show the standing and offer the adoption.
+		// The ledger's standing decides the boot's writes (train B) and, on
+		// an UNREADABLE ledger — a shape that is not this binary's, a row
+		// that cannot be read — every reader that would die on a missing
+		// table too (train D): the boot goes on, names the standing to the
+		// screen, and touches nothing. A failure to judge that is not a
+		// verdict is boot-fatal, never read as «unreadable».
+		// standingErr is the judgement's own error, kept apart from the err
+		// the later steps reassign: every skip warning of this boot names the
+		// standing's cause, and none of those steps inherits the verdict as
+		// its failure.
+		standing, owner, standingErr := actions.Standing(context.Background())
+		unreadable := errors.Is(standingErr, actionsqlite.ErrLedgerUnreadable) || errors.Is(standingErr, actionsqlite.ErrLedgerMarkMalformed)
+		if standingErr != nil && !unreadable {
+			_ = actions.Close()
+			_ = store.Close()
+			return nil, fmt.Errorf("app: judge the ledger's standing: %w", standingErr)
+		}
+		ownsLedger := standingErr == nil && standing != actionsqlite.LedgerStandingForeignProfile
+		if !ownsLedger {
+			b.logger.Warn("boot: no root intent and no identity registration on a ledger this profile does not own or cannot read", "standing", string(standing), "owner", owner, "err", standingErr)
+		}
+		if err := ensureRootIntentIf(ownsLedger, context.Background(), actions); err != nil {
 			_ = actions.Close()
 			_ = store.Close()
 			return nil, err
@@ -377,14 +440,16 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// The ledger's ink (Etapa 4, FR-KEY-1): the signing key lives
 		// beside the store, generated idempotently, permissions verified
 		// on every boot — boot-fatal on any refusal.
-		signingKey, err := ensureSigningKey(context.Background(), actions, filepath.Dir(storagePath(cfg)))
+		// On an unreadable ledger the ink is loaded from its file and not
+		// registered in the ledger (a write the ledger refuses anyway).
+		signingKey, err := ensureSigningKeyIn(context.Background(), actions, filepath.Dir(storagePath(cfg)), !unreadable)
 		if err != nil {
 			_ = actions.Close()
 			_ = store.Close()
 			return nil, err
 		}
 		wireIdentitySigners(actions, signingKey)
-		if err := actions.RegisterIdentity(context.Background(), b.identityRegistry, time.Now().UTC()); err != nil {
+		if err := registerIdentityIf(ownsLedger, actions, b.identityRegistry); err != nil {
 			_ = actions.Close()
 			_ = store.Close()
 			return nil, fmt.Errorf("app: register identity: %w", err)
@@ -395,6 +460,10 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 				_ = store.Close()
 				return nil, err
 			}
+		} else if unreadable {
+			// No act can be recorded on an unreadable ledger, so no activation
+			// can be acted upon; the check that reads it is skipped, said.
+			b.logger.Warn("boot: the strict-authority activation check is skipped on an unreadable ledger", "err", standingErr)
 		} else if err := refuseNonStrictBootOverActivation(context.Background(), actions); err != nil {
 			_ = actions.Close()
 			_ = store.Close()
@@ -410,20 +479,36 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// R3: the recovery pass runs AFTER the sealer is wired, so its
 		// terminal closes land in the ledger signed like every other —
 		// no terminal is born without its receipt. Boot-fatal on refusal.
-		recSkipped, err := actions.RecoverPreviousLife(context.Background())
-		if recSkipped > 0 {
-			// R7-Y5: a postponed orphan is NEVER silent — named note.
-			b.logger.Info("recovery: rows held by another connection were postponed", "skipped", recSkipped)
-		}
-		if err != nil {
-			_ = actions.Close()
-			_ = store.Close()
-			return nil, fmt.Errorf("app: recover previous life: %w", err)
+		// The acts THIS process sealed and still owns are not orphans of a
+		// previous life: a cutover builds this app while the act's outcome
+		// is seconds away, and the registry will close it with the result.
+		// They are named to the pass; everything else is judged as before.
+		// A ledger this profile does not own gets no recovery from it (R10):
+		// the boot says so and goes on — the screen names the standing.
+		if !ownsLedger {
+			b.logger.Warn("recovery: skipped on a ledger this profile does not own or cannot read", "standing", string(standing), "owner", owner, "err", standingErr)
+		} else {
+			recSkipped, err := actions.RecoverPreviousLife(context.Background(),
+				b.actRegistry.inFlightIn(storagePath(cfg))...)
+			if recSkipped > 0 {
+				// R7-Y5: a postponed orphan is NEVER silent — named note.
+				b.logger.Info("recovery: rows held by another connection were postponed", "skipped", recSkipped)
+			}
+			if err != nil {
+				_ = actions.Close()
+				_ = store.Close()
+				return nil, fmt.Errorf("app: recover previous life: %w", err)
+			}
 		}
 		// R4: the boot also sweeps expired PENDING approvals (EXPIRED +
 		// REJECTED action with its receipt) — server-owned expiry, so
 		// an untouched request cannot outlive its window forever.
-		swept, skipped, err := actions.SweepExpiredApprovals(context.Background(), time.Now().UTC())
+		swept, skipped := 0, 0
+		if unreadable {
+			b.logger.Warn("expiry sweep: skipped on an unreadable ledger", "err", standingErr)
+		} else {
+			swept, skipped, err = actions.SweepExpiredApprovals(context.Background(), time.Now().UTC())
+		}
 		if skipped > 0 {
 			// R4-F3: losing a clean race is a NOTE, never boot-fatal.
 			b.logger.Info("expiry sweep: rows decided concurrently were skipped", "skipped", skipped, "swept", swept)
@@ -590,7 +675,42 @@ func Build(cfg *config.Config, opts ...Option) (*App, error) {
 		// every reload, so enabling/rotating the env-var name is itself a config edit.
 		if b.reloader != nil && cfg.Admin != nil {
 			if token := os.Getenv(cfg.Admin.TokenEnv); token != "" {
-				controlapi.RegisterMutation(adminServer, b.reloader, token)
+				// The operator act behind every profile change (director's
+				// ruling, 2026-09-24). A nil recorder — a profile with no
+				// action store — makes the write doors REFUSE by name rather
+				// than apply a change nobody can audit.
+				noteAct := func(err error) { b.logger.Warn("config act", "error", err.Error()) }
+				var rec controlapi.ActRecorder
+				if b.actions != nil {
+					if actRec := newConfigActRecorder(b.actions, b.principalResolver,
+						b.ingressIssuers[console.ChannelName], noteAct, b.actRegistry, storagePath(cfg)); actRec != nil {
+						actRec.profile = ProfileIdentity(b.profilePath)
+						if b.wrapActLedger != nil {
+							actRec.ledger = b.wrapActLedger(actRec.ledger)
+						}
+						rec = actRec
+						app.configActs = actRec
+						b.actRegistry.attach(actRec)
+					}
+				} else {
+					// No store: the doors refuse by name (ErrNoLedger), the
+					// status door can still close a founding act, and the ONE
+					// door open — enable-storage — lives on this recorder,
+					// which marks the ledger it founds with this profile.
+					ledgerless := newLedgerlessRecorder(cfg, b.actRegistry, noteAct)
+					ledgerless.profile = ProfileIdentity(b.profilePath)
+					rec = ledgerless
+				}
+				app.actRegistry = b.actRegistry
+				controlapi.RegisterMutation(adminServer, b.reloader, token, rec)
+				// «¿Qué pasa hoy?» (v0.16.2, the seventh law): the screen's
+				// contract and its four write doors, on the SAME bearer and
+				// the same supervisor seam as the mutation surface. It mounts
+				// here rather than beside the approvals surface because that
+				// one needs an open action store, and the profile with NO
+				// store is exactly the one whose first contract row explains
+				// why nothing can park.
+				controlapi.RegisterWhatsHappening(adminServer, token, b.reloader, rec)
 				// Mount the builder UI on the SAME token gate (ADR-0030 §4): a builder
 				// whose Save would 404 is a trap, so with no token only the read-only
 				// /ui is served. StripPrefix("/builder") maps GET /builder/ -> "/".
@@ -1741,6 +1861,12 @@ func (a *App) Serve(ctx context.Context) error {
 // rest.
 func (a *App) Shutdown(ctx context.Context) error {
 	var errs []error
+	// The operator acts' recorder leaves the registry FIRST: from here on a
+	// settler must not reach this app's store, which closes below. A close
+	// that arrives after this goes through a transient open instead.
+	if a.actRegistry != nil && a.configActs != nil {
+		a.actRegistry.detach(a.configActs)
+	}
 	// Cancel any in-flight boot warmup and await its unwind first (ADR-0031
 	// sub-phase 6, AS-6), bounded by ctx, so no warmup goroutine outlives Shutdown.
 	a.awaitWarmup(ctx)
@@ -1883,4 +2009,22 @@ func buildCoordinator(dispatch, policyKind string) brain.Coordinator {
 		}
 		return fanout.New()
 	}
+}
+
+// ensureRootIntentIf is ensureRootIntent when the ledger is this profile's,
+// and nothing otherwise.
+func ensureRootIntentIf(owns bool, ctx context.Context, actions *actionsqlite.Store) error {
+	if !owns {
+		return nil
+	}
+	return ensureRootIntent(ctx, actions)
+}
+
+// registerIdentityIf registers the identity registry when the ledger is this
+// profile's, and nothing otherwise.
+func registerIdentityIf(owns bool, actions *actionsqlite.Store, registry identity.Registry) error {
+	if !owns {
+		return nil
+	}
+	return actions.RegisterIdentity(context.Background(), registry, time.Now().UTC())
 }

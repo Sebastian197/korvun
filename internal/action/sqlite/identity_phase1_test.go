@@ -27,7 +27,7 @@ import (
 func identityStoreFixture(t *testing.T) (*Store, *identity.Resolver, *identity.Issuer, ed25519.PrivateKey, time.Time) {
 	t.Helper()
 	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
-	store, err := Open(filepath.Join(t.TempDir(), "identity.db"))
+	store, err := openFull(filepath.Join(t.TempDir(), "identity.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -583,7 +583,7 @@ func TestIdentity_EvidenceAndActionCommitTogether(t *testing.T) {
 func emptyIdentityStoreFixture(t *testing.T) (*Store, ed25519.PublicKey, ed25519.PrivateKey, time.Time) {
 	t.Helper()
 	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
-	store, err := Open(filepath.Join(t.TempDir(), "empty-identity.db"))
+	store, err := openFull(filepath.Join(t.TempDir(), "empty-identity.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -645,13 +645,13 @@ func TestIdentity_MigrationDoesNotUpgradeHistoricalClaims(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open migrated store: %v", err)
 	}
 	defer func() { _ = store.Close() }()
-	if got, err := store.SchemaVersion(context.Background()); err != nil || got != 15 {
-		t.Fatalf("SchemaVersion = %d, %v; want 15", got, err)
+	if got, err := store.SchemaVersion(context.Background()); err != nil || got != schemaVersionCurrent {
+		t.Fatalf("SchemaVersion = %d, %v; want schemaVersionCurrent", got, err)
 	}
 	check, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(path)))
 	if err != nil {
@@ -961,7 +961,7 @@ func TestIdentity_MigrationDoesNotUpgradeHistoricalClaims(t *testing.T) {
 				if raw, err := os.ReadFile(marker); err != nil || string(raw) != "dispatched" {
 					t.Fatalf("dispatch marker = %q, %v", raw, err)
 				}
-				store, err := Open(path)
+				store, err := openFull(path)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1028,7 +1028,7 @@ func TestIdentity_MigrationDoesNotUpgradeHistoricalClaims(t *testing.T) {
 		}
 		assertVerifiedV3Receipt(t, store, env.ActionID,
 			privateKey.Public().(ed25519.PublicKey), evidence)
-		reopened, err := Open(store.path)
+		reopened, err := openFull(store.path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1120,7 +1120,7 @@ func TestIdentityCrashProcess(t *testing.T) {
 	privateKey := ed25519.PrivateKey(privateRaw)
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 	now := time.Date(2026, 9, 21, 20, 0, 0, 0, time.UTC)
-	store, err := Open(os.Getenv("KORVUN_IDENTITY_CRASH_DB"))
+	store, err := openFull(os.Getenv("KORVUN_IDENTITY_CRASH_DB"))
 	if err != nil {
 		t.Fatal(err)
 	}

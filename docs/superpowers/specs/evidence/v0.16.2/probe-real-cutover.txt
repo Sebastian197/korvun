@@ -1,0 +1,12 @@
+# SONDA (2026-09-24, sesión del cierre del §0) — el acto del operador tras un cutover REAL del supervisor
+# Perfil CON storage, shell.Controller real, POST /api/config, sondeo hasta "succeeded", lectura directa del libro.
+# Fichero de la sonda: internal/shell/zz_probe_act_cutover_test.go (temporal, retirado tras la captura).
+    zz_probe_act_cutover_test.go:60: POST /api/config -> 202 {"action_id":"act_7fb850ba0114cd2874e1063eb749efb1","handle":"reload-1","receipt_id":""}
+    zz_probe_act_cutover_test.go:88: last status body: {"state":"succeeded"}
+    zz_probe_act_cutover_test.go:99: post-cutover poll 0: {"state":"succeeded"}
+    zz_probe_act_cutover_test.go:99: post-cutover poll 1: {"state":"succeeded"}
+    zz_probe_act_cutover_test.go:99: post-cutover poll 2: {"state":"succeeded"}
+    zz_probe_act_cutover_test.go:115: ACTION act_7fb850ba0114cd2874e1063eb749efb1 state=OUTCOME_UNKNOWN (config act? true)
+    zz_probe_act_cutover_test.go:125: RECEIPT rcpt_8e97507e966dc4e62f83fa2067c167f3 action=act_7fb850ba0114cd2874e1063eb749efb1 outcome=OUTCOME_UNKNOWN
+PASS
+ok  	github.com/Sebastian197/korvun/internal/shell	0.660s

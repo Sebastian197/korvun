@@ -86,6 +86,7 @@ func (a *ApprovalsAdapter) ListPending(ctx context.Context) (controlapi.Approval
 			ApprovalsEnabled: true,
 			BrainsTotal:      len(a.cfg.Brains),
 			BrainsCanPark:    a.brainsThatCanPark(),
+			Blocked:          a.parkBlocks(),
 			RowsSkipped:      len(listing.Skipped),
 		},
 		Rows: make([]controlapi.ApprovalRow, 0, len(listing.Rows)),
@@ -241,6 +242,32 @@ func (a *ApprovalsAdapter) currentLawDigest(ctx context.Context, id string) stri
 	return pin.Digest
 }
 
+// parkBlocks reports, per brain, every condition that stops it from parking.
+//
+// Condition 1 — the action store — belongs to the PROFILE, not to any brain, so
+// a missing store is reported once against every brain rather than invented as a
+// sixth brain-level condition: whichever brain the screen looks at, the answer
+// to «what is missing here» is the same.
+func (a *ApprovalsAdapter) parkBlocks() []controlapi.ParkBlock {
+	var out []controlapi.ParkBlock
+	for i := range a.cfg.Brains {
+		var failed []controlapi.ParkCondition
+		var culprit string
+		if a.cfg.Storage == nil {
+			failed = []controlapi.ParkCondition{controlapi.ParkNeedsStore}
+		} else {
+			failed, culprit = a.brainParkBlockers(&a.cfg.Brains[i])
+		}
+		if len(failed) == 0 {
+			continue
+		}
+		out = append(out, controlapi.ParkBlock{
+			Brain: a.cfg.Brains[i].Name, Failed: failed, Tool: culprit,
+		})
+	}
+	return out
+}
+
 // brainsThatCanPark counts the brains that meet the FIVE conditions the gate
 // really demands, over the channels the profile configures.
 //
@@ -262,24 +289,57 @@ func (a *ApprovalsAdapter) brainsThatCanPark() int {
 	return n
 }
 
+// brainCanPark answers the COUNT's question — can this brain park? — and is
+// now a thin reading of brainParkBlockers, so the number and the motive can
+// never disagree. Its value and its meaning are unchanged.
 func (a *ApprovalsAdapter) brainCanPark(bc *config.BrainConfig) bool {
-	// 2 · only an AGENT brain runs tools.
+	failed, _ := a.brainParkBlockers(bc)
+	return len(failed) == 0
+}
+
+// brainParkBlockers returns EVERY condition that stops this brain from parking,
+// in the order the gate evaluates them, and nil when nothing does.
+//
+// It does NOT short-circuit, and that is the whole point. The predicate it
+// replaces returned at the first failure, so a profile with no ceiling and a
+// denied tool looked exactly like a profile with only one of the two — and the
+// screen that has to tell the operator what to fix could not tell them apart.
+// Evaluating all five costs nothing here: this runs once per list, over a
+// handful of brains.
+func (a *ApprovalsAdapter) brainParkBlockers(bc *config.BrainConfig) ([]controlapi.ParkCondition, string) {
+	var failed []controlapi.ParkCondition
+	// culprit is the tool the reported condition is ABOUT, when the condition
+	// is about a tool at all. Empty otherwise, and empty is not «none»: it is
+	// «this condition does not name one», which the screen must not turn into a
+	// button aimed at nothing.
+	var culprit string
+	// 2 · only an AGENT brain runs tools. Nothing below it can be judged
+	// without an agent block, so this one DOES stop the walk — a brain with no
+	// agent has no cage and no governance to look at, and naming conditions
+	// that cannot be evaluated would be inventing them.
 	if bc.Agent == nil {
-		return false
+		return []controlapi.ParkCondition{controlapi.ParkNeedsAgent}, ""
 	}
 	// 3 · the ceiling has to be ON the ladder and reach write_irreversible.
 	// An unknown class ranks ABOVE critical, which is fail-closed for the
 	// shield and would be fail-OPEN here, so it is refused by name.
 	ceiling := action.EffectClass(bc.Agent.EffectCeiling)
-	if !ceiling.OnLadder() || ceiling.Rank() < action.EffectWriteIrreversible.Rank() {
-		return false
+	ceilingOK := ceiling.OnLadder() && ceiling.Rank() >= action.EffectWriteIrreversible.Rank()
+	if !ceilingOK {
+		failed = append(failed, controlapi.ParkNeedsCeiling)
 	}
+	// 4 and 5 · walk the cage. The ceiling's own failure does not stop this
+	// walk: the operator needs to know whether the tool is also a problem.
+	// When the ceiling is missing, judge the tool against the ladder's
+	// parkable classes alone, which is what the ceiling would have bounded.
+	parkable, denied, shadowed := false, false, false
+	// The NAME of the tool whose state produced the reported condition. The
+	// screen's «Levantar la sombra» button has to say which tool it lifts, and
+	// this walk is the only place that knows: a screen left to guess would
+	// hardcode whichever tool the last demo used and hand the wrong name to the
+	// door on every other profile.
+	var shadowedTool, deniedTool string
 	for _, name := range bc.Agent.Tools {
-		// 4 · at least one tool whose DECLARED class is parkable and whose
-		// rank does not exceed the ceiling. A ceiling of write_irreversible
-		// over a lone critical tool is denied by effect_ceiling and parks
-		// nothing — counting that brain would publish a number the gate
-		// cannot honour.
 		d, ok := tool.BuiltinEffects(name)
 		if !ok {
 			continue
@@ -287,35 +347,81 @@ func (a *ApprovalsAdapter) brainCanPark(bc *config.BrainConfig) bool {
 		if d.Class != action.EffectWriteIrreversible && d.Class != action.EffectCritical {
 			continue
 		}
-		if d.Class.Rank() > ceiling.Rank() {
+		if ceilingOK && d.Class.Rank() > ceiling.Rank() {
+			// A ceiling of write_irreversible over a lone critical tool is
+			// denied by effect_ceiling and parks nothing.
 			continue
 		}
-		// 5 · and governance has to let it through. The capability gate runs
+		parkable = true
+		// 5 · governance has to let it through. The capability gate runs
 		// BEFORE the effect gate, so a deny, a shadow or a channel-restricted
-		// grant kills the tool without ever reaching the effect rule.
-		if a.governanceAllows(bc, name) {
-			return true
+		// grant kills the tool without ever reaching the effect rule — and a
+		// SHADOW is not a denial: it is a simulation, which is a different
+		// sentence for the operator.
+		switch a.governanceVerdict(bc, name) {
+		case governanceAllow:
+			if ceilingOK {
+				return nil, ""
+			}
+			// The tool is fine and the ceiling is not: only the ceiling is
+			// reported, which is exactly the one thing to fix.
+			return failed, ""
+		case governanceShadow:
+			shadowed = true
+			if shadowedTool == "" {
+				shadowedTool = name
+			}
+		default:
+			denied = true
+			if deniedTool == "" {
+				deniedTool = name
+			}
 		}
 	}
-	return false
+	switch {
+	case !parkable:
+		failed = append(failed, controlapi.ParkNeedsParkableTool)
+	case shadowed:
+		culprit = shadowedTool
+		// A shadowed tool wins over a denied one in the report: it is the
+		// state the operator is most likely to have chosen on purpose, and the
+		// screen's sentence for it («se observa sin ejecutar») is the one that
+		// describes what actually happens.
+		failed = append(failed, controlapi.ParkToolShadowed)
+	case denied:
+		culprit = deniedTool
+		failed = append(failed, controlapi.ParkGovernanceDenies)
+	}
+	return failed, culprit
 }
 
-// governanceAllows judges one tool against the brain's grants over the
-// channels the profile configures. A brain with no governance block is
-// ungoverned and passes.
-func (a *ApprovalsAdapter) governanceAllows(bc *config.BrainConfig, toolName string) bool {
+// governanceVerdict is governanceAllows with its third answer kept. The
+// predicate it grew from collapsed shadow into deny, which is what made the
+// screen unable to tell «se observa sin ejecutar» from «se ejecuta al instante».
+type governanceOutcome int
+
+const (
+	governanceDeny governanceOutcome = iota
+	governanceAllow
+	governanceShadow
+)
+
+func (a *ApprovalsAdapter) governanceVerdict(bc *config.BrainConfig, toolName string) governanceOutcome {
 	if len(bc.Agent.Governance) == 0 {
-		return true
+		return governanceAllow
 	}
 	for _, g := range bc.Agent.Governance {
 		if g.Tool != toolName {
 			continue
 		}
+		if g.Mode == "shadow" {
+			return governanceShadow
+		}
 		if g.Mode != "allow" {
-			return false
+			return governanceDeny
 		}
 		if len(g.Channels) == 0 {
-			return true
+			return governanceAllow
 		}
 		for _, want := range g.Channels {
 			for _, ch := range a.cfg.Channels {
@@ -323,15 +429,15 @@ func (a *ApprovalsAdapter) governanceAllows(bc *config.BrainConfig, toolName str
 				// ("telegram", "discord", "webhook"), which is the same key
 				// the grants use.
 				if ch.Type == want {
-					return true
+					return governanceAllow
 				}
 			}
 		}
-		return false
+		return governanceDeny
 	}
 	// Listed in the cage and absent from the grants: the tri-state treats an
 	// ungranted tool as not advertised.
-	return false
+	return governanceDeny
 }
 
 // resolveLawFor resolves the law ONCE for one parked request and hands back
@@ -505,6 +611,12 @@ func decideWasCommitted(status action.ApprovalStatus) bool {
 // decided, after it the decision exists and only the effect is unknown.
 func (a *ApprovalsAdapter) nameTouch(ctx context.Context, id string, err error, sealed bool) error {
 	switch {
+	case errors.Is(err, actionsqlite.ErrLedgerForeignProfile):
+		// The ledger belongs to another profile (the durable mark): the
+		// decision is an act, and it refuses by name — nothing decided.
+		return fmt.Errorf("%w: %w", controlapi.ErrLedgerForeign, err)
+	case errors.Is(err, actionsqlite.ErrLedgerUnreadable), errors.Is(err, actionsqlite.ErrLedgerMarkMalformed):
+		return fmt.Errorf("%w: %w", controlapi.ErrLedgerUnreadable, err)
 	case errors.Is(err, actionsqlite.ErrApprovalWriteFailed):
 		// A driver failure while the decide wrote the transition: the
 		// transaction rolled back and nothing was decided (v0.15.1 block B,

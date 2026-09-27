@@ -43,7 +43,7 @@ func (s *Store) CreateIntentV2(ctx context.Context, c action.IntentContractV2, a
 	if signed.Event != e {
 		return action.ErrSignedObjectMutated
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func (s *Store) CreateIntentV2(ctx context.Context, c action.IntentContractV2, a
 	if err := s.verifyNewEventTx(ctx, tx, signed); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO intent_versions(intent_id,version,schema_version,profile_id,owner_principal_id,canonical_terms,digest,created_at) VALUES(?,?,?,?,?,?,?,?)`, c.IntentID, c.Version, 2, c.ProfileID, c.OwnerPrincipalID, c.CanonicalBytes(), c.Digest(), at.UTC().Format(time.RFC3339Nano)); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO intent_versions(intent_id,version,schema_version,profile_id,owner_principal_id,canonical_terms,digest,created_at) VALUES(?,?,?,?,?,?,?,?)`, c.IntentID, c.Version, 2, c.ProfileID, c.OwnerPrincipalID, c.CanonicalBytes(), c.Digest(), at.UTC().Format(time.RFC3339Nano)); err != nil {
 		return fmt.Errorf("action/sqlite: create intent v2: %w", err)
 	}
 	if err = s.insertIntentEventTx(ctx, tx, signed); err != nil {
@@ -60,7 +60,7 @@ func (s *Store) CreateIntentV2(ctx context.Context, c action.IntentContractV2, a
 	if err = s.appendIntentMutationReceiptTx(ctx, tx, signed, c.Digest()); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO intent_heads(intent_id,active_version,revision,last_event_digest,status) VALUES(?,?,?,?,?)`, c.IntentID, c.Version, 1, signed.Digest, string(action.LifecycleDraft)); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO intent_heads(intent_id,active_version,revision,last_event_digest,status) VALUES(?,?,?,?,?)`, c.IntentID, c.Version, 1, signed.Digest, string(action.LifecycleDraft)); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -71,7 +71,7 @@ func (s *Store) ActivateIntentV2(ctx context.Context, id string, version int, ac
 	if s.intentContractSigner == nil || s.intentEventSigner == nil {
 		return errors.New("action/sqlite: intent signer unavailable")
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,7 @@ func (s *Store) ActivateIntentV2(ctx context.Context, id string, version int, ac
 	if err = s.verifyNewEventTx(ctx, tx, signedE); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE intent_versions SET signing_key_id=?,signature=? WHERE intent_id=? AND version=?`, signedC.SigningKeyID, signedC.Signature, id, version); err != nil {
+	if _, err = s.txExec(ctx, tx, `UPDATE intent_versions SET signing_key_id=?,signature=? WHERE intent_id=? AND version=?`, signedC.SigningKeyID, signedC.Signature, id, version); err != nil {
 		return err
 	}
 	if err = s.insertIntentEventTx(ctx, tx, signedE); err != nil {
@@ -121,7 +121,7 @@ func (s *Store) ActivateIntentV2(ctx context.Context, id string, version int, ac
 	if err = s.appendIntentMutationReceiptTx(ctx, tx, signedE, c.Digest()); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE intent_heads SET active_version=?,revision=?,last_event_digest=?,status=? WHERE intent_id=?`, version, e.Revision, signedE.Digest, string(action.LifecycleActive), id); err != nil {
+	if _, err = s.txExec(ctx, tx, `UPDATE intent_heads SET active_version=?,revision=?,last_event_digest=?,status=? WHERE intent_id=?`, version, e.Revision, signedE.Digest, string(action.LifecycleActive), id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -140,7 +140,7 @@ func (s *Store) transitionIntentV2(ctx context.Context, id, actor string, to act
 	if s.intentEventSigner == nil {
 		return errors.New("action/sqlite: intent event signer unavailable")
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (s *Store) transitionIntentV2(ctx context.Context, id, actor string, to act
 	if err = s.appendIntentMutationReceiptTx(ctx, tx, signed, intentDigest); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE intent_heads SET revision=?,last_event_digest=?,status=? WHERE intent_id=?`, e.Revision, signed.Digest, string(to), id); err != nil {
+	if _, err = s.txExec(ctx, tx, `UPDATE intent_heads SET revision=?,last_event_digest=?,status=? WHERE intent_id=?`, e.Revision, signed.Digest, string(to), id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -254,12 +254,12 @@ func (s *Store) PutExecutionBinding(ctx context.Context, b action.ExecutionBindi
 	if b.Status != action.BindingActive && b.Status != action.BindingRevoked {
 		return errors.New("action/sqlite: invalid binding status")
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO execution_bindings(binding_id,actor_principal_id,channel,conversation_id,intent_id,intent_version,intent_digest,grant_id,grant_version,grant_digest,revision,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, b.BindingID, b.ActorPrincipalID, b.Channel, nullString(b.ConversationID), b.IntentID, b.IntentVersion, b.IntentDigest, nullString(b.GrantID), nullableInt(b.GrantVersion), nullString(b.GrantDigest), b.Revision, string(b.Status)); err != nil {
+	if _, err = s.txExec(ctx, tx, `INSERT INTO execution_bindings(binding_id,actor_principal_id,channel,conversation_id,intent_id,intent_version,intent_digest,grant_id,grant_version,grant_digest,revision,status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, b.BindingID, b.ActorPrincipalID, b.Channel, nullString(b.ConversationID), b.IntentID, b.IntentVersion, b.IntentDigest, nullString(b.GrantID), nullableInt(b.GrantVersion), nullString(b.GrantDigest), b.Revision, string(b.Status)); err != nil {
 		return err
 	}
 	at := time.Now().UTC()
@@ -442,7 +442,7 @@ func (s *Store) publicKey(ctx context.Context, id string) (ed25519.PublicKey, bo
 }
 func (s *Store) insertIntentEventTx(ctx context.Context, tx *sql.Tx, signed action.SignedIntentEventV1) error {
 	e := signed.Event
-	_, err := tx.ExecContext(ctx, `INSERT INTO intent_events(event_id,intent_id,intent_version,revision,from_status,to_status,actor_principal_id,evidence_digest,occurred_at,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, e.EventID, e.IntentID, e.Version, e.Revision, string(e.From), string(e.To), e.ActorPrincipalID, e.EvidenceDigest, e.OccurredAt.UTC().Format(time.RFC3339Nano), e.PreviousEventDigest, e.CanonicalBytes(), signed.Digest, signed.SigningKeyID, signed.Signature)
+	_, err := s.txExec(ctx, tx, `INSERT INTO intent_events(event_id,intent_id,intent_version,revision,from_status,to_status,actor_principal_id,evidence_digest,occurred_at,previous_event_digest,canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, e.EventID, e.IntentID, e.Version, e.Revision, string(e.From), string(e.To), e.ActorPrincipalID, e.EvidenceDigest, e.OccurredAt.UTC().Format(time.RFC3339Nano), e.PreviousEventDigest, e.CanonicalBytes(), signed.Digest, signed.SigningKeyID, signed.Signature)
 	return err
 }
 
@@ -707,7 +707,7 @@ func (s *Store) BindExecutionWithGrant(ctx context.Context, b action.ExecutionBi
 	case err != nil:
 		return "", fmt.Errorf("action/sqlite: read the selector's current binding: %w", err)
 	default:
-		if _, err := tx.ExecContext(ctx,
+		if _, err := s.txExec(ctx, tx,
 			`UPDATE execution_bindings SET status='REVOKED' WHERE binding_id=? AND status='ACTIVE'`,
 			priorID); err != nil {
 			return "", fmt.Errorf("action/sqlite: revoke binding %q: %w", priorID, err)
@@ -720,7 +720,7 @@ func (s *Store) BindExecutionWithGrant(ctx context.Context, b action.ExecutionBi
 		s.authorityAfterSelectorRead()
 	}
 
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO execution_bindings(binding_id,actor_principal_id,channel,conversation_id,
 		  intent_id,intent_version,intent_digest,grant_id,grant_version,grant_digest,revision,status)
 		  VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,

@@ -44,7 +44,7 @@ func buildV3File(t *testing.T) string {
 func TestMigrationV4_freshFileLandsOnV4WithThePinColumns(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestMigrationV4_freshFileLandsOnV4WithThePinColumns(t *testing.T) {
 func TestMigrationV4_v3FileMigratesAndOldDecisionsReadUnpinned(t *testing.T) {
 	t.Parallel()
 	path := buildV3File(t)
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open over v3: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestMigrationV4_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatalf("close raw: %v", err)
 	}
-	if _, err := Open(path); err == nil {
+	if _, err := openFull(path); err == nil {
 		t.Fatal("an aborted v4 migration must be boot-fatal")
 	}
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 3 {
@@ -130,7 +130,7 @@ func TestMigrationV4_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 	if err := db2.Close(); err != nil {
 		t.Fatalf("close raw 2: %v", err)
 	}
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("the next boot must complete: %v", err)
 	}

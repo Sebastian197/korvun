@@ -29,7 +29,7 @@ func ledgerApp(t *testing.T) (*actionsqlite.Store, string) {
 	t.Helper()
 	dbDir := t.TempDir()
 	dbPath := filepath.Join(dbDir, "korvun.db")
-	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

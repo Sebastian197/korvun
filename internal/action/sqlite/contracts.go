@@ -106,7 +106,15 @@ func (s *Store) CreateIntent(ctx context.Context, c action.IntentContract) error
 	if err != nil {
 		return err
 	}
-	if _, err := s.db.ExecContext(ctx,
+	// Through the judged transaction (R3): the identity row is read inside
+	// it and the guard refreshed before the write; the trigger is the second
+	// line, never the only one.
+	tx, err := s.beginWrite(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO intents (intent_id, schema_version, owner_principal_id,
 		    purpose, operations, resources, max_actions, per_operation,
 		    valid_from, expires_at, status, version, digest)
@@ -118,7 +126,7 @@ func (s *Store) CreateIntent(ctx context.Context, c action.IntentContract) error
 	); err != nil {
 		return fmt.Errorf("action/sqlite: create intent %q: %w", c.IntentID, err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // GetIntent returns one stored intent contract.
@@ -182,7 +190,7 @@ func (s *Store) TransitionGrant(ctx context.Context, grantID string, to action.L
 // and column names are compile-time literals from the two wrappers above,
 // never external input.
 func (s *Store) transitionContract(ctx context.Context, table, idColumn, id string, to action.LifecycleStatus) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin transition: %w", err)
 	}
@@ -200,7 +208,7 @@ func (s *Store) transitionContract(ctx context.Context, table, idColumn, id stri
 		return fmt.Errorf("action/sqlite: transition %s %q: %w", table, id, err)
 	}
 	update := `UPDATE ` + table + ` SET status = ? WHERE ` + idColumn + ` = ?` // #nosec G202 -- same compile-time literals
-	if _, err := tx.ExecContext(ctx, update, string(to), id); err != nil {
+	if _, err := s.txExec(ctx, tx, update, string(to), id); err != nil {
 		return fmt.Errorf("action/sqlite: update status of %s %q: %w", table, id, err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -227,7 +235,15 @@ func (s *Store) CreateGrant(ctx context.Context, g action.AuthorityGrant) error 
 	if err != nil {
 		return err
 	}
-	if _, err := s.db.ExecContext(ctx,
+	// Through the judged transaction (R3): the identity row is read inside
+	// it and the guard refreshed before the write; the trigger is the second
+	// line, never the only one.
+	tx, err := s.beginWrite(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO grants (grant_id, intent_id, issuer_principal_id,
 		    subject_principal_id, parent_grant_id, operations, resources,
 		    max_actions, per_operation, valid_from, expires_at, status,
@@ -241,7 +257,7 @@ func (s *Store) CreateGrant(ctx context.Context, g action.AuthorityGrant) error 
 	); err != nil {
 		return fmt.Errorf("action/sqlite: create grant %q: %w", g.GrantID, err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // GetGrant returns one stored grant.

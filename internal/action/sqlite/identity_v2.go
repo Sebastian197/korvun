@@ -31,7 +31,7 @@ func (s *Store) SetIdentitySigners(
 // RegisterIdentity idempotently materializes configured principals and
 // bindings. Incompatible existing rows fail without overwrite.
 func (s *Store) RegisterIdentity(ctx context.Context, registry identity.Registry, at time.Time) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin identity registration: %w", err)
 	}
@@ -44,7 +44,7 @@ func (s *Store) RegisterIdentity(ctx context.Context, registry identity.Registry
 			created.CreatedAt = at.UTC()
 			created.DisabledAt = time.Time{}
 			created.Revision = 1
-			if _, err := tx.ExecContext(ctx,
+			if _, err := s.txExec(ctx, tx,
 				`INSERT INTO principals(principal_id,kind,display_name,created_at,disabled_at,revision)
 				 VALUES(?,?,?,?,NULL,1)`, created.ID, string(created.Kind), created.DisplayName,
 				created.CreatedAt.Format(time.RFC3339Nano)); err != nil {
@@ -84,7 +84,7 @@ func (s *Store) RegisterIdentity(ctx context.Context, registry identity.Registry
 				&stored.Generation, &stored.Status)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			if _, err := tx.ExecContext(ctx,
+			if _, err := s.txExec(ctx, tx,
 				`INSERT INTO principal_bindings(binding_id,provider,channel,credential_ref,
 				 subject_namespace,verified_subject,principal_id,generation,status)
 				 VALUES(?,?,?,?,?,?,?,?,?)`,
@@ -121,7 +121,7 @@ func (s *Store) RegisterIdentity(ctx context.Context, registry identity.Registry
 // DisablePrincipal appends a signed disable event and changes its projection
 // in the same transaction. Repeated disable is an idempotent no-op.
 func (s *Store) DisablePrincipal(ctx context.Context, principalID string, at time.Time) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin principal disable: %w", err)
 	}
@@ -145,7 +145,7 @@ func (s *Store) DisablePrincipal(ctx context.Context, principalID string, at tim
 		EventID: newIdentityID("pev_"), Principal: principal,
 		Revision: principal.Revision, Kind: "disabled", OccurredAt: at.UTC(),
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`UPDATE principals SET disabled_at=?,revision=? WHERE principal_id=?`,
 		principal.DisabledAt.Format(time.RFC3339Nano), principal.Revision, principal.ID); err != nil {
 		return fmt.Errorf("action/sqlite: disable principal %q: %w", principalID, err)
@@ -167,11 +167,26 @@ func (s *Store) RecordAttemptAuthenticated(ctx context.Context, env action.Envel
 	default:
 		return fmt.Errorf("%w: %s", ErrNotADecisionState, state)
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin authenticated record: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.recordAuthenticatedTx(ctx, tx, env, d, state, evidence); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("action/sqlite: commit authenticated record %q: %w", env.ActionID, err)
+	}
+	s.noteWrite(ctx)
+	return nil
+}
+
+// recordAuthenticatedTx is the body of RecordAttemptAuthenticated inside a
+// caller's transaction — shared with AdoptLedger, whose act and marked receipt
+// must land together or not at all. It writes the action, its decision and its
+// evidence, and the receipt of a terminal decision state.
+func (s *Store) recordAuthenticatedTx(ctx context.Context, tx *sql.Tx, env action.Envelope, d Decision, state action.State, evidence identity.Evidence) error {
 	if err := validateResolvedEvidenceTx(ctx, tx, evidence, env, s.identityNow().UTC()); err != nil {
 		return err
 	}
@@ -179,7 +194,7 @@ func (s *Store) RecordAttemptAuthenticated(ctx context.Context, env action.Envel
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO actions (action_id,schema_version,correlation_id,
 		 source_kind,source_protocol,source_channel,op_namespace,op_name,op_version,
 		 parameters_digest,effect_class,state,requested_at,principal_id,intent_id,authority_refs,
@@ -195,7 +210,7 @@ func (s *Store) RecordAttemptAuthenticated(ctx context.Context, env action.Envel
 		signed.Digest, signed.Canonical, signed.SigningKeyID, signed.Signature); err != nil {
 		return fmt.Errorf("action/sqlite: insert authenticated action %q: %w", env.ActionID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO action_decisions(action_id,outcome,rule,decided_at,policy_version,policy_digest)
 		 VALUES(?,?,?,?,?,?)`, env.ActionID, d.Outcome, d.Rule,
 		env.RequestedAt.UTC().Format(time.RFC3339Nano), d.PolicyVersion, d.PolicyDigest); err != nil {
@@ -213,10 +228,6 @@ func (s *Store) RecordAttemptAuthenticated(ctx context.Context, env action.Envel
 			return err
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("action/sqlite: commit authenticated record %q: %w", env.ActionID, err)
-	}
-	s.noteWrite(ctx)
 	return nil
 }
 
@@ -277,7 +288,7 @@ func (s *Store) insertPrincipalEventTx(ctx context.Context, tx *sql.Tx, event id
 	if err := identity.VerifyPrincipalEvent(pub, signed); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO principal_events(event_id,principal_id,revision,kind,occurred_at,
 		 canonical_event,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?,?)`,
 		event.EventID, event.Principal.ID, event.Revision, event.Kind,

@@ -210,7 +210,7 @@ func TestManualRepairProcedure_byBinary(t *testing.T) {
 	// The boot itself, IN PROCESS (bootstrap DDL + migration + prune;
 	// not the server's boot): it fails closed naming the row, the
 	// field and the procedure.
-	if _, err := actionsqlite.Open(dbPath); err == nil || !strings.Contains(err.Error(), "decision_at") ||
+	if _, err := actionsqlite.OpenFor(dbPath, testProfileIdentity); err == nil || !strings.Contains(err.Error(), "decision_at") ||
 		!strings.Contains(err.Error(), "docs/operations/tombstone-manual-repair.md") {
 		t.Fatalf("the boot must fail closed naming decision_at and pointing at the procedure: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestManualRepairProcedure_byBinary(t *testing.T) {
 		t.Fatalf("adjudicated correction: %v", err)
 	}
 	_ = db2.Close()
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("after the honest repair the boot (Open in process) must converge: %v", err)
 	}

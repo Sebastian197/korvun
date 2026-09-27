@@ -1,0 +1,10 @@
+{
+  "act": {
+    "action_id": "act_01"
+  },
+  "applied": false,
+  "detail": "aplicando; tu perfil en disco todavía no ha cambiado. El libro vive en /perfil/korvun.db",
+  "handle": "reload-1",
+  "outcome": "applying",
+  "profile_unchanged": true
+}

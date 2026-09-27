@@ -32,7 +32,7 @@ func intentV2Fixture(t *testing.T) action.IntentContractV2 {
 
 func signedIntentStore(t *testing.T) (*Store, ed25519.PublicKey, ed25519.PrivateKey) {
 	t.Helper()
-	store, err := Open(filepath.Join(t.TempDir(), "kernel.db"))
+	store, err := openFull(filepath.Join(t.TempDir(), "kernel.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func intentCounts(t *testing.T, store *Store, id string) (events, receipts int) 
 
 func TestIntentV2_MigrationNeverSignsLegacyAsHistoricalConsent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestIntentV2_MigrationNeverSignsLegacyAsHistoricalConsent(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = store.Close()
-	reopened, err := Open(path)
+	reopened, err := openFull(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +306,7 @@ func TestIntentV2_MigrationNeverSignsLegacyAsHistoricalConsent(t *testing.T) {
 }
 
 func TestMigrationV13AddsIntentV2Tables(t *testing.T) {
-	store, err := Open(filepath.Join(t.TempDir(), "schema.db"))
+	store, err := openFull(filepath.Join(t.TempDir(), "schema.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +324,7 @@ func TestMigrationV13AddsIntentV2Tables(t *testing.T) {
 func TestIntentV2_PersistenceFailureDoors(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "doors.db")
-	plain, err := Open(path)
+	plain, err := openFull(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -798,7 +798,7 @@ func TestIntentV2_ADraftIsNamedInactiveNotMissing(t *testing.T) {
 func TestIntentV2_ALegitimateRevocationIsNotCalledCorruption(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "kernel.db")
-	writer, err := Open(path)
+	writer, err := openFull(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -823,7 +823,7 @@ func TestIntentV2_ALegitimateRevocationIsNotCalledCorruption(t *testing.T) {
 	if err := writer.ActivateIntentV2(ctx, c.IntentID, 1, "principal_operator", c.ValidFrom); err != nil {
 		t.Fatal(err)
 	}
-	reader, err := Open(path)
+	reader, err := openFull(path)
 	if err != nil {
 		t.Fatal(err)
 	}

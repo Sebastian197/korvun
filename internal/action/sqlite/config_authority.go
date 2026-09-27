@@ -139,7 +139,7 @@ func (s *Store) SyncConfigAuthorityClauses(ctx context.Context, profileID,
 		if err != nil {
 			return 0, err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO config_authority_snapshots(profile_id,brain_principal_id,generation,clause_id,canonical_clause,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?)`,
+		if _, err := s.txExec(ctx, tx, `INSERT INTO config_authority_snapshots(profile_id,brain_principal_id,generation,clause_id,canonical_clause,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?)`,
 			profileID, brainPrincipal, generation, clause.ClauseID, canonical,
 			seal.Digest, seal.SigningKeyID, seal.Signature); err != nil {
 			return 0, err
@@ -155,7 +155,7 @@ func (s *Store) SyncConfigAuthorityClauses(ctx context.Context, profileID,
 	if err != nil {
 		return 0, err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO config_authority_heads(profile_id,brain_principal_id,generation,clause_set_digest,canonical_head,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(profile_id,brain_principal_id) DO UPDATE SET generation=excluded.generation,clause_set_digest=excluded.clause_set_digest,canonical_head=excluded.canonical_head,digest=excluded.digest,signing_key_id=excluded.signing_key_id,signature=excluded.signature`,
+	if _, err := s.txExec(ctx, tx, `INSERT INTO config_authority_heads(profile_id,brain_principal_id,generation,clause_set_digest,canonical_head,digest,signing_key_id,signature) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(profile_id,brain_principal_id) DO UPDATE SET generation=excluded.generation,clause_set_digest=excluded.clause_set_digest,canonical_head=excluded.canonical_head,digest=excluded.digest,signing_key_id=excluded.signing_key_id,signature=excluded.signature`,
 		profileID, brainPrincipal, generation, setDigest, canonicalHead,
 		headSeal.Digest, headSeal.SigningKeyID, headSeal.Signature); err != nil {
 		return 0, err

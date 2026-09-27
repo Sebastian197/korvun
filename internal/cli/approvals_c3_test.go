@@ -37,7 +37,7 @@ func decidedNotExecuted(t *testing.T) (cfgPath, dbPath, approvalID string) {
 	if err != nil {
 		t.Fatalf("law: %v", err)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestApprovalsExecute_resumesTheCrashedApproval(t *testing.T) {
 	if !strings.Contains(stdout, "42") || !strings.Contains(stdout, "SUCCEEDED") {
 		t.Fatalf("execute must report the REAL outcome: %q", stdout)
 	}
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

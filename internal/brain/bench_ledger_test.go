@@ -34,7 +34,7 @@ func (r benchSealedRecorder) FinishWithResult(ctx context.Context, actionID stri
 }
 
 func BenchmarkRunToolHotPathSealed(b *testing.B) {
-	store, err := actionsqlite.Open(filepath.Join(b.TempDir(), "korvun.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(b.TempDir(), "korvun.db"), testProfileIdentity)
 	if err != nil {
 		b.Fatalf("open action store: %v", err)
 	}

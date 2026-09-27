@@ -145,7 +145,7 @@ func TestLedgerCheck_emptyPartitionIsHonestlyEmpty(t *testing.T) {
 	// under the consolidation
 	// mandate when the door changed.
 	cfgPath, dbPath := intentTestConfig(t)
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("seed store: %v", err)
 	}

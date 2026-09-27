@@ -145,7 +145,7 @@ func TestIngress_ForgedSenderCannotBecomeOperator(t *testing.T) {
 		IngressIssuer: issuer,
 	})
 	storePath := filepath.Join(t.TempDir(), "identity.db")
-	store, err := actionsqlite.Open(storePath)
+	store, err := actionsqlite.OpenFor(storePath, testProfileIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}

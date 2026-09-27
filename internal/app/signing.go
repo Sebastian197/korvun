@@ -39,6 +39,13 @@ const signingKeyFile = "receipt-signing.key"
 // private key); absent → generate + persist + register; wrong
 // permissions, unreadable or corrupt → boot-fatal, closed.
 func ensureSigningKey(ctx context.Context, store *actionsqlite.Store, profileDir string) (ed25519.PrivateKey, error) {
+	return ensureSigningKeyIn(ctx, store, profileDir, true)
+}
+
+// ensureSigningKeyIn is ensureSigningKey with the ledger registration made
+// optional: an UNREADABLE ledger (train D) refuses every write, so the boot
+// loads or creates the ink from its file and leaves the registry alone.
+func ensureSigningKeyIn(ctx context.Context, store *actionsqlite.Store, profileDir string, registerInLedger bool) (ed25519.PrivateKey, error) {
 	keysDir := filepath.Join(profileDir, "keys")
 	keyPath := filepath.Join(keysDir, signingKeyFile)
 
@@ -59,8 +66,10 @@ func ensureSigningKey(ctx context.Context, store *actionsqlite.Store, profileDir
 		if err != nil {
 			return nil, fmt.Errorf("app: signing key %q is corrupt (%w) — refusing to regenerate: that would orphan every historical receipt", keyPath, err)
 		}
-		if err := registerPublicKey(ctx, store, priv); err != nil {
-			return nil, err
+		if registerInLedger {
+			if err := registerPublicKey(ctx, store, priv); err != nil {
+				return nil, err
+			}
 		}
 		return priv, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -78,8 +87,10 @@ func ensureSigningKey(ctx context.Context, store *actionsqlite.Store, profileDir
 	if err := os.WriteFile(keyPath, action.EncodeSigningKeySeed(priv), 0o600); err != nil {
 		return nil, fmt.Errorf("app: write signing key: %w", err)
 	}
-	if err := registerPublicKey(ctx, store, priv); err != nil {
-		return nil, err
+	if registerInLedger {
+		if err := registerPublicKey(ctx, store, priv); err != nil {
+			return nil, err
+		}
 	}
 	return priv, nil
 }

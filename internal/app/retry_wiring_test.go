@@ -102,7 +102,7 @@ func TestBuild_sequentialForcesRetryOff(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	ch := newCapturingChannel("telegram")
-	a, err := Build(seqOllamaCfg(srv.URL, 2), withChannelFactory(okFactory(ch)))
+	a, err := Build(seqOllamaCfg(srv.URL, 2), withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestBuild_retryRecoversTransient503(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	ch := newCapturingChannel("telegram")
-	a, err := Build(retryOllamaCfg(srv.URL, 1), withChannelFactory(okFactory(ch)))
+	a, err := Build(retryOllamaCfg(srv.URL, 1), withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

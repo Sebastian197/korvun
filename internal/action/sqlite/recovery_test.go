@@ -50,7 +50,7 @@ func recordSeq(id string) int {
 func TestOpen_recoveryClosesNonTerminalsAndNeverReexecutes(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestOpen_recoveryClosesNonTerminalsAndNeverReexecutes(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	reopened, err := Open(path)
+	reopened, err := openFull(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestPrune_neverTouchesLiveRowsEvenBeyondTheCap(t *testing.T) {
 func TestOpen_prunesAtOpen(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

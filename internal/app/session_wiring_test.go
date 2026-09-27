@@ -51,7 +51,7 @@ func TestBuild_SessionDispatchWiredFromConfig(t *testing.T) {
 	ch := &sessionRecChannel{fakeChannel: newFakeChannel("telegram")}
 	app, err := Build(cfg,
 		WithLogger(slog.New(slog.DiscardHandler)),
-		withChannelFactory(okFactory(ch)))
+		withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestBuild_ConsoleChannelAutoRoutesToFirstBrain(t *testing.T) {
 		// register "telegram" twice and never "console").
 		withChannelFactory(func(_ *builder, cc config.ChannelConfig) (Channel, error) {
 			return &sessionRecChannel{fakeChannel: newFakeChannel(cc.Type)}, nil
-		}))
+		}), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

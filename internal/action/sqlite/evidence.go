@@ -59,13 +59,13 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 		}
 		refs = string(raw)
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin identified record: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	requestedAt := env.RequestedAt.UTC().Format(time.RFC3339Nano)
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO actions (action_id, schema_version, correlation_id,
 		    source_kind, source_protocol, source_channel,
 		    op_namespace, op_name, op_version,
@@ -80,7 +80,7 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert identified action %q: %w", env.ActionID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at, policy_version, policy_digest)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		env.ActionID, d.Outcome, d.Rule, requestedAt,
@@ -88,7 +88,7 @@ func (s *Store) RecordAttemptIdentified(ctx context.Context, env action.Envelope
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert decision %q: %w", env.ActionID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO evidence (evidence_id, action_id, provider, subject,
 		    credential, issued_at, transport_binding, claims_digest)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

@@ -35,7 +35,7 @@ func TestAuthority_ConcurrentStartsShareAncestorBudget(t *testing.T) {
 		}
 	}
 	path := f.store.path
-	second, err := Open(path)
+	second, err := openFull(path)
 	if err != nil {
 		t.Fatal(err)
 	}

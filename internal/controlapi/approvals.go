@@ -78,14 +78,20 @@ const (
 	// The execution outcomes, after a decision that is already committed.
 	OutcomeNotStartedParamsHeld OutcomeName = "not_started_params_held"
 	OutcomeNotStartedParamsGone OutcomeName = "not_started_params_gone"
-	OutcomeParamsUnaccounted    OutcomeName = "params_unaccounted"
-	OutcomeParamsUnreadable     OutcomeName = "params_unreadable"
-	OutcomeDecidedEvidenceBad   OutcomeName = "decided_evidence_corrupt"
-	OutcomeAlreadyClosed        OutcomeName = "already_closed"
-	OutcomeNotDecided           OutcomeName = "not_decided"
-	OutcomeUnknownOutcome       OutcomeName = "unknown_outcome"
-	OutcomeCloseFailed          OutcomeName = "close_failed"
-	OutcomeReceiptUnreadable    OutcomeName = "receipt_unreadable"
+	// OutcomeApprovalLedgerForeign · the ledger belongs to another profile (the durable
+	// mark): the decision refuses by name, nothing decided.
+	OutcomeApprovalLedgerForeign OutcomeName = "ledger_foreign_profile"
+	// OutcomeApprovalLedgerUnreadable · the ledger's identity cannot be read: the
+	// decision refuses by name, nothing decided.
+	OutcomeApprovalLedgerUnreadable OutcomeName = "ledger_unreadable"
+	OutcomeParamsUnaccounted        OutcomeName = "params_unaccounted"
+	OutcomeParamsUnreadable         OutcomeName = "params_unreadable"
+	OutcomeDecidedEvidenceBad       OutcomeName = "decided_evidence_corrupt"
+	OutcomeAlreadyClosed            OutcomeName = "already_closed"
+	OutcomeNotDecided               OutcomeName = "not_decided"
+	OutcomeUnknownOutcome           OutcomeName = "unknown_outcome"
+	OutcomeCloseFailed              OutcomeName = "close_failed"
+	OutcomeReceiptUnreadable        OutcomeName = "receipt_unreadable"
 )
 
 // ApprovalOutcomeNames is every name this surface can emit, written from the
@@ -99,6 +105,7 @@ var ApprovalOutcomeNames = []OutcomeName{
 	OutcomeNotStartedParamsHeld, OutcomeNotStartedParamsGone, OutcomeParamsUnaccounted,
 	OutcomeParamsUnreadable, OutcomeDecidedEvidenceBad, OutcomeAlreadyClosed,
 	OutcomeNotDecided, OutcomeUnknownOutcome, OutcomeCloseFailed, OutcomeReceiptUnreadable,
+	OutcomeApprovalLedgerForeign, OutcomeApprovalLedgerUnreadable,
 }
 
 // The sentinels the adapter returns. Each one is a distinction the store can
@@ -229,6 +236,13 @@ var outcomes = map[error]outcome{
 		"the decision left this window, whether the effect happened is unknown, and THIS execution could not close the ledger"},
 	ErrApprovalReceiptUnreadable: {http.StatusConflict, OutcomeReceiptUnreadable,
 		"the decision is sealed and recorded; only its receipt identifier could not be read back, and no execution was attempted"},
+	// The ledger's identity (the durable mark, redesigned): a decision is an
+	// act, and a ledger this profile does not own, or cannot read, refuses
+	// every act by name — here too, never as a 500.
+	ErrLedgerForeign: {http.StatusConflict, OutcomeApprovalLedgerForeign,
+		"this ledger belongs to another profile — adopt it from the app's «¿Qué pasa hoy?» screen before deciding; nothing was decided"},
+	ErrLedgerUnreadable: {http.StatusServiceUnavailable, OutcomeApprovalLedgerUnreadable,
+		"this ledger's identity cannot be read — no door repairs it; its remedy is replacing the ledger's file (docs/operations/ledger-restore.md); nothing was decided"},
 }
 
 // ApprovalRow is one line of the pending list. The digest lives HERE, once, and
@@ -298,6 +312,69 @@ type ApprovalGate struct {
 	// lose them in silence: a list that quietly returns fewer rows than the
 	// store holds is the failure this field exists to make impossible.
 	RowsSkipped int `json:"rows_skipped"`
+	// Blocked carries, per brain, EVERY condition that keeps it from parking.
+	//
+	// It exists because BrainsCanPark cannot answer the question the operator
+	// actually has. That number is a count: two profiles that fail for
+	// completely different reasons — no effect ceiling, or a tool the
+	// governance shadows — both read 0, so a screen that paints them
+	// differently would be recalculating the five conditions on its own, and
+	// two copies of that logic are two truths. Blocked publishes the motive
+	// from the ONE place that decides it.
+	//
+	// It reports EVERY failing condition, not the first: an operator whose
+	// ceiling is missing AND whose tool is denied has two things to fix, and a
+	// list that stops at one hides half the work.
+	//
+	// Empty when nothing blocks. BrainsCanPark keeps its exact meaning and its
+	// exact value; this field is beside it, never instead of it.
+	Blocked []ParkBlock `json:"blocked,omitempty"`
+}
+
+// ParkCondition names one of the conditions the gate demands before a brain can
+// park an irreversible action. The set is closed and each member is a distinct
+// sentence on the screen — which is why a SHADOWED tool is its own member and
+// not a flavour of «governance denies»: a shadowed tool is simulated, never
+// executed and never parked, and «se observa sin ejecutar» is a different thing
+// to tell an operator than «se ejecuta al instante».
+type ParkCondition string
+
+const (
+	// ParkNeedsStore · without the action store nothing can be parked at all.
+	ParkNeedsStore ParkCondition = "store"
+	// ParkNeedsAgent · only an AGENT brain runs tools.
+	ParkNeedsAgent ParkCondition = "agent"
+	// ParkNeedsCeiling · the effect ceiling must be on the ladder and reach
+	// write_irreversible. Without a ceiling the action is not stopped anywhere.
+	ParkNeedsCeiling ParkCondition = "ceiling"
+	// ParkNeedsParkableTool · at least one tool whose declared class is
+	// parkable and whose rank does not exceed the ceiling.
+	ParkNeedsParkableTool ParkCondition = "tool"
+	// ParkGovernanceDenies · the parkable tool exists and governance refuses
+	// it, over the channels the profile configures.
+	ParkGovernanceDenies ParkCondition = "governance_denies"
+	// ParkToolShadowed · the parkable tool exists and governance SHADOWS it:
+	// it is simulated on every call, so it never reaches the effect gate and
+	// never parks.
+	ParkToolShadowed ParkCondition = "tool_shadowed"
+)
+
+// ParkBlock is one brain and every condition it fails.
+type ParkBlock struct {
+	Brain  string          `json:"brain"`
+	Failed []ParkCondition `json:"failed"`
+	// Tool names the tool the reported condition is ABOUT — the shadowed one
+	// for ParkToolShadowed, the refused one for ParkGovernanceDenies.
+	//
+	// It travels because the screen's «Levantar la sombra» button must say
+	// WHICH tool it lifts, and the gate's walk is the only place that knows. A
+	// screen left to work it out would hardcode whichever tool the last demo
+	// used and hand the wrong name to the door on every other profile.
+	//
+	// EMPTY is not «none»: it means this condition does not name a tool (no
+	// store, no agent, no ceiling). A screen must not turn that into a button
+	// aimed at nothing — only the conditions above ever fill it.
+	Tool string `json:"tool,omitempty"`
 }
 
 // ApprovalList is the list response: the gate and the page, never a bare array.

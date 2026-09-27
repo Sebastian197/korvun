@@ -1932,7 +1932,7 @@ Escenarios de primera clase, con DOS actores reales. Ninguno es in-process.
 
 > **AMPLIADO el 2026-09-19** (v0.15.1 bloque B, P2-7, autorizado por el director): entra `loopback_only`, el rechazo a un par que no es loopback, con el literal aprobado ese día por el copiloto bajo la orden de velocidad del director (Chano puede vetarlo después): «Esta decisión solo puede tomarse desde la misma máquina que ejecuta Korvun. La petición llegó desde otro origen y se rechazó sin tocar nada.» El registro pasa de 21 a 22 nombres.
 >
-> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». `params_not_canonical` y `params_belt_failed` SALEN del registro: verificado por `grep` sobre el árbol entero, ningún camino de producción podía emitirlos. El registro cerrado es de **22** nombres (21 hasta la ampliación del 2026-09-19). La cifra va en dígitos a propósito: el molde de FR-TEST-6 la lee de esta frase y la cruza contra las filas de la tabla y contra `ApprovalOutcomeNames`, porque escrita en letra decía **veinte** sobre una tabla de veintiuna filas y nadie lo enrojecía. `parameters_state: "unavailable"` sale por lo mismo, de FR-UI-16.
+> **ACOTADO el 2026-09-13** — regla del director «nombre sin productor, fuera». `params_not_canonical` y `params_belt_failed` SALEN del registro: verificado por `grep` sobre el árbol entero, ningún camino de producción podía emitirlos. El registro cerrado es de **24** nombres (21 hasta la ampliación del 2026-09-19; 22 hasta la del 2026-09-24, cuando el libro con identidad —`ledger_foreign_profile`, `ledger_unreadable`— entró por la v0.16.2). La cifra va en dígitos a propósito: el molde de FR-TEST-6 la lee de esta frase y la cruza contra las filas de la tabla y contra `ApprovalOutcomeNames`, porque escrita en letra decía **veinte** sobre una tabla de veintiuna filas y nadie lo enrojecía. `parameters_state: "unavailable"` sale por lo mismo, de FR-UI-16.
 
 
 Cada fila lleva su marcador estable. El molde de FR-TEST-6 cruza
@@ -1962,6 +1962,8 @@ Cada fila lleva su marcador estable. El molde de FR-TEST-6 cruza
 | <!-- outcome:unknown_outcome --> `unknown_outcome` | P4 |
 | <!-- outcome:close_failed --> `close_failed` | P4 |
 | <!-- outcome:receipt_unreadable --> `receipt_unreadable` | P5 |
+| <!-- outcome:ledger_foreign_profile --> `ledger_foreign_profile` | §12-quater — «este libro es de otro perfil: adóptalo desde «¿Qué pasa hoy?» antes de decidir; no se decidió nada» (v0.16.2, el marcador durable rediseñado) |
+| <!-- outcome:ledger_unreadable --> `ledger_unreadable` | §12-quater — «la identidad de este libro no se puede leer; solo restaurar el libro lo levanta; no se decidió nada» (v0.16.2). *Superado (tren E, tanda 5): el 503 dice ahora que su remedio es sustituir el fichero del libro (docs/operations/ledger-restore.md).* |
 
 ## 13. Pruebas, evidencia y mutacion — una mutación por rama vigilada
 

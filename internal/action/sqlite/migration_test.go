@@ -115,7 +115,7 @@ func countV2Artifacts(t *testing.T, path string) (tables, columns int) {
 func TestMigration_freshFileLandsOnV2(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestMigration_freshFileLandsOnV2(t *testing.T) {
 func TestMigration_v1FileMigratesAndOldRowsRemainReadable(t *testing.T) {
 	t.Parallel()
 	path := buildV1File(t)
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("Open over v1: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestMigration_idempotentAcrossReopens(t *testing.T) {
 	t.Parallel()
 	path := buildV1File(t)
 	for i := 0; i < 3; i++ {
-		store, err := Open(path)
+		store, err := openFull(path)
 		if err != nil {
 			t.Fatalf("Open %d: %v", i, err)
 		}
@@ -206,7 +206,7 @@ func TestMigration_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 		t.Fatalf("close raw: %v", err)
 	}
 	// The interrupted boot must fail loudly — never open over a zombie.
-	if _, err := Open(path); err == nil {
+	if _, err := openFull(path); err == nil {
 		t.Fatal("an aborted migration must be boot-fatal, not silent")
 	}
 	// The file is a CLEAN v1: version untouched, ZERO v2 artifacts.
@@ -228,7 +228,7 @@ func TestMigration_crashMidMigrationNeverLeavesAZombie(t *testing.T) {
 	if err := db2.Close(); err != nil {
 		t.Fatalf("close raw 2: %v", err)
 	}
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("the next boot must complete the migration: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestMigration_futureSchemaFailsClosed(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatalf("close raw: %v", err)
 	}
-	_, err = Open(path)
+	_, err = openFull(path)
 	if err == nil {
 		t.Fatal("a schema from the future must fail closed, not be guessed at")
 	}

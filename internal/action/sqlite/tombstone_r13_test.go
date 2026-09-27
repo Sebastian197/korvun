@@ -347,7 +347,7 @@ func TestMigrationV12_nullDigestOnV11OriginIsFault(t *testing.T) {
 		t.Fatalf("auditor's UPDATE: %v", err)
 	}
 	_ = db.Close()
-	_, err := Open(path)
+	_, err := openFull(path)
 	mustFault(t, "AUDIT R13-A1", err, "approval_digest", "NULL", true)
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 11 {
 		t.Fatalf("v11 stands: %d", v)
@@ -374,7 +374,7 @@ func TestMigrationV12_nullEvidenceColumnIsFaultNamed(t *testing.T) {
 				t.Fatalf("auditor's UPDATE: %v", err)
 			}
 			_ = db.Close()
-			_, err := Open(path)
+			_, err := openFull(path)
 			mustFault(t, "AUDIT R13-A2 "+col, err, col, "NULL", true)
 			if v := inspect(t, path, `SELECT version FROM action_schema`); v != 11 {
 				t.Fatalf("v11 stands: %d", v)
@@ -393,7 +393,7 @@ func v12ClassMold(t *testing.T, tag, set, field, detail string) {
 		t.Fatalf("auditor's UPDATE: %v", err)
 	}
 	_ = db.Close()
-	_, err := Open(path)
+	_, err := openFull(path)
 	mustFault(t, "AUDIT R13-G4 "+tag, err, field, detail, true)
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 11 {
 		t.Fatalf("v11 stands: %d", v)
@@ -445,7 +445,7 @@ func TestMigrationV11_blobPolicyVersionInV10IsFault(t *testing.T) {
 		t.Fatalf("auditor's UPDATE: %v", err)
 	}
 	_ = db.Close()
-	_, err := Open(path)
+	_, err := openFull(path)
 	mustFault(t, "AUDIT R13-G4 v10 blob", err, "policy_version", "storage class blob", true)
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 10 {
 		t.Fatalf("v10 stands: %d", v)
@@ -467,7 +467,7 @@ func TestMigrationV11_textPolicyVersionInV10IsFault(t *testing.T) {
 		t.Fatalf("auditor's UPDATE: %v", err)
 	}
 	_ = db.Close()
-	_, err := Open(path)
+	_, err := openFull(path)
 	mustFault(t, "AUDIT R13-G4 v10 text", err, "policy_version", "storage class text", true)
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 10 {
 		t.Fatalf("v10 stands: %d", v)
@@ -486,7 +486,7 @@ func TestMigrationV11_nullPolicyVersionInV10IsFault(t *testing.T) {
 		t.Fatalf("auditor's UPDATE: %v", err)
 	}
 	_ = db.Close()
-	_, err := Open(path)
+	_, err := openFull(path)
 	mustFault(t, "AUDIT R13-G1 v10 NULL", err, "policy_version", "NULL", true)
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 10 {
 		t.Fatalf("v10 stands: %d", v)

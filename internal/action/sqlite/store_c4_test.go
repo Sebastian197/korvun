@@ -28,7 +28,7 @@ import (
 func TestOpenOperator_besideALiveServerTouchesNothingItDoesNotOwn(t *testing.T) {
 	t.Parallel()
 	path := t.TempDir() + "/korvun.db"
-	server, err := Open(path)
+	server, err := openFull(path)
 	if err != nil {
 		t.Fatalf("server open: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestOpenOperator_besideALiveServerTouchesNothingItDoesNotOwn(t *testing.T) 
 	// And a separate parked request the operator wants to reject.
 	aPark, _ := pendingRequest(t, server, "act_c4park")
 
-	cli, err := OpenOperator(path)
+	cli, err := openOperator(path)
 	if err != nil {
 		t.Fatalf("AUDIT C4: the operator door must open beside the server: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestOpenOperator_besideALiveServerTouchesNothingItDoesNotOwn(t *testing.T) 
 func TestOpenOperator_neverMigratesAPreviousLife(t *testing.T) {
 	t.Parallel()
 	path := buildV6File(t)
-	_, err := OpenOperator(path)
+	_, err := openOperator(path)
 	if err == nil {
 		t.Fatal("AUDIT C4: an operator act must never migrate an existing store")
 	}
@@ -101,7 +101,7 @@ func TestOpenOperator_freshProfileBootstrapsButNeverRecoversOrPrunes(t *testing.
 	path := t.TempDir() + "/fresh/korvun.db"
 	// A fresh profile is a clean bootstrap (the intent-create-before-
 	// first-boot flow stays alive) — there is no previous life to harm.
-	store, err := OpenOperator(path)
+	store, err := openOperator(path)
 	if err != nil {
 		t.Fatalf("fresh operator open: %v", err)
 	}

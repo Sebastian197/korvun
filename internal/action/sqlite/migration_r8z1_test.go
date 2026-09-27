@@ -100,7 +100,7 @@ func buildV10File(t *testing.T) (string, action.Approval) {
 func TestMigrationV11_copiesEveryTombstoneComputingTheDigest(t *testing.T) {
 	t.Parallel()
 	path, seed := buildV10File(t)
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestMigrationV11_crashMidCopyLandsBackOnV10Intact(t *testing.T) {
 		t.Fatalf("install crash trigger: %v", err)
 	}
 	_ = db.Close()
-	if _, err := Open(path); err == nil {
+	if _, err := openFull(path); err == nil {
 		t.Fatal("an aborted v11 migration must be boot-fatal")
 	}
 	if v := inspect(t, path, `SELECT version FROM action_schema`); v != 10 {
@@ -142,7 +142,7 @@ func TestMigrationV11_crashMidCopyLandsBackOnV10Intact(t *testing.T) {
 	db2, _ := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(path)))
 	_, _ = db2.Exec(`DROP TRIGGER crash_mid_v11`)
 	_ = db2.Close()
-	recovered, err := Open(path)
+	recovered, err := openFull(path)
 	if err != nil {
 		t.Fatalf("the retry completes: %v", err)
 	}

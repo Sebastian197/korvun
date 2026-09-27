@@ -872,7 +872,7 @@ func TestExecution_CloseAndRecoveryRemainCompatible(t *testing.T) {
 
 	t.Run("recovery closes an authorized start once", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "actions.db")
-		store, err := actionsqlite.Open(path)
+		store, err := actionsqlite.OpenFor(path, testProfileIdentity)
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -885,7 +885,7 @@ func TestExecution_CloseAndRecoveryRemainCompatible(t *testing.T) {
 		if err := store.Close(); err != nil {
 			t.Fatalf("Close: %v", err)
 		}
-		reopened, err := actionsqlite.Open(path)
+		reopened, err := actionsqlite.OpenFor(path, testProfileIdentity)
 		if err != nil {
 			t.Fatalf("reopen: %v", err)
 		}

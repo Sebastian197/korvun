@@ -201,7 +201,7 @@ func TestV0151B_sister_showEscapesTheRawParameters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("law: %v", err)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestV0151B_P2_1_sister_showEscapesThePurpose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("law: %v", err)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -469,7 +469,7 @@ func sealMarkThroughRecovery(t *testing.T, mc markCase, prune bool) (cfgPath, re
 	}
 	// Instrument: the repaired row must read and cohere again, or a verifier
 	// could fail through its unreadable-row arm instead of the mark.
-	check, err := actionsqlite.Open(dbPath)
+	check, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -738,7 +738,7 @@ func parkedRequestWithID(t *testing.T, actionID string) (cfgPath, dbPath, approv
 	if err != nil {
 		t.Fatalf("law: %v", err)
 	}
-	store, err := actionsqlite.Open(dbPath)
+	store, err := actionsqlite.OpenFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

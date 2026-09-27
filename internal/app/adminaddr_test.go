@@ -19,7 +19,7 @@ func TestAdminAddr_nilSafeStates(t *testing.T) {
 	off := false
 	cfgOff := cfgWith(ollamaBrain())
 	cfgOff.Observability = &config.ObservabilityConfig{Enabled: &off}
-	appOff, err := Build(cfgOff, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	appOff, err := Build(cfgOff, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build (observability off): %v", err)
 	}
@@ -28,7 +28,7 @@ func TestAdminAddr_nilSafeStates(t *testing.T) {
 		t.Fatalf("AdminAddr with observability disabled = %q, want empty", got)
 	}
 
-	appOn, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	appOn, err := Build(cfgWith(ollamaBrain()), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build (observability on): %v", err)
 	}

@@ -79,7 +79,7 @@ func TestMigrationV11_garbageDateFailsClosedNamingRowAndField(t *testing.T) {
 		"sha256:wwww", "sha256:xxxx", 0, "sha256:yyyy", "principal_operator",
 		"rejected", "not-a-date"})
 	before := v10RowBytes(t, path)
-	_, err := Open(path)
+	_, err := openFull(path)
 	if err == nil {
 		t.Fatal("AUDIT R9-W1: garbage bytes must fail the migration closed, never normalize to zero time")
 	}
@@ -103,7 +103,7 @@ func TestMigrationV11_emptyEvidenceFieldFailsClosedNamed(t *testing.T) {
 	seedV10RawRow(t, path, [9]any{"act_zz_empty", "apr_zz_empty00000000000000000001",
 		"sha256:wwww", "sha256:xxxx", 1, "sha256:yyyy", "",
 		"rejected", "2026-09-03T01:02:03Z"})
-	_, err := Open(path)
+	_, err := openFull(path)
 	if err == nil {
 		t.Fatal("AUDIT R9-W1: an empty decision_principal_id must fail the migration closed")
 	}
@@ -124,7 +124,7 @@ func TestMigrationV11_nullDecisionAtIsHonestAbsenceAndMigrates(t *testing.T) {
 	seedV10RawRow(t, path, [9]any{"act_zz_null", "apr_zz_null000000000000000000001",
 		"sha256:wwww", "sha256:xxxx", 1, "sha256:yyyy", "principal_operator",
 		"rejected", nil})
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("absence is not corruption — the migration must pass: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestMigrationV11_repairThenRetryConverges(t *testing.T) {
 	seedV10RawRow(t, path, [9]any{"act_zz_weird", "apr_zz_weird00000000000000000001",
 		"sha256:wwww", "sha256:xxxx", 0, "sha256:yyyy", "principal_operator",
 		"rejected", "not-a-date"})
-	if _, err := Open(path); err == nil {
+	if _, err := openFull(path); err == nil {
 		t.Fatal("precondition: the garbage row must fail the migration first")
 	}
 	db, err := sql.Open("sqlite", buildFileDSN(filepath.ToSlash(path)))
@@ -158,7 +158,7 @@ func TestMigrationV11_repairThenRetryConverges(t *testing.T) {
 		t.Fatalf("repair: %v", err)
 	}
 	_ = db.Close()
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("the retry after repair must converge: %v", err)
 	}

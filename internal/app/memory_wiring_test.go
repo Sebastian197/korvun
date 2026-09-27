@@ -118,7 +118,7 @@ func memoryAgentCfg(t *testing.T, baseURL, sensitivity, scope string) *config.Co
 func bootMemoryApp(t *testing.T, cfg *config.Config) *capturingChannel {
 	t.Helper()
 	ch := newCapturingChannel("telegram")
-	a, err := Build(cfg, withChannelFactory(okFactory(ch)))
+	a, err := Build(cfg, withChannelFactory(okFactory(ch)), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

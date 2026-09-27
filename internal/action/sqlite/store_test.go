@@ -33,9 +33,9 @@ func testEnvelope(id string) action.Envelope {
 func openTemp(t *testing.T) (*Store, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "korvun.db")
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
-		t.Fatalf("Open(%q) failed: %v", path, err)
+		t.Fatalf("openFull(%q) failed: %v", path, err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	return store, path
@@ -53,7 +53,7 @@ func TestOpen_bootstrapsItsOwnLifecycleAndIsIdempotent(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	again, err := Open(path)
+	again, err := openFull(path)
 	if err != nil {
 		t.Fatalf("reopen must be idempotent, got %v", err)
 	}
@@ -68,7 +68,7 @@ func TestOpen_badPathFailsLoud(t *testing.T) {
 	// A path whose parent is a regular FILE cannot host a database: the
 	// boot-fatal posture demands the failure at Open, never at first write.
 	base := filepath.Join(t.TempDir(), "occupied")
-	if store, err := Open(base + "/korvun.db/impossible.db"); err == nil {
+	if store, err := openFull(base + "/korvun.db/impossible.db"); err == nil {
 		_ = store.Close()
 		t.Skip("filesystem allowed the path; the boot-fatal case needs a blocking parent")
 	}
@@ -173,7 +173,7 @@ func TestFinish_terminalsAreDurableAcrossReopen(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	again, err := Open(path)
+	again, err := openFull(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}

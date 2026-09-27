@@ -30,7 +30,7 @@ func kernelWiringConfig(dbPath string) *config.Config {
 
 func TestBuild_storage_bootstrapsTheActionKernelStoreOnTheSharedFile(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "korvun.db")
-	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build with storage: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestBuild_storage_bootstrapsTheActionKernelStoreOnTheSharedFile(t *testing.
 func TestBuild_stateless_keepsTheKernelRecordingOff(t *testing.T) {
 	cfg := kernelWiringConfig("")
 	cfg.Storage = nil
-	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(cfg, withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("stateless Build: %v", err)
 	}

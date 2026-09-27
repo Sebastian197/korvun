@@ -1,0 +1,401 @@
+# v0.16.2 · «¿Qué pasa hoy?» — el ROJO de las tres curas, antes de una línea de producción
+
+Fecha: 2026-09-24. Rama v0162-mockups sobre master (d20dea6).
+Plan: docs/superpowers/specs/2026-09-23-v0162-que-pasa-hoy-pretest.md, segunda
+versión, tras un veto interno con 3 P1, 5 P2, 7 P3.
+
+Los tres rojos son de COMPILACIÓN, y eso es exactamente lo que el plan
+predijo: los símbolos que la pantalla necesita NO EXISTEN en el árbol. El
+adversario lo capturó antes — brainCanPark cortocircuita en la tercera
+condición y devuelve un bool, y ApprovalGate lleva cuatro números y ningún
+motivo — así que no hay forma de pintar la maqueta aprobada sin ampliarlo.
+
+## Cura 1 · el núcleo publica el motivo
+
+```
+$ go test ./internal/app/ -run "TestGate_"
+# github.com/Sebastian197/korvun/internal/app [github.com/Sebastian197/korvun/internal/app.test]
+internal/app/whats_happening_gate_test.go:38:87: undefined: controlapi.ParkCondition
+internal/app/whats_happening_gate_test.go:40:25: gate.Blocked undefined (type controlapi.ApprovalGate has no field or method Blocked)
+internal/app/whats_happening_gate_test.go:48:36: undefined: controlapi.ParkCondition
+internal/app/whats_happening_gate_test.go:69:19: undefined: controlapi.ParkCondition
+internal/app/whats_happening_gate_test.go:73:17: undefined: controlapi.ParkNeedsStore
+internal/app/whats_happening_gate_test.go:76:17: undefined: controlapi.ParkNeedsAgent
+internal/app/whats_happening_gate_test.go:79:17: undefined: controlapi.ParkNeedsCeiling
+internal/app/whats_happening_gate_test.go:83:17: undefined: controlapi.ParkNeedsParkableTool
+internal/app/whats_happening_gate_test.go:86:17: undefined: controlapi.ParkGovernanceDenies
+internal/app/whats_happening_gate_test.go:94:17: undefined: controlapi.ParkToolShadowed
+internal/app/whats_happening_gate_test.go:94:17: too many errors
+FAIL	github.com/Sebastian197/korvun/internal/app [build failed]
+```
+
+## Cura 2 · la acción, por la Control API
+
+```
+$ go test ./internal/controlapi/ -run "TestAction_"
+# github.com/Sebastian197/korvun/internal/controlapi_test [github.com/Sebastian197/korvun/internal/controlapi.test]
+internal/controlapi/whats_happening_action_test.go:71:13: undefined: controlapi.RegisterWhatsHappening
+internal/controlapi/whats_happening_action_test.go:79:61: undefined: jsonBody
+internal/controlapi/whats_happening_action_test.go:107:21: undefined: controlapi.WhatsHappeningOutcome
+internal/controlapi/whats_happening_action_test.go:113:31: undefined: controlapi.OutcomeNotApplied
+internal/controlapi/whats_happening_action_test.go:114:61: undefined: controlapi.OutcomeNotApplied
+internal/controlapi/whats_happening_action_test.go:136:21: undefined: controlapi.WhatsHappeningOutcome
+internal/controlapi/whats_happening_action_test.go:145:31: undefined: controlapi.OutcomeAppliedNotSaved
+internal/controlapi/whats_happening_action_test.go:147:28: undefined: controlapi.OutcomeAppliedNotSaved
+internal/controlapi/whats_happening_action_test.go:166:21: undefined: controlapi.WhatsHappeningOutcome
+internal/controlapi/whats_happening_action_test.go:168:31: undefined: controlapi.OutcomeAnotherChangeInFlight
+internal/controlapi/whats_happening_action_test.go:168:31: too many errors
+FAIL	github.com/Sebastian197/korvun/internal/controlapi [build failed]
+```
+
+## Cura 3 · el indicador
+
+```
+$ npx vitest run src/components/HealthzBadge.test.tsx
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/components/HealthzBadge.test.tsx > HealthzBadge > shows the hour of the last answer and the measured round trip
+ FAIL  src/components/HealthzBadge.test.tsx > HealthzBadge > keeps the last good hour when the core stops answering
+ FAIL  src/components/HealthzBadge.test.tsx > HealthzBadge > does not claim to be live while the poll is wedged
+TypeError: resetCoreForTests is not a function
+      Tests  3 failed (3)
+```
+
+# ============================================================================
+# 2026-09-24 · CIERRE DEL §0 — el almacén desde la pantalla y el acto que cierra tras un cutover REAL
+# Plan: docs/superpowers/specs/2026-09-24-v0162-el-almacen-y-el-cierre-del-acto-pretest.md
+# Seis rojos, antes de una línea de producción. Cuatro son de COMPILACIÓN (los símbolos
+# no existen); el de shell y el de la pantalla son de COMPORTAMIENTO sobre el árbol tal cual.
+
+## supervisor — WithStateObserver no existe
+```
+$ go test ./internal/supervisor/ -run StateObserver
+# github.com/Sebastian197/korvun/internal/supervisor_test [github.com/Sebastian197/korvun/internal/supervisor.test]
+internal/supervisor/state_observer_test.go:82:14: undefined: supervisor.WithStateObserver
+internal/supervisor/state_observer_test.go:137:15: undefined: supervisor.WithStateObserver
+internal/supervisor/state_observer_test.go:164:15: undefined: supervisor.WithStateObserver
+FAIL	github.com/Sebastian197/korvun/internal/supervisor [build failed]
+FAIL
+```
+
+## sqlite — RecoverPreviousLife no admite keep
+```
+$ go test ./internal/action/sqlite/ -run RecoverPreviousLife_keep
+# github.com/Sebastian197/korvun/internal/action/sqlite [github.com/Sebastian197/korvun/internal/action/sqlite.test]
+internal/action/sqlite/recovery_keep_test.go:49:46: too many arguments in call to store.RecoverPreviousLife
+	have (context.Context, string)
+	want (context.Context)
+internal/action/sqlite/recovery_keep_test.go:93:46: too many arguments in call to store.RecoverPreviousLife
+	have (context.Context, string)
+	want (context.Context)
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite [build failed]
+FAIL
+```
+
+## controlapi — ErrNoLedger, la puerta enable-storage, la aritmética 16/6/10/5
+```
+$ go test ./internal/controlapi/ -run "Bootstrap|Ledgerless|Contract_theHeader"
+# github.com/Sebastian197/korvun/internal/controlapi [github.com/Sebastian197/korvun/internal/controlapi.test]
+internal/controlapi/mutation_ledgerless_test.go:31:18: undefined: ErrNoLedger
+FAIL	github.com/Sebastian197/korvun/internal/controlapi [build failed]
+FAIL
+```
+
+## app — el registro, el recorder sin libro, CreateLedger
+```
+$ go test ./internal/app/ -run "Registry|Ledgerless|CreateLedger|TestBuild_recovery|TestMount_"
+# github.com/Sebastian197/korvun/internal/app [github.com/Sebastian197/korvun/internal/app.test]
+internal/app/config_act_registry_test.go:109:38: undefined: ConfigActRegistry
+internal/app/config_act_registry_test.go:119:78: too many arguments in call to newConfigActRecorder
+	have (*"github.com/Sebastian197/korvun/internal/action/sqlite".Store, *identity.Resolver, *identity.Issuer, func(err error), unknown type, string)
+	want (*"github.com/Sebastian197/korvun/internal/action/sqlite".Store, *identity.Resolver, *identity.Issuer, func(error))
+internal/app/config_act_registry_test.go:153:9: undefined: NewConfigActRegistry
+internal/app/config_act_registry_test.go:180:2: undefined: actLedger
+internal/app/config_act_registry_test.go:200:9: undefined: NewConfigActRegistry
+internal/app/config_act_registry_test.go:210:9: undefined: newConfigActRecorderOver
+internal/app/config_act_registry_test.go:261:9: undefined: NewConfigActRegistry
+internal/app/config_act_registry_test.go:301:9: undefined: NewConfigActRegistry
+internal/app/config_act_registry_test.go:334:9: undefined: NewConfigActRegistry
+internal/app/config_act_registry_test.go:504:33: undefined: actLedger
+internal/app/config_act_registry_test.go:334:9: too many errors
+```
+
+## shell — el cutover REAL: OUTCOME_UNKNOWN donde debía decir SUCCEEDED/FAILED, y 404 en la puerta
+```
+$ go test ./internal/shell/ -run "TestReload_pristinePersistAndAddrRotation|TestProxy_reloadCutover_pollNeverSeesPhantomFailure|TestReload_reprovisionsKeychainSecret|TestBootstrap_|TestReload_aRolledBackCutoverClosesTheActAsFailed|TestReload_theActClosesEvenIfNobodyPolls"
+--- FAIL: TestBootstrap_aRolledBackCutoverClosesTheFoundingActAsFailed (0.01s)
+    bootstrap_test.go:215: enable-storage = 404 {Outcome: Handle: Detail: Act:{ActionID: ReceiptID:}}, want 200 applying/not_applied
+--- FAIL: TestBootstrap_anUnwritableProfileDirCreatesNoLedger (0.00s)
+    bootstrap_test.go:288: enable-storage over an unwritable dir = 404 {Outcome: Handle: Detail: Act:{ActionID: ReceiptID:}}, want 503 ledger_not_created
+--- FAIL: TestBootstrap_aLedgerAlreadyThereIsNeverAdopted (0.00s)
+    bootstrap_test.go:327: enable-storage over a foreign file = 404 {Outcome: Handle: Detail: Act:{ActionID: ReceiptID:}}, want 409 ledger_exists
+--- FAIL: TestReload_aRolledBackCutoverClosesTheActAsFailed (0.07s)
+    bootstrap_test.go:412: the act of a rolled-back cutover is "OUTCOME_UNKNOWN" with receipts [{ReceiptID:rcpt_21a52737482807c72320ceef9eba11fe … Outcome:OUTCOME_UNKNOWN …}], want FAILED with one receipt
+--- FAIL: TestReload_theActClosesEvenIfNobodyPolls (0.07s)
+    bootstrap_test.go:448: with nobody polling, the act is "OUTCOME_UNKNOWN" with receipts [{ReceiptID:rcpt_5f6fb3133ea3c6132c30fbe95cc747a1 … Outcome:OUTCOME_UNKNOWN …}], want SUCCEEDED with its receipt
+--- FAIL: TestReload_pristinePersistAndAddrRotation (0.10s)
+    controller_test.go:589: the status door on the new app answered map[state:succeeded], want action "act_ff962eeea9bac04c2830542fa271dda9" with its receipt
+--- FAIL: TestProxy_reloadCutover_pollNeverSeesPhantomFailure (0.12s)
+    reload_cutover_test.go:130: round 1: act act_a035209f26da1ad88a43a92c3badd98e ended "OUTCOME_UNKNOWN", want SUCCEEDED
+--- FAIL: TestReload_reprovisionsKeychainSecret (0.00s)
+    secrets_reload_test.go:129: enable-storage = 404 {Outcome: Handle: Detail: Act:{ActionID: ReceiptID:}}, want 200
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/shell	1.065s
+FAIL
+```
+
+## pantalla — el botón «Activar almacén» no existe
+```
+$ npx vitest run src/views/WhatsHappening.test.tsx
+     × offers «Activar almacén» on the store row and founds the ledger 1013ms
+     × names a ledger already there, and one that could not be created 1003ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/WhatsHappening.test.tsx > WhatsHappening > offers «Activar almacén» on the store row and founds the ledger
+TestingLibraryElementError: Unable to find role="button" and name "Activar almacén"
+ FAIL  src/views/WhatsHappening.test.tsx > WhatsHappening > names a ledger already there, and one that could not be created
+TestingLibraryElementError: Unable to find role="button" and name "Activar almacén"
+      Tests  2 failed | 17 passed (19)
+```
+
+# ============================================================================
+# 2026-09-24 · EL MARCADOR DURABLE «libro fundado por este perfil» — el ROJO, antes de una línea de producción
+# Plan: docs/superpowers/specs/2026-09-24-v0162-el-libro-fundado-por-este-perfil-pretest.md (con su delta §6)
+# Cinco paquetes de Go en rojo de COMPILACIÓN (los símbolos no existen) y la pantalla en rojo de comportamiento.
+
+## internal/action/sqlite
+```
+$ go test ./internal/action/sqlite/ -count=1
+internal/action/sqlite/profile_standing_test.go:56:18: store.FinishFounding undefined (type *Store has no field or method FinishFounding)
+internal/action/sqlite/profile_standing_test.go:107:18: store.SetProfileIdentity undefined (type *Store has no field or method SetProfileIdentity)
+internal/action/sqlite/profile_standing_test.go:110:29: store.Standing undefined (type *Store has no field or method Standing)
+internal/action/sqlite/profile_standing_test.go:110:81: undefined: LedgerStandingOK
+internal/action/sqlite/profile_standing_test.go:121:19: second.FinishFounding undefined (type *Store has no field or method FinishFounding)
+internal/action/sqlite/profile_standing_test.go:124:19: second.SetProfileIdentity undefined (type *Store has no field or method SetProfileIdentity)
+internal/action/sqlite/profile_standing_test.go:127:26: second.Standing undefined (type *Store has no field or method Standing)
+internal/action/sqlite/profile_standing_test.go:127:78: undefined: LedgerStandingOK
+```
+
+## internal/controlapi
+```
+$ go test ./internal/controlapi/ -count=1
+internal/controlapi/mutation_ledgerless_test.go:61:18: undefined: ErrLedgerForeign
+FAIL	github.com/Sebastian197/korvun/internal/controlapi [build failed]
+FAIL
+```
+
+## internal/app
+```
+$ go test ./internal/app/ -count=1
+internal/app/profile_standing_test.go:58:10: undefined: ProfileIdentity
+internal/app/profile_standing_test.go:63:13: undefined: ProfileIdentity
+internal/app/profile_standing_test.go:72:13: undefined: ProfileIdentity
+internal/app/profile_standing_test.go:80:5: undefined: ProfileIdentity
+internal/app/profile_standing_test.go:83:5: undefined: ProfileIdentity
+internal/app/profile_standing_test.go:100:18: store.FinishFounding undefined (type *"github.com/Sebastian197/korvun/internal/action/sqlite".Store has no field or method FinishFounding)
+internal/app/profile_standing_test.go:130:66: undefined: ProfileIdentity
+internal/app/profile_standing_test.go:136:27: undefined: WithProfilePath
+```
+
+## internal/cli
+```
+$ go test ./internal/cli/ -count=1
+internal/cli/ledger_standing_test.go:45:18: store.FinishFounding undefined (type *"github.com/Sebastian197/korvun/internal/action/sqlite".Store has no field or method FinishFounding)
+internal/cli/ledger_standing_test.go:80:41: undefined: app.ProfileIdentity
+internal/cli/ledger_standing_test.go:90:35: undefined: app.ProfileIdentity
+internal/cli/ledger_standing_test.go:102:41: undefined: app.ProfileIdentity
+internal/cli/ledger_standing_test.go:130:41: undefined: app.ProfileIdentity
+FAIL	github.com/Sebastian197/korvun/internal/cli [build failed]
+FAIL
+```
+
+## internal/shell
+```
+$ go test ./internal/shell/ -count=1
+internal/shell/ledger_standing_test.go:66:62: undefined: app.ProfileIdentity
+internal/shell/ledger_standing_test.go:67:108: undefined: app.ProfileIdentity
+FAIL	github.com/Sebastian197/korvun/internal/shell [build failed]
+FAIL
+```
+
+## pantalla — la fila del libro ajeno, la caption legacy y la frase del rechazo
+```
+$ npx vitest run src/views/WhatsHappening.test.tsx
+     × offers «Adoptar libro» when the ledger belongs to another profile
+     × names a ledger older than this version as legacy, without a button
+     × names the foreign ledger when another button is refused
+      Tests  3 failed | 20 passed (23)
+```
+# github.com/Sebastian197/korvun/internal/action/sqlite [github.com/Sebastian197/korvun/internal/action/sqlite.test]
+internal/action/sqlite/ledger_identity_test.go:22:2: "path/filepath" imported and not used
+internal/action/sqlite/ledger_identity_test.go:383:72: undefined: LedgerStandingLegacy
+internal/action/sqlite/ledger_identity_test.go:519:89: undefined: LedgerStandingLegacy
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite [build failed]
+FAIL
+# github.com/Sebastian197/korvun/internal/action/sqlite [github.com/Sebastian197/korvun/internal/action/sqlite.test]
+internal/action/sqlite/ledger_identity_test.go:22:2: "path/filepath" imported and not used
+internal/action/sqlite/ledger_identity_test.go:383:72: undefined: LedgerStandingLegacy
+internal/action/sqlite/ledger_identity_test.go:519:89: undefined: LedgerStandingLegacy
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite [build failed]
+FAIL
+# github.com/Sebastian197/korvun/internal/action/sqlite [github.com/Sebastian197/korvun/internal/action/sqlite.test]
+internal/action/sqlite/ledger_identity_test.go:22:2: "path/filepath" imported and not used
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite [build failed]
+FAIL
+--- FAIL: TestIdentity_aMissingRowWithAMarkedReceiptIsUnreadable (0.04s)
+    ledger_identity_test.go:93: raw "DELETE FROM ledger_identity": SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestAdopt_readsTheIdentityInsideItsOwnTransaction (0.08s)
+    --- FAIL: TestAdopt_readsTheIdentityInsideItsOwnTransaction/the_row_vanished_after_the_look (0.04s)
+        ledger_identity_test.go:139: raw "DELETE FROM ledger_identity": SQL logic error: no such table: ledger_identity (1)
+    --- FAIL: TestAdopt_readsTheIdentityInsideItsOwnTransaction/the_row_changed_hands_after_the_look (0.04s)
+        ledger_identity_test.go:161: raw "UPDATE ledger_identity SET owner_digest = ?": SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestStanding_followsTheRowNotTheReceipt (0.04s)
+    ledger_identity_test.go:210: raw "UPDATE ledger_identity SET owner_digest = ?": SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestAdopt_twoAdoptionsSerialize (0.04s)
+    ledger_identity_test.go:250: raw update: SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestWriteTx_busyIsNamed (0.04s)
+    ledger_identity_test.go:288: raw touch: SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestMigrate_identityRowFromTheReceiptMark (0.12s)
+    --- FAIL: TestMigrate_identityRowFromTheReceiptMark/a_canonical_mark_becomes_the_row (0.04s)
+        ledger_identity_test.go:315: raw "DROP TABLE ledger_identity": SQL logic error: no such table: ledger_identity (1)
+    --- FAIL: TestMigrate_identityRowFromTheReceiptMark/a_junk_mark_becomes_no_row_and_is_named (0.04s)
+        ledger_identity_test.go:330: raw "DROP TABLE ledger_identity": SQL logic error: no such table: ledger_identity (1)
+    --- FAIL: TestMigrate_identityRowFromTheReceiptMark/two_marked_receipts:_the_last_one_is_the_row (0.04s)
+        ledger_identity_test.go:360: raw "DROP TABLE ledger_identity": SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestGuard_livesInTheConnectionNotInTheFile (0.04s)
+    ledger_identity_test.go:410: B has 0 guard triggers (<nil>), want 12 (7 INSERT on the act tables, 2 UPDATE on intents/grants, 3 INSERT on the identity tables)
+--- FAIL: TestGuard_anUnguardedDoorDiesAnyway (0.04s)
+    ledger_identity_test.go:455: spelling 0 on B = <nil>, want ErrLedgerForeignProfile
+--- FAIL: TestOpen_aForeignLedgerGetsNoMaintenance (0.04s)
+    ledger_identity_test.go:480: recovery on a foreign ledger = <nil>, want ErrLedgerForeignProfile
+--- FAIL: TestFounding_receiptAndRowAreOneTransaction (0.04s)
+    ledger_identity_test.go:506: founding through the seam = <nil>, want the seam's error
+--- FAIL: TestOpeners_everyExportedOpenerTakesAnIdentity (0.01s)
+    ledger_identity_test.go:566: openers outside the contract:
+          ledger_identity.go: OpenFor
+          ledger_identity.go: OpenOperatorFor
+          ledger_identity.go: OpenReadOnlyFor
+          profile_standing.go: SetProfileIdentity (a handle serves the profile it was opened for)
+          store.go: Open
+          store.go: OpenOperator
+          store.go: OpenReadOnly
+--- FAIL: TestGuard_survivesAPoolReconnect (0.06s)
+    ledger_identity_test.go:585: after the reconnect B has 0 guard triggers (<nil>), want 12
+--- FAIL: TestGuard_anEmptyGuardTableFailsClosed (0.04s)
+    ledger_identity_test.go:598: empty the guard: SQL logic error: no such table: temp.profile_guard (1)
+--- FAIL: TestWriteTx_theIdentityIsReadInsideTheImmediateTransaction (0.04s)
+    ledger_identity_test.go:621: raw update: SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestGuard_aDoorOutsideWriteTxSeesTheLastJudgedStanding (0.04s)
+    ledger_identity_test.go:656: raw "UPDATE ledger_identity SET owner_digest = ?": SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestGuard_theErrorIsNamedByTheStanding (0.11s)
+    --- FAIL: TestGuard_theErrorIsNamedByTheStanding/foreign (0.04s)
+        ledger_identity_test.go:679: raw "UPDATE ledger_identity SET owner_digest = ?": SQL logic error: no such table: ledger_identity (1)
+    --- FAIL: TestGuard_theErrorIsNamedByTheStanding/unreadable (0.04s)
+        ledger_identity_test.go:687: raw "DELETE FROM ledger_identity": SQL logic error: no such table: ledger_identity (1)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	3.829s
+FAIL
+--- FAIL: TestApprovals_aForeignOrUnreadableLedgerIsNamed (0.00s)
+    --- FAIL: TestApprovals_aForeignOrUnreadableLedgerIsNamed/foreign (0.00s)
+        approvals_ledger_test.go:36: approve over a foreign ledger: status 500, want 409
+    --- FAIL: TestApprovals_aForeignOrUnreadableLedgerIsNamed/unreadable (0.00s)
+        approvals_ledger_test.go:36: approve over a unreadable ledger: status 500, want 503
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/controlapi	0.455s
+FAIL
+--- FAIL: TestLedgerCheck_theRowIsTheStateAndTheReceiptIsTheEvidence (0.06s)
+    ledger_identity_test.go:42: hand edit: SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestLedgerCheck_namesAMalformedReceiptMarkAfterTheMigration (0.05s)
+    ledger_identity_test.go:71: DROP TABLE ledger_identity: SQL logic error: no such table: ledger_identity (1)
+--- FAIL: TestLedgerCheck_namesEveryStandingFromTheRow (0.12s)
+    ledger_identity_test.go:149: [receipt verify]: "", want "legacy_unfounded"
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.869s
+FAIL
+2026/09/24 17:07:45 INFO model wired brain=default provider=ollama model_id=llama3.2 locality=local
+2026/09/24 17:07:45 INFO admin server listening addr=127.0.0.1:50203
+2026/09/24 17:07:45 INFO channel started channel=telegram
+2026/09/24 17:07:45 INFO korvun is serving; send your bot a message
+--- FAIL: TestMount_anUnreadableIdentityRefusesAdoption (0.10s)
+    --- FAIL: TestMount_anUnreadableIdentityRefusesAdoption/deleted_before_the_app_looked (0.05s)
+        profile_standing_test.go:344: tamper: SQL logic error: no such table: ledger_identity (1)
+    --- FAIL: TestMount_anUnreadableIdentityRefusesAdoption/deleted_after_the_app_looked (0.05s)
+        profile_standing_test.go:344: tamper: SQL logic error: no such table: ledger_identity (1)
+2026/09/24 17:07:45 INFO model wired brain=default provider=ollama model_id=llama3.2 locality=local
+2026/09/24 17:07:45 INFO admin server listening addr=127.0.0.1:50205
+2026/09/24 17:07:45 INFO channel started channel=telegram
+2026/09/24 17:07:45 INFO korvun is serving; send your bot a message
+--- FAIL: TestMount_theApprovalDoorsNameAForeignLedger (0.05s)
+    profile_standing_test.go:516: approve over a foreign ledger = 404 map[error:not_found message:no approval request with that id], want 409 ledger_foreign_profile
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/app	0.747s
+FAIL
+--- FAIL: TestCLI_identityRegistrationIsRefusedOnAForeignLedger (0.06s)
+    ledger_identity_test.go:119: principals 0 → 3: a foreign profile registered its principal before the refusal
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	0.638s
+FAIL
+
+## Tren C — el rojo de los moldes C01–C13 (2026-09-25), antes de la cura
+$ go test ./internal/action/sqlite/ -count=1 -race -run "TestGuard_theHookFailsClosedOnEveryCorruptShape|TestGuard_theHookOpensTheTwoBenignStates|TestGuard_theHookNamesAForgottenHandle|TestPrune_judgesAndDeletesInOneImmediateTransaction|TestOpeners_refuseAMalformedIdentityByName|TestReadOnly_aForeignLedgerIsReadAndNeverWritten|TestOpen_aForeignLedgerFromANewerSchemaIsNotMigrated|TestGuard_theErrorIsNamedByTheStanding" -v
+    ledger_hook_test.go:106: guard row after the reconnect = "ok", want "ledger_unreadable" (the hook read corruption as absence)
+    ledger_hook_test.go:106: guard row after the reconnect = "ok", want "ledger_unreadable" (the hook read corruption as absence)
+    ledger_hook_test.go:106: guard row after the reconnect = "ok", want "ledger_unreadable" (the hook read corruption as absence)
+    ledger_hook_test.go:106: guard row after the reconnect = "ok", want "ledger_unreadable" (the hook read corruption as absence)
+--- FAIL: TestGuard_theHookFailsClosedOnEveryCorruptShape (17.08s)
+    --- FAIL: TestGuard_theHookFailsClosedOnEveryCorruptShape/A1_receipts_dropped_and_no_identity_row (6.48s)
+    --- FAIL: TestGuard_theHookFailsClosedOnEveryCorruptShape/A2_identity_and_schema_tables_dropped (3.08s)
+    --- FAIL: TestGuard_theHookFailsClosedOnEveryCorruptShape/A3_schema_version_not_numeric (5.30s)
+    --- FAIL: TestGuard_theHookFailsClosedOnEveryCorruptShape/A4_two_schema_rows (2.23s)
+--- PASS: TestGuard_theHookOpensTheTwoBenignStates (2.07s)
+--- PASS: TestGuard_theHookNamesAForgottenHandle (0.00s)
+    ledger_hook_test.go:231: B's adoption landed (<nil>) between the prune's judgement and its DELETE
+    ledger_hook_test.go:251: B's adoption never landed after the prune
+--- FAIL: TestPrune_judgesAndDeletesInOneImmediateTransaction (11.12s)
+--- PASS: TestOpeners_refuseAMalformedIdentityByName (0.74s)
+--- PASS: TestReadOnly_aForeignLedgerIsReadAndNeverWritten (0.79s)
+--- PASS: TestOpen_aForeignLedgerFromANewerSchemaIsNotMigrated (0.88s)
+--- PASS: TestGuard_theErrorIsNamedByTheStanding (4.53s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	38.512s
+FAIL
+
+## Tren D — el rojo de los moldes D01–D08 (2026-09-25), antes de la cura
+$ go test ./internal/action/sqlite/ -count=1 -race -run "TestShape_|TestOpen_anAdoptionBetweenTheJudgementAndThePruneIsNotBootFatal|TestGuard_theHookNamesAForgottenHandle|TestOpen_aForeignLedgerFromANewerSchemaIsNotMigrated" -v
+    ledger_hook_test.go:286: the hook on a forgotten handle = action/sqlite: connection guard: unknown handle "g99509-1", want ErrGuardHandleUnknown
+--- FAIL: TestGuard_theHookNamesAForgottenHandle (0.00s)
+    ledger_hook_test.go:458: OpenFor on a foreign v17 ledger = action/sqlite: store "/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestOpen_aForeignLedgerFromANewerSchemaIsNotMigrated4023055946/001/identity.db" is at schema v17, this binary writes v16 — a ledger another profile owns is not migrated by this profile, want ErrSchemaFromTheFuture
+--- FAIL: TestOpen_aForeignLedgerFromANewerSchemaIsNotMigrated (0.85s)
+    ledger_shape_test.go:74: the hook judged the shared file "ledger_unreadable", want ok (fresh for the action store)
+--- FAIL: TestShape_theSharedFileIsFreshForTheActionStore (0.02s)
+--- PASS: TestShape_theTableListIsTheFreshStores (0.68s)
+    ledger_shape_test.go:157: OpenOperatorFor: Standing = "ok" <nil>, want unreadable naming actions
+    ledger_shape_test.go:153: OpenOperatorFor: guard row = "ok" (<nil>), want unreadable
+    ledger_shape_test.go:157: OpenOperatorFor: Standing = "ok" <nil>, want unreadable naming receipts
+    ledger_shape_test.go:153: OpenOperatorFor: guard row = "ok" (<nil>), want unreadable
+    ledger_shape_test.go:153: OpenOperatorFor: guard row = "ok" (<nil>), want unreadable
+    ledger_shape_test.go:149: OpenOperatorFor on a ledger without intents: action/sqlite: connection guard: SQL logic error: no such table: main.intents (1), want an open with the guard unreadable
+    ledger_shape_test.go:149: OpenOperatorFor on a ledger without action_schema: action/sqlite: file_not_fresh: the file has no schema and is not empty: "/var/folders/kp/hxg_0hmn4qv1bkyk_rqxj1vh0000gn/T/TestShape_aBadShapeOpensUnreadableAndIsNeverRepairedaction_sche1761512800/001/identity.db" has 56 objects and 1 free pages and no action_schema, want an open with the guard unreadable
+--- FAIL: TestShape_aBadShapeOpensUnreadableAndIsNeverRepaired (6.04s)
+    --- FAIL: TestShape_aBadShapeOpensUnreadableAndIsNeverRepaired/actions (0.86s)
+    --- FAIL: TestShape_aBadShapeOpensUnreadableAndIsNeverRepaired/action_decisions (0.88s)
+    --- FAIL: TestShape_aBadShapeOpensUnreadableAndIsNeverRepaired/receipts (0.91s)
+    --- FAIL: TestShape_aBadShapeOpensUnreadableAndIsNeverRepaired/approval_tombstones (0.87s)
+    --- FAIL: TestShape_aBadShapeOpensUnreadableAndIsNeverRepaired/authorization_snapshots (0.88s)
+    --- FAIL: TestShape_aBadShapeOpensUnreadableAndIsNeverRepaired/intents (0.86s)
+    --- FAIL: TestShape_aBadShapeOpensUnreadableAndIsNeverRepaired/action_schema (0.78s)
+    ledger_shape_test.go:214: holder "BEGIN IMMEDIATE": database is locked (5) (SQLITE_BUSY)
+--- FAIL: TestShape_aTransientErrorAtBirthIsNotAVerdict (0.77s)
+    ledger_shape_test.go:252: a write on a connection whose hook failed = <nil>, want the injected error
+--- FAIL: TestShape_theHookRefusesTheConnectionOnAQueryError (0.85s)
+    ledger_shape_test.go:298: the open never reached its seam
+--- FAIL: TestOpen_anAdoptionBetweenTheJudgementAndThePruneIsNotBootFatal (0.95s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/action/sqlite	10.895s
+FAIL
+$ go test ./internal/cli/ -count=1 -race -run "TestLedgerBinary_aBadShapeIsNamedAndNeverRepaired" -v
+    ledger_binary_test.go:65: `ledger check` on a ledger without actions did not name it:
+        ledger standing: legacy_unfounded
+        ledger main: FAIL at receipt rcpt_ee4626fbf1ef6071e54f64a88df74be4 (seq 0): custody_mismatch: the presence of the action row for "act_425d1958c985fff86141d5de1da40a83" cannot be established: action/sqlite: presence of "act_425d1958c985fff86141d5de1da40a83": SQL logic error: no such table: ac
+--- FAIL: TestLedgerBinary_aBadShapeIsNamedAndNeverRepaired (8.24s)
+FAIL
+FAIL	github.com/Sebastian197/korvun/internal/cli	8.983s
+FAIL

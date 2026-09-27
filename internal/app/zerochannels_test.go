@@ -56,6 +56,7 @@ func TestRun_zeroChannels_everythingElseAlive(t *testing.T) {
 	a, err := Build(cfg,
 		WithLogger(slog.New(slog.NewTextHandler(logs, nil))),
 		WithReloader(stubReloader{}),
+		withTestProfile(),
 	)
 	if err != nil {
 		t.Fatalf("Build with zero channels: %v", err)

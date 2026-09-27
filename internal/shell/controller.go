@@ -203,6 +203,14 @@ func (c *Controller) Start(ctx context.Context) error {
 	var sup *supervisor.Supervisor
 	started := make(chan struct{})
 	var once sync.Once
+	// The operator acts' registry lives for the CYCLE, not for one app: the
+	// supervisor shuts down the app that asked for a cutover before the
+	// cutover ends, so the act's memory and its close must outlive it. Every
+	// Build of this cycle gets it, and the supervisor reports every reload
+	// state to it (v0.16.2, evidence/v0.16.2/probe-real-cutover.txt).
+	acts := app.NewConfigActRegistry(func(err error) {
+		c.logger.Warn("config act", "error", err.Error())
+	})
 	// bearerEnv is the per-cycle bearer variable name, captured for the seams
 	// so their reload provisioning excludes it (the initial provisioning above
 	// used c.cfg's Admin block). It is stable for the whole cycle.
@@ -232,7 +240,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		if err := reprovision(cfg); err != nil {
 			return nil, err
 		}
-		a, err := app.Build(withEphemeralAdmin(cfg), c.appOptions(sup)...)
+		a, err := app.Build(withEphemeralAdmin(cfg), c.appOptions(sup, acts)...)
 		if err != nil {
 			return nil, err
 		}
@@ -246,7 +254,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		if err := reprovision(cfg); err != nil {
 			return err
 		}
-		return app.Preflight(withEphemeralAdmin(cfg), c.appOptions(sup)...)
+		return app.Preflight(withEphemeralAdmin(cfg), c.appOptions(sup, acts)...)
 	}
 	path := c.path
 	persist := func(cfg *config.Config) error {
@@ -263,6 +271,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		supervisor.WithPersist(persist),
 		supervisor.WithLogger(c.logger),
 		supervisor.WithSignalChan(sigCh),
+		supervisor.WithStateObserver(acts.ObserveReload),
 	)
 
 	runCtx, cancel := context.WithCancel(context.Background())
@@ -379,9 +388,13 @@ func (c *Controller) reapLocked() {
 
 // appOptions assembles the options every app.Build/app.Preflight call in the
 // build seam uses: the shell's logger, the reload supervisor (the builder's
-// mount precondition, ADR-0035 §1), and any embedder extras.
-func (c *Controller) appOptions(sup *supervisor.Supervisor) []app.Option {
-	opts := []app.Option{app.WithLogger(c.logger), app.WithReloader(sup)}
+// mount precondition, ADR-0035 §1), the cycle's operator-act registry, and
+// any embedder extras.
+func (c *Controller) appOptions(sup *supervisor.Supervisor, acts *app.ConfigActRegistry) []app.Option {
+	opts := []app.Option{app.WithLogger(c.logger), app.WithReloader(sup), app.WithConfigActRegistry(acts),
+		// The profile FILE this cycle boots: the ledger is judged and marked
+		// for it (the durable mark). c.path is fixed for the whole cycle.
+		app.WithProfilePath(c.path)}
 	return append(opts, c.buildOpts...)
 }
 

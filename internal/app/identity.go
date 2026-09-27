@@ -26,6 +26,26 @@ import (
 const (
 	consoleRequesterPrincipal   = "principal_console"
 	consoleResponsiblePrincipal = "principal_console_admin"
+	// controlAPIWorkloadBrain is the workload an OPERATOR ACT resolves under
+	// when the change comes through the Control API rather than through a brain.
+	//
+	// A config change has no target brain — nobody's model asked for it — so the
+	// resolver needs a workload that is the surface itself. This is the same
+	// shape `internal/cli` uses for its own acts, where the synthetic workload
+	// is the brain "cli".
+	//
+	// WHAT HAPPENS IF A PROFILE DECLARES A BRAIN BY THIS NAME, measured rather
+	// than assumed. The first version of this comment claimed `config.Validate`
+	// rejects it; executed, the validator ACCEPTS it — brain names are not
+	// constrained that way. What actually happens is better and is the reason
+	// this name is safe: two workloads with the same brain make
+	// `identity.NewResolver` refuse with `duplicate workload "__control_api__"`,
+	// so the app FAILS TO BOOT by name instead of letting a configured brain
+	// silently take over the operator's acts. Fail-closed, loudly.
+	// `TestIdentity_aBrainNamedLikeTheControlAPIWorkloadFailsTheBoot` holds it.
+	controlAPIWorkloadBrain = "__control_api__"
+	// controlAPIOperatorPrincipal is the workload principal of those acts.
+	controlAPIOperatorPrincipal = "principal_control_api_operator"
 )
 
 // phase1IdentityRegistry derives shared channel principals and fixed brain
@@ -83,6 +103,17 @@ func phase1IdentityRegistry(cfg *config.Config) identity.Registry {
 			Generation:       1, Status: identity.BindingActive,
 		})
 	}
+	// The Control API's own workload, so an operator act that changes the profile
+	// has a principal chain: the console credential in front, the operator
+	// workload behind it, the administrator role responsible.
+	principals[controlAPIOperatorPrincipal] = identity.Principal{
+		ID: controlAPIOperatorPrincipal, Kind: identity.PrincipalWorkload,
+		DisplayName: "Control API operator workload",
+	}
+	registry.Workloads = append(registry.Workloads, identity.Workload{
+		Brain: controlAPIWorkloadBrain, PrincipalID: controlAPIOperatorPrincipal,
+		ResponsiblePrincipalID: consoleResponsiblePrincipal,
+	})
 	for _, configured := range cfg.Brains {
 		principalID := "principal_brain_" + configured.Name
 		principals[principalID] = identity.Principal{

@@ -102,13 +102,13 @@ func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.
 	if d.Rule != a.Reason {
 		return fmt.Errorf("action/sqlite: approval request %q: preview_rule_mismatch: the gate decided by rule %q but the request claims %q", a.ApprovalID, d.Rule, a.Reason)
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return fmt.Errorf("action/sqlite: begin approval request: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	if evidence == nil {
-		if _, err := tx.ExecContext(ctx,
+		if _, err := s.txExec(ctx, tx,
 			`INSERT INTO actions (action_id, schema_version, correlation_id,
 		    source_kind, source_protocol, source_channel,
 		    op_namespace, op_name, op_version,
@@ -132,7 +132,7 @@ func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx,
+		if _, err := s.txExec(ctx, tx,
 			`INSERT INTO actions (action_id,schema_version,correlation_id,
 			 source_kind,source_protocol,source_channel,op_namespace,op_name,op_version,
 			 parameters_digest,effect_class,state,requested_at,principal_id,intent_id,
@@ -152,7 +152,7 @@ func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at, policy_version, policy_digest)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		env.ActionID, d.Outcome, d.Rule, env.RequestedAt.UTC().Format(time.RFC3339Nano),
@@ -160,7 +160,7 @@ func (s *Store) createApprovalPartsWithIdentity(ctx context.Context, env action.
 	); err != nil {
 		return fmt.Errorf("action/sqlite: insert decision %q: %w", env.ActionID, err)
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO approvals (approval_id, schema_version, action_id, action_digest,
 		    preview_digest, canonical_preview, canonical_params,
 		    requested_from, reason, risk_summary, policy_version, policy_digest,
@@ -249,7 +249,7 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	if fault := judgeTombstoneOrigin(approvalID, decision, ident.PrincipalID); fault != nil {
 		return "", fmt.Errorf("action/sqlite: decide approval %q: %w", approvalID, fault)
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return "", fmt.Errorf("action/sqlite: begin decision: %w: %w", ErrApprovalUnreadable, err)
 	}
@@ -341,7 +341,7 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 	} else if decision == action.DecisionCancelled {
 		status = action.ApprovalCancelled
 	}
-	res, err := tx.ExecContext(ctx,
+	res, err := s.txExec(ctx, tx,
 		`UPDATE approvals SET status = ?, decision_principal_id = ?, decision = ?,
 		        decision_at = ?, comment = ?, decision_receipt_id = ?
 		  WHERE approval_id = ? AND status = ?`,
@@ -379,7 +379,7 @@ func (s *Store) decideApprovalWithLaw(ctx context.Context, approvalID, decision 
 			return "", err
 		}
 		// A close without execution purges the raw canonical params.
-		if _, err := tx.ExecContext(ctx,
+		if _, err := s.txExec(ctx, tx,
 			`UPDATE approvals SET canonical_params = '' WHERE approval_id = ?`, approvalID); err != nil {
 			return "", fmt.Errorf("action/sqlite: purge params %q: %w", approvalID, err)
 		}
@@ -414,7 +414,7 @@ func (s *Store) approvalTx(ctx context.Context, tx *sql.Tx, approvalID string) (
 // the return says whether THIS transaction won the transition; a loser
 // mutated nothing and must not receipt anything.
 func (s *Store) closeApprovalTx(ctx context.Context, tx *sql.Tx, a action.Approval, status action.ApprovalStatus, decider, decision string, at time.Time, comment, proofID string) (bool, error) {
-	res, err := tx.ExecContext(ctx,
+	res, err := s.txExec(ctx, tx,
 		`UPDATE approvals SET status = ?, decision_principal_id = ?, decision = ?,
 		        decision_at = ?, comment = ?, decision_receipt_id = ?,
 		        canonical_params = ''
@@ -444,7 +444,7 @@ func (s *Store) rejectParkedActionTx(ctx context.Context, tx *sql.Tx, actionID s
 	if err := transitionTx(ctx, tx, actionID, action.StatePendingApproval, action.StateRejected); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`UPDATE actions SET finished_at = ? WHERE action_id = ?`,
 		at.UTC().Format(time.RFC3339Nano), actionID); err != nil {
 		return fmt.Errorf("action/sqlite: stamp finish %q: %w", actionID, err)
@@ -478,7 +478,7 @@ func (s *Store) tombstoneTx(ctx context.Context, tx *sql.Tx, a action.Approval, 
 	sealed.DecisionPrincipalID = decider
 	sealed.Decision = decision
 	sealed.DecisionAt = at.UTC()
-	_, err := tx.ExecContext(ctx,
+	_, err := s.txExec(ctx, tx,
 		`INSERT INTO approval_tombstones
 		    (approval_id, approval_digest, action_id, action_digest, preview_digest,
 		     policy_version, policy_digest, decision_principal_id, decision, decision_at)
@@ -793,7 +793,7 @@ func (s *Store) SweepExpiredApprovals(ctx context.Context, at time.Time) (swept,
 // only the winner rejects the action, purges params and receipts; a
 // loser rolls back untouched and reports won=false.
 func (s *Store) sweepExpiredOne(ctx context.Context, approvalID string, at time.Time) (bool, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginWrite(ctx)
 	if err != nil {
 		return false, fmt.Errorf("action/sqlite: begin expiry sweep %q: %w: %w", approvalID, ErrApprovalUnreadable, err)
 	}
@@ -822,7 +822,7 @@ func (s *Store) sweepExpiredOne(ctx context.Context, approvalID string, at time.
 // action, terminal SUCCEEDED, receipted — inside the shared
 // transaction, and returns the receipt id (the proof of decision).
 func (s *Store) recordDecisionActTx(ctx context.Context, tx *sql.Tx, env action.Envelope, ident AttemptIdentity, decision string, at time.Time) (string, error) {
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO actions (action_id, schema_version, correlation_id,
 		    source_kind, source_protocol, source_channel,
 		    op_namespace, op_name, op_version,
@@ -839,7 +839,7 @@ func (s *Store) recordDecisionActTx(ctx context.Context, tx *sql.Tx, env action.
 		return "", fmt.Errorf("action/sqlite: record decision act %q: %w", env.ActionID, err)
 	}
 	d := Decision{Outcome: "allow", Rule: "operator"}
-	if _, err := tx.ExecContext(ctx,
+	if _, err := s.txExec(ctx, tx,
 		`INSERT INTO action_decisions (action_id, outcome, rule, decided_at, policy_version, policy_digest)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		env.ActionID, d.Outcome, d.Rule, at.UTC().Format(time.RFC3339Nano),

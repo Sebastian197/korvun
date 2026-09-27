@@ -28,7 +28,7 @@ import (
 func signingHarness(t *testing.T) (*actionsqlite.Store, string) {
 	t.Helper()
 	dir := t.TempDir()
-	store, err := actionsqlite.Open(filepath.Join(dir, "korvun.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(dir, "korvun.db"), testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestEnsureSigningKey_orphanFileKeyIsReRegistered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("boot 1: %v", err)
 	}
-	fresh, err := actionsqlite.Open(filepath.Join(t.TempDir(), "korvun.db"))
+	fresh, err := actionsqlite.OpenFor(filepath.Join(t.TempDir(), "korvun.db"), testProfileIdentity)
 	if err != nil {
 		t.Fatalf("fresh store: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestEnsureSigningKey_orphanFileKeyIsReRegistered(t *testing.T) {
 func TestBuild_generatesTheSigningKeyBesideTheStore(t *testing.T) {
 	dbDir := t.TempDir()
 	dbPath := filepath.Join(dbDir, "korvun.db")
-	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))))
+	app, err := Build(kernelWiringConfig(dbPath), withChannelFactory(okFactory(newFakeChannel("telegram"))), withTestProfile())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}

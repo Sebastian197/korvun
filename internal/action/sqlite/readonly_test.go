@@ -38,7 +38,7 @@ func TestOpenReadOnly_theReviewerScenario_inFlightActionSurvives(t *testing.T) {
 		t.Fatalf("record in-flight: %v", err)
 	}
 	// The READER (verify/check/consultation) opens the SAME live file.
-	reader, err := OpenReadOnly(path)
+	reader, err := openReadOnly(path)
 	if err != nil {
 		t.Fatalf("OpenReadOnly on a live store: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestOpenReadOnly_theConnectionRefusesEveryWrite(t *testing.T) {
 		Decision{Outcome: "deny", Rule: "not_granted"}, action.StateDenied); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	reader, err := OpenReadOnly(path)
+	reader, err := openReadOnly(path)
 	if err != nil {
 		t.Fatalf("OpenReadOnly: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestOpenReadOnly_neverMigratesAnOldProfile(t *testing.T) {
 	// The ceremony precedent, reproduced: a hand-built OLD profile
 	// (v4 — no receipts) must NOT be migrated by a read-only consult.
 	path := buildV4File(t)
-	_, err := OpenReadOnly(path)
+	_, err := openReadOnly(path)
 	if err == nil {
 		t.Fatal("a pre-receipts schema must be refused by the RO door, never migrated")
 	}
@@ -101,7 +101,7 @@ func TestOpenReadOnly_neverMigratesAnOldProfile(t *testing.T) {
 
 func TestOpenReadOnly_missingFileFailsHonest(t *testing.T) {
 	t.Parallel()
-	if _, err := OpenReadOnly(t.TempDir() + "/nope.db"); err == nil {
+	if _, err := openReadOnly(t.TempDir() + "/nope.db"); err == nil {
 		t.Fatal("a missing store must fail honest — the RO door refuses an absent path by name instead of creating it")
 	}
 }
@@ -120,7 +120,7 @@ func TestOpenReadOnly_readSurfacesWork(t *testing.T) {
 		Decision{Outcome: "deny", Rule: "not_granted"}, action.StateDenied); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	reader, err := OpenReadOnly(path)
+	reader, err := openReadOnly(path)
 	if err != nil {
 		t.Fatalf("OpenReadOnly: %v", err)
 	}

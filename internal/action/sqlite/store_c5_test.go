@@ -22,7 +22,7 @@ import (
 func TestRecovery_crashAfterClaimIsOutcomeUnknownNotFailed(t *testing.T) {
 	t.Parallel()
 	path := t.TempDir() + "/korvun.db"
-	store, err := Open(path)
+	store, err := openFull(path)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestRecovery_crashAfterClaimIsOutcomeUnknownNotFailed(t *testing.T) {
 	}
 	_ = store.Close()
 
-	reopened, err := Open(path)
+	reopened, err := openFull(path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}

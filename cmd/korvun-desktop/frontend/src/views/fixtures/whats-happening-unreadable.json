@@ -1,0 +1,142 @@
+{
+  "conditions": {
+    "agent": "agent",
+    "ceiling": "effect_ceiling",
+    "governance_denies": "deny",
+    "store": "store",
+    "tool": "effect_undeclared",
+    "tool_shadowed": "tool_shadowed"
+  },
+  "ledger": {
+    "owner": "action/sqlite: ledger_unreadable: the ledger's identity row cannot be read: action_schema.version cannot be read: SQL logic error: no such column: version (1)",
+    "path": "/perfil/korvun.db",
+    "standing": "unreadable"
+  },
+  "rows": [
+    {
+      "door": "enable-storage",
+      "has_button": true,
+      "label": "Almacén de acciones",
+      "profile_key": "storage.path",
+      "rule": "store",
+      "why": "crea el libro en la carpeta de usuario de Korvun (la misma que storage: {}) y deja en él su primer acto; sin almacén ninguna otra puerta de esta pantalla ni el builder aplican nada"
+    },
+    {
+      "has_button": false,
+      "label": "Cerebro agente",
+      "profile_key": "brains[].agent",
+      "rule": "agent",
+      "why": "dar agencia a un cerebro es una decisión de diseño del perfil, no un botón"
+    },
+    {
+      "door": "enable-approvals",
+      "has_button": true,
+      "label": "Aprobaciones",
+      "profile_key": "approvals.enabled",
+      "rule": "approvals_disabled"
+    },
+    {
+      "has_button": false,
+      "label": "Caducidad de la petición",
+      "profile_key": "approvals.ttl",
+      "rule": "approvals_ttl",
+      "why": "elegir una ventana de caducidad pide pensar, no un clic"
+    },
+    {
+      "door": "set-ceiling",
+      "has_button": true,
+      "label": "Techo de efecto",
+      "profile_key": "brains[].agent.effect_ceiling",
+      "rule": "effect_ceiling"
+    },
+    {
+      "door": "enable-approvals",
+      "has_button": true,
+      "label": "Aprobaciones no disponibles",
+      "profile_key": "approvals.enabled",
+      "rule": "approval_unavailable",
+      "why": "el techo ya alcanza la acción; lo que falta es el circuito de aprobación"
+    },
+    {
+      "has_button": false,
+      "label": "Herramienta denegada",
+      "profile_key": "brains[].agent.governance[].mode",
+      "rule": "deny",
+      "why": "una denegación explícita se levanta mirando el perfil, no tras el texto de confirmación de la sombra"
+    },
+    {
+      "has_button": false,
+      "label": "Herramienta no concedida",
+      "profile_key": "brains[].agent.governance[].mode",
+      "rule": "not_granted",
+      "why": "no hay entrada que levantar: conceder una herramienta que el perfil no concede es una decisión de diseño, no un clic"
+    },
+    {
+      "door": "lift-shadow",
+      "has_button": true,
+      "label": "Herramienta en sombra",
+      "profile_key": "brains[].agent.governance[].mode",
+      "rule": "tool_shadowed"
+    },
+    {
+      "has_button": false,
+      "label": "Restricción por canal",
+      "profile_key": "brains[].agent.governance[].channels",
+      "rule": "channel",
+      "why": "quitar una restricción de canal amplía por dónde entra la herramienta; se hace mirando el perfil entero"
+    },
+    {
+      "after_approval": true,
+      "door": "allow-host",
+      "has_button": true,
+      "label": "Jaula de la herramienta",
+      "profile_key": "brains[].agent.\u003ctool\u003e.allow_hosts · .root",
+      "rule": "cage",
+      "why": "«Añadir host» alcanza las allow-list de webhook_call y http_fetch; read_file.root se cambia en el perfil"
+    },
+    {
+      "has_button": false,
+      "label": "Sensibilidad frente a localidad del modelo",
+      "profile_key": "brains[].sensitivity × models[].locality",
+      "rule": "sensitive_locality",
+      "why": "no es una clave: se deriva de dos, y cambiar cualquiera mueve mucho más que esta herramienta"
+    },
+    {
+      "after_approval": true,
+      "has_button": false,
+      "label": "Escudo de red privada",
+      "profile_key": "se deriva de brains[].sensitivity y del atributo network de la herramienta",
+      "rule": "private_network_shield",
+      "why": "NO tiene clave propia: se arma solo cuando el cerebro es private y la herramienta es de red"
+    },
+    {
+      "has_button": false,
+      "label": "Operación sin clase declarada",
+      "profile_key": "brains[].agent.tools",
+      "rule": "effect_undeclared",
+      "why": "una operación sin descriptor se deniega por construcción; declararla es trabajo de código, no de perfil"
+    },
+    {
+      "has_button": false,
+      "label": "Operación que exige preparación",
+      "profile_key": "brains[].agent.tools",
+      "rule": "prepare_unavailable",
+      "why": "ídem: la preparación la declara la herramienta, no el perfil"
+    },
+    {
+      "has_button": false,
+      "label": "Modo estricto, intención y grant",
+      "profile_key": "authority.mode · authority.activation_digest",
+      "rule": "require_approval",
+      "why": "el modo estricto cambia el arranque entero del perfil; no se enciende desde una pantalla"
+    },
+    {
+      "door": "adopt-ledger",
+      "has_button": true,
+      "label": "Libro de otro perfil",
+      "profile_key": "storage.path",
+      "rule": "ledger_foreign_profile",
+      "why": "el libro lo fundó o adoptó otro perfil; hasta que este lo adopte, ninguna puerta aplica nada en él"
+    }
+  ]
+}

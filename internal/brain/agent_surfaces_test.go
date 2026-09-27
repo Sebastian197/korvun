@@ -48,7 +48,7 @@ func (p *capturingPublisher) Publish(ctx context.Context, ev bus.Event) {
 
 func TestSurfaces_noReceiptMaterialLeaks(t *testing.T) {
 	t.Parallel()
-	store, err := actionsqlite.Open(filepath.Join(t.TempDir(), "korvun.db"))
+	store, err := actionsqlite.OpenFor(filepath.Join(t.TempDir(), "korvun.db"), testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

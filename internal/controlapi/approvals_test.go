@@ -336,6 +336,13 @@ func namedOutcomes() []struct {
 			"the decision left this window, whether the effect happened is unknown, and THIS execution could not close the ledger"},
 		{"receipt unreadable", controlapi.ErrApprovalReceiptUnreadable, http.StatusConflict, "receipt_unreadable",
 			"the decision is sealed and recorded; only its receipt identifier could not be read back, and no execution was attempted"},
+		// The ledger's identity (the durable mark, redesigned, v0.16.2): a
+		// decision is an act, refused by name on a ledger this profile does not
+		// own or cannot read.
+		{"ledger foreign", controlapi.ErrLedgerForeign, http.StatusConflict, "ledger_foreign_profile",
+			"this ledger belongs to another profile — adopt it from the app's «¿Qué pasa hoy?» screen before deciding; nothing was decided"},
+		{"ledger unreadable", controlapi.ErrLedgerUnreadable, http.StatusServiceUnavailable, "ledger_unreadable",
+			"this ledger's identity cannot be read — no door repairs it; its remedy is replacing the ledger's file (docs/operations/ledger-restore.md); nothing was decided"},
 	}
 }
 
@@ -400,8 +407,10 @@ func TestApprovals_EveryNameIsInTheRegistry(t *testing.T) {
 	// above the assert that contradicted them. The count that governs is the
 	// one FR-TEST-6 executes against the document.
 	// TWENTY-TWO since 2026-09-19: loopback_only (v0.15.1 block B, P2-7).
-	if len(registry) != 22 {
-		t.Fatalf("the registry is the closed set: want 22 names, got %d", len(registry))
+	// TWENTY-FOUR since 2026-09-24: ledger_foreign_profile and
+	// ledger_unreadable (v0.16.2, the durable mark redesigned).
+	if len(registry) != 24 {
+		t.Fatalf("the registry is the closed set: want 24 names, got %d", len(registry))
 	}
 }
 
@@ -570,28 +579,30 @@ func decodeMap(t *testing.T, res *http.Response) map[string]any {
 // is carried by ErrApprovalDecidedEvidenceBad — and a derivation that guessed
 // the name would have been the third guard-by-text of this train.
 var sentinelOf = map[controlapi.OutcomeName]string{
-	controlapi.OutcomeAlreadyDecided:       "ErrApprovalAlreadyDecided",
-	controlapi.OutcomeExpired:              "ErrApprovalExpired",
-	controlapi.OutcomeDigestMismatch:       "ErrApprovalDigestMismatch",
-	controlapi.OutcomeForbidden:            "ErrApprovalForbidden",
-	controlapi.OutcomeLoopbackOnly:         "ErrApprovalLoopbackOnly", // CHANGED 2026-09-19, v0.15.1 block B
-	controlapi.OutcomeDisabled:             "ErrApprovalsDisabled",
-	controlapi.OutcomeUnavailable:          "ErrApprovalsUnavailable",
-	controlapi.OutcomeNotFound:             "ErrApprovalNotFound",
-	controlapi.OutcomeParamsDigestMismatch: "ErrApprovalParamsDigestMismatch",
-	controlapi.OutcomeInvalidated:          "ErrApprovalInvalidated",
-	controlapi.OutcomeEvidenceCorrupt:      "ErrApprovalEvidenceCorrupt",
-	controlapi.OutcomeBrainGone:            "ErrApprovalBrainGone",
-	controlapi.OutcomeNotStartedParamsHeld: "ErrApprovalNotStartedParamsHeld",
-	controlapi.OutcomeNotStartedParamsGone: "ErrApprovalNotStartedParamsGone",
-	controlapi.OutcomeParamsUnaccounted:    "ErrApprovalParamsUnaccounted",
-	controlapi.OutcomeParamsUnreadable:     "ErrApprovalParamsUnreadable",
-	controlapi.OutcomeDecidedEvidenceBad:   "ErrApprovalDecidedEvidenceBad",
-	controlapi.OutcomeAlreadyClosed:        "ErrApprovalAlreadyClosed",
-	controlapi.OutcomeNotDecided:           "ErrApprovalNotDecided",
-	controlapi.OutcomeUnknownOutcome:       "ErrApprovalUnknownOutcome",
-	controlapi.OutcomeReceiptUnreadable:    "ErrApprovalReceiptUnreadable",
-	controlapi.OutcomeCloseFailed:          "ErrApprovalCloseFailed",
+	controlapi.OutcomeAlreadyDecided:           "ErrApprovalAlreadyDecided",
+	controlapi.OutcomeExpired:                  "ErrApprovalExpired",
+	controlapi.OutcomeDigestMismatch:           "ErrApprovalDigestMismatch",
+	controlapi.OutcomeForbidden:                "ErrApprovalForbidden",
+	controlapi.OutcomeLoopbackOnly:             "ErrApprovalLoopbackOnly", // CHANGED 2026-09-19, v0.15.1 block B
+	controlapi.OutcomeDisabled:                 "ErrApprovalsDisabled",
+	controlapi.OutcomeUnavailable:              "ErrApprovalsUnavailable",
+	controlapi.OutcomeNotFound:                 "ErrApprovalNotFound",
+	controlapi.OutcomeParamsDigestMismatch:     "ErrApprovalParamsDigestMismatch",
+	controlapi.OutcomeInvalidated:              "ErrApprovalInvalidated",
+	controlapi.OutcomeEvidenceCorrupt:          "ErrApprovalEvidenceCorrupt",
+	controlapi.OutcomeBrainGone:                "ErrApprovalBrainGone",
+	controlapi.OutcomeNotStartedParamsHeld:     "ErrApprovalNotStartedParamsHeld",
+	controlapi.OutcomeNotStartedParamsGone:     "ErrApprovalNotStartedParamsGone",
+	controlapi.OutcomeParamsUnaccounted:        "ErrApprovalParamsUnaccounted",
+	controlapi.OutcomeParamsUnreadable:         "ErrApprovalParamsUnreadable",
+	controlapi.OutcomeDecidedEvidenceBad:       "ErrApprovalDecidedEvidenceBad",
+	controlapi.OutcomeAlreadyClosed:            "ErrApprovalAlreadyClosed",
+	controlapi.OutcomeNotDecided:               "ErrApprovalNotDecided",
+	controlapi.OutcomeUnknownOutcome:           "ErrApprovalUnknownOutcome",
+	controlapi.OutcomeReceiptUnreadable:        "ErrApprovalReceiptUnreadable",
+	controlapi.OutcomeApprovalLedgerForeign:    "ErrLedgerForeign",
+	controlapi.OutcomeApprovalLedgerUnreadable: "ErrLedgerUnreadable",
+	controlapi.OutcomeCloseFailed:              "ErrApprovalCloseFailed",
 }
 
 // TestApprovals_everyNameHasAProducer is the registry's THIRD direction: a name

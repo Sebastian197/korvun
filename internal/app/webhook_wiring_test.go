@@ -161,7 +161,7 @@ func TestWebhookBuild_inboundSecretMissing(t *testing.T) {
 	// The env var is deliberately NOT set.
 	cfg := webhookCfg(webhookChannelCfg("127.0.0.1:0", "/hook", nil))
 
-	_, err := Build(cfg)
+	_, err := Build(cfg, withTestProfile())
 	if !errors.Is(err, ErrMissingSecret) {
 		t.Fatalf("err = %v, want ErrMissingSecret", err)
 	}
@@ -181,7 +181,7 @@ func TestWebhookBuild_outboundSecretNamedButUnset(t *testing.T) {
 	cc := webhookChannelCfg("127.0.0.1:0", "/hook", nil)
 	cc.Webhook.OutboundTokenEnv = "KORVUN_WEBHOOK_OUTBOUND_TOKEN_TEST" // never set
 
-	_, err := Build(webhookCfg(cc))
+	_, err := Build(webhookCfg(cc), withTestProfile())
 	if !errors.Is(err, ErrMissingSecret) {
 		t.Fatalf("err = %v, want ErrMissingSecret", err)
 	}
@@ -196,9 +196,9 @@ func TestWebhookBuild_outboundSecretAbsentIsOk(t *testing.T) {
 	t.Setenv(webhookInboundEnv, "the-inbound-secret")
 	cc := webhookChannelCfg("127.0.0.1:0", "/hook", nil) // no OutboundTokenEnv
 
-	app, err := Build(webhookCfg(cc))
+	app, err := Build(webhookCfg(cc), withTestProfile())
 	if err != nil {
-		t.Fatalf("Build() error with no outbound token: %v", err)
+		t.Fatalf("Build(withTestProfile()) error with no outbound token: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -254,9 +254,9 @@ func TestWebhookBuild_nonLoopbackWarns(t *testing.T) {
 	t.Setenv(webhookInboundEnv, "the-inbound-secret")
 	logger, recs, mu := newCapturingLogger()
 
-	app, err := Build(webhookCfg(webhookChannelCfg("0.0.0.0:0", "/hook", nil)), WithLogger(logger))
+	app, err := Build(webhookCfg(webhookChannelCfg("0.0.0.0:0", "/hook", nil)), WithLogger(logger), withTestProfile())
 	if err != nil {
-		t.Fatalf("Build() error: %v", err)
+		t.Fatalf("Build(withTestProfile()) error: %v", err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

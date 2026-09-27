@@ -59,7 +59,7 @@ func TestApprovalsApprove_policyChangeInvalidates(t *testing.T) {
 		t.Fatalf("the refusal must name approval_invalidated/policy: %q", stderr)
 	}
 	// ZERO execution, and the request still awaits an explicit human act.
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestApprovalsApprove_revokedToolNeverExecutes(t *testing.T) {
 	if !strings.Contains(stderr, "approval_invalidated") && !strings.Contains(stderr, "calc") {
 		t.Fatalf("the refusal must name the invalidation or the revoked tool: %q", stderr)
 	}
-	store, err := actionsqlite.OpenReadOnly(dbPath)
+	store, err := actionsqlite.OpenReadOnlyFor(dbPath, testProfileIdentity)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
