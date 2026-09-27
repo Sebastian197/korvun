@@ -147,6 +147,36 @@ habría enseñado nada de eso, porque nace en la versión actual.
 
 ## TREN E reducido de la v0.16.2 — estado en la puerta previa al PR (2026-09-27)
 
+**Aviso para Windows.** Dos riesgos para un perfil real de Korvun en
+`%AppData%`:
+1. Los dos commits del PR #69 anteriores al de curas: en la rama, `1239c011…`
+   («feat(desktop,ledger): v0.16.2 — what happens today, the operator act, the
+   ledger's owner, and train E») y `ac114930…` («chore: the marker for the
+   v0.16.2 train E»). Si la integración los reescribe (con rebase cambian los
+   SHA, no los árboles), en `master` quedarán sus copias, con esos asuntos. En
+   ellos, TE47 (`cmd/korvun-desktop/e2e-harness/main_e4_test.go`) y el primer
+   caso de TE56 (`internal/app/ledger_e4_recorder_test.go`) solo redirigen
+   `HOME` y `XDG_CONFIG_HOME`, trabajan en la carpeta de usuario real, y TE47
+   escribe texto en `%AppData%\korvun\korvun.db`. No corras la suite de Go de
+   esos commits ni de sus copias, tampoco en un checkout o un bisect, en un
+   Windows con un perfil real. El commit de curas los pasa a un sandbox que
+   también redirige `AppData` y comprueba la ruta antes de escribir nada. Este
+   punto no se retira: esos commits, o sus copias, siguen en la historia.
+2. Cualquier commit anterior al de curas, `master` incluido: el arnés de la e2e
+   de chrome (`cmd/korvun-desktop/e2e-harness`, el que lanza `npm run e2e`) no
+   redirigía `AppData`. Sin `-fresh` escribía su configuración encima del
+   `korvun.json` real y el núcleo que arranca abría el libro real; con
+   `-fresh`, el reset de la e2e de onboarding lo borraba (por lectura del código
+   y por una reproducción traspuesta a macOS del adversario; no ejecutado en
+   Windows). No corras esa e2e en un Windows con un perfil real desde esos
+   commits. El commit de curas hace que `run` redirija también `AppData` y
+   `LocalAppData` (`isolationEnv`, con sus moldes), por decisión del director.
+   Este punto se queda hasta que la CI de Windows del commit de curas confirme
+   que nada toca la carpeta real: allí corre
+   `TestHarnessBinary_neverTouchesTheRealUserConfigDir`, que compila el arnés,
+   lo arranca como proceso aparte sobre un perfil «real» de prueba y comprueba
+   que no lo toca. La e2e de chrome no arranca nunca el arnés en Windows.
+
 **Qué es.** El plan de fallos del libro que no se puede usar
 (`design-drafts/2026-09-26-tren-E-plan-de-fallos-codex.md`, fuera del
 repositorio): el juez de la forma y de la identidad, la siembra y su residuo,
@@ -202,6 +232,25 @@ sale con el tren E solo).
   «Activar almacén» con sondeo la fila no dice dónde vive el libro (la cura
   prevista lleva la ruta en un campo propio de la respuesta, no en el
   `detail`).
+- G, la identidad del fichero fundado (A de la primera pasada de CI del PR #69,
+  2026-09-27): la puerta de fundar reconoce el fichero que creó con
+  `os.SameFile`. En Linux el inodo de un fichero borrado puede ir al siguiente;
+  en Windows `os.SameFile` lee el identificador del fichero fundado por la ruta
+  en el primer reintento y se lo queda. Así, allí un fichero puesto en la misma
+  ruta tras un intento fallido puede readoptarse (en Linux, si su número de
+  inodo se reutiliza; en Windows, si se puso antes del primer reintento). Si es
+  un libro sin marca que esta versión ya abrió y migró, la puerta sella en él
+  su acto de fundación, y al aplicarse lo marca como de este perfil; uno con la
+  marca de otro perfil se rechaza al preparar el sellado
+  (`ledger_foreign_profile`). Las dos cosas, reproducidas en proceso por el
+  adversario con un mutante que compara por ruta. Uno con un esquema anterior
+  se rechaza sin sellar (`ErrSchemaBehind`: la puerta del operador no migra
+  nunca un libro que ya existe), por lectura del código. El caso de la primera CI, un fichero de texto, se readoptó y se
+  rechazó con `ledger_unreadable` sin sellar nada. Acotado por el
+  director: los godoc de `createdHere`, `CreateLedger` y el campo `created` lo
+  dicen, `TestCreateLedger_aReplacedFileIsNeverReadopted` se salta en Linux y
+  en Windows con esa razón y sigue corriendo en darwin, y las notas lo llevan
+  en sus límites. La cura es que el fichero fundado lleve una identidad propia.
 - H: las puertas de escritura y la CLI que escribe dan los fallos del libro sin
   clase propia, y el texto de `ErrLedgerUnreadable` habla de la fila de
   identidad también ante un daño de forma.
@@ -210,13 +259,45 @@ sale con el tren E solo).
 - F: la clave de firma (crash al crearla o rotarla, registro concurrente,
   recuperación concurrente de su `.new`).
 
-**Pendiente.** Los checks requeridos del PR sobre su SHA exacto; el informe
-externo de Codex, que lanza el director; la pasada UX del director sobre la
-frase NUEVA de D2 y los tres estados de la pantalla (plan §7); y, antes de
-etiquetar, su pasada manual sobre la build empaquetada.
+**La primera pasada de CI del PR #69 (2026-09-27).** Sobre `ac114930…`, tres
+checks en rojo: `quality (ubuntu-latest)`, `quality (windows-latest)` y
+`chrome e2e`. macOS, en verde. Ninguno era AS07. Las siete clases, adjudicadas
+por el director el mismo día:
+- A, la puerta de fundar readopta un fichero sustituido en Linux y en Windows:
+  no se cura en la v0.16.2; queda acotada (límites conocidos, tren G).
+- B, en Windows las costuras del gancho no se armaban nunca: `dsnPath`
+  devolvía `\C:\…` para `file:///C:/…`. Curado con `dsnPathFor`, una función pura
+  que recibe el GOOS; molde en `internal/action/sqlite/ledger_dsn_path_test.go`.
+  Si la cura es correcta, en Windows esas costuras se arman por primera vez;
+  la prueba es la CI del commit de curas.
+- C, TE47 y TE56 en la carpeta de usuario real de Windows: curado (el punto 1
+  del «Aviso para Windows» de esta ficha).
+- D, TE49 comparaba la ruta de Windows sin escapar: curado con `e4Normalized`;
+  molde en `internal/app/ledger_e4_golden_test.go`.
+- E, el test del binario no le ponía `.exe` en Windows y descartaba el error de
+  ejecución: curado.
+- F, el test de identidad del perfil no tenía ruta relativa entre `D:` y `C:`:
+  el perfil se crea bajo el directorio de trabajo.
+- G, cuatro specs e2e esperaban `OK` del indicador de `/healthz`: esperan
+  «en vivo», y el chip de Actividad se busca por su `data-testid`, visible y
+  con «En vivo» (sin distinguir mayúsculas, como el spec original).
 
-**El marcador.** Este PR lleva el marcador SIN versión («VETO LEVANTADO <C>»,
-con el commit de código como padre). El versionado
+C, D, E y F están curadas en el código y probadas en macOS; su mitad de
+Windows solo la prueba la CI del commit de curas.
+
+**Pendiente.** Los checks requeridos del PR sobre el SHA del commit de curas;
+el informe externo de Codex, que lanza el director; la pasada UX del director
+sobre la frase NUEVA de D2 y los tres estados de la pantalla (plan §7); y,
+antes de etiquetar, su pasada manual sobre la build empaquetada.
+
+**El marcador.** Este PR lleva el marcador SIN versión en su punta. Primero
+fue «VETO LEVANTADO <C>», con el commit de código como padre. Tras la primera
+pasada de CI, el commit de curas va encima del marcador y un marcador nuevo,
+«VETO LEVANTADO <commit de curas>», cierra la cadena (C → marcador → curas →
+marcador), sin reescribir nada: el checker juzga solo la punta, que tenga un
+único padre, que la primera línea lo nombre y que no cambie más que el
+marcador. La cadena se simuló con los scripts reales del gate antes de
+publicarla. El versionado
 (`KORVUN-REBASE-EVIDENCE v1`, con el número real del PR) queda para la
 integración, por decisión del director: el número no existía antes de abrir el
 PR, antes de la integración `scripts/rebase_evidence.py` solo admite el
@@ -250,14 +331,16 @@ forzar el push.
    contesta deja la pantalla en «Leyendo tu perfil…». Medido en la puerta
    previa al PR: WebKit, con un esquema propio, esperó 75 s sin cortar la
    petición. No se toca en la v0.16.2 (director, 2026-09-27).
-10. H1 del adversario: el juicio del libro lee la fila de identidad y la marca
-    en dos instantáneas; una fundación o adopción que confirma entre las dos,
-    desde otro pool, da un `ledger_unreadable` falso, y en el hook ese
-    veredicto se queda pegado a la conexión. Declarado en las notas y en
+10. H1 del adversario (a la v0.16.3, como H2–H6; director, 2026-09-27): el
+    juicio del libro lee la fila de identidad y la marca en dos instantáneas;
+    una fundación o adopción que confirma entre las dos, desde otro pool, da un
+    `ledger_unreadable` falso, y en el hook ese veredicto se queda pegado a la
+    conexión. Declarado en las notas y en
     `docs/operations/ledger-restore.md` (comprobar otra vez con todo parado).
 11. H2: D2 manda borrar el `-wal` y el `-shm` del libro dañado;
     `docs/operations/ledger-restore.md` manda guardarlos como evidencia. La
-    copia de D2 la decide el director.
+    copia de D2 es una decisión de texto del director para la ficha UX del tren
+    G; la propuesta del copiloto es «aparta también», no «borra también».
 12. H3: si el sondeo llega a un estado terminal sin `receipt_id`, la fila del
     acto sigue diciendo que el recibo «llegará cuando el cambio termine».
 13. H4: agotado el presupuesto de sondeo, la fila dice «tu perfil en disco

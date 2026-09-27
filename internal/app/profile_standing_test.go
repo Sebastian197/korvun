@@ -40,7 +40,21 @@ import (
 //
 // PROBING MUTATION: digest the path as given. The relative spelling reddens.
 func TestProfileIdentity_isTheFileNotItsSpelling(t *testing.T) {
-	dir := t.TempDir()
+	// The profile lives under the working directory, not in t.TempDir(): the
+	// relative spelling needs a relative path from here, and on the Windows CI
+	// runner the temp dir is on C: and the checkout on D:, between which there
+	// is none (the first CI run of PR #69). The "." prefix keeps Go's tools
+	// out of it.
+	tmp, err := os.MkdirTemp(".", ".profile-identity-")
+	if err != nil {
+		t.Fatalf("mkdir under the working directory: %v", err)
+	}
+	dir, err := filepath.Abs(tmp)
+	if err != nil {
+		_ = os.RemoveAll(tmp)
+		t.Fatalf("abs: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	file := filepath.Join(dir, "korvun.json")
 	if err := os.WriteFile(file, []byte("{}"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)

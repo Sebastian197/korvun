@@ -360,14 +360,16 @@ func (l *ledgerlessRecorder) SettleReload(ctx context.Context, handle string, ap
 // same resolution the boot uses for an empty storage.path — and seals the
 // founding act in it. Its taxonomy, in order:
 //
-//   - a file already there that this process did not create: ErrLedgerExists,
-//     with the path. Nothing is opened. The default path is the desktop's own
-//     book on this machine, and adopting it from another profile would be
-//     sealing acts in someone else's book;
-//   - the very file this process DID create (same device and inode, not
-//     merely the same path), in a bootstrap that rolled back: opened again,
-//     so the button can be pressed again (the first founding act stays FAILED
-//     in it — history is kept);
+//   - a file already there that this process did not create, as createdHere
+//     tells them apart: ErrLedgerExists, with the path. Nothing is opened. The
+//     default path is the desktop's own book on this machine, and adopting it
+//     from another profile would be sealing acts in someone else's book;
+//   - the file this process DID create, as createdHere recognises it, in a
+//     bootstrap that rolled back: opened again, so the button can be pressed
+//     again (the first founding act stays FAILED in it — history is kept).
+//     createdHere tells a file replaced at the same path apart only on macOS
+//     with APFS: on Linux and on Windows such a replacement can be opened
+//     here as if it were the founded file (a known limit of v0.16.2);
 //   - the file cannot be created or opened: ErrLedgerNotCreated. Nothing
 //     exists that did not before: a file this call claimed and then could
 //     not open is removed by this same call;

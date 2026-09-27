@@ -14,7 +14,7 @@ test.describe.configure({ mode: 'serial' })
 // ensure it themselves instead of leaning on an earlier test's side effect.
 async function ensureRunning(page: Page): Promise<void> {
   await page.request.post(`${BASE}/__test/bindings/Start`, { data: [] }).catch(() => undefined) // already-running rides back as {"error": ...}
-  await expect(page.getByTestId('healthz-badge')).toContainText('OK', {
+  await expect(page.getByTestId('healthz-badge')).toContainText('en vivo', {
     timeout: 15000,
   })
 }
@@ -71,7 +71,7 @@ test('AS-2: Start from the UI → marcha with real data, no client-side bearer',
   })
   await expect(page.getByTestId('status-chip')).toContainText('En marcha')
   await expect(page.getByTestId('status-chip')).toContainText(/:\d+/)
-  await expect(page.getByTestId('healthz-badge')).toContainText('OK')
+  await expect(page.getByTestId('healthz-badge')).toContainText('en vivo')
   // Real control-API data: the scripted channel and the template brain.
   await expect(page.getByText('Telegram')).toBeVisible()
   // SP-console: two operational channels now (telegram + console).
@@ -90,7 +90,9 @@ test('Actividad vacía: designed empty state, En vivo', async ({ page }) => {
   await ensureRunning(page)
   await page.getByRole('button', { name: 'Actividad' }).click()
   await expect(page.getByText('Sin actividad todavía')).toBeVisible()
-  await expect(page.getByText('En vivo')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByTestId('act-live-chip').filter({ hasText: 'En vivo' })).toBeVisible({
+    timeout: 10000,
+  })
   await settleFonts(page)
   await page.screenshot({
     path: SHOT('sp6b-actividad-vacia.png'),
@@ -140,14 +142,16 @@ test('Ajustes: filas reales en oscuro y claro', async ({ page }) => {
 test('marcha con datos reales: inyección → tarjetas + capture', async ({ page }) => {
   await installBindings(page)
   await page.goto('/')
-  await expect(page.getByTestId('healthz-badge')).toContainText('OK', {
+  await expect(page.getByTestId('healthz-badge')).toContainText('en vivo', {
     timeout: 10000,
   })
   // The feed is WINDOW-scoped: confirm the stream is live (via Actividad's
   // indicator) before injecting, then return to Inicio — the store is
   // module-level, the stream survives the view swap.
   await page.getByRole('button', { name: 'Actividad' }).click()
-  await expect(page.getByText('En vivo')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByTestId('act-live-chip').filter({ hasText: 'En vivo' })).toBeVisible({
+    timeout: 10000,
+  })
   await page.getByRole('button', { name: 'Inicio' }).click()
   await post(page, '/__test/inject', { text: 'hola korvun' })
   await post(page, '/__test/inject', { text: 'resume mi día' })
@@ -175,14 +179,16 @@ test('Actividad con feed real: filas + filtros + capture', async ({ page }) => {
   await page.getByRole('button', { name: 'Actividad' }).click()
   // The feed is WINDOW-scoped: wait for the stream to be live before
   // injecting, or the frame honestly never reaches this window.
-  await expect(page.getByText('En vivo')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByTestId('act-live-chip').filter({ hasText: 'En vivo' })).toBeVisible({
+    timeout: 10000,
+  })
   await post(page, '/__test/inject', { text: 'otro mensaje' })
   await expect(page.getByText('Mensaje recibido').first()).toBeVisible({
     timeout: 10000,
   })
   await expect(page.getByText('Respuesta enviada').first()).toBeVisible()
   await expect(page.getByText('→ asistente').first()).toBeVisible()
-  await expect(page.getByText('En vivo')).toBeVisible()
+  await expect(page.getByTestId('act-live-chip').filter({ hasText: 'En vivo' })).toBeVisible()
   // Type filter narrows honestly.
   await page.getByRole('button', { name: 'Respuestas' }).click()
   await expect(page.getByText('Mensaje recibido')).toHaveCount(0)
@@ -201,11 +207,13 @@ test('incidencia honesta: message_dropped real → banner ámbar + capture; AS-6
 }) => {
   await installBindings(page)
   await page.goto('/')
-  await expect(page.getByTestId('healthz-badge')).toContainText('OK', {
+  await expect(page.getByTestId('healthz-badge')).toContainText('en vivo', {
     timeout: 10000,
   })
   await page.getByRole('button', { name: 'Actividad' }).click()
-  await expect(page.getByText('En vivo')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByTestId('act-live-chip').filter({ hasText: 'En vivo' })).toBeVisible({
+    timeout: 10000,
+  })
   await page.getByRole('button', { name: 'Inicio' }).click()
   await post(page, '/__test/channel', { send: 'fail' })
   await post(page, '/__test/inject', { text: 'este se pierde' })
@@ -244,7 +252,7 @@ test('AS-6: el core muere solo → banner rojo honesto, recuperado con Start lim
 }) => {
   await installBindings(page)
   await page.goto('/')
-  await expect(page.getByTestId('healthz-badge')).toContainText('OK', {
+  await expect(page.getByTestId('healthz-badge')).toContainText('en vivo', {
     timeout: 10000,
   })
   // The core vanishes WITHOUT the UI asking (the reap-shaped signal).

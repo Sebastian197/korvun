@@ -9,10 +9,11 @@ import { expect, test } from '@playwright/test'
 import { installBindings } from './bindings'
 import { FRESH_BASE, SHOT, settleFonts } from './util'
 
-// fresh-reset deletes the config under the fresh harness's temp HOME so
-// created=true is re-establishable — the onboarding mounts on every attempt,
-// not just the harness process's first (review finding: one-shot fresh state
-// defeated the Playwright retry budget).
+// fresh-reset deletes the config under the fresh harness's isolated user config
+// dir (its temp dir, on macOS, Linux and Windows) so created=true is
+// re-establishable — the onboarding mounts on every attempt, not just the
+// harness process's first (review finding: one-shot fresh state defeated the
+// Playwright retry budget).
 test.beforeEach(async ({ request }) => {
   await request.post(`${FRESH_BASE}/__test/fresh-reset`, { data: [] })
 })
