@@ -24,6 +24,8 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -117,19 +119,49 @@ func judgeScopeOf(ctx context.Context) judgeScope {
 	return scope
 }
 
-// sameFile compares two absolute paths as the file they name.
+// sameFile reports whether two absolute paths are one spelling once cleaned
+// (filepath.Clean) — no symlink, case or short-name folding. A seam is
+// found when its mould armed it with the path spelt as the opener spells
+// it, which is the spelling dsnPath gives back.
 func sameFile(a, b string) bool {
 	return a != "" && filepath.Clean(a) == filepath.Clean(b)
 }
 
-// dsnPath is the file a connection's DSN names, for the hook, which sees only
-// the DSN.
+// dsnPath is the path of the file a connection's DSN names, for the hook,
+// which sees only the DSN: the absolute path the opener built that DSN from
+// (buildFileDSN, buildWriterDSN), spelt as the opener spelt it, so the seams
+// selected by that path arm. The platform step is dsnPathFor.
 func dsnPath(dsn string) string {
 	u, err := url.Parse(dsn)
 	if err != nil {
 		return ""
 	}
-	return filepath.FromSlash(u.Path)
+	return dsnPathFor(runtime.GOOS, u.Path)
+}
+
+// dsnPathFor turns the URL path of a file DSN built from an ABSOLUTE path —
+// the only kind the openers build from — back into that path, for goos. The
+// builders put a "/" in front of a path that has none, so on windows a drive
+// path arrives as "/C:/…": that slash is dropped, and every "/" becomes the
+// Windows separator (a UNC share, "//server/…", keeps its two). Any other URL
+// path keeps its slash: a relative spelling such as "C:x" or "1:/x" does not
+// come back as it was built, and the openers never build from one. On every
+// other goos the URL path is already the file's path. Pure — goos is an
+// argument — so a mould runs every platform's rows on any host.
+func dsnPathFor(goos, urlPath string) string {
+	if goos != "windows" {
+		return urlPath
+	}
+	if len(urlPath) >= 3 && urlPath[0] == '/' && urlPath[2] == ':' && isDriveLetter(urlPath[1]) &&
+		(len(urlPath) == 3 || urlPath[3] == '/') {
+		urlPath = urlPath[1:]
+	}
+	return strings.ReplaceAll(urlPath, "/", `\`)
+}
+
+// isDriveLetter reports whether c can name a Windows drive.
+func isDriveLetter(c byte) bool {
+	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
 }
 
 // judgeReadFault is one armed failure: the read it replaces — file, origin,

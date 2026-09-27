@@ -217,8 +217,14 @@ func (e4NoPathRecorder) LedgerStanding(context.Context) (string, string) {
 // string, never a guessed default. A recorder that does not provide a path
 // gets none in the answer, and no placeholder.
 //
+// The isolated dir is sandboxUserDirApp's, which redirects AppData on Windows
+// too, and the ledger's resolved path is asserted inside it before the app
+// opens anything: redirecting HOME and XDG_CONFIG_HOME alone left Windows on
+// the user's REAL AppData (the first CI run of PR #69).
+//
 // PROBING MUTATIONS (MU56): the path not serialized → reddens; the raw
-// configured path served → reddens.
+// configured path served → reddens; the sandbox removed → the path assertion
+// reddens before any write.
 //
 // Evidence level: real app on loopback over real temporary files; the absent
 // provider through the real read door in process.
@@ -228,10 +234,11 @@ func TestE4_TE56_thePathIsTheFileTheAppOpened(t *testing.T) {
 		set  func(t *testing.T, cfg *config.Config)
 	}{
 		{"storage:{} under an isolated user config dir", func(t *testing.T, cfg *config.Config) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
-			t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+			home := sandboxUserDirApp(t)
 			cfg.Storage = &config.StorageConfig{}
+			if p := storagePath(cfg); !strings.HasPrefix(p, home+string(os.PathSeparator)) {
+				t.Fatalf("the ledger would open at %q, outside the isolated dir %q: refused before anything is written", p, home)
+			}
 		}},
 		{"an explicit absolute path", func(t *testing.T, cfg *config.Config) {
 			cfg.Storage = &config.StorageConfig{Path: filepath.Join(t.TempDir(), "abs", "korvun.db")}
@@ -263,16 +270,26 @@ func TestE4_TE56_thePathIsTheFileTheAppOpened(t *testing.T) {
 	})
 }
 
+// e4Normalized replaces, in a GET body, the ledger's directory and the
+// separator that follows it with "/perfil/". Both are searched as the body's
+// JSON spells them — escaped, so a Windows directory (C:\\…\\) is found —
+// and the file that follows comes out as /perfil/<name> on every platform.
+func e4Normalized(body, dir, sep string) string {
+	esc, _ := json.Marshal(dir + sep) // a string always marshals
+	return strings.ReplaceAll(body, string(esc[1:len(esc)-1]), "/perfil/")
+}
+
 // e4GoldenDir is where the screen's moulds read the real GET's bodies.
 var e4GoldenDir = filepath.Join("..", "..", "cmd", "korvun-desktop", "frontend", "src", "views", "fixtures")
 
 // e4Golden normalizes a GET body — the ledger's directory replaced by
-// /perfil — indents it with sorted keys, and compares it with its reference
-// file; KORVUN_E4_UPDATE_GOLDEN=1 writes the file instead.
+// /perfil, as e4Normalized does it — indents it with sorted keys, and compares
+// it with its reference file; KORVUN_E4_UPDATE_GOLDEN=1 writes the file
+// instead.
 func e4Golden(t *testing.T, name, body, dir string) {
 	t.Helper()
 	var v any
-	if err := json.Unmarshal([]byte(strings.ReplaceAll(body, dir, "/perfil")), &v); err != nil {
+	if err := json.Unmarshal([]byte(e4Normalized(body, dir, string(os.PathSeparator))), &v); err != nil {
 		t.Fatalf("the GET body: %v", err)
 	}
 	got, err := json.MarshalIndent(v, "", "  ")

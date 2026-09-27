@@ -12,7 +12,7 @@ test.describe.configure({ mode: 'serial' })
 
 async function ensureRunning(page: Page): Promise<void> {
   await page.request.post(`${BASE}/__test/bindings/Start`, { data: [] }).catch(() => undefined)
-  await expect(page.getByTestId('healthz-badge')).toContainText('OK', { timeout: 15000 })
+  await expect(page.getByTestId('healthz-badge')).toContainText('en vivo', { timeout: 15000 })
 }
 
 async function post(page: Page, path: string, body?: unknown): Promise<void> {
@@ -129,7 +129,9 @@ test('Incidencia de evento: "Entendido" despeja el banner', async ({ page }) => 
   await page.goto('/')
   await ensureRunning(page)
   await page.getByRole('button', { name: 'Actividad' }).click()
-  await expect(page.getByText('En vivo')).toBeVisible({ timeout: 10000 })
+  await expect(page.getByTestId('act-live-chip').filter({ hasText: 'En vivo' })).toBeVisible({
+    timeout: 10000,
+  })
   await page.getByRole('button', { name: 'Inicio' }).click()
   await post(page, '/__test/channel', { send: 'fail' })
   await post(page, '/__test/inject', { text: 'este se pierde' })

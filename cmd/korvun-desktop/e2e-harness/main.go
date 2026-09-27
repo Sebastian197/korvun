@@ -53,6 +53,8 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -251,8 +253,10 @@ func harnessConfig(modelURL string, approvals bool) *config.Config {
 		Admin:  &config.AdminConfig{TokenEnv: "KORVUN_ADMIN_TOKEN"},
 		// SP4 (operator-console): durable store + sessions so the console
 		// API mounts and /__test/inject produces real persisted history.
-		// Storage.Path empty resolves under the harness's ISOLATED temp
-		// HOME (set below), so nothing touches the developer's real data.
+		// Storage.Path empty resolves under the user config dir, which run
+		// points into its temp dir on macOS, Linux and Windows (isolationEnv),
+		// so the harness's ledger lands there and not in the developer's real
+		// one.
 		Storage:       &config.StorageConfig{},
 		Session:       &config.SessionConfig{},
 		Observability: &config.ObservabilityConfig{Enabled: boolPtr(true)},
@@ -313,15 +317,17 @@ func run() error {
 			"this harness and the existing ones were written against the profile "+
 			"without it.")
 	fresh := flag.Bool("fresh", false,
-		"fresh-install mode (SP6c onboarding e2e): HOME/XDG_CONFIG_HOME point at a "+
-			"temp dir and NO config is written or loaded — EnsureDefaultConfig's "+
-			"created=true is real, so the onboarding runs for real")
+		"fresh-install mode (SP6c onboarding e2e): the user config dir points at a "+
+			"temp dir on macOS, Linux and Windows (isolationEnv) and NO config is "+
+			"written or loaded — "+
+			"EnsureDefaultConfig's created=true is real, so the onboarding runs for real")
 	agentConfig := flag.String("agent-config", "",
 		"path to an operator config to run INSTEAD of the scripted default (the "+
-			"governed-tools round harness): it is copied to the isolated HOME's "+
-			"config path verbatim, so a real Ollama and a governed agent brain can "+
-			"drive the real chrome under Playwright. The scripted telegram channel "+
-			"still applies to any telegram entry referencing the harness token env.")
+			"governed-tools round harness): it is copied verbatim to the default "+
+			"config path inside the isolated user config dir, so a real Ollama and a "+
+			"governed agent brain can drive the real chrome under Playwright. The "+
+			"scripted telegram channel still applies to any telegram entry "+
+			"referencing the harness token env.")
 	flag.Parse()
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
@@ -382,17 +388,18 @@ func run() error {
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	// ALWAYS isolate the default-config location into the temp dir
-	// (os.UserConfigDir reads HOME on darwin, XDG_CONFIG_HOME on linux). The
-	// chrome calls EnsureDefaultConfig(DefaultConfigPath) on mount; without
-	// isolation it would hit the developer's or runner's REAL path — creating
-	// a config on a clean HOME and wrongly triggering onboarding over the
-	// running-core harness.
-	if err := os.Setenv("HOME", dir); err != nil {
-		return fmt.Errorf("harness HOME: %w", err)
-	}
-	if err := os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, ".config")); err != nil {
-		return fmt.Errorf("harness XDG_CONFIG_HOME: %w", err)
+	// ALWAYS isolate the default-config location into the temp dir, on macOS,
+	// Linux and Windows (isolationEnv: HOME on darwin, XDG_CONFIG_HOME on
+	// linux, AppData and LocalAppData on windows), BEFORE the config path is
+	// resolved (TestHarnessBinary_neverTouchesTheRealUserConfigDir runs the
+	// built binary and watches for it). The chrome calls
+	// EnsureDefaultConfig(DefaultConfigPath) on mount; without isolation it
+	// would hit the developer's or runner's REAL path — creating a config on a
+	// clean HOME and wrongly triggering onboarding over the running-core
+	// harness, and, without -fresh, writing the scripted config over a real
+	// korvun.json.
+	if err := isolate(dir); err != nil {
+		return err
 	}
 
 	cfgPath, err := shell.DefaultConfigPath()
@@ -490,6 +497,43 @@ func run() error {
 
 // defaultChannel is the scripted channel harnessConfig registers.
 const defaultChannel = "telegram"
+
+// isolationEnv is the environment that points into dir, for goos, the source
+// os.UserConfigDir reads on macOS, Linux and Windows: HOME (macOS),
+// XDG_CONFIG_HOME (Linux) and AppData (Windows) — and on Windows LocalAppData
+// too, which os.UserCacheDir reads. Pure, the GOOS being an argument, so a
+// mould checks every platform's map on any host. Until PR #69 the harness set
+// only HOME and XDG_CONFIG_HOME, so on Windows — by reading the code, not by
+// running it there — its scripted config and its ledger went to the user's
+// REAL %AppData%.
+func isolationEnv(goos, dir string) map[string]string {
+	env := map[string]string{
+		"HOME":            dir,
+		"XDG_CONFIG_HOME": filepath.Join(dir, ".config"),
+	}
+	if goos == "windows" {
+		env["AppData"] = filepath.Join(dir, "AppData", "Roaming")
+		env["LocalAppData"] = filepath.Join(dir, "AppData", "Local")
+	}
+	return env
+}
+
+// isolate sets isolationEnv for this process's GOOS, in sorted order so a
+// failure is reported the same way every time.
+func isolate(dir string) error {
+	env := isolationEnv(runtime.GOOS, dir)
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if err := os.Setenv(k, env[k]); err != nil {
+			return fmt.Errorf("harness %s: %w", k, err)
+		}
+	}
+	return nil
+}
 
 // writeScriptedConfig writes the one-telegram harness config (pointed at the
 // fake model) to path, creating the parent dir.

@@ -81,11 +81,13 @@ type ConfigActRegistry struct {
 	// profiles maps an act to the identity of the profile whose handle sealed
 	// it: the profile a transient close opens the ledger for.
 	profiles map[string]string
-	// created remembers the ledger files this process founded — by FILE
-	// (os.FileInfo, compared with os.SameFile), not by path: a file removed
-	// and replaced at the same path by another actor is another book, and
-	// re-adopting it by its spelling would seal this profile's founding act
-	// in someone else's ledger (the official pass, round 2).
+	// created remembers the ledger files this process founded as os.FileInfo,
+	// compared with os.SameFile rather than by path: a file removed and
+	// replaced at the same path by another actor is another book, and
+	// re-adopting it would seal this profile's founding act in someone else's
+	// ledger (the official pass, round 2). How far os.SameFile tells the two
+	// apart depends on the platform (createdHere): on Linux and on Windows a
+	// replacement can pass for the founded file.
 	created map[string]os.FileInfo
 	// current is the recorder of the app that is SERVING — attached by Build
 	// with its store open, detached by Shutdown before the store closes. It
@@ -243,8 +245,26 @@ func (g *ConfigActRegistry) forgetCreated(path string) {
 	delete(g.created, ledgerKey(path))
 }
 
-// createdHere reports whether the file NOW at path is the very file this
-// process founded there — same device and inode, not merely the same path.
+// createdHere reports whether the file NOW at path is, as os.SameFile sees
+// it, the file this process founded there. What os.SameFile compares depends
+// on the platform, and so does what this promises:
+//   - macOS with APFS: the device and the inode number. APFS gives each new
+//     file the volume's next object identifier (apfs_next_obj_id in Apple's
+//     APFS reference), and a replacement has come out with a new number in
+//     every run observed, so it is told apart. Other file systems on macOS
+//     are not covered.
+//   - Linux: the device and the inode number too, but the number of a
+//     removed file can go to the next file created, and the replacement then
+//     passes for the founded one (the first CI run of PR #69).
+//   - Windows: os.Stat keeps the path, and os.SameFile reads the file ID
+//     through it the first time that FileInfo is compared, then keeps it.
+//     The founded file is therefore identified by whatever file is at the
+//     path at the first retry: a replacement made before it passes for the
+//     founded one.
+//
+// «A replaced file is never re-adopted» therefore holds only on macOS with
+// APFS — a known limit of v0.16.2 (its release notes); train G gives the
+// founded file an identity of its own.
 func (g *ConfigActRegistry) createdHere(path string) bool {
 	g.mu.Lock()
 	info, ok := g.created[ledgerKey(path)]

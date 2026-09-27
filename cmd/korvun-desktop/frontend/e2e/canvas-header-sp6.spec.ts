@@ -10,7 +10,7 @@ test.describe.configure({ mode: 'serial' })
 
 async function ensureRunning(page: Page): Promise<void> {
   await page.request.post(`${BASE}/__test/bindings/Start`, { data: [] }).catch(() => undefined)
-  await expect(page.getByTestId('healthz-badge')).toContainText('OK', { timeout: 15000 })
+  await expect(page.getByTestId('healthz-badge')).toContainText('en vivo', { timeout: 15000 })
 }
 
 test.beforeEach(async ({ request }) => {
