@@ -5,6 +5,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,13 +19,22 @@ import (
 func writeIntentV2Fixture(t *testing.T, dir string) string {
 	t.Helper()
 	path := filepath.Join(dir, "intent-v2.json")
-	raw := `{"intent_id":"int_cli_v2","schema_version":2,"version":1,"profile_id":"profile_cli","owner_principal_id":"principal_operator","purpose":"read reports","operations":[{"namespace":"tool","name":"read_file","version":1}],"allowed_resources":[{"kind":"cage","id":"reports"}],"denied_resources":[],"data_scope":["internal"],"output_destinations":["console"],"effect_classes":["read_external"],"budget":{"total":null,"per_operation":{}},"valid_from":"2026-09-19T12:00:00Z","expires_at":"2099-09-20T12:00:00Z","approval":{"required":false},"max_delegation_depth":0}`
+	raw := fmt.Sprintf(`{"intent_id":"int_cli_v2","schema_version":2,"version":1,"profile_id":"profile_cli","owner_principal_id":"principal_operator","purpose":"read reports","operations":[{"namespace":"tool","name":"read_file","version":1}],"allowed_resources":[{"kind":"cage","id":"reports"}],"denied_resources":[],"data_scope":["internal"],"output_destinations":["console"],"effect_classes":["read_external"],"budget":{"total":null,"per_operation":{}},"valid_from":"%s","expires_at":"%s","approval":{"required":false},"max_delegation_depth":0}`,
+		wallStamp(-48*time.Hour), wallStamp(365*24*time.Hour))
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return path
 }
 
+// TestIntentV2CLI_CreateActivateVerifyBind: a v2 intent whose window is
+// relative to the wall clock goes through create, activate, verify and bind on
+// the CLI, and its binding resolves at the wall clock.
+//
+// PROBING MUTATION: the binding resolved at a fixed date of the past →
+// reddens: «intent expired».
+//
+// Evidence level: in-process CLI (Run over buffers) against a real SQLite file.
 func TestIntentV2CLI_CreateActivateVerifyBind(t *testing.T) {
 	cfg, dbPath := intentTestConfig(t)
 	file := writeIntentV2Fixture(t, t.TempDir())
@@ -45,7 +55,7 @@ func TestIntentV2CLI_CreateActivateVerifyBind(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	resolved, err := store.ResolveExecutionBinding(context.Background(), "principal_brain", "console", "", time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC))
+	resolved, err := store.ResolveExecutionBinding(context.Background(), "principal_brain", "console", "", time.Now())
 	if err != nil || resolved.Contract.IntentID != "int_cli_v2" {
 		t.Fatalf("binding resolution = %q, %v", resolved.Contract.IntentID, err)
 	}
@@ -91,6 +101,8 @@ func TestIntentV2CLI_ExplicitRootAdoption(t *testing.T) {
 // explained the absence as retention's cascade — a prune that never happened —
 // and `ledger check` reported every intent act as a degraded check on a
 // newborn store (the twenty-second pass, P2-9).
+//
+// Evidence level: in-process CLI (Run over buffers) against a real SQLite file.
 func TestIntentV2CLI_LedgerIsCleanAfterIntentActs(t *testing.T) {
 	cfg, dbPath := intentTestConfig(t)
 	file := writeIntentV2Fixture(t, t.TempDir())

@@ -14,6 +14,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
@@ -40,13 +41,17 @@ func issueGrantID(t *testing.T, cfgPath, intentID string) string {
 	code, stdout, stderr := runIntentCLI(t, "grant", "issue", "--config", cfgPath,
 		"--intent", intentID, "--subject", "principal_brain_a",
 		"--operations", "calc,time", "--max-actions", "50",
-		"--expires", "2026-09-30T00:00:00Z", "--depth", "2")
+		"--expires", wallStamp(365*24*time.Hour), "--depth", "2")
 	if code != 0 {
 		t.Fatalf("issue: %d %q", code, stderr)
 	}
 	return extractID(t, stdout, "grant_")
 }
 
+// TestGrantIssue_underActiveIntentWithReceipt: a grant issued under an active
+// intent persists with its receipt.
+//
+// Evidence level: in-process CLI (Run over buffers) against a real SQLite file.
 func TestGrantIssue_underActiveIntentWithReceipt(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath := intentTestConfig(t)
@@ -76,6 +81,15 @@ func TestGrantIssue_underActiveIntentWithReceipt(t *testing.T) {
 	}
 }
 
+// TestGrantIssue_inactiveOrExpiredIntentFailsClosed: issuing under a DRAFT
+// intent, or under an intent whose window is past, fails closed naming its
+// rule. The past window is past on purpose; internal/testgates excuses its two
+// dates in its exception list.
+//
+// PROBING MUTATION: the historical window turned into one around now →
+// reddens: the grant is issued.
+//
+// Evidence level: in-process CLI (Run over buffers) against a real SQLite file.
 func TestGrantIssue_inactiveOrExpiredIntentFailsClosed(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath := intentTestConfig(t)
@@ -95,7 +109,7 @@ func TestGrantIssue_inactiveOrExpiredIntentFailsClosed(t *testing.T) {
 	// Expired intent (ACTIVE status, window past): the clock wins.
 	code, stdout, _ = runIntentCLI(t, "intent", "create", "--config", cfgPath,
 		"--purpose", "expired", "--operations", "calc",
-		"--valid-from", "2026-08-01T00:00:00Z", "--expires", "2026-08-02T00:00:00Z")
+		"--valid-from", "2026-08-01T00:00:00Z", "--expires", "2026-08-02T00:00:00Z") // past on purpose: the intent is built to be expired
 	if code != 0 {
 		t.Fatalf("create expired: %d", code)
 	}
@@ -134,6 +148,14 @@ func TestGrantIssue_inactiveOrExpiredIntentFailsClosed(t *testing.T) {
 	}
 }
 
+// TestGrantDelegate_wideningDeniedNamingTheDimension: a child that asks for
+// more budget than its parent is refused naming the dimension, and leaves only
+// its DENIED receipt.
+//
+// PROBING MUTATION: issueGrantID's expiry put back to its fixed date of the
+// base → reddens: authority_expired.
+//
+// Evidence level: in-process CLI (Run over buffers) against a real SQLite file.
 func TestGrantDelegate_wideningDeniedNamingTheDimension(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath := intentTestConfig(t)
@@ -164,6 +186,13 @@ func TestGrantDelegate_wideningDeniedNamingTheDimension(t *testing.T) {
 	}
 }
 
+// TestGrantDelegate_attenuatedChildPersists: a strict subset of the parent is
+// delegated and persists with its chain.
+//
+// PROBING MUTATION: issueGrantID's expiry put back to its fixed date of the
+// base → reddens: authority_expired.
+//
+// Evidence level: in-process CLI (Run over buffers) against a real SQLite file.
 func TestGrantDelegate_attenuatedChildPersists(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath := intentTestConfig(t)
@@ -193,6 +222,10 @@ func TestGrantDelegate_attenuatedChildPersists(t *testing.T) {
 	}
 }
 
+// TestGrantDelegate_revokedParentFailsClosed: a delegation under a revoked
+// parent fails closed.
+//
+// Evidence level: in-process CLI (Run over buffers) against a real SQLite file.
 func TestGrantDelegate_revokedParentFailsClosed(t *testing.T) {
 	t.Parallel()
 	cfgPath, _ := intentTestConfig(t)
