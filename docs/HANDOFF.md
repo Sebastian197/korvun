@@ -304,7 +304,7 @@ PR, antes de la integración `scripts/rebase_evidence.py` solo admite el
 versionado con el commit de código como padre directo, y ponerlo aquí exigiría
 forzar el push.
 
-**La lista de cierre (P3).**
+**La lista de cierre (P3, y un P2 fichado para la v0.16.3).**
 1. `ledger_busy` al nacer la conexión sobre una ruta nueva (tanda 3); su texto
    es del tren H.
 2. El registro por ruta en los seams de fallo del juez y de etapa, propuesto
@@ -359,13 +359,37 @@ forzar el push.
     («the judgement above», «the write below») y el comentario del test
     aprobado `keeps polling until the supervisor reports a terminal state`. No
     son falsos hoy; la ley los prohíbe porque se pudren.
-17. AS07 (`TestAuthority_ConcurrentStartsShareAncestorBudget`, de la v0.16.1)
-    vive en el borde del `busy_timeout` de 5 s. Aislado, con `-race` y
-    cobertura, pasa 10 de 10 a 4,8–5,1 s por pasada, igual en esta rama que en
-    `master` (`518ba15`). En la pasada de cobertura del `make quality` del
-    2026-09-27 tardó 20,67 s y un arranque dio `ledger_busy`
-    (committed=12 exhausted=35). No se toca en la v0.16.2: es un test aprobado
-    de la v0.16.1 (director, 2026-09-27).
+17. CURADO el 2026-09-29, con una cura declarada del test en su propio PR
+    (director). AS07 (`TestAuthority_ConcurrentStartsShareAncestorBudget`, de
+    la v0.16.1) vivía en el borde del `busy_timeout` de 5 s y cayó tres veces
+    por un `ledger_busy`, siempre con committed=12 exhausted=35: en la pasada de
+    cobertura del `make quality` local del 2026-09-27 (20,67 s, el arranque 0) y
+    dos veces en la CI de Windows de `master` del 2026-09-29, run 36520026213
+    (11,84 s, el arranque 26; y en su relanzamiento, 14,22 s, el arranque 1).
+    Ahora el test conduce cada arranque hasta que resuelve: si la puerta
+    responde `ErrLedgerBusy`, lo reintenta el test, con un tope de 20 intentos,
+    y la puerta no cambia. Moldes: un busy real reproducido con una tercera
+    conexión que sostiene `BEGIN IMMEDIATE`; el busy más allá del tope en el
+    último arranque, que se nombra busy y no se cuenta como agotado; el
+    conductor, que solo reintenta `ErrLedgerBusy`; y el comprobador, que solo
+    da la clase busy a un arranque que sigue en busy.
+18. P2 de producción, para la v0.16.3, tren H (director, 2026-10-03). Lo
+    encontró el adversario de la cura de AS07, fuera de su delta, en su segunda
+    pasada (`.claude/adversary/v0162-as07-cure-verdict.md`, la sonda N-DL). La
+    puerta no corta la espera de `BEGIN IMMEDIATE` cuando vence el plazo o llega
+    la cancelación del contexto de quien llama: agota el `busy_timeout` de 5 s y
+    responde `ledger_busy`, sin el error del contexto en la cadena.
+    Reproducción, en una copia del árbol (`TestADV2_theDoorsDeadlineChains`,
+    sobre el fixture de AS07): una conexión cruda sostiene `BEGIN IMMEDIATE`;
+    `StartAuthorization` con un plazo de 1 s vuelve a los 5,091 s con
+    `ErrAuthorityStoreBusy` y `ErrLedgerBusy`, sin `DeadlineExceeded`, y con el
+    contexto cancelado al segundo vuelve a los 5,107 s igual, sin `Canceled`.
+    Con el plazo ya vencido al entrar, en cambio, vuelve como
+    `ErrAuthorityStoreBusy` con `DeadlineExceeded` sin esperar (43 µs y
+    21 µs, medidos por el adversario del saneamiento de master en
+    `.claude/adversary/v0162-date-bomb-verdict.md`). El mecanismo es una
+    hipótesis del adversario, sin verificar: el manejador de busy de SQLite no
+    atiende `sqlite3_interrupt`. No se toca ahora.
 
 Cerrados: el nombre viejo de D07 en el pretest del marcador (marcado como
 superado, tanda 5); el entorno sin pintar en pantalla (tanda 4); el tiempo

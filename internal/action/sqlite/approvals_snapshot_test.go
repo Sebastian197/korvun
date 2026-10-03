@@ -89,7 +89,7 @@ func TestClaim_refusesARowThatMovedInAnyColumn(t *testing.T) {
 		{"the risk line the human was shown",
 			`UPDATE approvals SET risk_summary = ? WHERE approval_id = ?`, "harmless, honest"},
 		{"the window the request was born with",
-			`UPDATE approvals SET expires_at = ? WHERE approval_id = ?`, "2099-01-01T00:00:00Z"},
+			`UPDATE approvals SET expires_at = ? WHERE approval_id = ?`, time.Now().Add(100 * 365 * 24 * time.Hour).UTC().Format(time.RFC3339)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

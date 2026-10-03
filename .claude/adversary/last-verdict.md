@@ -1,46 +1,40 @@
-VETO LEVANTADO d38c9fd70d859e8fb63103dedf96265bb60ed9d9
-Round: v0.16.2, PR #69, the cures after the first CI run (2026-09-27). The
-first run over ac114930 went red on Ubuntu, Windows and the chrome e2e;
-macOS was green, and AS07 was not among the failures. The director
-adjudicated seven classes (A to G) and, after the adversary's first pass,
-the chrome e2e harness fix.
+VETO LEVANTADO 2f88dda8ea3e32f5db74c22925990f2657ed0df4
+Round: v0.16.2, master sanitation before the tag (2026-10-03). Since
+2026-09-30T00:00Z master's suite has failed on every tree: issueGrantID
+issued its parent grant with a fixed --expires, and two delegation
+tests answer authority_expired. AS07 fell twice more in master's
+Windows CI (run 36520026213). The director ordered one PR with two
+test commits and this marker; nothing in production changes.
 
-WHAT THE CURES ARE.
-- A, scoped and not cured (train G): createdHere, CreateLedger and the
-  created field say what os.SameFile compares on each platform; the
-  replaced-file mould skips on Linux and Windows and runs everywhere else;
-  the release notes list the limit and its damage.
-- B: dsnPathFor, pure and taking the GOOS, gives back the Windows drive path
-  a DSN was built from, so the hook's seams arm there.
-- C: TE47 and TE56 sandbox AppData too and assert the resolved ledger path
-  before anything is written.
-- D: TE49 finds the ledger's directory as the JSON body spells it.
-- E: the CLI binary test builds korvun.exe on Windows, fails by name when a
-  command cannot run, and pins ledger check's exit status to 1.
-- F: the profile identity test keeps its profile under the working
-  directory.
-- G: four chrome e2e specs expect the redesigned /healthz badge; the
-  activity chip is found by its test id and still required visible.
-- The harness (director's decision): isolationEnv and isolate point AppData
-  and LocalAppData into its temp dir; a test of the built binary, run as a
-  separate process with its core started, proves it never touches a marker
-  profile standing for the user's real one.
+WHAT THE COMMITS ARE.
+- fix(test) a408f0b9: the validity bounds the tests hand the CLI follow
+  the wall clock; the one window past on purpose keeps its two dates;
+  the sqlite claim test's 2099 tamper value is relative. The gate the
+  director dictated, internal/testgates: no string literal holding an
+  RFC3339 instant to the second, and no time.Date with a literal year,
+  of the current year or later in any test file, unless its exception
+  list excuses that date in that file with a written reason.
+- test(sqlite) 2f88dda8: AS07 retries ledger_busy in the test, never in
+  the door, as prepared. The HANDOFF moves point 17 to cured and files
+  point 18 (BEGIN IMMEDIATE does not stop waiting when the caller's
+  context ends), a P2 for v0.16.3 train H, with a line in the release
+  notes' known limits.
 
-THE ADVERSARY. Six passes over the delta: VETO MANTENIDO (one P2, nine P3),
-VETO LEVANTADO (four P3), VETO MANTENIDO (one P2, three P3), VETO LEVANTADO
-(three P3), VETO LEVANTADO (no findings), and a sixth after the gate forced
-a prettier reformat of two specs: VETO LEVANTADO, with one P3 left to the
-director (the verbatim record keeps the adversary's own relative locators).
-Every other finding was cured in the delta. The six passes, verbatim:
-v0162-pr69-cures-verdict.md in this directory.
+THE ADVERSARY. Commit 1 and commit 2's filing: seven passes. The first
+five, each VETO MANTENIDO, judged a name evaluator the director retired
+(option D); the sixth, over the dictated gate, VETO MANTENIDO (the
+commit message missing, comments naming the retired gate); the
+seventh, VETO LEVANTADO, with three text P3 folded before the commit.
+Verbatim: v0162-date-bomb-verdict.md in this directory. The AS07 cure:
+four passes, the last VETO LEVANTADO without findings; verbatim:
+v0162-as07-cure-verdict.md.
 
-EVIDENCE. Every cure red where its defect exists on this host, green, and
-its probing mutations red and restored by sha256; each of the 14 changed e2e
-assertions seen red under its mutant; go vet for windows, linux and darwin
-and cross-built test binaries; the chrome e2e 50 passed, 1 skipped; make
-quality through the cures commit's pre-commit gate: exit 0, 20:34:23 to 20:46:47, on the cures commit d38c9fd7 (a first
-attempt, 19:26:38 to 20:23:40, passed every step up to its last,
-desktop-frontend-check, which failed on prettier; the second reused go
-test's cache for the unchanged Go code). The Windows
-half (the hook's moulds armed there for the first time, the harness binary
-test, C, D, E and F) is this PR's CI.
+EVIDENCE. Commit 1: the two delegation tests red on the base and green
+after; the gate red against a stub and red with the fixed date put
+back, naming the file and the date; 23 probing mutations over the
+final bytes, all red by the runner's jsonl and restored by sha256;
+golangci-lint, goimports, go vet for three systems, internal/testgates
+and internal/cli whole with -race. Commit 2: as recorded in its verdict
+(20 probing mutations red and one control green). make quality through
+each commit's pre-commit gate: exit 0 on a408f0b9 (12:22:47 to 13:20:05
+WEST) and exit 0 on 2f88dda8 (13:20:19 to 14:17:55 WEST).

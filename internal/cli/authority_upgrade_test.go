@@ -91,7 +91,7 @@ func TestOperatorCLI_OpensAProfileTheBaseCLITouched(t *testing.T) {
 
 	code, stdout, stderr := runIntentCLI(t, "intent", "create", "--config", cfg,
 		"--purpose", "upgrade repro", "--operations", "calc", "--max-actions", "5",
-		"--expires", "2027-01-01T00:00:00Z")
+		"--expires", wallStamp(90*24*time.Hour))
 	if code != 0 || !strings.Contains(stdout, "created (DRAFT)") {
 		t.Errorf("intent create on the base's profile: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}

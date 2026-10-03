@@ -17,10 +17,22 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Sebastian197/korvun/internal/action"
 	actionsqlite "github.com/Sebastian197/korvun/internal/action/sqlite"
 )
+
+// wallStamp is an RFC3339 instant d away from the wall clock the CLI reads. The
+// tests of this package write the validity bounds they hand the CLI with it, or
+// with operator_act_test.go's stamp closure; the one fixed window is past on
+// purpose (TestGrantIssue_inactiveOrExpiredIntentFailsClosed). A fixed future
+// date turns its test red on the day the calendar passes it, and
+// internal/testgates refuses a string holding an RFC3339 instant to the second
+// of the current year or later unless its exception list excuses it.
+func wallStamp(d time.Duration) string {
+	return time.Now().Add(d).UTC().Format(time.RFC3339)
+}
 
 // intentTestConfig writes a minimal valid config whose storage points at a
 // temp db, returning the config path and the db path.
@@ -78,15 +90,24 @@ func receiptOf(t *testing.T, dbPath, namespace, name string) (actionsqlite.Recor
 	return recs[0], evidence
 }
 
+// TestIntentCreate_persistsDraftWithReceipt: intent create persists a DRAFT
+// with the exact terms it was given, its expiry included, and leaves the
+// operator's receipt.
+//
+// PROBING MUTATION: the CLI storing the expiry a day later than it was given
+// (intent.go) → reddens on the expiry term.
+//
+// Evidence level: in-process CLI (Run over buffers) against a real SQLite file.
 func TestIntentCreate_persistsDraftWithReceipt(t *testing.T) {
 	t.Parallel()
 	cfgPath, dbPath := intentTestConfig(t)
+	expires := wallStamp(3 * 24 * time.Hour)
 	code, stdout, stderr := runIntentCLI(t,
 		"intent", "create", "--config", cfgPath,
 		"--purpose", "read-only until friday",
 		"--operations", "calc,time",
 		"--max-actions", "25",
-		"--expires", "2026-09-04T18:00:00Z")
+		"--expires", expires)
 	if code != 0 {
 		t.Fatalf("create: exit %d, stderr %q", code, stderr)
 	}
@@ -109,8 +130,8 @@ func TestIntentCreate_persistsDraftWithReceipt(t *testing.T) {
 	if len(stored.AllowedOperations) != 2 || stored.Budgets.MaxActions != 25 {
 		t.Fatalf("terms corrupted: %+v", stored)
 	}
-	if stored.ExpiresAt.IsZero() {
-		t.Fatal("the expiry term must persist")
+	if got := stored.ExpiresAt.UTC().Format(time.RFC3339); got != expires {
+		t.Fatalf("the expiry term persisted as %s, want the %s it was given", got, expires)
 	}
 	// The RECEIPT: an identified SUCCEEDED action by the operator with
 	// loopback evidence — the human's act leaves a trace.
