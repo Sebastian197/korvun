@@ -117,6 +117,24 @@ discipline in another surface: every new step is born pinned OR with
 its exception written in the same commit, and a Scorecard alert opened
 by our own commit is debt of the same train.
 
+## Merges are NEVER squashed (2026-09-08) — CRITICAL
+
+Director's ruling, born from a release day lost to it.
+
+A MARKER commit and a SQUASH merge are incompatible by construction. The
+marker's whole contract is "my first line names my direct parent"; a
+squash collapses the marker into the code commit and rewrites the parent
+AFTER the marker was written, so the recorded SHA names a commit that no
+longer exists. The push gate then refuses the branch and the tag, which
+is exactly what it is for — and exactly what happened: two trains
+delivered, master's tip unauthorised, no tag possible until a repair
+commit was written by hand.
+
+From here: **pull requests are merged with a method that PRESERVES the
+commits** — a merge commit, or rebase. Never squash. A repository setting
+enforces it; this rule says why, so nobody re-enables it to tidy a
+history and rediscovers the gate the hard way.
+
 ## The delivery shape (2026-09-08) — CRITICAL
 
 `master` is PROTECTED. There is no direct push: a train travels on its
@@ -514,6 +532,39 @@ third skill to document.
   bindings (e.g. rolldown → `@emnapi/*`), so `npm ci` passes locally but breaks
   on Linux CI. Conflicting/floating transitives are pinned with EXACT
   `overrides` (no `^`) in `package.json`.
+
+## Dependency alerts — cadence and triage (2026-09-12) — CRITICAL
+
+npm advisories are a steady drip, not an incident. They stop interrupting work
+and get their own cadence and triage.
+
+**Triage by EXPOSURE, never by the label's severity.** Dependabot's `runtime`
+scope only means the package sits in `dependencies` rather than
+`devDependencies`; it says nothing about whether its code reaches a visitor.
+Establish the real exposure before assigning a group. For the website, check
+whether the library appears in the built client bundle — and read that result
+for exactly what it is: absence from the bundle rules the fortnightly group OUT,
+it never establishes no-exposure. A build tool's risk lives in the build
+process, which runs on the pull requests that touch it, including one from a
+fork carrying a crafted input; that is the exposure the monthly group and the
+watch list exist to track.
+
+| Exposure | Cadence |
+| --- | --- |
+| Reaches the published Go binary | **Critical path** — cure immediately and tell the director |
+| Reaches the published website (code served to visitors) | **Fortnightly batch** |
+| Development or build tooling (vitest, the frontends' js-yaml, anything scoped `Development`) | **Monthly batch**, unless it has known exploitation in our flow |
+| No patched version available | **Declared watch**, with its reason, reviewed in every batch |
+
+**One batch per cadence, never loose alerts.** Each batch ships a table of
+alert → real exposure → cure → state. The director only steps in for the merge.
+
+**What the director must NOT see:** none of this reaches them outside its batch.
+The Go-binary category is the sole exception.
+
+A watch is not a fix. An alert under watch stays open and is reported as open;
+hiding it, or downgrading it because it is "only" a build dependency, is the
+failure this policy exists to prevent.
 
 ## Documentation layout
 
