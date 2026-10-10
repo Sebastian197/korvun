@@ -145,6 +145,24 @@ vuelve a abrir ese fichero— y **no escribió una sola línea en el log**:
 `grep -ci migrat` sobre el log entero devuelve 0. Un perfil recién creado no
 habría enseñado nada de eso, porque nace en la versión actual.
 
+## El tag de la v0.16.2 espera a dos cosas (director, 2026-10-10)
+
+1. A que se integre el PR de gobernanza de la rama `governance/prompt-audit`
+   (la auditoría de `CLAUDE.md`, `AGENTS.md` rastreado y alineado, y el
+   ADR-0047 del tope de pasadas revocado).
+2. A que la CI de `master` salga en verde sobre la punta que deje esa
+   integración.
+
+Ese PR lleva un marcador antiguo, sin versión. El procedimiento versionado de
+`docs/INTEGRATION.md` no se puede cumplir hoy sin force en un tren nuevo: para
+abrir el PR hay que publicar un marcador, y el marcador versionado necesita el
+número de ese PR (P2 del procedimiento, adjudicado el 2026-10-10). La cura del
+checker va en su propio PR. Tras el rebase, el marcador antiguo nombra un SHA
+reescrito y la punta de `master` no pasa `scripts/adversary-gate-check.sh`
+hasta que el director escriba a mano el marcador de reparación. El #69 y el
+#74 se integraron igual, y la punta actual, `1e22640`, sigue en ese caso: su
+marcador nombra `2f88dda`, que el rebase del #74 reescribió.
+
 ## TREN E reducido de la v0.16.2 — estado en la puerta previa al PR (2026-09-27)
 
 **Aviso para Windows.** Dos riesgos para un perfil real de Korvun en
