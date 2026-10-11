@@ -1,40 +1,40 @@
-VETO LEVANTADO 2f88dda8ea3e32f5db74c22925990f2657ed0df4
-Round: v0.16.2, master sanitation before the tag (2026-10-03). Since
-2026-09-30T00:00Z master's suite has failed on every tree: issueGrantID
-issued its parent grant with a fixed --expires, and two delegation
-tests answer authority_expired. AS07 fell twice more in master's
-Windows CI (run 36520026213). The director ordered one PR with two
-test commits and this marker; nothing in production changes.
+VETO LEVANTADO d32749fa14d06dc2ed2826d47ac7a1f2719a4768
+Round: the go1.26.9 toolchain train (2026-10-11), critical path.
+Legacy marker by the director's order: the versioned procedure of
+docs/INTEGRATION.md cannot be followed without force for a new train
+(P2 of the procedure, adjudicated 2026-10-10; the checker cure goes in
+its own PR). After rebase this marker names a rewritten SHA; the
+director repairs master's marker by hand, as after #69 and #74.
 
 WHAT THE COMMITS ARE.
-- fix(test) a408f0b9: the validity bounds the tests hand the CLI follow
-  the wall clock; the one window past on purpose keeps its two dates;
-  the sqlite claim test's 2099 tamper value is relative. The gate the
-  director dictated, internal/testgates: no string literal holding an
-  RFC3339 instant to the second, and no time.Date with a literal year,
-  of the current year or later in any test file, unless its exception
-  list excuses that date in that file with a written reason.
-- test(sqlite) 2f88dda8: AS07 retries ledger_busy in the test, never in
-  the door, as prepared. The HANDOFF moves point 17 to cured and files
-  point 18 (BEGIN IMMEDIATE does not stop waiting when the caller's
-  context ends), a P2 for v0.16.3 train H, with a line in the release
-  notes' known limits.
+- fix(deps) 746f795: go.mod's go directive 1.26.6 -> 1.26.9, the single
+  Go pin (the six setup-go steps read go-version-file: go.mod). Cures
+  the ten reachable stdlib advisories govulncheck v1.7.0 reports on
+  go1.26.6: GO-2026-6603, -6605, -6607..-6613, -6617 (net/http,
+  net/textproto, crypto/tls), fixed in go1.26.9 (released 2026-10-08,
+  a Go-team security release, verified at go.dev/dl).
+- docs(release): one bullet in docs/releases/v0.16.2.md under
+  "Corregido antes de publicar." naming the advisories and go1.26.9.
 
-THE ADVERSARY. Commit 1 and commit 2's filing: seven passes. The first
-five, each VETO MANTENIDO, judged a name evaluator the director retired
-(option D); the sixth, over the dictated gate, VETO MANTENIDO (the
-commit message missing, comments naming the retired gate); the
-seventh, VETO LEVANTADO, with three text P3 folded before the commit.
-Verbatim: v0162-date-bomb-verdict.md in this directory. The AS07 cure:
-four passes, the last VETO LEVANTADO without findings; verbatim:
-v0162-as07-cure-verdict.md.
+EVIDENCE (local). govulncheck v1.7.0 over the CI pruned list (43
+packages): go1.26.6 exit 3 with the ten; go1.26.9 exit 0, "No
+vulnerabilities found". go vet GOOS=linux/windows/darwin exit 0. make
+dmg (wails v2.16.0) exit 0; both slices of the universal binary report
+go1.26.9. make quality green in the pre-commit gate of both commits
+(the hook prints nothing on success).
 
-EVIDENCE. Commit 1: the two delegation tests red on the base and green
-after; the gate red against a stub and red with the fixed date put
-back, naming the file and the date; 23 probing mutations over the
-final bytes, all red by the runner's jsonl and restored by sha256;
-golangci-lint, goimports, go vet for three systems, internal/testgates
-and internal/cli whole with -race. Commit 2: as recorded in its verdict
-(20 probing mutations red and one control green). make quality through
-each commit's pre-commit gate: exit 0 on a408f0b9 (12:22:47 to 13:20:05
-WEST) and exit 0 on 2f88dda8 (13:20:19 to 14:17:55 WEST).
+THE ADVERSARY'S SHORT PASS: VETO LEVANTADO, zero P1, zero P2. It
+reproduced the ten on go1.26.6 (darwin, linux, windows) and zero on
+go1.26.9, vet x3, go mod tidy unchanged, the dmg slices, -race tests of
+the HTTP packages, and that the stdlib sources the code comments cite
+as "Go 1.26.6" did not change the cited mechanisms in 1.26.9.
+P3s, declared, for the director: (1) the gate logs carry no transcript
+and the vet/govulncheck captures no header (the adversary reproduced
+the substance); (2) QUICKSTART.md:218 "Go 1.26.4+" and the website
+quickstart "Go 1.26.5+" (en/es) were stale before this train and stay
+so; (3) codeql.yml autobuilds Go without setup-go, no version pinned,
+not verified which Go it uses; (4) the user-level GOTOOLCHAIN=go1.26.6
+outside the repo makes every go command fail loudly on this tree until
+changed.
+Not verified: make quality's own transcript; CI; desktop builds for
+Windows and Linux.
