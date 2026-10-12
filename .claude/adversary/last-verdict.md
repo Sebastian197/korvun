@@ -1,4 +1,4 @@
-VETO LEVANTADO 9fbf84e0f6011a9d5ffcf0bb0ca9dc35c6302fe8
+VETO LEVANTADO 016172330ad32c307c047c021d5aa05a7be24c8d
 Round: the registerGuard race train (2026-10-12), product P2 cured in
 its own PR before the v0.16.2 tag.
 Legacy marker by the director's order: the versioned procedure of
@@ -52,3 +52,32 @@ tsan internals behind lost reports (inferred from behaviour).
 Filed, not cured: e2_trap (ledger_e2_harness_test.go) and e4_trap
 (internal/app/ledger_e4_harness_test.go) register scalar functions
 lazily, the same class, tests only.
+
+SECOND ROUND, after the PR's first CI run (director's adjudication,
+2026-10-12): quality (windows-latest), job 114877740941, go1.26.9
+windows/amd64, failed on the probe row only: the probe child reported
+no race (RACECHILD door=probe opened_ahead=8, child PASS). The probe row
+is the detector's positive control, so it now skips on Windows with the
+reason in the test. No cause is established and the candidates named
+(the wait orders the openers there; the opener's work after its write
+costs the detector the write's history; the Windows detector does not
+report the pattern) are not known to be the only ones.
+WINDOWS: green doors, detector not certified. The for/operator/readonly
+rows keep running there; their green is not evidence.
+LINUX: quality (ubuntu-latest) green at 82a736f, internal/action/sqlite
+ok in both the test and the coverage jobs; no skip existed there, so the
+probe row ran (inferred from the package's ok, the log is not verbose).
+MACOS, after the skip: go vet with GOOS=windows ok; the mould -count=3
+all rows PASS, probe not skipped; the probe child run directly three
+times: exit 1, 8 reports, 8 on readProbe each; mutation of the skip's
+condition to darwin: probe SKIP on macOS; after the comment cures, one
+more -count=1 all rows PASS. Freeze sha256 6bc79d3d....
+Adversary, short pass over the delta: VETO (P2: the HANDOFF recipe
+concluded "es la espera" from an outcome its experiment does not
+isolate) -> cured; P3s folded (handshake fixed as a spin on the variable
+itself, with its 1/2/0 reports measured by the adversary on macOS; three
+candidates named; godoc scoped; the cure commit's probe sentence scoped
+to Linux and macOS in the new commit's message). Scoped re-pass: VETO
+LEVANTADO; its two P3s (what the mutation proves; a broken comment wrap)
+folded.
+Closing list, next train's CI: the detector row recipe in docs/HANDOFF.md.
