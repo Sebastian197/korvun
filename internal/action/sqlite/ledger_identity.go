@@ -447,16 +447,23 @@ var guardedTables = []struct {
 // so the connection hook — which sees only the DSN — knows the nonce is ours.
 var guardRegistry sync.Map
 
-var guardHookOnce sync.Once
 var guardNonces atomic.Uint64
 
-// registerGuard mints a nonce for identity and registers the connection hook
-// once; "" for a handle without a profile, which gets no guard.
+// init registers the connection hook on the driver this package opens
+// through. modernc.org/sqlite requires every registration before the first
+// call to Open, and its Open reads the hook list without a lock: registered
+// at the first ledger open instead, the hook was a write that raced any
+// connection another store was opening alongside that first ledger open
+// (master CI, job 111449911669). On a connection whose DSN carries no guard
+// nonce the hook does nothing.
+func init() { msqlite.RegisterConnectionHook(guardHook) }
+
+// registerGuard mints a nonce for identity; "" for a handle without a
+// profile, which gets no guard.
 func registerGuard(identity string) string {
 	if identity == "" {
 		return ""
 	}
-	guardHookOnce.Do(func() { msqlite.RegisterConnectionHook(guardHook) })
 	nonce := fmt.Sprintf("g%d-%d", os.Getpid(), guardNonces.Add(1))
 	guardRegistry.Store(nonce, identity)
 	return nonce
