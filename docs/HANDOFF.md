@@ -145,6 +145,28 @@ vuelve a abrir ese fichero— y **no escribió una sola línea en el log**:
 `grep -ci migrat` sobre el log entero devuelve 0. Un perfil recién creado no
 habría enseñado nada de eso, porque nace en la versión actual.
 
+## El tag de la v0.16.2 espera a la cura de la carrera en `registerGuard` (director, 2026-10-12)
+
+La CI de `master` sobre `1e22640` salió roja en Ubuntu (job 111449911669) por
+una carrera de datos: el gancho de conexión del libro se registraba en el
+driver de SQLite en la primera apertura de un libro, mientras otra goroutine
+abría un store de conversaciones con el mismo driver. modernc.org/sqlite exige
+registrar antes de la primera llamada a `Open`, y su `Open` lee la lista de
+ganchos sin cerrojo. La cura registra el gancho en el `init()` del paquete
+`internal/action/sqlite` y va en su propio PR, la rama
+`fix/register-guard-race`.
+
+El tag espera a dos cosas: que se integre ese PR y que la CI de `master` salga
+en verde sobre la punta que deje la integración. Ese PR lleva un marcador
+antiguo, sin versión (P2 del procedimiento de `docs/INTEGRATION.md`,
+adjudicado el 2026-10-10). Tras el rebase, el director repara el marcador de
+`master` a mano, como tras el #69 y el #74.
+
+Fichado, sin curar en ese tren: dos tests registran funciones escalares en el
+driver de forma perezosa, la misma clase de escritura tardía
+(`internal/action/sqlite/ledger_e2_harness_test.go`, `e2_trap`, e
+`internal/app/ledger_e4_harness_test.go`, `e4_trap`).
+
 ## TREN E reducido de la v0.16.2 — estado en la puerta previa al PR (2026-09-27)
 
 **Aviso para Windows.** Dos riesgos para un perfil real de Korvun en
