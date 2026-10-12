@@ -162,6 +162,32 @@ antiguo, sin versión (P2 del procedimiento de `docs/INTEGRATION.md`,
 adjudicado el 2026-10-10). Tras el rebase, el director repara el marcador de
 `master` a mano, como tras el #69 y el #74.
 
+Windows, puertas verdes, detector no certificado. En la CI del PR (job
+114877740941, go1.26.9 windows/amd64), el hijo de la fila `probe` del molde
+`TestRegisterGuard_firstLedgerOpenAgainstConcurrentOpens` no reportó ninguna
+carrera. La fila es el control positivo del detector, así que en Windows se
+salta con la razón escrita en el propio test. Ninguna causa está establecida, y
+no se sabe que estas sean las únicas candidatas: que algo de la espera ordene a
+los openers antes de la lectura en Windows; que lo que el opener hace tras su
+escritura (`os.Mkdir`, el `Close` del store) le cueste al detector la historia
+de esa escritura allí; o que el detector de Windows no reporte este patrón. Las
+filas `for`, `operator` y `readonly` siguen corriendo en Windows, pero su verde
+allí no es evidencia de que la carrera haya desaparecido.
+
+Lista de cierre, para la CI del siguiente tren: una fila `detector` junto a
+`probe`: una goroutine escribe una variable compartida en memoria y la
+principal gira leyendo esa misma variable hasta ver la escritura, sin una
+bandera aparte (sería una segunda carrera), sin ficheros, sin `Sleep` y sin
+`Stat`. La fila exige exactamente un reporte. Antes de llevarla a la CI, una
+mutación en macOS: un mismo `sync.Mutex` que envuelva la escritura de la
+goroutine y cada lectura de la principal tiene que apagar el reporte. El
+reporte sin mutar prueba en macOS que el giro no ordena nada, y la mutación
+prueba que la fila lo notaría; ninguna de las dos cosas vale para Windows. Si en
+Windows `detector` dispara y `probe` no, lo que calla al detector está en lo que
+`probe` hace y `detector` no (la espera, lo que el opener hace tras escribir o
+la historia del detector), y hay que aislarlo. Si tampoco dispara `detector`,
+apunta al detector de Windows.
+
 Fichado, sin curar en ese tren: dos tests registran funciones escalares en el
 driver de forma perezosa, la misma clase de escritura tardía
 (`internal/action/sqlite/ledger_e2_harness_test.go`, `e2_trap`, e
