@@ -238,6 +238,13 @@ install-hooks:
 hook-probe:
 	@bash scripts/adversary-gate-probe.sh
 
+# The destructive-command permission rules: pins that .claude/settings.json
+# carries exactly them. Claude Code enforces them; this probe proves only the
+# file (scripts/permission_rules_test.py says what it does not prove).
+.PHONY: permission-rules-probe
+permission-rules-probe:
+	python3 -I scripts/permission_rules_test.py
+
 .PHONY: integration-probe
 integration-probe:
 	python3 scripts/integration_gate_test.py
@@ -263,7 +270,7 @@ wails-pin-probe:
 mutation-tally-probe:
 	python3 scripts/mutation_tally_test.py
 
-quality: guard-gopkgs lint test cover fuzz-smoke hook-probe integration-probe wails-pin-probe mutation-tally-probe desktop-frontend-check
+quality: guard-gopkgs lint test cover fuzz-smoke hook-probe integration-probe permission-rules-probe wails-pin-probe mutation-tally-probe desktop-frontend-check
 	@echo "Quality gate passed."
 
 # --- Web track SP1: the site check harness (spec AS-1 + AS-9, ADR-0040) ----------
