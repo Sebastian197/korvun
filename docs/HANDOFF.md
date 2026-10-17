@@ -145,6 +145,102 @@ vuelve a abrir ese fichero— y **no escribió una sola línea en el log**:
 `grep -ci migrat` sobre el log entero devuelve 0. Un perfil recién creado no
 habría enseñado nada de eso, porque nace en la versión actual.
 
+## Comandos destructivos: reglas de permisos en `.claude/settings.json` (director, 2026-10-17)
+
+`.claude/settings.json` lleva ahora 46 reglas `deny` (44 de Bash y 2 de MCP)
+y 34 `ask`. `scripts/permission_rules_test.py` las fija en `make quality` y
+en la CI (`quality.yml`).
+
+**Qué había antes.** `.claude/hooks/adversary-gate.sh` ya bloqueaba
+`--no-verify` y `core.hooksPath` en cualquier comando git, y ya juzgaba
+cada push. Para esas dos cosas, las reglas son una segunda línea detrás del
+hook: el hook responde antes que las reglas. Es nuevo que queden rechazados
+el merge, la release, el `gh api` que escribe y el borrado de ramas
+remotas. También son nuevos los `ask`.
+
+**deny** (el patrón exacto manda; esto es su resumen):
+- push forzado (`--force…` y `-f…` delante o detrás, también tras `git -C …`);
+- `+ref`, `--mirror`, `--delete`, `-d`;
+- `--tags`, y un ref separado por espacio que empiece por `v0.` o `v1.`;
+- `--no-verify` en commit y push, `commit -n`, y `core.hooksPath` /
+  `core.hookspath` en esas dos grafías;
+- `gh pr merge`, `gh release create|edit|delete`, `gh repo delete`;
+- `gh api` con `-X`, `--method`, `-f`, `-F`, `--field`, `--raw-field` o
+  `--input` como palabra separada;
+- las herramientas MCP `merge_pull_request` y `delete_repository` del plugin
+  de GitHub.
+
+**ask** (lo aprueba el humano en el aviso):
+- `rm` recursivo;
+- `find -delete` y `find -exec rm`;
+- `reset --hard`, `git clean`, `checkout --`, `checkout .`, `checkout -f`;
+- `git restore`, `switch -f`, `switch --discard-changes`;
+- `branch -D`, `-f`, `--force`;
+- `stash drop|clear`;
+- `worktree remove -f|--force`;
+- `update-ref -d`, `tag -d`;
+- `filter-branch`, `filter-repo`;
+- `reflog expire`, `gc --prune`.
+
+Consecuencia a decidir: Claude ya no puede empujar un tag de release ni
+pedir permiso para hacerlo; lo hace el director.
+
+**Evidencia.** Sesiones reales de Claude Code (`claude -p`) en un proyecto
+desechable con un remoto git local:
+- Configuración de las sesiones:
+  - solo los ajustes del proyecto (`--setting-sources project`), así que no
+    hay hooks;
+  - modo por defecto;
+  - las 80 reglas, más `allow: Bash(*)` y `--allowedTools Bash`, para que lo
+    que ninguna regla toca se ejecute;
+  - las filas MCP cargaron además los ajustes de usuario, porque es ahí donde
+    está habilitado el plugin.
+- **Una fila por regla.** Las 44 de Bash en `deny` muestran «Permission to
+  use Bash with command … has been denied». Las 34 `ask` muestran «Claude
+  requested permissions to use Bash, but you haven't granted it yet».
+- **Una mutación por regla.** Quitando solo esa regla, cada uno de los 78
+  comandos se ejecuta contra el remoto local o contra un repositorio de
+  GitHub que no existe. Eso prueba que cada regla es la única que casa su
+  fila, y también que el patrón distingue mayúsculas.
+- **Compuestos.** Se rechazan `true && …`, `$( … )`, `timeout` y `FOO=1 …`
+  delante de un push forzado; `true && gh api -X PUT …`; y `true && rm -rf`,
+  que pide permiso.
+- **Trabajo normal.** Se ejecutan `git push -u`, `git push -n`, `rm -f`, un
+  commit, un `gh api` de lectura y `git worktree remove` sin forzar.
+- **MCP.** Las dos herramientas desaparecen de la sesión con la regla y
+  vuelven sin ella.
+
+Esa evidencia no es repetible en `make quality`: el test solo prueba que el
+fichero lleva exactamente esas reglas.
+
+**Límites.** No es una frontera de seguridad: la documentación de Claude
+Code dice que una regla «covers the invocation Claude usually produces and
+isn't a security boundary around the program».
+
+Se ejecutaron, capturado, porque no los cubre ninguna regla:
+- `/bin/rm -rf`, `rm -vrf`;
+- `git -c x.y=z push --force-with-lease`, `git push -uf`;
+- `git push origin :rama` (su regla, `Bash(git push * :*)`, se retiró porque
+  no casaba);
+- `git push origin refs/tags/v0.0.1`;
+- `gh api -fcampo=valor`.
+
+Tampoco cubre, declarado sin capturar:
+- `sh -c '…'` y los alias de git;
+- las opciones largas abreviadas, salvo `--ha…`;
+- tags desde `v2.`, otras grafías de `core.hooksPath` (las tapa el hook);
+- `git -C … push` salvo el forzado;
+- las herramientas de escritura del plugin MCP (`push_files`,
+  `create_or_update_file`…).
+
+La documentación también dice, de un mod instalado: «on a machine with
+managed settings, or when you're signed in with a Team or Enterprise plan,
+deny rules hold over the mod by default … Anywhere else, the mod can approve
+a call that a deny rule refuses».
+
+Sobrebloquea datos a propósito: un `-m` que mencione una forma prohibida se
+rechaza, y `git commit -F <fichero>` lo evita.
+
 ## El tag de la v0.16.2 espera a la cura de la carrera en `registerGuard` (director, 2026-10-12)
 
 La CI de `master` sobre `1e22640` salió roja en Ubuntu (job 111449911669) por
