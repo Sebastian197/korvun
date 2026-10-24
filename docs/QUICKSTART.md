@@ -215,7 +215,7 @@ Checksum, cosign, and macOS Gatekeeper are covered in
 
 ## Alternative: build from source
 
-Requires **Go 1.26.4+** (see [`go.mod`](../go.mod)):
+Requires **Go 1.26.10+** (see [`go.mod`](../go.mod)):
 
 ```sh
 make build          # or: go build ./cmd/korvun
