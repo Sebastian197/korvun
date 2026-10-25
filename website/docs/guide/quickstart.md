@@ -120,7 +120,7 @@ down cleanly.
 
 ## Building from source instead
 
-Requires **Go 1.26.5+**:
+Requires **Go 1.26.10+**:
 
 ```sh
 make build          # or: go build ./cmd/korvun

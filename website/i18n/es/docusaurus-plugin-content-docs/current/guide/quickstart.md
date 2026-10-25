@@ -124,7 +124,7 @@ vuelve al chat — cero nube. Korvun sirve hasta `Ctrl-C` y apaga limpio.
 
 ## Compilar desde código, si lo prefieres
 
-Requiere **Go 1.26.5+**:
+Requiere **Go 1.26.10+**:
 
 ```sh
 make build          # or: go build ./cmd/korvun
