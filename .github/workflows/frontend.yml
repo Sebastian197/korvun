@@ -103,7 +103,7 @@ jobs:
           cache-dependency-path: cmd/korvun-desktop/frontend/package-lock.json
       # The e2e webServer is the Go harness (built chrome + SP4 proxy + the
       # SP5 channel-less template on a real Controller) — Go is required.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - run: npm ci
